@@ -14,6 +14,7 @@ export interface PortalCustomer {
   contactNumber: string
   dispenserType: string
   filterInstalled: boolean
+  installedDate: string | null
   assignedTechnician: string
 }
 
@@ -37,6 +38,8 @@ export interface PortalSettings {
   address: string
   contactNumbers: { label: string; value: string }[]
   contactEmails: { label: string; value: string }[]
+  monitoringDefaultMonths: number
+  monitoringIntervals: Record<string, number>
 }
 
 export interface PortalProfile {
@@ -60,6 +63,7 @@ type RpcRow = {
     contact_number: string
     dispenser_type: string
     filter_installed: boolean
+    installed_date: string | null
     assigned_technician: string
   } | null
   sales: {
@@ -77,6 +81,8 @@ type RpcRow = {
     address: string
     contact_numbers: { label: string; value: string }[]
     contact_emails: { label: string; value: string }[]
+    monitoring_default_months?: number | null
+    monitoring_intervals?: Record<string, number> | null
   } | null
 }
 
@@ -104,6 +110,7 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       contactNumber: row.customer.contact_number,
       dispenserType: row.customer.dispenser_type,
       filterInstalled: row.customer.filter_installed,
+      installedDate: row.customer.installed_date,
       assignedTechnician: row.customer.assigned_technician,
     },
     sales: row.sales.map((s) => ({
@@ -122,6 +129,8 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
           address: row.settings.address,
           contactNumbers: row.settings.contact_numbers,
           contactEmails: row.settings.contact_emails,
+          monitoringDefaultMonths: row.settings.monitoring_default_months ?? 6,
+          monitoringIntervals: row.settings.monitoring_intervals ?? {},
         }
       : null,
   }

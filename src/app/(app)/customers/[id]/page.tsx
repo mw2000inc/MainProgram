@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Building2,
   QrCode,
+  Droplet,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -242,6 +243,13 @@ export default function CustomerProfilePage() {
               <InfoRow icon={Mail} label="Email Address" value={customer.email} />
               <InfoRow icon={Phone} label="Contact Number" value={customer.contactNumber} />
               <InfoRow icon={MapPin} label="Address" value={customer.address} className="sm:col-span-2" />
+              <InfoRow icon={Droplet} label="Water Purification Type" value={customer.dispenserType} />
+              <InfoRow
+                icon={CalendarDays}
+                label="Installed Date"
+                value={customer.installedDate ? formatDate(customer.installedDate) : "N/A"}
+              />
+              <InfoRow icon={Droplet} label="Water Filter Installed" value={customer.filterInstalled ? "Yes" : "No"} />
               <InfoRow icon={Wrench} label="Assigned Technician" value={customer.assignedTechnician || "N/A"} />
             </CardContent>
           </Card>

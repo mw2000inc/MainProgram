@@ -124,6 +124,10 @@ type SettingsRow = {
   address: string
   contact_numbers: ContactEntry[]
   contact_emails: ContactEntry[]
+  // Added by the monitoring-intervals migration; read defensively so the app
+  // keeps working against a database that hasn't run the migration yet.
+  monitoring_default_months?: number | null
+  monitoring_intervals?: Record<string, number> | null
 }
 
 function settingsFromRow(row: SettingsRow): CompanySettings {
@@ -137,6 +141,8 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
     address: row.address,
     contactNumbers: row.contact_numbers,
     contactEmails: row.contact_emails,
+    monitoringDefaultMonths: row.monitoring_default_months ?? 6,
+    monitoringIntervals: row.monitoring_intervals ?? {},
   }
 }
 
@@ -157,6 +163,8 @@ export async function updateSettings(input: Partial<CompanySettings>, actorId: s
   if (input.address !== undefined) row.address = input.address
   if (input.contactNumbers !== undefined) row.contact_numbers = input.contactNumbers
   if (input.contactEmails !== undefined) row.contact_emails = input.contactEmails
+  if (input.monitoringDefaultMonths !== undefined) row.monitoring_default_months = input.monitoringDefaultMonths
+  if (input.monitoringIntervals !== undefined) row.monitoring_intervals = input.monitoringIntervals
 
   const { data, error } = await supabase.from("company_settings").update(row).eq("id", 1).select().single()
   if (error) throw error

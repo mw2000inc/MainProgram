@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { ContractStatus, PaymentStatus, StockStatus } from "@/lib/types"
+import type { ContractStatus, MonitoringViewStatus, PaymentStatus, StockStatus } from "@/lib/types"
 
 export type BadgeTone = "success" | "warning" | "danger" | "neutral" | "secondary"
 
@@ -37,6 +37,17 @@ const CONTRACT_STATUS_MAP: Record<ContractStatus, { tone: BadgeTone; label: stri
 
 export function ContractStatusBadge({ status }: { status: ContractStatus }) {
   const { tone, label } = CONTRACT_STATUS_MAP[status]
+  return <StatusBadge tone={tone} label={label} />
+}
+
+const MONITORING_STATUS_MAP: Record<MonitoringViewStatus, { tone: BadgeTone; label: string }> = {
+  active: { tone: "success", label: "Active" },
+  expiring: { tone: "warning", label: "Expiring Soon" },
+  "for-replacement": { tone: "danger", label: "For Replacement" },
+}
+
+export function MonitoringViewStatusBadge({ status }: { status: MonitoringViewStatus }) {
+  const { tone, label } = MONITORING_STATUS_MAP[status]
   return <StatusBadge tone={tone} label={label} />
 }
 

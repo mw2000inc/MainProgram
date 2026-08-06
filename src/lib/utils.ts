@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns"
-import type { ContractStatus, StockStatus } from "@/lib/types"
+import type { ContractStatus, MonitoringViewStatus, StockStatus } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -28,6 +28,37 @@ export function getNextQuarterlyDate(anchorDate: string, today: Date = new Date(
     next = addMonths(next, 3)
   }
   return next
+}
+
+// The monitoring interval (in months) for a given Water Purification Type — a
+// per-type override from Settings, falling back to the configured default (6).
+// Accepts a loose settings shape so both CompanySettings and the portal's
+// settings payload work.
+export const DEFAULT_MONITORING_MONTHS = 6
+
+export function getMonitoringIntervalMonths(
+  dispenserType: string,
+  settings?: { monitoringDefaultMonths?: number; monitoringIntervals?: Record<string, number> } | null
+): number {
+  const fallback = settings?.monitoringDefaultMonths ?? DEFAULT_MONITORING_MONTHS
+  const mapped = settings?.monitoringIntervals?.[dispenserType]
+  return typeof mapped === "number" && mapped > 0 ? mapped : fallback
+}
+
+// Next monitoring/replacement due date = anchor + interval, where anchor is the
+// installed date when on file, otherwise the contract start.
+export function getMonitoringEndDate(anchorDate: string, intervalMonths: number): Date {
+  return addMonths(parseISO(anchorDate), intervalMonths)
+}
+
+// Three-bucket customer-facing status derived from the monitoring End Date:
+// past due -> for replacement, within the expiry window -> expiring, else active.
+export function getMonitoringStatus(endDate: Date | string, today: Date = new Date()): MonitoringViewStatus {
+  const end = typeof endDate === "string" ? parseISO(endDate) : endDate
+  const days = differenceInCalendarDays(end, today)
+  if (days < 0) return "for-replacement"
+  if (days <= EXPIRY_WINDOW_DAYS) return "expiring"
+  return "active"
 }
 
 export function getStockStatus(quantity: number, minLevel: number): StockStatus {

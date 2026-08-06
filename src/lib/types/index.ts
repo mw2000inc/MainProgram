@@ -45,6 +45,10 @@ export interface Customer {
 
 export type MonitoringStatus = "active" | "for-replacement"
 
+// Customer-facing quarterly-monitoring status (three buckets) shown on the public
+// scan page, derived from the monitoring End Date rather than the contract end.
+export type MonitoringViewStatus = "active" | "expiring" | "for-replacement"
+
 export interface Contract {
   id: string
   customerId: string
@@ -176,4 +180,10 @@ export interface CompanySettings {
   address: string
   contactNumbers: ContactEntry[]
   contactEmails: ContactEntry[]
+  // Quarterly-monitoring interval used to compute each customer's next
+  // monitoring/replacement due date. `monitoringIntervals` maps a Water
+  // Purification Type (dispenserType) to a number of months; types absent from
+  // the map fall back to `monitoringDefaultMonths`.
+  monitoringDefaultMonths: number
+  monitoringIntervals: Record<string, number>
 }
