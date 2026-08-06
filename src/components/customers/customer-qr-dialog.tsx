@@ -43,7 +43,6 @@ export function CustomerQrDialog({
 }) {
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   const [scanUrl, setScanUrl] = React.useState("")
-  const [qrDataUrl, setQrDataUrl] = React.useState("")
 
   React.useEffect(() => {
     // window.location.origin is a client-only external value, unavailable during SSR.
@@ -53,17 +52,14 @@ export function CustomerQrDialog({
     }
   }, [open, customer.id])
 
-  // qrcode.react paints the hidden high-res canvas synchronously on render, so by
-  // the time this effect runs (after paint) we can snapshot it to a PNG data URL
-  // and reuse that single image for the preview, PNG, PDF and print output.
-  React.useEffect(() => {
-    if (scanUrl && qrCanvasRef.current) {
-      setQrDataUrl(qrCanvasRef.current.toDataURL("image/png"))
-    }
-  }, [scanUrl])
-
+  // The QR is rendered directly in the preview (see below) rather than snapshotted
+  // asynchronously — so the exports just read that same already-painted canvas at
+  // click time via its ref. Reading at click time is reliable (the canvas has long
+  // since painted by the time a button is pressed), which is why there's no
+  // qrDataUrl state or effect-based snapshot anymore (that race left the preview
+  // stuck on its loading placeholder in production).
   function currentQrDataUrl(): string {
-    return qrDataUrl || qrCanvasRef.current?.toDataURL("image/png") || ""
+    return qrCanvasRef.current?.toDataURL("image/png") || ""
   }
 
   function handleCopyLink() {
@@ -172,14 +168,12 @@ export function CustomerQrDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Hidden high-res QR used as the source image for preview/export/print. */}
-        <div style={{ position: "absolute", left: "-9999px", top: 0 }} aria-hidden>
-          {scanUrl && <QRCodeCanvas ref={qrCanvasRef} value={scanUrl} size={512} level="M" marginSize={2} />}
-        </div>
-
-        {/* On-screen preview at true cm size (single card). */}
+        {/* On-screen preview at true cm size (single card). The QR renders
+            directly here at a high backing resolution (512px) scaled down via
+            CSS, so it's always visible and doubles as the export source (read
+            through qrCanvasRef at click time). */}
         <div className="flex justify-center overflow-x-auto py-2">
-          <PreviewCard qrDataUrl={qrDataUrl} orderNumber={customer.orderNumber} />
+          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} orderNumber={customer.orderNumber} />
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -201,7 +195,15 @@ export function CustomerQrDialog({
   )
 }
 
-function PreviewCard({ qrDataUrl, orderNumber }: { qrDataUrl: string; orderNumber: string }) {
+function PreviewCard({
+  qrCanvasRef,
+  scanUrl,
+  orderNumber,
+}: {
+  qrCanvasRef: React.Ref<HTMLCanvasElement>
+  scanUrl: string
+  orderNumber: string
+}) {
   const valueRef = React.useRef<HTMLDivElement>(null)
   const [valueFontPt, setValueFontPt] = React.useState(12)
 
@@ -218,7 +220,7 @@ function PreviewCard({ qrDataUrl, orderNumber }: { qrDataUrl: string; orderNumbe
       el.style.fontSize = `${size}pt`
     }
     setValueFontPt(size)
-  }, [orderNumber, qrDataUrl])
+  }, [orderNumber, scanUrl])
 
   return (
     <div
@@ -231,9 +233,15 @@ function PreviewCard({ qrDataUrl, orderNumber }: { qrDataUrl: string; orderNumbe
       }}
       className="flex items-center rounded-sm overflow-hidden shrink-0"
     >
-      {qrDataUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={qrDataUrl} alt="QR code" style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }} />
+      {scanUrl ? (
+        <QRCodeCanvas
+          ref={qrCanvasRef}
+          value={scanUrl}
+          size={512}
+          level="M"
+          marginSize={2}
+          style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }}
+        />
       ) : (
         <div style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }} className="bg-neutral-100 animate-pulse" />
       )}
