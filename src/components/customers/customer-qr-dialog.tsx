@@ -24,13 +24,12 @@ const CARD_H_CM = 3
 const QR_CM = 2.2
 const PAD_CM = 0.2
 
-// Card color scheme (matches the QR modal): dark navy card, light-gray label,
-// white value. No border. The QR image itself carries its own white quiet-zone
-// square (qrcode.react renders a white background), so it stays scannable
-// sitting directly on the navy.
-const CARD_BG = "#0f1729"
-const LABEL_COLOR = "#9ca3af"
-const VALUE_COLOR = "#ffffff"
+// Card color scheme: plain white card, no background fill and no border. The QR
+// is black-on-white (qrcode.react renders its own white quiet-zone), and both
+// the label and order number are dark navy so they read on the white card.
+const CARD_BG = "#ffffff"
+const LABEL_COLOR = "#0f1729"
+const VALUE_COLOR = "#0f1729"
 
 export function CustomerQrDialog({
   open,
@@ -134,10 +133,8 @@ export function CustomerQrDialog({
             body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
             .card {
               width: ${CARD_W_CM}cm; height: ${CARD_H_CM}cm;
-              border-radius: 2mm;
               display: flex; align-items: center; gap: 0.2cm;
-              padding: ${PAD_CM}cm; overflow: hidden; background: ${CARD_BG};
-              -webkit-print-color-adjust: exact; print-color-adjust: exact;
+              padding: ${PAD_CM}cm; overflow: hidden; background: #ffffff;
             }
             .card img { width: ${QR_CM}cm; height: ${QR_CM}cm; display: block; }
             .meta { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
@@ -261,17 +258,6 @@ function PreviewCard({
   )
 }
 
-function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const radius = Math.min(r, w / 2, h / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + radius, y)
-  ctx.arcTo(x + w, y, x + w, y + h, radius)
-  ctx.arcTo(x + w, y + h, x, y + h, radius)
-  ctx.arcTo(x, y + h, x, y, radius)
-  ctx.arcTo(x, y, x + w, y, radius)
-  ctx.closePath()
-}
-
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -293,15 +279,11 @@ function drawCardCanvas(
 ) {
   const pad = PAD_CM * pxPerCm
   const qr = QR_CM * pxPerCm
-  const radius = 0.08 * pxPerCm
 
-  // Navy card background, no border.
-  ctx.fillStyle = CARD_BG
-  roundedRectPath(ctx, x, y, cardW, cardH, radius)
-  ctx.fill()
+  // Plain white card — the canvas is already filled white by the caller, so
+  // there's no background rect or border to draw here.
 
-  // QR on the left, vertically centered (its own white quiet zone keeps it
-  // scannable against the navy).
+  // QR on the left, vertically centered.
   ctx.drawImage(qrImg, x + pad, y + (cardH - qr) / 2, qr, qr)
 
   // Meta on the right
@@ -330,21 +312,20 @@ function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, orderN
   const pad = PAD_CM * 10
   const qr = QR_CM * 10
 
-  // Navy card background, no border.
-  doc.setFillColor(15, 23, 41) // #0f1729
-  doc.roundedRect(x, y, cardW, cardH, 0.8, 0.8, "F")
+  // Plain white card — jsPDF pages are white by default, so no background rect
+  // or border is drawn.
 
   doc.addImage(qrDataUrl, "PNG", x + pad, y + (cardH - qr) / 2, qr, qr)
 
   const textX = x + pad + qr + 2
   const maxTextW = x + cardW - pad - textX
 
-  doc.setTextColor(156, 163, 175) // #9ca3af
+  doc.setTextColor(15, 23, 41) // #0f1729 navy
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.text("ORDER #", textX, cardH / 2 + y - 1.5)
 
-  doc.setTextColor(255, 255, 255)
+  doc.setTextColor(15, 23, 41) // #0f1729 navy
   doc.setFont("courier", "bold")
   let fs = 12
   doc.setFontSize(fs)
