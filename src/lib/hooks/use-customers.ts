@@ -36,7 +36,7 @@ export function useCreateCustomer(actorId: string) {
 export function useUpdateCustomer(actorId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: Partial<Omit<Customer, "id" | "createdAt" | "orderNumber">> }) =>
+    mutationFn: ({ id, input }: { id: string; input: Partial<Omit<Customer, "id" | "createdAt">> }) =>
       api.updateCustomer(id, input, actorId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: customersKey })
@@ -44,7 +44,7 @@ export function useUpdateCustomer(actorId: string) {
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
       toast.success("Customer updated successfully")
     },
-    onError: () => toast.error("Failed to update customer"),
+    onError: (error: Error) => toast.error(error.message || "Failed to update customer"),
   })
 }
 

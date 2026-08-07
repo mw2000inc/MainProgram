@@ -48,8 +48,12 @@ function fromRow(row: CustomerRow): Customer {
   }
 }
 
-function toRow(input: Partial<Omit<Customer, "id" | "createdAt" | "orderNumber">>) {
+function toRow(input: Partial<Omit<Customer, "id" | "createdAt">>) {
   const row: Record<string, unknown> = {}
+  // order_number is normally auto-generated on insert, but admins can edit it
+  // afterwards (see updateCustomer). Create never passes it (its narrower type
+  // omits it), so this only ever fires on an edit.
+  if (input.orderNumber !== undefined) row.order_number = input.orderNumber
   if (input.fullName !== undefined) row.full_name = input.fullName
   if (input.companyName !== undefined) row.company_name = input.companyName || null
   if (input.contractNumber !== undefined) row.contract_number = input.contractNumber
@@ -92,11 +96,19 @@ export async function createCustomer(
 
 export async function updateCustomer(
   id: string,
-  input: Partial<Omit<Customer, "id" | "createdAt" | "orderNumber">>,
+  // orderNumber is editable here (unlike on create, where it's auto-generated).
+  input: Partial<Omit<Customer, "id" | "createdAt">>,
   actorId: string
 ): Promise<Customer> {
   const { data, error } = await supabase.from("customers").update(toRow(input)).eq("id", id).select().single()
-  if (error) throw error
+  if (error) {
+    // 23505 = unique violation; order_number is the only unique column an admin
+    // can edit, so a friendlier message than the raw Postgres error.
+    if (error.code === "23505") {
+      throw new Error("That order number is already used by another customer.")
+    }
+    throw error
+  }
   await logActivity(actorId, "Customer Edited")
   return fromRow(data as CustomerRow)
 }

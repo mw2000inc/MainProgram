@@ -13,6 +13,7 @@ import {
   Building2,
   QrCode,
   Droplet,
+  Hash,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -53,6 +54,8 @@ export default function CustomerProfilePage() {
   const [technicianDraft, setTechnicianDraft] = React.useState(TECHNICIAN_NA)
   const [installedDateOpen, setInstalledDateOpen] = React.useState(false)
   const [installedDateDraft, setInstalledDateDraft] = React.useState("")
+  const [orderNumberOpen, setOrderNumberOpen] = React.useState(false)
+  const [orderNumberDraft, setOrderNumberDraft] = React.useState("")
   const isAdmin = user?.role === "admin"
 
   if (isPending) {
@@ -120,6 +123,55 @@ export default function CustomerProfilePage() {
         </TabsList>
 
         <div className="flex flex-wrap gap-2">
+          <Popover
+            open={orderNumberOpen}
+            onOpenChange={(open) => {
+              setOrderNumberOpen(open)
+              if (open) setOrderNumberDraft(customer.orderNumber)
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Hash className="h-4 w-4" /> Order # {customer.orderNumber}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="start">
+              <p className="text-sm font-semibold mb-3">Order Number</p>
+              {isAdmin ? (
+                <div className="space-y-3">
+                  <Input
+                    value={orderNumberDraft}
+                    onChange={(e) => setOrderNumberDraft(e.target.value)}
+                    placeholder="e.g. SK001-0016"
+                    className="font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={updateCustomer.isPending || !orderNumberDraft.trim()}
+                    onClick={async () => {
+                      const next = orderNumberDraft.trim()
+                      if (!next || next === customer.orderNumber) {
+                        setOrderNumberOpen(false)
+                        return
+                      }
+                      try {
+                        await updateCustomer.mutateAsync({ id: customer.id, input: { orderNumber: next } })
+                        setOrderNumberOpen(false)
+                      } catch {
+                        // Duplicate/other errors are surfaced by the hook's error toast;
+                        // keep the popover open so the admin can correct the value.
+                      }
+                    }}
+                  >
+                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              ) : (
+                <InfoRow icon={Hash} label="Order Number" value={customer.orderNumber} />
+              )}
+            </PopoverContent>
+          </Popover>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
