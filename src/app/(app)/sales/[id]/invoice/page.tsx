@@ -49,6 +49,11 @@ export default function InvoicePage() {
   const rep = users.find((u) => u.id === sale.salesRepId)
   const gross =
     sale.items.reduce((s, it) => s + it.subtotal, 0) + sale.services.reduce((s, sv) => s + sv.subtotal, 0)
+  const shipping = sale.shipping ?? 0
+  // Compute the total from the displayed lines so the invoice's own math always
+  // adds up (Gross - Discount + Shipping); equals the stored total_amount for
+  // correctly-recorded sales.
+  const total = gross - sale.discount + shipping
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -137,9 +142,13 @@ export default function InvoicePage() {
                 <span className="text-muted-foreground">Discount</span>
                 <span>-{formatCurrency(sale.discount)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Shipping</span>
+                <span>+{formatCurrency(shipping)}</span>
+              </div>
               <div className="flex justify-between font-semibold text-base border-t pt-1 mt-1">
                 <span>Total Amount</span>
-                <span>{formatCurrency(sale.totalAmount)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground pt-2">
                 <span>Payment Method</span>

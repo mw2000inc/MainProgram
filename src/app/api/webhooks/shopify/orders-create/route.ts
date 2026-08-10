@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   mapShopifyPaymentStatus,
+  shopifyShippingAmount,
   verifyWebhookHmac,
   SHOPIFY_PAYMENT_METHOD,
   type ShopifyOrder,
@@ -197,6 +198,9 @@ export async function POST(request: Request) {
   // discount, so the discount is already fully baked into grossOfMatched —
   // no separate order-level subtraction here, or it would double-count.
   const grossOfMatched = matched.reduce((sum, m) => sum + m.subtotal, 0)
+  // Shipping is charged on top of the goods — capture it so the invoice total
+  // matches what Shopify actually billed (subtotal - discount + shipping).
+  const shipping = shopifyShippingAmount(order)
 
   const { data: sale, error: saleError } = await admin
     .from("sales")
@@ -205,7 +209,8 @@ export async function POST(request: Request) {
       customer_id: customerId,
       sales_rep_id: settings.system_profile_id,
       discount: 0,
-      total_amount: grossOfMatched,
+      shipping,
+      total_amount: grossOfMatched + shipping,
       payment_method: SHOPIFY_PAYMENT_METHOD,
       payment_status: mapShopifyPaymentStatus(order.financial_status),
       shopify_order_id: shopifyOrderId,

@@ -85,6 +85,10 @@ export interface Sale {
   items: SaleItem[]
   services: SaleService[]
   discount: number
+  // Shipping fee charged on top of the goods (0 for manual walk-in sales;
+  // populated from the Shopify order total for online orders). Optional so
+  // existing create paths that don't set it fall back to the DB default of 0.
+  shipping?: number
   totalAmount: number
   paymentMethod: PaymentMethod
   paymentStatus: PaymentStatus

@@ -25,6 +25,7 @@ type SaleRow = {
   customer_id: string
   sales_rep_id: string
   discount: number
+  shipping: number
   total_amount: number
   payment_method: string
   payment_status: string
@@ -63,6 +64,9 @@ function fromRow(row: SaleRow): Sale {
     items: (row.sale_items ?? []).map(itemFromRow),
     services: (row.sale_services ?? []).map(serviceFromRow),
     discount: Number(row.discount),
+    // `|| 0` (not `?? 0`) also catches NaN from a row read before the shipping
+    // column/migration exists, so the invoice never shows "NaN".
+    shipping: Number(row.shipping) || 0,
     totalAmount: Number(row.total_amount),
     paymentMethod: row.payment_method as Sale["paymentMethod"],
     paymentStatus: row.payment_status as Sale["paymentStatus"],
@@ -76,6 +80,7 @@ function saleFieldsToRow(input: Partial<Omit<Sale, "id" | "invoiceNumber" | "ite
   if (input.customerId !== undefined) row.customer_id = input.customerId
   if (input.salesRepId !== undefined) row.sales_rep_id = input.salesRepId
   if (input.discount !== undefined) row.discount = input.discount
+  if (input.shipping !== undefined) row.shipping = input.shipping
   if (input.totalAmount !== undefined) row.total_amount = input.totalAmount
   if (input.paymentMethod !== undefined) row.payment_method = input.paymentMethod
   if (input.paymentStatus !== undefined) row.payment_status = input.paymentStatus

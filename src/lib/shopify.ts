@@ -145,6 +145,16 @@ export function mapShopifyPaymentStatus(financialStatus: string): PaymentStatus 
 // rather than a distinct "payment method" MW2000 has an enum value for).
 export const SHOPIFY_PAYMENT_METHOD: PaymentMethod = "Credit Card"
 
+// The shipping fee the customer paid. Shopify exposes it as
+// total_shipping_price_set.shop_money.amount on the order; older/edge payloads
+// only carry per-line shipping_lines, so sum those as a fallback.
+export function shopifyShippingAmount(order: ShopifyOrder): number {
+  const fromSet = Number(order.total_shipping_price_set?.shop_money?.amount)
+  if (Number.isFinite(fromSet) && fromSet > 0) return fromSet
+  const fromLines = (order.shipping_lines ?? []).reduce((sum, l) => sum + (Number(l.price) || 0), 0)
+  return fromLines
+}
+
 export interface ShopifyLineItem {
   sku: string | null
   quantity: number
@@ -187,6 +197,10 @@ export interface ShopifyOrder {
   financial_status: string
   total_price: string
   total_discounts: string
+  // Order-level shipping total; shipping_lines is the per-line breakdown used as
+  // a fallback. Either may be absent on orders with no shipping.
+  total_shipping_price_set?: { shop_money?: { amount?: string } } | null
+  shipping_lines?: { price: string; title?: string }[]
   line_items: ShopifyLineItem[]
   // Null for guest checkouts with no Shopify customer account — fall back to
   // the order-level email/phone and the billing address in that case.
