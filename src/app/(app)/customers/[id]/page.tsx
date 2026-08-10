@@ -37,7 +37,7 @@ import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
-import { TECHNICIANS } from "@/lib/constants"
+import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
 
 const TECHNICIAN_NA = "N/A"
 
@@ -56,6 +56,8 @@ export default function CustomerProfilePage() {
   const [installedDateDraft, setInstalledDateDraft] = React.useState("")
   const [orderNumberOpen, setOrderNumberOpen] = React.useState(false)
   const [orderNumberDraft, setOrderNumberDraft] = React.useState("")
+  const [dispenserOpen, setDispenserOpen] = React.useState(false)
+  const [dispenserDraft, setDispenserDraft] = React.useState("")
   const isAdmin = user?.role === "admin"
 
   if (isPending) {
@@ -281,6 +283,58 @@ export default function CustomerProfilePage() {
                   label="Date"
                   value={customer.installedDate ? formatDate(customer.installedDate) : "N/A"}
                 />
+              )}
+            </PopoverContent>
+          </Popover>
+          <Popover
+            open={dispenserOpen}
+            onOpenChange={(open) => {
+              setDispenserOpen(open)
+              if (open) setDispenserDraft(DISPENSER_TYPES.includes(customer.dispenserType as (typeof DISPENSER_TYPES)[number]) ? customer.dispenserType : "")
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Droplet className="h-4 w-4" /> Water Purification Type
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="start">
+              <p className="text-sm font-semibold mb-3">Water Purification Type</p>
+              {isAdmin ? (
+                <div className="space-y-3">
+                  <Select value={dispenserDraft} onValueChange={setDispenserDraft}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DISPENSER_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={updateCustomer.isPending || !dispenserDraft}
+                    onClick={async () => {
+                      if (!dispenserDraft || dispenserDraft === customer.dispenserType) {
+                        setDispenserOpen(false)
+                        return
+                      }
+                      await updateCustomer.mutateAsync({
+                        id: customer.id,
+                        input: { dispenserType: dispenserDraft },
+                      })
+                      setDispenserOpen(false)
+                    }}
+                  >
+                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              ) : (
+                <InfoRow icon={Droplet} label="Type" value={customer.dispenserType || "N/A"} />
               )}
             </PopoverContent>
           </Popover>
