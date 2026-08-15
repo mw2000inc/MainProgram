@@ -87,17 +87,22 @@ export async function GET(request: Request) {
   const admin = createAdminClient()
   const { data: systemCustomer } = await admin.from("customers").select("id").eq("is_system", true).limit(1).maybeSingle()
 
-  const { error: settingsError } = await admin
-    .from("shopify_settings")
-    .update({
+  // Upsert (not update) — the shopify_settings singleton row is normally seeded by
+  // migration, but may be absent (e.g. after a data wipe/restore). An UPDATE would
+  // silently match zero rows and report no error, so the token would never persist
+  // even though OAuth succeeded. Upsert creates-or-updates the id=1 row reliably.
+  const { error: settingsError } = await admin.from("shopify_settings").upsert(
+    {
+      id: 1,
       shop_domain: shop,
       scopes: scope,
       access_token: accessToken,
       installed_at: new Date().toISOString(),
       system_customer_id: systemCustomer?.id ?? null,
       system_profile_id: caller.id,
-    })
-    .eq("id", 1)
+    },
+    { onConflict: "id" }
+  )
   if (settingsError) {
     return redirectToSettings(appUrl, "error", "Saved token failed to persist — check server logs")
   }
