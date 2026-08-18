@@ -150,10 +150,29 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
   }
 }
 
+// Mirrors the company_settings column defaults in the schema. Used when the
+// singleton row is missing (e.g. after a data wipe) so the app keeps working
+// until the next save recreates the row.
+const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+  companyName: "MW2000",
+  supportEmail: "",
+  emailNotificationsEnabled: true,
+  currency: "PHP",
+  taxRate: 0,
+  address: "",
+  contactNumbers: [],
+  contactEmails: [],
+  monitoringDefaultMonths: 6,
+  monitoringIntervals: {},
+}
+
 export async function getSettings(): Promise<CompanySettings> {
-  const { data, error } = await supabase.from("company_settings").select("*").eq("id", 1).single()
+  // maybeSingle (not single): the singleton row is normally seeded by migration
+  // but can be removed by a data wipe. single() throws on zero rows, which would
+  // break the whole Settings page; fall back to defaults instead.
+  const { data, error } = await supabase.from("company_settings").select("*").eq("id", 1).maybeSingle()
   if (error) throw error
-  return settingsFromRow(data as SettingsRow)
+  return data ? settingsFromRow(data as SettingsRow) : { ...DEFAULT_COMPANY_SETTINGS }
 }
 
 export async function updateSettings(input: Partial<CompanySettings>, actorId: string): Promise<CompanySettings> {
@@ -172,7 +191,16 @@ export async function updateSettings(input: Partial<CompanySettings>, actorId: s
   if (input.dailyReportLayout !== undefined) row.daily_report_layout = input.dailyReportLayout
   if (input.dailyReportPanelSizes !== undefined) row.daily_report_panel_sizes = input.dailyReportPanelSizes
 
-  const { data, error } = await supabase.from("company_settings").update(row).eq("id", 1).select().single()
+  // Upsert (not update): if the singleton row was wiped, an UPDATE matches zero
+  // rows and .single() then throws, so the save fails. Upsert recreates the
+  // id=1 row (schema defaults fill any columns not being saved) or updates it.
+  // Requires the admin INSERT policy added in the company_settings_insert_policy
+  // migration, since this runs under RLS via the browser client.
+  const { data, error } = await supabase
+    .from("company_settings")
+    .upsert({ id: 1, ...row }, { onConflict: "id" })
+    .select()
+    .single()
   if (error) throw error
   await logActivity(actorId, "Settings Updated")
   return settingsFromRow(data as SettingsRow)
