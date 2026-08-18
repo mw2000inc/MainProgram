@@ -66,15 +66,22 @@ export default function LoginPage() {
     resolver: zodResolver(signInSchema),
     defaultValues: { email: "", password: "" },
   })
-  const [rememberMe, setRememberMe] = React.useState(
-    () => typeof window !== "undefined" && !!window.localStorage.getItem(REMEMBERED_EMAIL_KEY)
-  )
+  // Always false on the initial render (server and client alike) to avoid a
+  // hydration mismatch — reading localStorage during the state initializer
+  // would make the client's first render disagree with the server's, since
+  // the server has no localStorage. Synced from the real stored value below,
+  // after mount.
+  const [rememberMe, setRememberMe] = React.useState(false)
 
   // Pre-fill the remembered email (never the password — that's the browser's own
   // password manager's job, not something we store ourselves) on first load.
   React.useEffect(() => {
     const remembered = window.localStorage.getItem(REMEMBERED_EMAIL_KEY)
-    if (remembered) signInForm.setValue("email", remembered)
+    if (remembered) {
+      signInForm.setValue("email", remembered)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRememberMe(true)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

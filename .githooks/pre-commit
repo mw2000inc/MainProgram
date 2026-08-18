@@ -1,0 +1,58 @@
+#!/bin/sh
+# Rejects a commit if any newly added supabase/migrations/*.sql file has a
+# timestamp prefix lower than the highest timestamp already present among
+# the other migration files.
+#
+# This is the exact failure mode that let
+# 20260815090000_company_settings_insert_policy.sql silently never get
+# applied: it sorted before migrations already recorded as applied on the
+# remote database, and `supabase db push` (which expects strictly
+# increasing versions) skipped it without ever erroring.
+
+set -e
+
+migrations_dir="supabase/migrations"
+[ -d "$migrations_dir" ] || exit 0
+
+# --no-renames so a renamed-in migration is still checked as a plain add,
+# not silently exempted because git's rename heuristic paired it with a delete.
+added_files=$(git diff --cached --no-renames --name-only --diff-filter=A -- "$migrations_dir" | grep '\.sql$' || true)
+[ -z "$added_files" ] && exit 0
+
+# Highest timestamp among all OTHER migration files currently on disk
+# (excluding the newly added ones themselves).
+other_max=0
+for f in "$migrations_dir"/*.sql; do
+  [ -e "$f" ] || continue
+  base=$(basename "$f")
+  is_added=0
+  for a in $added_files; do
+    [ "$(basename "$a")" = "$base" ] && is_added=1 && break
+  done
+  [ "$is_added" = 1 ] && continue
+  ts=$(printf '%s' "$base" | grep -oE '^[0-9]+' || true)
+  [ -n "$ts" ] && [ "$ts" -gt "$other_max" ] && other_max=$ts
+done
+
+failed=0
+for a in $added_files; do
+  base=$(basename "$a")
+  ts=$(printf '%s' "$base" | grep -oE '^[0-9]+' || true)
+  if [ -z "$ts" ]; then
+    echo "pre-commit: $base has no numeric timestamp prefix — skipping migration order check" >&2
+    continue
+  fi
+  if [ "$ts" -lt "$other_max" ]; then
+    echo "" >&2
+    echo "pre-commit REJECTED: $base" >&2
+    echo "  Its timestamp ($ts) sorts before an existing migration (highest: $other_max)." >&2
+    echo "  A migration named earlier than files already in the repo will be silently" >&2
+    echo "  skipped by 'supabase db push', which expects strictly increasing versions —" >&2
+    echo "  this is exactly what happened to company_settings_insert_policy." >&2
+    echo "  Fix: rename this file to a timestamp greater than $other_max." >&2
+    echo "" >&2
+    failed=1
+  fi
+done
+
+exit $failed

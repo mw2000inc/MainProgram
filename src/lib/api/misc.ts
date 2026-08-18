@@ -130,6 +130,7 @@ type SettingsRow = {
   monitoring_intervals?: Record<string, number> | null
   daily_report_layout?: string[] | null
   daily_report_panel_sizes?: Record<string, PanelSize> | null
+  daily_report_layout_mode?: "stacked" | "grid" | null
 }
 
 function settingsFromRow(row: SettingsRow): CompanySettings {
@@ -147,6 +148,7 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
     monitoringIntervals: row.monitoring_intervals ?? {},
     dailyReportLayout: row.daily_report_layout ?? [],
     dailyReportPanelSizes: row.daily_report_panel_sizes ?? {},
+    dailyReportLayoutMode: row.daily_report_layout_mode ?? "stacked",
   }
 }
 
@@ -166,6 +168,7 @@ const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   monitoringIntervals: {},
   dailyReportLayout: [],
   dailyReportPanelSizes: {},
+  dailyReportLayoutMode: "stacked",
 }
 
 export async function getSettings(): Promise<CompanySettings> {
@@ -192,6 +195,7 @@ export async function updateSettings(input: Partial<CompanySettings>, actorId: s
   if (input.monitoringIntervals !== undefined) row.monitoring_intervals = input.monitoringIntervals
   if (input.dailyReportLayout !== undefined) row.daily_report_layout = input.dailyReportLayout
   if (input.dailyReportPanelSizes !== undefined) row.daily_report_panel_sizes = input.dailyReportPanelSizes
+  if (input.dailyReportLayoutMode !== undefined) row.daily_report_layout_mode = input.dailyReportLayoutMode
 
   // Upsert (not update): if the singleton row was wiped, an UPDATE matches zero
   // rows and .single() then throws, so the save fails. Upsert recreates the

@@ -208,6 +208,12 @@ export interface CompanySettings {
   // Admin-customized, shared panel sizes for the Daily Report page, keyed by the
   // same panel id used for dailyReportLayout. Missing entries mean "natural size."
   dailyReportPanelSizes: Record<string, PanelSize>
+  // "stacked" (default): every panel in one draggable, individually-resizable
+  // column. "grid": Filter Change/Installation/Repair/Collection render as a
+  // fixed 2x2 block instead (not draggable or resizable while in this mode) —
+  // everything else is unaffected. Shared across every viewer, same as the
+  // fields above.
+  dailyReportLayoutMode: "stacked" | "grid"
 }
 
 export interface PanelSize {

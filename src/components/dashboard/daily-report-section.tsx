@@ -16,7 +16,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
-import { Droplets, HardHat, Wrench, Banknote } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DateControl } from "@/components/dashboard/date-control"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
@@ -65,6 +66,20 @@ function resolveOrder(saved: string[] | undefined): PanelId[] {
   return [...savedValid, ...missing]
 }
 
+// The four plan panels that arrange into a fixed 2x2 grid in "grid" layout
+// mode — Filter Change + Installation on top, Repair + Collection below,
+// left-to-right in this exact order (matches the old AppSheet reference).
+// Not draggable or individually resizable while in that mode, since the
+// arrangement is fixed.
+const GRID_PANEL_IDS: PanelId[] = ["filter-change", "installation", "repair", "collection"]
+
+// Same fixed, non-draggable/non-resizable treatment as the four above while
+// in "grid" mode — rendered as their own side-by-side pair (Announcements
+// left, Schedule right) directly above the 2x2 block, not merged into it.
+// Date Control is deliberately not in this list: it keeps its handles in
+// both modes.
+const FROZEN_IN_GRID_IDS: PanelId[] = ["announcements", "schedule"]
+
 // Shared operational panel layout — Announcements, Schedule, the Date Control,
 // and the Filter Change/Installation/Repair/Collection panels. Rendered on both
 // the Dashboard and the standalone Daily Report page so they stay in sync
@@ -112,6 +127,17 @@ export function DailyReportSection() {
     updateSettings.mutate({ dailyReportPanelSizes: { ...sizes, [panelId]: size } })
   }
 
+  // Same shared-settings pattern as order/sizes above.
+  const savedLayoutMode = settings?.dailyReportLayoutMode ?? "stacked"
+  const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
+  const layoutMode = localLayoutMode ?? savedLayoutMode
+
+  function handleLayoutModeChange(mode: "stacked" | "grid") {
+    if (mode === layoutMode) return
+    setLocalLayoutMode(mode)
+    updateSettings.mutate({ dailyReportLayoutMode: mode })
+  }
+
   const [reportDate, setReportDate] = React.useState(today)
 
   const { data: filterChangePlans = [], isPending: pFilter } = useFilterChangePlans()
@@ -152,108 +178,179 @@ export function DailyReportSection() {
     [collectionPlans, reportDate]
   )
 
-  const panels: Record<PanelId, React.ReactNode> = {
-    announcements: (
-      <ResizablePanel panelId="announcements" isAdmin={isAdmin} savedSize={sizes.announcements} onResizeEnd={handleResizeEnd}>
-        <AnnouncementPanel />
-      </ResizablePanel>
-    ),
-    schedule: (
-      <ResizablePanel panelId="schedule" isAdmin={isAdmin} savedSize={sizes.schedule} onResizeEnd={handleResizeEnd}>
-        <ScheduleAgenda date={reportDate} />
-      </ResizablePanel>
-    ),
+  // Raw panel content, unwrapped — reused as-is inside the fixed grid cells in
+  // "grid" mode, and wrapped in ResizablePanel below for "stacked" mode. Only
+  // the arrangement changes between modes, never the panel internals.
+  const rawContent: Record<PanelId, React.ReactNode> = {
+    announcements: <AnnouncementPanel />,
+    schedule: <ScheduleAgenda date={reportDate} />,
     date: <DateControl value={reportDate} onChange={setReportDate} />,
     "filter-change": (
-      <ResizablePanel
-        panelId="filter-change"
-        isAdmin={isAdmin}
-        savedSize={sizes["filter-change"]}
-        onResizeEnd={handleResizeEnd}
-      >
-        <DashboardPlanPanel
-          title="Filter Change Plan"
-          icon={Droplets}
-          columns={filterChangeColumns}
-          expandedColumns={filterChangeExpandedColumns}
-          data={dayFilterChangePlans}
-          loading={pFilter}
-          emptyMessage="No filter change plans for this date."
-          canAdd
-          addLabel="Add"
-          onAdd={() => setFilterChangeFormOpen(true)}
-          canDelete={isAdmin}
-          onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
-        />
-      </ResizablePanel>
+      <DashboardPlanPanel
+        title="Filter Change Plan"
+        icon={Droplets}
+        columns={filterChangeColumns}
+        expandedColumns={filterChangeExpandedColumns}
+        data={dayFilterChangePlans}
+        loading={pFilter}
+        emptyMessage="No filter change plans for this date."
+        canAdd
+        addLabel="Add"
+        onAdd={() => setFilterChangeFormOpen(true)}
+        canDelete={isAdmin}
+        onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
+      />
     ),
     installation: (
-      <ResizablePanel panelId="installation" isAdmin={isAdmin} savedSize={sizes.installation} onResizeEnd={handleResizeEnd}>
-        <DashboardPlanPanel
-          title="Installation Plan"
-          icon={HardHat}
-          columns={installColumns}
-          data={dayInstallPlans}
-          loading={pInstall}
-          emptyMessage="No installs for this date."
-          canAdd
-          addLabel="Add"
-          onAdd={() => setInstallFormOpen(true)}
-          canDelete={isAdmin}
-          onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
-          exportColumns={INSTALL_EXPORT_COLUMNS}
-          exportFileName="install-plan"
-        />
-      </ResizablePanel>
+      <DashboardPlanPanel
+        title="Installation Plan"
+        icon={HardHat}
+        columns={installColumns}
+        data={dayInstallPlans}
+        loading={pInstall}
+        emptyMessage="No installs for this date."
+        canAdd
+        addLabel="Add"
+        onAdd={() => setInstallFormOpen(true)}
+        canDelete={isAdmin}
+        onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
+        exportColumns={INSTALL_EXPORT_COLUMNS}
+        exportFileName="install-plan"
+      />
     ),
     repair: (
-      <ResizablePanel panelId="repair" isAdmin={isAdmin} savedSize={sizes.repair} onResizeEnd={handleResizeEnd}>
-        <DashboardPlanPanel
-          title="Repair Plan"
-          icon={Wrench}
-          columns={repairColumns}
-          data={dayRepairPlans}
-          loading={pRepair}
-          emptyMessage="No repair plans for this date."
-          canAdd
-          addLabel="Add"
-          onAdd={() => setRepairFormOpen(true)}
-          canDelete={isAdmin}
-          onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
-          exportColumns={REPAIR_EXPORT_COLUMNS}
-          exportFileName="repair-plan"
-        />
-      </ResizablePanel>
+      <DashboardPlanPanel
+        title="Repair Plan"
+        icon={Wrench}
+        columns={repairColumns}
+        data={dayRepairPlans}
+        loading={pRepair}
+        emptyMessage="No repair plans for this date."
+        canAdd
+        addLabel="Add"
+        onAdd={() => setRepairFormOpen(true)}
+        canDelete={isAdmin}
+        onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
+        exportColumns={REPAIR_EXPORT_COLUMNS}
+        exportFileName="repair-plan"
+      />
     ),
     collection: (
-      <ResizablePanel panelId="collection" isAdmin={isAdmin} savedSize={sizes.collection} onResizeEnd={handleResizeEnd}>
-        <DashboardPlanPanel
-          title="Collection Plan"
-          icon={Banknote}
-          columns={collectionsColumns}
-          data={dayCollectionPlans}
-          loading={pCollections}
-          emptyMessage="No collections for this date."
-          canAdd
-          addLabel="Add"
-          onAdd={() => setCollectionsFormOpen(true)}
-          canDelete={isAdmin}
-          onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
-        />
-      </ResizablePanel>
+      <DashboardPlanPanel
+        title="Collection Plan"
+        icon={Banknote}
+        columns={collectionsColumns}
+        data={dayCollectionPlans}
+        loading={pCollections}
+        emptyMessage="No collections for this date."
+        canAdd
+        addLabel="Add"
+        onAdd={() => setCollectionsFormOpen(true)}
+        canDelete={isAdmin}
+        onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
+      />
     ),
   }
 
+  function resizable(id: PanelId) {
+    return (
+      <ResizablePanel panelId={id} isAdmin={isAdmin} savedSize={sizes[id]} onResizeEnd={handleResizeEnd}>
+        {rawContent[id]}
+      </ResizablePanel>
+    )
+  }
+
+  const isGrid = layoutMode === "grid"
+  const firstGridIndex = order.findIndex((id) => GRID_PANEL_IDS.includes(id))
+  const firstFrozenIndex = order.findIndex((id) => FROZEN_IN_GRID_IDS.includes(id))
+  // In grid mode, the four grid panels and the frozen ones aren't individually
+  // sortable — only the remaining ids (Date Control) are real drag targets.
+  const sortableItems = isGrid
+    ? order.filter((id) => !GRID_PANEL_IDS.includes(id) && !FROZEN_IN_GRID_IDS.includes(id))
+    : order
+
   return (
     <div className="space-y-6">
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Layout:</span>
+          <div className="inline-flex rounded-lg border p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={layoutMode === "stacked" ? "default" : "ghost"}
+              className="gap-1.5"
+              onClick={() => handleLayoutModeChange("stacked")}
+            >
+              <Rows3 className="h-3.5 w-3.5" /> Stacked
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={isGrid ? "default" : "ghost"}
+              className="gap-1.5"
+              onClick={() => handleLayoutModeChange("grid")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Grid
+            </Button>
+          </div>
+        </div>
+      )}
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+        <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           <div className="space-y-6">
-            {order.map((id) => (
-              <SortablePanel key={id} id={id} isAdmin={isAdmin}>
-                {panels[id]}
-              </SortablePanel>
-            ))}
+            {order.map((id, index) => {
+              if (GRID_PANEL_IDS.includes(id)) {
+                if (!isGrid) {
+                  return (
+                    <SortablePanel key={id} id={id} isAdmin={isAdmin}>
+                      {resizable(id)}
+                    </SortablePanel>
+                  )
+                }
+                // Render the whole fixed 2x2 block once, at the position the
+                // first grid panel occupies in the saved order — the other
+                // three grid-panel ids are skipped below so they don't repeat.
+                if (index !== firstGridIndex) return null
+                return (
+                  <div key="grid-block" className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {GRID_PANEL_IDS.map((gridId) => (
+                      <div key={gridId} className="min-w-0">
+                        {rawContent[gridId]}
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+              if (FROZEN_IN_GRID_IDS.includes(id)) {
+                if (!isGrid) {
+                  return (
+                    <SortablePanel key={id} id={id} isAdmin={isAdmin}>
+                      {resizable(id)}
+                    </SortablePanel>
+                  )
+                }
+                // Same pairing treatment as the 2x2 block below — rendered
+                // once, at the position the first of the two occupies in the
+                // saved order, side by side, no drag/resize handles.
+                if (index !== firstFrozenIndex) return null
+                return (
+                  <div key="frozen-pair-block" className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {FROZEN_IN_GRID_IDS.map((frozenId) => (
+                      <div key={frozenId} className="min-w-0">
+                        {rawContent[frozenId]}
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+              return (
+                <SortablePanel key={id} id={id} isAdmin={isAdmin}>
+                  {resizable(id)}
+                </SortablePanel>
+              )
+            })}
           </div>
         </SortableContext>
       </DndContext>
