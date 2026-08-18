@@ -40,6 +40,8 @@ interface DataTableProps<TData> {
   emptyMessage?: string
   pageSize?: number
   onRowClick?: (row: TData) => void
+  // Extra className per row (e.g. strikethrough for completed/inactive entries).
+  getRowClassName?: (row: TData) => string | undefined
 }
 
 export function DataTable<TData>({
@@ -51,6 +53,7 @@ export function DataTable<TData>({
   emptyMessage = "No records found.",
   pageSize = 10,
   onRowClick,
+  getRowClassName,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -147,7 +150,7 @@ export function DataTable<TData>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className={cn(onRowClick && "cursor-pointer hover:bg-muted/50")}
+                  className={cn(onRowClick && "cursor-pointer hover:bg-muted/50", getRowClassName?.(row.original))}
                   onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -175,11 +178,13 @@ export function DataTable<TData>({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[10, 20, 50, 100].map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    {size}
-                  </SelectItem>
-                ))}
+                {Array.from(new Set([10, 20, 50, 100, currentPageSize]))
+                  .sort((a, b) => a - b)
+                  .map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

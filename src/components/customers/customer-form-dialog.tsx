@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import {
   Form,
   FormControl,
@@ -24,52 +23,54 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import type { Customer } from "@/lib/types"
 
-const schema = z
-  .object({
-    fullName: z.string().min(2, "Full name is required"),
-    companyName: z.string().optional(),
-    contractStart: z.string().min(1, "Start date is required"),
-    contractEnd: z.string().min(1, "End date is required"),
-    address: z.string().min(5, "Address is required"),
-    email: z.string().email("Enter a valid email address"),
-    contactNumber: z.string().min(7, "Enter a valid contact number"),
-    dispenserType: z.string().min(1, "Select a dispenser type"),
-    filterInstalled: z.boolean(),
-    assignedTechnician: z.string().min(1, "Select a technician"),
-    notes: z.string().optional(),
-  })
-  .refine((data) => new Date(data.contractEnd) > new Date(data.contractStart), {
-    message: "End date must be after start date",
-    path: ["contractEnd"],
-  })
+const schema = z.object({
+  memberAccountNumber: z.string().min(1, "Member Account#0 is required"),
+  companyName: z.string().min(1, "Account Name is required"),
+  // Account Contact Person (= fullName) has no minimum length — optional.
+  fullName: z.string(),
+  contactNumber: z.string().min(7, "Enter a valid contact number"),
+  contactNumber2: z.string().optional(),
+  address: z.string().min(5, "Address is required"),
+  email: z.string().email("Enter a valid email address").or(z.literal("")),
+  tin: z.string().optional(),
+  notes: z.string().optional(),
+})
 
 type FormValues = z.infer<typeof schema>
 
 function defaultValues(customer?: Customer): FormValues {
   return {
+    memberAccountNumber: customer?.memberAccountNumber ?? "",
     fullName: customer?.fullName ?? "",
     companyName: customer?.companyName ?? "",
-    contractStart: customer?.contractStart ?? new Date().toISOString().slice(0, 10),
-    contractEnd: customer?.contractEnd ?? "",
     address: customer?.address ?? "",
     email: customer?.email ?? "",
     contactNumber: customer?.contactNumber ?? "",
-    dispenserType: customer?.dispenserType ?? "",
-    filterInstalled: customer?.filterInstalled ?? false,
-    assignedTechnician: customer?.assignedTechnician ?? "",
+    contactNumber2: customer?.contactNumber2 ?? "",
+    tin: customer?.tin ?? "",
     notes: customer?.notes ?? "",
+  }
+}
+
+// Water Purification Type, Contract Start/End Date, Assigned Technician, and
+// Water Filter Installed are no longer collected on this form, but the
+// customers table still requires contract_start/contract_end/dispenser_type on
+// insert — new members get these silent defaults; existing members are simply
+// left untouched on edit (the update payload never includes these keys).
+function newMemberDefaults() {
+  const today = new Date()
+  const oneYearLater = new Date(today)
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+  return {
+    dispenserType: "",
+    contractStart: today.toISOString().slice(0, 10),
+    contractEnd: oneYearLater.toISOString().slice(0, 10),
+    assignedTechnician: "",
+    filterInstalled: false,
   }
 }
 
@@ -103,7 +104,7 @@ export function CustomerFormDialog({
     if (isEdit) {
       await updateCustomer.mutateAsync({ id: customer.id, input: values })
     } else {
-      const created = await createCustomer.mutateAsync(values)
+      const created = await createCustomer.mutateAsync({ ...values, ...newMemberDefaults() })
       onCreated?.(created)
     }
     onOpenChange(false)
@@ -118,9 +119,9 @@ export function CustomerFormDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Customer" : "Add Customer"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Member" : "Add Member"}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update customer and contract details." : "Register a new customer and their contract."}
+            {isEdit ? "Update member details." : "Register a new member."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -128,12 +129,12 @@ export function CustomerFormDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="fullName"
+                name="memberAccountNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>Member Account#0</FormLabel>
                     <FormControl>
-                      <Input placeholder="Juan Dela Cruz" {...field} />
+                      <Input placeholder="e.g. 0007-000-0000-0006" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -144,9 +145,61 @@ export function CustomerFormDialog({
                 name="companyName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Name (Optional)</FormLabel>
+                    <FormLabel>Account Name</FormLabel>
                     <FormControl>
                       <Input placeholder="Golden Harvest Corp." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account Contact Person (Optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Juan Dela Cruz" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contactNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Number1 (Main)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="09171234567" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contactNumber2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Number2 (Sub, Optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Optional" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123 Main St., Quezon City" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -167,113 +220,14 @@ export function CustomerFormDialog({
               />
               <FormField
                 control={form.control}
-                name="contactNumber"
+                name="tin"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Number</FormLabel>
+                    <FormLabel>TIN # (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="09171234567" {...field} />
+                      <Input placeholder="Optional" {...field} />
                     </FormControl>
                     <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St., Quezon City" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="dispenserType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Water Purification Type</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DISPENSER_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="contractStart"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contract Start Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="contractEnd"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contract End Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="assignedTechnician"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assigned Technician</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select technician" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {TECHNICIANS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="filterInstalled"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
-                    <FormLabel className="cursor-pointer">Water Filter Installed</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
                   </FormItem>
                 )}
               />
@@ -284,7 +238,7 @@ export function CustomerFormDialog({
                   <FormItem className="sm:col-span-2">
                     <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <Textarea rows={3} placeholder="Optional notes about this customer..." {...field} />
+                      <Textarea rows={3} placeholder="Optional notes about this member..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -296,7 +250,7 @@ export function CustomerFormDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add Customer"}
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add Member"}
               </Button>
             </DialogFooter>
           </form>

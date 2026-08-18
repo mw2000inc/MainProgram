@@ -36,8 +36,6 @@ export default function CustomersPage() {
   const [deleting, setDeleting] = React.useState<Customer | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<CustomerRow[]>([])
 
-  // The Shopify placeholder customer is a bookkeeping artifact (billed on
-  // Shopify-origin sales), not a real contract customer — hide it here.
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
 
   const rows: CustomerRow[] = React.useMemo(
@@ -74,16 +72,19 @@ export default function CustomersPage() {
   )
 
   const exportColumns = [
+    { header: "Member Account#", key: "memberAccountNumber" },
+    { header: "Account Name", key: "companyName" },
+    { header: "Contact Person", key: "fullName" },
+    { header: "Contact Number 1 (Main)", key: "contactNumber" },
+    { header: "Contact Number 2 (Sub)", key: "contactNumber2" },
+    { header: "Address", key: "address" },
+    { header: "Email Address 1 (Main)", key: "email" },
+    { header: "TIN #", key: "tin" },
     { header: "Order Number", key: "orderNumber" },
-    { header: "Full Name", key: "fullName" },
-    { header: "Company", key: "companyName" },
     { header: "Contract Number", key: "contractNumber" },
     { header: "Status", key: "contractStatus" },
     { header: "Contract Start", key: "contractStart" },
     { header: "Contract End", key: "contractEnd" },
-    { header: "Address", key: "address" },
-    { header: "Email", key: "email" },
-    { header: "Contact Number", key: "contactNumber" },
     { header: "Water Purification Type", key: "dispenserType" },
     { header: "Technician", key: "assignedTechnician" },
   ]
@@ -102,9 +103,9 @@ export default function CustomersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" /> Customers
+            <Users className="h-6 w-6 text-primary" /> Member
           </h1>
-          <p className="text-sm text-muted-foreground">Manage customer records, contracts and installed products.</p>
+          <p className="text-sm text-muted-foreground">Manage member accounts, contracts and installed products.</p>
         </div>
         {can("customers:add") && (
           <Button
@@ -114,7 +115,7 @@ export default function CustomersPage() {
             }}
             className="gap-1.5"
           >
-            <Plus className="h-4 w-4" /> Add Customer
+            <Plus className="h-4 w-4" /> Add Member
           </Button>
         )}
       </div>
@@ -124,9 +125,9 @@ export default function CustomersPage() {
           <DataTable
             columns={columns}
             data={scopedRows}
-            searchPlaceholder="Search by name, contract number, email..."
+            searchPlaceholder="Search by name, account number, email..."
             onFilteredRowsChange={setFilteredRows}
-            emptyMessage="No customers found."
+            emptyMessage="No members found."
             toolbar={
               <>
                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
@@ -142,9 +143,9 @@ export default function CustomersPage() {
                 </Select>
                 <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
                 <ExportButtons
-                  title="Customer List"
+                  title="Member List"
                   subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                  fileName="customers"
+                  fileName="members"
                   columns={exportColumns}
                   rows={filteredRows}
                 />
@@ -159,8 +160,8 @@ export default function CustomersPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete customer?"
-        description={`This will permanently remove ${deleting?.fullName ?? "this customer"} and their contract record.`}
+        title="Delete member?"
+        description={`This will permanently remove ${deleting?.companyName || deleting?.fullName || "this member"} and their contract record.`}
         loading={deleteCustomer.isPending}
         onConfirm={async () => {
           if (!deleting) return

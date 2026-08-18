@@ -7,21 +7,23 @@ type CustomerRow = {
   order_number: string
   full_name: string
   company_name: string | null
+  member_account_number: string
   contract_number: string
   contract_start: string
   contract_end: string
   address: string
+  address2: string
   email: string
+  email2: string
   contact_number: string
+  contact_number2: string
+  tin: string
   dispenser_type: string
   filter_installed: boolean
   installed_date: string | null
   assigned_technician: string
   notes: string | null
   created_at: string
-  is_system: boolean
-  is_shopify_customer: boolean
-  shopify_customer_id: string | null
 }
 
 function fromRow(row: CustomerRow): Customer {
@@ -30,21 +32,24 @@ function fromRow(row: CustomerRow): Customer {
     orderNumber: row.order_number,
     fullName: row.full_name,
     companyName: row.company_name ?? undefined,
+    memberAccountNumber: row.member_account_number,
     contractNumber: row.contract_number,
     contractStart: row.contract_start,
     contractEnd: row.contract_end,
     address: row.address,
+    address2: row.address2 || undefined,
     email: row.email,
+    email2: row.email2 || undefined,
     contactNumber: row.contact_number,
+    contactNumber2: row.contact_number2 || undefined,
+    tin: row.tin || undefined,
     dispenserType: row.dispenser_type,
     filterInstalled: row.filter_installed,
     installedDate: row.installed_date ?? undefined,
     assignedTechnician: row.assigned_technician,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
-    isSystem: row.is_system,
-    isShopifyCustomer: row.is_shopify_customer,
-    shopifyCustomerId: row.shopify_customer_id ?? undefined,
+    isSystem: false,
   }
 }
 
@@ -56,12 +61,17 @@ function toRow(input: Partial<Omit<Customer, "id" | "createdAt">>) {
   if (input.orderNumber !== undefined) row.order_number = input.orderNumber
   if (input.fullName !== undefined) row.full_name = input.fullName
   if (input.companyName !== undefined) row.company_name = input.companyName || null
+  if (input.memberAccountNumber !== undefined) row.member_account_number = input.memberAccountNumber
   if (input.contractNumber !== undefined) row.contract_number = input.contractNumber
   if (input.contractStart !== undefined) row.contract_start = input.contractStart
   if (input.contractEnd !== undefined) row.contract_end = input.contractEnd
   if (input.address !== undefined) row.address = input.address
+  if (input.address2 !== undefined) row.address2 = input.address2 || ""
   if (input.email !== undefined) row.email = input.email
+  if (input.email2 !== undefined) row.email2 = input.email2 || ""
   if (input.contactNumber !== undefined) row.contact_number = input.contactNumber
+  if (input.contactNumber2 !== undefined) row.contact_number2 = input.contactNumber2 || ""
+  if (input.tin !== undefined) row.tin = input.tin || ""
   if (input.dispenserType !== undefined) row.dispenser_type = input.dispenserType
   if (input.filterInstalled !== undefined) row.filter_installed = input.filterInstalled
   if (input.installedDate !== undefined) row.installed_date = input.installedDate || null

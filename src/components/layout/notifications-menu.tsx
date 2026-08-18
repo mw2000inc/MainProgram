@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, AlertTriangle, PackageX, FileWarning, UserPlus, Receipt, SearchX } from "lucide-react"
+import { Bell, AlertTriangle, PackageX, FileWarning, UserPlus, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -21,7 +21,6 @@ const ICONS: Record<NotificationType, React.ElementType> = {
   "expiring-contract": FileWarning,
   "new-customer": UserPlus,
   "new-sale": Receipt,
-  "shopify-sku-not-found": SearchX,
 }
 
 const ICON_COLORS: Record<NotificationType, string> = {
@@ -30,7 +29,6 @@ const ICON_COLORS: Record<NotificationType, string> = {
   "expiring-contract": "text-warning",
   "new-customer": "text-secondary",
   "new-sale": "text-success",
-  "shopify-sku-not-found": "text-warning",
 }
 
 export function NotificationsMenu() {

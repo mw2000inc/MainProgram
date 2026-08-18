@@ -33,7 +33,9 @@ interface AuthContextValue {
   refreshUser: () => Promise<void>
 }
 
-const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
+// Exported (only) so a dev-only mock-data preview route can supply a fake
+// value via <AuthContext.Provider> without touching real Supabase auth.
+export const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))

@@ -1,8 +1,19 @@
+import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/inventory"
+import { useUsers } from "@/lib/hooks/use-misc"
 import type { Product, StockMovement, Supplier } from "@/lib/types"
 import { getStockStatus } from "@/lib/utils"
 import { toast } from "sonner"
+
+export type StockMovementRow = StockMovement & {
+  productName: string
+  sku: string
+  actualStock: number
+  currentStock: number
+  minStockLevel: number
+  userName: string
+}
 
 function warnIfLowStock(result: api.StockMovementResult) {
   const status = getStockStatus(result.stockQuantity, result.minStockLevel)
@@ -27,6 +38,72 @@ export function useSuppliers() {
 
 export function useStockMovements() {
   return useQuery({ queryKey: stockMovementsKey, queryFn: api.listStockMovements })
+}
+
+// Joins raw stock_movements with product/user info and reconstructs each entry's
+// running stock balance (Previous/Current Stock) — shared by the Stock Movements
+// page and the Inventory "In & Out Summary" drilldown so the two never drift.
+export function useStockMovementRows() {
+  const { data: movements = [], isPending: p1 } = useStockMovements()
+  const { data: products = [], isPending: p2 } = useProducts()
+  const { data: users = [], isPending: p3 } = useUsers()
+
+  const data = React.useMemo<StockMovementRow[]>(() => {
+    // Group per product so we can walk each product's own history in true creation
+    // order (via createdAt, not array position — Postgres doesn't guarantee same-day
+    // rows come back in insertion order) and rebuild the stock level as it was at
+    // each point in time, rather than stamping every row with today's live quantity.
+    const byProduct = new Map<string, StockMovement[]>()
+    movements.forEach((m) => {
+      const list = byProduct.get(m.productId) ?? []
+      list.push(m)
+      byProduct.set(m.productId, list)
+    })
+
+    // Current Stock = the combined balance going INTO a movement (opening); Actual
+    // Stock = the combined balance coming OUT of it (Current Stock + Qty Added -
+    // Qty Removed + 2nd Hand). Both pools count toward this single running total —
+    // only the product's own stock_quantity column tracks the regular pool, so we
+    // back-solve the combined opening balance from the live totals of both.
+    const actualStockByMovementId = new Map<string, number>()
+    const currentStockByMovementId = new Map<string, number>()
+    byProduct.forEach((entries, productId) => {
+      const product = products.find((p) => p.id === productId)
+      const netRegular = entries.reduce((sum, e) => sum + e.quantityAdded - e.quantityRemoved, 0)
+      const liveRegular = product?.stockQuantity ?? netRegular
+      const opening = liveRegular - netRegular
+
+      const chronological = [...entries].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+      let running = opening
+      for (const entry of chronological) {
+        currentStockByMovementId.set(entry.id, running)
+        running +=
+          entry.quantityAdded -
+          entry.quantityRemoved +
+          entry.secondHandReadyQuantity +
+          entry.secondHandRepairQuantity +
+          entry.demoQuantity
+        actualStockByMovementId.set(entry.id, running)
+      }
+    })
+
+    return movements.map((m) => {
+      const product = products.find((p) => p.id === m.productId)
+      const actualStock = actualStockByMovementId.get(m.id) ?? product?.stockQuantity ?? 0
+      return {
+        ...m,
+        productName: product?.name ?? "Unknown",
+        sku: product?.sku ?? "-",
+        actualStock,
+        currentStock: currentStockByMovementId.get(m.id) ?? actualStock,
+        minStockLevel: product?.minStockLevel ?? 0,
+        userName: users.find((u) => u.id === m.userId)?.name ?? "Unknown",
+      }
+    })
+  }, [movements, products, users])
+
+  return { data, isPending: p1 || p2 || p3 }
 }
 
 export function useCreateProduct(actorId: string) {
@@ -106,7 +183,10 @@ export function useUpdateStockMovement(actorId: string) {
       input,
     }: {
       id: string
-      input: Pick<StockMovement, "quantityAdded" | "quantityRemoved" | "secondHandQuantity" | "reason">
+      input: Pick<
+        StockMovement,
+        "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
+      >
     }) => api.updateStockMovement(id, input, actorId),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })

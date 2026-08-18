@@ -1,10 +1,12 @@
 import {
-  LayoutDashboard,
+  ClipboardList,
+  ClipboardCheck,
+  HardHat,
+  Wrench,
+  Droplets,
   Users,
-  FileText,
-  ShoppingCart,
   Package,
-  ArrowLeftRight,
+  CalendarClock,
   UserCog,
   Settings,
   type LucideIcon,
@@ -20,12 +22,14 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/contracts", label: "Quarterly Monitoring", icon: FileText },
-  { href: "/sales", label: "Sales", icon: ShoppingCart },
+  { href: "/", label: "Daily Report", icon: ClipboardList },
+  { href: "/install", label: "Install", icon: HardHat },
+  { href: "/repair-plan", label: "Repair Plan", icon: Wrench },
+  { href: "/customers", label: "Member", icon: Users },
+  { href: "/sale-list", label: "Sale List", icon: ClipboardCheck },
+  { href: "/schedule", label: "Schedule", icon: CalendarClock },
+  { href: "/filter-change", label: "Filter Change", icon: Droplets },
   { href: "/inventory", label: "Inventory", icon: Package },
-  { href: "/inventory/stock-movements", label: "Stock Movements", icon: ArrowLeftRight },
   { href: "/users", label: "Users", icon: UserCog, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ]

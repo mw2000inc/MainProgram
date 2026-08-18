@@ -72,9 +72,9 @@ export default function CustomerProfilePage() {
   if (!customer) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-        <p className="text-lg font-medium">Customer not found</p>
+        <p className="text-lg font-medium">Member not found</p>
         <Button variant="outline" onClick={() => router.push("/customers")}>
-          Back to Customers
+          Back to Member
         </Button>
       </div>
     )
@@ -86,7 +86,7 @@ export default function CustomerProfilePage() {
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" onClick={() => router.push("/customers")}>
-        <ArrowLeft className="h-4 w-4" /> Back to Customers
+        <ArrowLeft className="h-4 w-4" /> Back to Member
       </Button>
 
       <Card>
@@ -103,7 +103,7 @@ export default function CustomerProfilePage() {
             </div>
             {customer.companyName && <p className="text-sm text-muted-foreground">{customer.companyName}</p>}
             <p className="text-xs text-muted-foreground mt-1">
-              Customer ID: <span className="font-mono">{customer.id}</span> &middot; Registered{" "}
+              Member ID: <span className="font-mono">{customer.id}</span> &middot; Registered{" "}
               {formatDate(customer.createdAt)}
             </p>
           </div>

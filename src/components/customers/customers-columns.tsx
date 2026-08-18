@@ -10,11 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { formatDate } from "@/lib/utils"
 import type { Customer, ContractStatus } from "@/lib/types"
 
 export type CustomerRow = Customer & { contractStatus: ContractStatus }
 
+// Matches the old AppSheet "Member List" screen's column layout exactly.
 export function getCustomerColumns({
   canDelete,
   onEdit,
@@ -26,34 +26,48 @@ export function getCustomerColumns({
 }): ColumnDef<CustomerRow, unknown>[] {
   return [
     {
-      accessorKey: "orderNumber",
-      header: "Order Number",
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.orderNumber}</span>,
+      accessorKey: "memberAccountNumber",
+      header: "Member Account#",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{row.original.memberAccountNumber || "—"}</span>
+      ),
     },
     {
-      accessorKey: "fullName",
-      header: "Name",
+      // Account Name — falls back to Contact Person when there's no separate company.
+      id: "accountName",
+      header: "Account Name",
       cell: ({ row }) => (
-        <Link href={`/customers/${row.original.id}`} className="hover:underline">
-          <div className="font-medium">{row.original.fullName}</div>
-          {row.original.companyName && (
-            <div className="text-xs text-muted-foreground">{row.original.companyName}</div>
-          )}
+        <Link href={`/customers/${row.original.id}`} className="hover:underline font-medium">
+          {row.original.companyName || row.original.fullName}
         </Link>
       ),
     },
     {
+      accessorKey: "fullName",
+      header: "Contact Person",
+      cell: ({ row }) => row.original.fullName || "—",
+    },
+    {
       accessorKey: "contactNumber",
-      header: "Contact Number",
+      header: "Contact Number 1 (Main)",
+    },
+    {
+      accessorKey: "contactNumber2",
+      header: "Contact Number 2 (Sub)",
+      cell: ({ row }) => row.original.contactNumber2 || "—",
     },
     {
       accessorKey: "address",
       header: "Address",
     },
     {
-      accessorKey: "createdAt",
-      header: "Installed Date",
-      cell: ({ row }) => formatDate(row.original.createdAt),
+      accessorKey: "email",
+      header: "Email Address 1 (Main)",
+    },
+    {
+      accessorKey: "tin",
+      header: "TIN #",
+      cell: ({ row }) => row.original.tin || "—",
     },
     {
       id: "actions",

@@ -111,7 +111,9 @@ type StockMovementRow = {
   product_id: string
   quantity_added: number
   quantity_removed: number
-  second_hand_quantity: number
+  second_hand_ready_quantity: number
+  second_hand_repair_quantity: number
+  demo_quantity: number
   reason: string
   user_id: string
   reference_number: string
@@ -125,7 +127,9 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     productId: row.product_id,
     quantityAdded: row.quantity_added,
     quantityRemoved: row.quantity_removed,
-    secondHandQuantity: row.second_hand_quantity,
+    secondHandReadyQuantity: row.second_hand_ready_quantity,
+    secondHandRepairQuantity: row.second_hand_repair_quantity,
+    demoQuantity: row.demo_quantity,
     reason: row.reason as StockMovement["reason"],
     userId: row.user_id,
     referenceNumber: row.reference_number,
@@ -179,7 +183,9 @@ export async function addStockMovement(
       product_id: input.productId,
       quantity_added: input.quantityAdded,
       quantity_removed: input.quantityRemoved,
-      second_hand_quantity: input.secondHandQuantity,
+      second_hand_ready_quantity: input.secondHandReadyQuantity,
+      second_hand_repair_quantity: input.secondHandRepairQuantity,
+      demo_quantity: input.demoQuantity,
       reason: input.reason,
       user_id: input.userId,
       reference_number: input.referenceNumber,
@@ -197,7 +203,10 @@ export async function addStockMovement(
 // applies the new one so products.stock_quantity stays in sync with the edit.
 export async function updateStockMovement(
   id: string,
-  input: Pick<StockMovement, "quantityAdded" | "quantityRemoved" | "secondHandQuantity" | "reason">,
+  input: Pick<
+    StockMovement,
+    "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
+  >,
   actorId: string
 ): Promise<StockMovementResult> {
   const { data, error } = await supabase
@@ -205,7 +214,9 @@ export async function updateStockMovement(
     .update({
       quantity_added: input.quantityAdded,
       quantity_removed: input.quantityRemoved,
-      second_hand_quantity: input.secondHandQuantity,
+      second_hand_ready_quantity: input.secondHandReadyQuantity,
+      second_hand_repair_quantity: input.secondHandRepairQuantity,
+      demo_quantity: input.demoQuantity,
       reason: input.reason,
     })
     .eq("id", id)

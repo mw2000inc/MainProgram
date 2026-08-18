@@ -11,15 +11,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { StockStatusBadge } from "@/components/shared/status-badge"
 import { formatDateTime, getStockStatus } from "@/lib/utils"
-import type { StockMovement } from "@/lib/types"
+import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
-export type StockMovementRow = StockMovement & {
-  productName: string
-  sku: string
-  actualStock: number
-  currentStock: number
-  minStockLevel: number
-  userName: string
+export type { StockMovementRow }
+
+function signedQtyCell(qty: number) {
+  if (qty > 0) return <span className="text-success font-medium">+{qty}</span>
+  if (qty < 0) return <span className="text-danger font-medium">{qty}</span>
+  return <span className="text-muted-foreground">-</span>
 }
 
 export function getStockMovementsColumns({
@@ -76,14 +75,19 @@ export function getStockMovementsColumns({
         ),
     },
     {
-      accessorKey: "secondHandQuantity",
-      header: "2nd Hand",
-      cell: ({ row }) => {
-        const qty = row.original.secondHandQuantity
-        if (qty > 0) return <span className="text-success font-medium">+{qty}</span>
-        if (qty < 0) return <span className="text-danger font-medium">{qty}</span>
-        return <span className="text-muted-foreground">-</span>
-      },
+      accessorKey: "secondHandReadyQuantity",
+      header: "2nd Hand (Ready)",
+      cell: ({ row }) => signedQtyCell(row.original.secondHandReadyQuantity),
+    },
+    {
+      accessorKey: "secondHandRepairQuantity",
+      header: "2nd Hand (Repair)",
+      cell: ({ row }) => signedQtyCell(row.original.secondHandRepairQuantity),
+    },
+    {
+      accessorKey: "demoQuantity",
+      header: "Demo",
+      cell: ({ row }) => signedQtyCell(row.original.demoQuantity),
     },
     {
       accessorKey: "actualStock",

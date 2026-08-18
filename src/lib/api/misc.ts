@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { logActivity } from "@/lib/api/activity"
-import type { AppNotification, CompanySettings, ContactEntry, User } from "@/lib/types"
+import type { AppNotification, CompanySettings, ContactEntry, PanelSize, User } from "@/lib/types"
 
 type ProfileRow = {
   id: string
@@ -128,6 +128,8 @@ type SettingsRow = {
   // keeps working against a database that hasn't run the migration yet.
   monitoring_default_months?: number | null
   monitoring_intervals?: Record<string, number> | null
+  daily_report_layout?: string[] | null
+  daily_report_panel_sizes?: Record<string, PanelSize> | null
 }
 
 function settingsFromRow(row: SettingsRow): CompanySettings {
@@ -143,6 +145,8 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
     contactEmails: row.contact_emails,
     monitoringDefaultMonths: row.monitoring_default_months ?? 6,
     monitoringIntervals: row.monitoring_intervals ?? {},
+    dailyReportLayout: row.daily_report_layout ?? [],
+    dailyReportPanelSizes: row.daily_report_panel_sizes ?? {},
   }
 }
 
@@ -165,6 +169,8 @@ export async function updateSettings(input: Partial<CompanySettings>, actorId: s
   if (input.contactEmails !== undefined) row.contact_emails = input.contactEmails
   if (input.monitoringDefaultMonths !== undefined) row.monitoring_default_months = input.monitoringDefaultMonths
   if (input.monitoringIntervals !== undefined) row.monitoring_intervals = input.monitoringIntervals
+  if (input.dailyReportLayout !== undefined) row.daily_report_layout = input.dailyReportLayout
+  if (input.dailyReportPanelSizes !== undefined) row.daily_report_panel_sizes = input.dailyReportPanelSizes
 
   const { data, error } = await supabase.from("company_settings").update(row).eq("id", 1).select().single()
   if (error) throw error

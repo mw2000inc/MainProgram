@@ -73,3 +73,14 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   const { tone, label } = PAYMENT_STATUS_MAP[status]
   return <StatusBadge tone={tone} label={label} />
 }
+
+// Free-text status used by the daily-report plan tables (filter change, install,
+// repair, collection, schedule jobs) — normalizes common values to a tone.
+export function PlanStatusBadge({ status }: { status: string }) {
+  const normalized = status.toLowerCase()
+  let tone: BadgeTone = "warning"
+  if (normalized === "completed" || normalized === "done" || normalized === "active") tone = "success"
+  else if (normalized === "cancelled" || normalized === "canceled") tone = "danger"
+  const label = status.charAt(0).toUpperCase() + status.slice(1)
+  return <StatusBadge tone={tone} label={label} />
+}

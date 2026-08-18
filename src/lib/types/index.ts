@@ -15,32 +15,28 @@ export type ContractStatus = "active" | "expiring" | "expired"
 export interface Customer {
   id: string
   orderNumber: string
+  // fullName/companyName double as "Member List" Contact Person / Account Name —
+  // companyName falls back to fullName when a member has no separate company.
   fullName: string
   companyName?: string
+  memberAccountNumber: string
   contractNumber: string
   contractStart: string
   contractEnd: string
   address: string
+  address2?: string
   email: string
+  email2?: string
   contactNumber: string
+  contactNumber2?: string
+  tin?: string
   dispenserType: string
   filterInstalled: boolean
   installedDate?: string
   assignedTechnician: string
   notes?: string
   createdAt: string
-  // True for the one generic placeholder customer (fallback when a Shopify
-  // order has no usable buyer info) — hidden from Customers/Contracts/
-  // Dashboard entirely.
   isSystem?: boolean
-  // True for a real per-buyer customer auto-created/matched from a Shopify
-  // order — shows normally in Customers/Sales/Dashboard, but has no
-  // installed unit, so it's excluded from Contracts/Quarterly Monitoring
-  // the same way isSystem is.
-  isShopifyCustomer?: boolean
-  // Shopify's own customer id — the stable key repeat orders are matched
-  // against, since it survives an email change; null for guest checkouts.
-  shopifyCustomerId?: string
 }
 
 export type MonitoringStatus = "active" | "for-replacement"
@@ -85,17 +81,31 @@ export interface Sale {
   items: SaleItem[]
   services: SaleService[]
   discount: number
-  // Shipping fee charged on top of the goods (0 for manual walk-in sales;
-  // populated from the Shopify order total for online orders). Optional so
-  // existing create paths that don't set it fall back to the DB default of 0.
   shipping?: number
   totalAmount: number
   paymentMethod: PaymentMethod
   paymentStatus: PaymentStatus
-  // Present only for sales auto-created by the Shopify order webhook — also
-  // doubles as the idempotency key that prevents double-processing a
-  // redelivered webhook.
-  shopifyOrderId?: string
+}
+
+// "Sale List" — a per-Member install/care-plan record (order/product/coverage
+// tracking), distinct from the invoicing Sale above.
+export type SaleListStatus = "ACTIVE" | "INACTIVE" | "RENT"
+
+export interface SaleListEntry {
+  id: string
+  orderNumber: string
+  installedDate?: string
+  customerId?: string
+  productNo: string
+  sc: string
+  cf: string
+  ct: string
+  cpY1Y2: string
+  cpStart?: string
+  cpEnd?: string
+  note?: string
+  status: SaleListStatus
+  createdAt: string
 }
 
 export type StockStatus = "in-stock" | "low-stock" | "out-of-stock"
@@ -137,7 +147,9 @@ export interface StockMovement {
   productId: string
   quantityAdded: number
   quantityRemoved: number
-  secondHandQuantity: number
+  secondHandReadyQuantity: number
+  secondHandRepairQuantity: number
+  demoQuantity: number
   reason: StockMovementReason
   userId: string
   referenceNumber: string
@@ -149,7 +161,6 @@ export type NotificationType =
   | "expiring-contract"
   | "new-customer"
   | "new-sale"
-  | "shopify-sku-not-found"
 
 export interface AppNotification {
   id: string
@@ -190,4 +201,120 @@ export interface CompanySettings {
   // the map fall back to `monitoringDefaultMonths`.
   monitoringDefaultMonths: number
   monitoringIntervals: Record<string, number>
+  // Admin-customized panel order for the Daily Report page, shared across every
+  // viewer. Empty until an admin drags a panel, at which point it holds every
+  // known panel id in order — see DAILY_REPORT_PANEL_IDS.
+  dailyReportLayout: string[]
+  // Admin-customized, shared panel sizes for the Daily Report page, keyed by the
+  // same panel id used for dailyReportLayout. Missing entries mean "natural size."
+  dailyReportPanelSizes: Record<string, PanelSize>
+}
+
+export interface PanelSize {
+  width?: number
+  height?: number
+}
+
+export interface Announcement {
+  id: string
+  title: string
+  body: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AnnouncementComment {
+  id: string
+  announcementId: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ScheduleJobType = "installation" | "filter_change" | "repair" | "collection" | "monitoring" | "other"
+export type ScheduleJobStatus = "pending" | "completed" | "cancelled"
+
+export interface ScheduleJob {
+  id: string
+  jobType: ScheduleJobType
+  technician: string
+  customerId?: string
+  orderNo?: string
+  scheduledDate: string
+  status: ScheduleJobStatus
+  notes?: string
+  remarks?: string
+  createdAt: string
+}
+
+export interface FilterChangePlan {
+  id: string
+  orderNumber: string
+  memberAccount: string
+  filterType: string
+  planDate: string
+  status: string
+  contactNumber: string
+  address: string
+  sc: string
+  productNo: string
+  preD?: string
+  accD?: string
+  serviceman: string
+  note?: string
+  createdAt: string
+}
+
+export interface InstallPlan {
+  id: string
+  name: string
+  orderNo: string
+  inputDate: string
+  address: string
+  status: string
+  contactNumber: string
+  model: string
+  unitPrice: number
+  cpPrice: number
+  deliveryInstallationFee: number
+  preInstalledDate?: string
+  installedDate?: string
+  note?: string
+  modelDp?: string
+  inOut: string
+  createdAt: string
+}
+
+export interface RepairPlan {
+  id: string
+  issuedDate: string
+  accountName: string
+  orderNo: string
+  status: string
+  problem: string
+  solutionStatus?: string
+  preD?: string
+  accD?: string
+  th: string
+  partNo?: string
+  amt: number
+  unitInOut: string
+  createdAt: string
+}
+
+export interface CollectionPlan {
+  id: string
+  orderNo: string
+  accountName: string
+  collectionDate: string
+  amount: number
+  status: string
+  ct: string
+  preD?: string
+  accD?: string
+  note?: string
+  createdAt: string
 }

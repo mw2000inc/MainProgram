@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle, Bell, FileWarning, PackageX, Receipt, SearchX, UserPlus } from "lucide-react"
+import { AlertTriangle, Bell, FileWarning, PackageX, Receipt, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -26,7 +26,6 @@ const ICONS: Record<NotificationType, React.ElementType> = {
   "expiring-contract": FileWarning,
   "new-customer": UserPlus,
   "new-sale": Receipt,
-  "shopify-sku-not-found": SearchX,
 }
 
 const ICON_COLORS: Record<NotificationType, string> = {
@@ -35,7 +34,6 @@ const ICON_COLORS: Record<NotificationType, string> = {
   "expiring-contract": "bg-warning/10 text-warning",
   "new-customer": "bg-secondary/10 text-secondary",
   "new-sale": "bg-success/10 text-success",
-  "shopify-sku-not-found": "bg-warning/10 text-warning",
 }
 
 const TYPE_LABELS: Record<NotificationType, string> = {
@@ -44,7 +42,6 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   "expiring-contract": "Expiring Contract",
   "new-customer": "New Customer",
   "new-sale": "New Sale",
-  "shopify-sku-not-found": "Shopify SKU Not Found",
 }
 
 type TypeFilter = "all" | NotificationType

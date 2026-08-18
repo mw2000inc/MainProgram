@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { CheckCircle2, Plus, Settings as SettingsIcon, ShoppingBag, Trash2, Upload, XCircle } from "lucide-react"
+import { Plus, Settings as SettingsIcon, Trash2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,99 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdminGuard } from "@/components/shared/admin-guard"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
-import { useShopifyStatus } from "@/lib/hooks/use-shopify"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatDateTime } from "@/lib/utils"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import type { ContactEntry } from "@/lib/types"
-
-// Reads ?shopify=connected|error&shopify_message=... left by the OAuth
-// callback redirect. Read via window.location instead of useSearchParams()
-// so this client-only banner doesn't force a Suspense boundary onto an
-// otherwise fully client-rendered, admin-gated page.
-function useShopifyCallbackBanner() {
-  const [banner, setBanner] = React.useState<{ status: "connected" | "error"; message?: string } | null>(null)
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const status = params.get("shopify")
-    if (status === "connected" || status === "error") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBanner({ status, message: params.get("shopify_message") ?? undefined })
-      window.history.replaceState(null, "", window.location.pathname)
-    }
-  }, [])
-  return banner
-}
-
-function ShopifyIntegrationCard() {
-  const { data: status, isPending } = useShopifyStatus()
-  const banner = useShopifyCallbackBanner()
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <ShoppingBag className="h-4 w-4" /> Shopify Integration
-        </CardTitle>
-        <CardDescription>
-          Connect your Shopify store so new orders automatically deduct stock by SKU.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {banner && (
-          <div
-            className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
-              banner.status === "connected"
-                ? "border-success/20 bg-success/10 text-success"
-                : "border-danger/20 bg-danger/10 text-danger"
-            }`}
-          >
-            {banner.status === "connected" ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-            ) : (
-              <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            )}
-            <span>
-              {banner.status === "connected"
-                ? "Shopify connected successfully. New orders will now deduct stock automatically."
-                : banner.message || "Connecting to Shopify failed."}
-            </span>
-          </div>
-        )}
-
-        {isPending ? (
-          <Skeleton className="h-16 w-full" />
-        ) : status?.connected ? (
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <p className="text-sm font-medium flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-success" /> Connected to {status.shopDomain}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {status.installedAt ? `Since ${formatDateTime(status.installedAt)}` : null} · Scopes: {status.scopes}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <a href="/api/shopify/install">Reconnect</a>
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <p className="text-sm font-medium">Not connected</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                No Shopify store is linked yet.
-              </p>
-            </div>
-            <Button size="sm" asChild>
-              <a href="/api/shopify/install">Connect to Shopify</a>
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 function ContactEntryList({
   title,
@@ -249,8 +159,6 @@ export default function SettingsPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Manage company information, preferences, and data.</p>
         </div>
-
-        <ShopifyIntegrationCard />
 
         <Card>
           <CardHeader>

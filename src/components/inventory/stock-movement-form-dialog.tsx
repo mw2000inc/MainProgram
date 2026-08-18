@@ -42,23 +42,31 @@ const addSchema = z
     direction: z.enum(["in", "out"]),
     reason: z.enum(STOCK_MOVEMENT_REASONS),
     quantity: z.number().int().min(0),
-    secondHandQuantity: z.number().int().min(0),
+    secondHandReadyQuantity: z.number().int().min(0),
+    secondHandRepairQuantity: z.number().int().min(0),
+    demoQuantity: z.number().int().min(0),
   })
-  .refine((data) => data.quantity > 0 || data.secondHandQuantity > 0, {
-    message: "Enter a quantity or a 2nd hand quantity",
-    path: ["quantity"],
-  })
+  .refine(
+    (data) =>
+      data.quantity > 0 || data.secondHandReadyQuantity > 0 || data.secondHandRepairQuantity > 0 || data.demoQuantity > 0,
+    {
+      message: "Enter a quantity for at least one field",
+      path: ["quantity"],
+    }
+  )
 
 type AddFormValues = z.infer<typeof addSchema>
 
-// Edit mode exposes Qty Added / Qty Removed / 2nd Hand directly (rather than the
-// Add flow's single Quantity + Direction) so a wrong entry — e.g. an accidental
-// Qty Removed — can just be corrected or cleared to 0 in place.
+// Edit mode exposes Qty Added / Qty Removed / condition buckets directly (rather
+// than the Add flow's single Quantity + Direction) so a wrong entry — e.g. an
+// accidental Qty Removed — can just be corrected or cleared to 0 in place.
 const editSchema = z.object({
   reason: z.enum(STOCK_MOVEMENT_REASONS),
   quantityAdded: z.number().int().min(0),
   quantityRemoved: z.number().int().min(0),
-  secondHandQuantity: z.number().int(),
+  secondHandReadyQuantity: z.number().int(),
+  secondHandRepairQuantity: z.number().int(),
+  demoQuantity: z.number().int(),
 })
 
 type EditFormValues = z.infer<typeof editSchema>
@@ -70,7 +78,9 @@ function editDefaultValues(m: StockMovement): EditFormValues {
     reason: m.reason === "Sale" ? "Adjustment" : m.reason,
     quantityAdded: m.quantityAdded,
     quantityRemoved: m.quantityRemoved,
-    secondHandQuantity: m.secondHandQuantity,
+    secondHandReadyQuantity: m.secondHandReadyQuantity,
+    secondHandRepairQuantity: m.secondHandRepairQuantity,
+    demoQuantity: m.demoQuantity,
   }
 }
 
@@ -78,10 +88,15 @@ export function StockMovementFormDialog({
   open,
   onOpenChange,
   movement,
+  defaultDirection = "in",
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   movement?: StockMovement
+  // Which direction the Add form should default to (e.g. opening it from the
+  // In & Out Summary's "Out Stock" panel should default to Stock Out). Ignored
+  // in edit mode.
+  defaultDirection?: "in" | "out"
 }) {
   const isEdit = !!movement
 
@@ -97,7 +112,7 @@ export function StockMovementFormDialog({
         {isEdit ? (
           <EditMovementForm movement={movement} open={open} onOpenChange={onOpenChange} />
         ) : (
-          <AddMovementForm open={open} onOpenChange={onOpenChange} />
+          <AddMovementForm open={open} onOpenChange={onOpenChange} defaultDirection={defaultDirection} />
         )}
       </DialogContent>
     </Dialog>
@@ -107,37 +122,51 @@ export function StockMovementFormDialog({
 function AddMovementForm({
   open,
   onOpenChange,
+  defaultDirection,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  defaultDirection: "in" | "out"
 }) {
   const { user } = useAuth()
   const { data: products = [] } = useProducts()
   const addMovement = useAddStockMovement(user?.id ?? "")
 
+  const defaultsFor = (direction: "in" | "out"): AddFormValues => ({
+    productId: "",
+    direction,
+    reason: direction === "in" ? "Restock" : "Adjustment",
+    quantity: 1,
+    secondHandReadyQuantity: 0,
+    secondHandRepairQuantity: 0,
+    demoQuantity: 0,
+  })
+
   const form = useForm<AddFormValues>({
     resolver: zodResolver(addSchema),
-    defaultValues: { productId: "", direction: "in", reason: "Restock", quantity: 1, secondHandQuantity: 0 },
+    defaultValues: defaultsFor(defaultDirection),
   })
 
   React.useEffect(() => {
-    if (open) form.reset({ productId: "", direction: "in", reason: "Restock", quantity: 1, secondHandQuantity: 0 })
+    if (open) form.reset(defaultsFor(defaultDirection))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, defaultDirection])
 
   async function onSubmit(values: AddFormValues) {
     const quantityAdded = values.direction === "in" ? values.quantity : 0
     const quantityRemoved = values.direction === "out" ? values.quantity : 0
-    // Direction applies to 2nd hand stock too — Stock Out subtracts from the
-    // running 2nd hand total instead of always adding to it.
-    const secondHandQuantity = values.direction === "out" ? -values.secondHandQuantity : values.secondHandQuantity
+    // Direction applies to the condition buckets too — Stock Out subtracts from
+    // their running totals instead of always adding to them.
+    const sign = values.direction === "out" ? -1 : 1
 
     await addMovement.mutateAsync({
       date: new Date().toISOString().slice(0, 10),
       productId: values.productId,
       quantityAdded,
       quantityRemoved,
-      secondHandQuantity,
+      secondHandReadyQuantity: sign * values.secondHandReadyQuantity,
+      secondHandRepairQuantity: sign * values.secondHandRepairQuantity,
+      demoQuantity: sign * values.demoQuantity,
       reason: values.reason,
       userId: user?.id ?? "",
       referenceNumber: generateId("ADJ").toUpperCase(),
@@ -227,52 +256,61 @@ function AddMovementForm({
             )}
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="quantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quantity</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={field.value}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="secondHandQuantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>2nd Hand Qty (Optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    value={field.value}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => {
-                      const value = e.target.valueAsNumber || 0
-                      field.onChange(value)
-                      // A movement is either regular stock or 2nd hand stock, not both —
-                      // entering a 2nd hand quantity clears the regular Quantity field.
-                      if (value > 0) form.setValue("quantity", 0)
-                    }}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <FormField
+          control={form.control}
+          name="quantity"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Quantity</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={0}
+                  value={field.value}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-3 gap-4">
+          {(
+            [
+              ["secondHandReadyQuantity", "2nd Hand (Ready)"],
+              ["secondHandRepairQuantity", "2nd Hand (Repair)"],
+              ["demoQuantity", "Demo"],
+            ] as const
+          ).map(([name, label]) => (
+            <FormField
+              key={name}
+              control={form.control}
+              name={name}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{label}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      value={field.value}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const value = e.target.valueAsNumber || 0
+                        field.onChange(value)
+                        // A movement is either regular stock or one of the condition
+                        // buckets, not both — entering a bucket quantity clears Quantity.
+                        if (value > 0) form.setValue("quantity", 0)
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ))}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -318,7 +356,9 @@ function EditMovementForm({
       input: {
         quantityAdded: values.quantityAdded,
         quantityRemoved: values.quantityRemoved,
-        secondHandQuantity: values.secondHandQuantity,
+        secondHandReadyQuantity: values.secondHandReadyQuantity,
+        secondHandRepairQuantity: values.secondHandRepairQuantity,
+        demoQuantity: values.demoQuantity,
         reason: values.reason,
       },
     })
@@ -396,19 +436,45 @@ function EditMovementForm({
             )}
           </div>
         </div>
-        <div className="grid gap-2">
-          <Label>2nd Hand Qty</Label>
-          <Input
-            type="number"
-            aria-invalid={!!form.formState.errors.secondHandQuantity}
-            onFocus={(e) => e.target.select()}
-            {...form.register("secondHandQuantity", { valueAsNumber: true })}
-          />
-          <p className="text-xs text-muted-foreground">Positive adds to 2nd hand stock, negative subtracts.</p>
-          {form.formState.errors.secondHandQuantity && (
-            <p className="text-destructive text-sm">{form.formState.errors.secondHandQuantity.message}</p>
-          )}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-2">
+            <Label>2nd Hand (Ready)</Label>
+            <Input
+              type="number"
+              aria-invalid={!!form.formState.errors.secondHandReadyQuantity}
+              onFocus={(e) => e.target.select()}
+              {...form.register("secondHandReadyQuantity", { valueAsNumber: true })}
+            />
+            {form.formState.errors.secondHandReadyQuantity && (
+              <p className="text-destructive text-sm">{form.formState.errors.secondHandReadyQuantity.message}</p>
+            )}
+          </div>
+          <div className="grid gap-2">
+            <Label>2nd Hand (Repair)</Label>
+            <Input
+              type="number"
+              aria-invalid={!!form.formState.errors.secondHandRepairQuantity}
+              onFocus={(e) => e.target.select()}
+              {...form.register("secondHandRepairQuantity", { valueAsNumber: true })}
+            />
+            {form.formState.errors.secondHandRepairQuantity && (
+              <p className="text-destructive text-sm">{form.formState.errors.secondHandRepairQuantity.message}</p>
+            )}
+          </div>
+          <div className="grid gap-2">
+            <Label>Demo</Label>
+            <Input
+              type="number"
+              aria-invalid={!!form.formState.errors.demoQuantity}
+              onFocus={(e) => e.target.select()}
+              {...form.register("demoQuantity", { valueAsNumber: true })}
+            />
+            {form.formState.errors.demoQuantity && (
+              <p className="text-destructive text-sm">{form.formState.errors.demoQuantity.message}</p>
+            )}
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground">Positive adds to that bucket, negative subtracts.</p>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

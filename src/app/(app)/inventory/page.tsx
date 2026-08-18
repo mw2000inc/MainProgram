@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { parseISO } from "date-fns"
-import { Package, Plus } from "lucide-react"
+import { ArrowLeftRight, Package, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -16,14 +17,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { MonthYearFilter, type MonthYearValue } from "@/components/data-table/month-year-filter"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { ExportButtons } from "@/components/shared/export-buttons"
+import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
+import { DateControl } from "@/components/dashboard/date-control"
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog"
 import { getInventoryColumns, type ProductRow } from "@/components/inventory/inventory-columns"
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatDate, getStockStatus } from "@/lib/utils"
+import { getStockStatus } from "@/lib/utils"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import type { Product, StockStatus } from "@/lib/types"
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export default function InventoryPage() {
   const { user, can } = useAuth()
@@ -33,6 +39,7 @@ export default function InventoryPage() {
   const deleteProduct = useDeleteProduct(user?.id ?? "")
   const isAdmin = user?.role === "admin"
 
+  const [selectedDate, setSelectedDate] = React.useState(today)
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
   const [statusFilter, setStatusFilter] = React.useState<"all" | StockStatus>("all")
   const [monthYear, setMonthYear] = React.useState<MonthYearValue>({ month: "all", year: "all" })
@@ -43,29 +50,93 @@ export default function InventoryPage() {
 
   const isPending = p1 || p2 || p3
 
-  const secondHandTotals = React.useMemo(() => {
-    const totals = new Map<string, number>()
+  // Per-product balance as of the selected Date. Each bucket's live (all-time)
+  // total is a real anchor — products.stock_quantity for Brand New (kept in sync
+  // by a DB trigger on every movement) and a full sum of the movement ledger for
+  // the other three buckets. Balance "as of" the selected date is that live total
+  // minus the net effect of every movement dated AFTER the selected date — an
+  // exact reconstruction from the ledger, not an approximation. In/Out Stock are
+  // just that date's own movements.
+  const conditionTotals = React.useMemo(() => {
+    const totals = new Map<
+      string,
+      {
+        secondHandReadyAsOf: number
+        secondHandRepairAsOf: number
+        demoAsOf: number
+        netRegularAfter: number
+        inOnDate: number
+        outOnDate: number
+      }
+    >()
     for (const m of movements) {
-      totals.set(m.productId, (totals.get(m.productId) ?? 0) + m.secondHandQuantity)
+      const entry = totals.get(m.productId) ?? {
+        secondHandReadyAsOf: 0,
+        secondHandRepairAsOf: 0,
+        demoAsOf: 0,
+        netRegularAfter: 0,
+        inOnDate: 0,
+        outOnDate: 0,
+      }
+      const isAfter = m.date > selectedDate
+      const isOnDate = m.date === selectedDate
+
+      if (isAfter) {
+        entry.netRegularAfter += m.quantityAdded - m.quantityRemoved
+        entry.secondHandReadyAsOf -= m.secondHandReadyQuantity
+        entry.secondHandRepairAsOf -= m.secondHandRepairQuantity
+        entry.demoAsOf -= m.demoQuantity
+      } else {
+        entry.secondHandReadyAsOf += m.secondHandReadyQuantity
+        entry.secondHandRepairAsOf += m.secondHandRepairQuantity
+        entry.demoAsOf += m.demoQuantity
+      }
+
+      if (isOnDate) {
+        entry.inOnDate +=
+          m.quantityAdded +
+          Math.max(m.secondHandReadyQuantity, 0) +
+          Math.max(m.secondHandRepairQuantity, 0) +
+          Math.max(m.demoQuantity, 0)
+        entry.outOnDate +=
+          m.quantityRemoved +
+          Math.max(-m.secondHandReadyQuantity, 0) +
+          Math.max(-m.secondHandRepairQuantity, 0) +
+          Math.max(-m.demoQuantity, 0)
+      }
+      totals.set(m.productId, entry)
     }
     return totals
-  }, [movements])
+  }, [movements, selectedDate])
 
   const rows: ProductRow[] = React.useMemo(
     () =>
       products.map((p) => {
-        const secondHandQuantity = secondHandTotals.get(p.id) ?? 0
+        const totals = conditionTotals.get(p.id) ?? {
+          secondHandReadyAsOf: 0,
+          secondHandRepairAsOf: 0,
+          demoAsOf: 0,
+          netRegularAfter: 0,
+          inOnDate: 0,
+          outOnDate: 0,
+        }
+        const brandNewAsOf = p.stockQuantity - totals.netRegularAfter
+        const balance = brandNewAsOf + totals.secondHandReadyAsOf + totals.secondHandRepairAsOf + totals.demoAsOf
         return {
           ...p,
           stockStatus: getStockStatus(p.stockQuantity, p.minStockLevel),
           supplierName: suppliers.find((s) => s.id === p.supplierId)?.name ?? "Unknown",
-          secondHandQuantity,
-          brandNewQuantity: p.stockQuantity,
-          // Stock Qty is the combined total shown in this table — Brand New + 2nd Hand.
-          stockQuantity: p.stockQuantity + secondHandQuantity,
+          brandNewQuantity: brandNewAsOf,
+          secondHandReadyQuantity: totals.secondHandReadyAsOf,
+          secondHandRepairQuantity: totals.secondHandRepairAsOf,
+          demoQuantity: totals.demoAsOf,
+          inStockOnDate: totals.inOnDate,
+          outStockOnDate: totals.outOnDate,
+          balance,
+          pBalance: balance - (totals.inOnDate - totals.outOnDate),
         }
       }),
-    [products, suppliers, secondHandTotals]
+    [products, suppliers, conditionTotals]
   )
 
   const years = React.useMemo(
@@ -84,36 +155,33 @@ export default function InventoryPage() {
     })
   }, [rows, categoryFilter, statusFilter, monthYear])
 
+  const canEdit = can("inventory:edit")
+
   const columns = React.useMemo(
     () =>
       getInventoryColumns({
-        isAdmin: user?.role === "admin",
-        canEdit: can("inventory:edit"),
         canDelete: can("inventory:delete"),
-        // Stock Qty on the row is the combined (Brand New + 2nd Hand) display value —
-        // restore the true raw stock quantity before handing the product to the
-        // edit/delete flows, so we never write the combined number back as if it
-        // were the real stockQuantity.
-        onEdit: (p) => {
-          setEditing({ ...p, stockQuantity: p.brandNewQuantity })
-          setFormOpen(true)
-        },
-        onDelete: (p) => setDeleting({ ...p, stockQuantity: p.brandNewQuantity }),
+        onDelete: (p) => setDeleting(p),
       }),
-    [can, user?.role]
+    [can]
   )
 
   const exportColumns = [
     { header: "SKU", key: "sku" },
-    { header: "Product Name", key: "name" },
-    { header: "Date Added", key: "dateAdded" },
+    { header: "Description", key: "name" },
     { header: "Category", key: "category" },
-    { header: "Supplier", key: "supplierName" },
-    { header: "Stock Qty", key: "stockQuantity" },
+    { header: "P_Balance", key: "pBalance" },
+    { header: "In Stock", key: "inStockOnDate" },
+    { header: "Out Stock", key: "outStockOnDate" },
+    { header: "Balance", key: "balance" },
     { header: "Brand New", key: "brandNewQuantity" },
-    { header: "2nd Hand", key: "secondHandQuantity" },
+    { header: "2nd hand (ready)", key: "secondHandReadyQuantity" },
+    { header: "2nd hand (need repair)", key: "secondHandRepairQuantity" },
+    { header: "Demo", key: "demoQuantity" },
     { header: "Min Level", key: "minStockLevel" },
     { header: "Status", key: "stockStatus" },
+    { header: "Date Added", key: "dateAdded" },
+    { header: "Supplier", key: "supplierName" },
     ...(isAdmin ? [{ header: "Purchase Price", key: "purchasePrice" }] : []),
     { header: "Selling Price", key: "sellingPrice" },
   ]
@@ -136,66 +204,79 @@ export default function InventoryPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Track stock levels, pricing and suppliers.</p>
         </div>
-        {can("inventory:add") && (
-          <Button
-            onClick={() => {
-              setEditing(undefined)
-              setFormOpen(true)
-            }}
-            className="gap-1.5"
-          >
-            <Plus className="h-4 w-4" /> Add Product
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link href="/inventory/in-and-out">
+            <Button variant="outline" className="gap-1.5">
+              <ArrowLeftRight className="h-4 w-4" /> In &amp; Out Summary
+            </Button>
+          </Link>
+          <PanelExportMenu columns={exportColumns} rows={filteredRows} fileName="inventory" />
+          {can("inventory:add") && (
+            <Button
+              onClick={() => {
+                setEditing(undefined)
+                setFormOpen(true)
+              }}
+              className="gap-1.5"
+            >
+              <Plus className="h-4 w-4" /> Add Product
+            </Button>
+          )}
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <DataTable
-            columns={columns}
-            data={scopedRows}
-            searchPlaceholder="Search by name, SKU, barcode..."
-            onFilteredRowsChange={setFilteredRows}
-            emptyMessage="No products found."
-            toolbar={
-              <>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-9 w-[150px]">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {PRODUCT_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                  <SelectTrigger className="h-9 w-[150px]">
-                    <SelectValue placeholder="Stock Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="in-stock">In Stock</SelectItem>
-                    <SelectItem value="low-stock">Low Stock</SelectItem>
-                    <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-                  </SelectContent>
-                </Select>
-                <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                <ExportButtons
-                  title="Inventory Report"
-                  subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                  fileName="inventory"
-                  columns={exportColumns}
-                  rows={filteredRows}
-                />
-              </>
-            }
-          />
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4 items-start">
+        <DateControl value={selectedDate} onChange={setSelectedDate} />
+
+        <Card>
+          <CardContent className="pt-6">
+            <DataTable
+              columns={columns}
+              data={scopedRows}
+              searchPlaceholder="Search by name, SKU, barcode..."
+              onFilteredRowsChange={setFilteredRows}
+              emptyMessage="No products found."
+              onRowClick={
+                canEdit
+                  ? (p) => {
+                      setEditing(p)
+                      setFormOpen(true)
+                    }
+                  : undefined
+              }
+              toolbar={
+                <>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-9 w-[150px]">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {PRODUCT_CATEGORIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                    <SelectTrigger className="h-9 w-[150px]">
+                      <SelectValue placeholder="Stock Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="in-stock">In Stock</SelectItem>
+                      <SelectItem value="low-stock">Low Stock</SelectItem>
+                      <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+                </>
+              }
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <ProductFormDialog open={formOpen} onOpenChange={setFormOpen} product={editing} />
 

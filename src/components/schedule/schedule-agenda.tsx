@@ -1,0 +1,148 @@
+"use client"
+
+import * as React from "react"
+import Link from "next/link"
+import { CalendarClock, Plus, ArrowRight } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
+import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import type { ScheduleJob } from "@/lib/types"
+
+function MarkJobDoneDialog({
+  job,
+  onOpenChange,
+}: {
+  job: ScheduleJob | undefined
+  onOpenChange: (open: boolean) => void
+}) {
+  const updateJob = useUpdateScheduleJob()
+  const [remarks, setRemarks] = React.useState(() => job?.remarks ?? "")
+
+  return (
+    <Dialog open={!!job} onOpenChange={onOpenChange}>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>Mark Job as Done</DialogTitle>
+          <DialogDescription>
+            Add remarks about what was done for this {job ? JOB_TYPE_LABELS[job.jobType].toLowerCase() : "job"}.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          rows={4}
+          placeholder="What did you do on this job/errand?"
+          autoFocus
+        />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={updateJob.isPending}
+            onClick={async () => {
+              if (!job) return
+              await updateJob.mutateAsync({ id: job.id, input: { status: "completed", remarks } })
+              onOpenChange(false)
+            }}
+          >
+            {updateJob.isPending ? "Saving..." : "Save & Mark Done"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function ScheduleAgenda({ date }: { date: string }) {
+  const { data: jobs = [], isPending } = useScheduleJobs()
+  const updateJob = useUpdateScheduleJob()
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [markingDone, setMarkingDone] = React.useState<ScheduleJob | undefined>(undefined)
+
+  const todaysJobs = React.useMemo(
+    () => jobs.filter((j) => j.scheduledDate === date),
+    [jobs, date]
+  )
+
+  function toggleComplete(job: ScheduleJob) {
+    if (job.status === "completed") {
+      updateJob.mutate({ id: job.id, input: { status: "pending" } })
+      return
+    }
+    setMarkingDone(job)
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex min-w-0 max-w-full flex-col items-stretch gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between">
+        <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+          <CalendarClock className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Schedule</span>
+        </CardTitle>
+        <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap">
+          <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={() => setFormOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> Schedule Job
+          </Button>
+          <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
+            <Button size="sm" variant="outline" className="w-full gap-1.5">
+              Full Schedule <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isPending && (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        )}
+        {!isPending && todaysJobs.length === 0 && (
+          <p className="text-sm text-muted-foreground py-6 text-center">No jobs scheduled for this date.</p>
+        )}
+        {!isPending && todaysJobs.length > 0 && (
+          <div className="divide-y">
+            {todaysJobs.map((job) => (
+              <div key={job.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                <Checkbox
+                  checked={job.status === "completed"}
+                  onCheckedChange={() => toggleComplete(job)}
+                  aria-label="Mark complete"
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                    <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
+                    {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{job.technician}</p>
+                  {job.remarks && (
+                    <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>
+                  )}
+                </div>
+                <PlanStatusBadge status={job.status} />
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <ScheduleFormDialog open={formOpen} onOpenChange={setFormOpen} defaultDate={date} />
+      <MarkJobDoneDialog key={markingDone?.id ?? "none"} job={markingDone} onOpenChange={(o) => !o && setMarkingDone(undefined)} />
+    </Card>
+  )
+}
