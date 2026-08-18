@@ -164,6 +164,8 @@ const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   contactEmails: [],
   monitoringDefaultMonths: 6,
   monitoringIntervals: {},
+  dailyReportLayout: [],
+  dailyReportPanelSizes: {},
 }
 
 export async function getSettings(): Promise<CompanySettings> {
