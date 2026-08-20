@@ -24,13 +24,17 @@ import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { ResizablePanel } from "@/components/dashboard/resizable-panel"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
-import { getFilterChangeColumns, getFilterChangeExpandedColumns } from "@/components/filter-change/filter-change-columns"
+import {
+  getFilterChangeColumns,
+  getFilterChangeExpandedColumns,
+  FILTER_CHANGE_EXPORT_COLUMNS,
+} from "@/components/filter-change/filter-change-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
-import { getCollectionsColumns } from "@/components/collections/collections-columns"
+import { getCollectionsColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { useFilterChangePlans, useDeleteFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans } from "@/lib/hooks/use-install-plans"
@@ -199,6 +203,8 @@ export function DailyReportSection() {
         onAdd={() => setFilterChangeFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
+        exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
+        exportFileName="filter-change-plan"
       />
     ),
     installation: (
@@ -248,6 +254,8 @@ export function DailyReportSection() {
         onAdd={() => setCollectionsFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
+        exportColumns={COLLECTIONS_EXPORT_COLUMNS}
+        exportFileName="collection-plan"
       />
     ),
   }

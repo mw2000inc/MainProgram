@@ -8,27 +8,34 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
+import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { getRepairFullColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { useDeleteRepairPlans, useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
+import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
 export default function RepairPlanPage() {
   const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useRepairPlans()
   const deletePlans = useDeleteRepairPlans()
 
   const [formOpen, setFormOpen] = React.useState(false)
+  const [editing, setEditing] = React.useState<RepairPlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<RepairPlan | undefined>(undefined)
+  const [filteredRows, setFilteredRows] = React.useState<RepairPlan[]>(plans)
+
+  const selection = useSplitViewSelection(filteredRows)
 
   const columns = React.useMemo(
     () =>
       getRepairFullColumns({
-        canDelete: user?.role === "admin",
+        canDelete: isAdmin,
         onDelete: (plan) => setDeleting(plan),
       }),
-    [user?.role]
+    [isAdmin]
   )
 
   if (isPending) {
@@ -39,6 +46,8 @@ export default function RepairPlanPage() {
       </div>
     )
   }
+
+  const selected = selection.selected
 
   return (
     <div className="space-y-6">
@@ -51,24 +60,84 @@ export default function RepairPlanPage() {
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={REPAIR_EXPORT_COLUMNS} rows={plans} fileName="repair-plan" />
-          <Button className="gap-1.5" onClick={() => setFormOpen(true)}>
+          <Button
+            className="gap-1.5"
+            onClick={() => {
+              setEditing(undefined)
+              setFormOpen(true)
+            }}
+          >
             <Plus className="h-4 w-4" /> Add
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <DataTable
-            columns={columns}
-            data={plans}
-            searchPlaceholder="Search by account name, order no, problem..."
-            emptyMessage="No repair plans found."
-          />
-        </CardContent>
-      </Card>
+      <SplitViewLayout
+        isOpen={selection.isOpen}
+        expanded={selection.expanded}
+        list={
+          <Card>
+            <CardContent className="pt-6">
+              <DataTable
+                columns={columns}
+                data={plans}
+                searchPlaceholder="Search by account name, order no, problem..."
+                emptyMessage="No repair plans found."
+                onFilteredRowsChange={setFilteredRows}
+                onRowClick={(row) => selection.open(row)}
+              />
+            </CardContent>
+          </Card>
+        }
+        detail={
+          selected && (
+            <DetailPanel
+              title={selected.accountName}
+              icon={Wrench}
+              subtitle={selected.orderNo}
+              onEdit={
+                isAdmin
+                  ? () => {
+                      setEditing(selected)
+                      setFormOpen(true)
+                    }
+                  : undefined
+              }
+              onDelete={isAdmin ? () => setDeleting(selected) : undefined}
+              onPrev={selection.prev}
+              onNext={selection.next}
+              hasPrev={selection.hasPrev}
+              hasNext={selection.hasNext}
+              expanded={selection.expanded}
+              onToggleExpand={() => selection.setExpanded((v) => !v)}
+              onClose={selection.close}
+            >
+              <DetailField label="Issued Date" value={formatDate(selected.issuedDate)} />
+              <DetailField label="Order No" value={selected.orderNo} />
+              <DetailField label="Account Name" value={selected.accountName} />
+              <DetailField label="Unit IN/OUT" value={selected.unitInOut} />
+              <DetailField label="Problem" value={selected.problem} className="sm:col-span-2" />
+              <DetailField label="Solution / Status" value={selected.solutionStatus} className="sm:col-span-2" />
+              <DetailField label="Pre D" value={selected.preD ? formatDate(selected.preD) : undefined} />
+              <DetailField label="Acc D" value={selected.accD ? formatDate(selected.accD) : undefined} />
+              <DetailField label="TH" value={selected.th} />
+              <DetailField label="Part No" value={selected.partNo} />
+              <DetailField label="AMT" value={formatCurrency(selected.amt)} />
+              <DetailField label="Status" value={selected.status} />
+            </DetailPanel>
+          )
+        }
+      />
 
-      <RepairFormDialog open={formOpen} onOpenChange={setFormOpen} defaultDate={new Date().toISOString().slice(0, 10)} />
+      <RepairFormDialog
+        open={formOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o)
+          if (!o) setEditing(undefined)
+        }}
+        defaultDate={new Date().toISOString().slice(0, 10)}
+        plan={editing}
+      />
 
       <ConfirmDialog
         open={!!deleting}
@@ -78,8 +147,10 @@ export default function RepairPlanPage() {
         loading={deletePlans.isPending}
         onConfirm={async () => {
           if (!deleting) return
+          const wasSelected = selected?.id === deleting.id
           await deletePlans.mutateAsync([deleting.id])
           setDeleting(undefined)
+          if (wasSelected) selection.close()
         }}
       />
     </div>

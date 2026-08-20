@@ -16,6 +16,16 @@ export const JOB_TYPE_LABELS: Record<ScheduleJobType, string> = {
   other: "Other",
 }
 
+export const SCHEDULE_EXPORT_COLUMNS = [
+  { header: "Date", key: "scheduledDate" },
+  { header: "Job Type", key: "jobType" },
+  { header: "Technician", key: "technician" },
+  { header: "Order No", key: "orderNo" },
+  { header: "Status", key: "status" },
+  { header: "Notes", key: "notes" },
+  { header: "Remarks", key: "remarks" },
+]
+
 export function getScheduleColumns({
   canDelete,
   onDelete,

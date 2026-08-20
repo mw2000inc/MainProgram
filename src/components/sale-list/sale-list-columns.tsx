@@ -9,7 +9,7 @@ import type { SaleListEntry } from "@/lib/types"
 
 export type SaleListRow = SaleListEntry & { accountLabel: string }
 
-function StatusCell({ status }: { status: SaleListEntry["status"] }) {
+export function StatusCell({ status }: { status: SaleListEntry["status"] }) {
   if (status === "RENT") {
     return (
       <Badge variant="outline" className="border-warning/20 bg-warning/10 text-warning font-medium">

@@ -30,9 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useCreateSaleListEntry } from "@/lib/hooks/use-sale-list"
+import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
-import type { SaleListStatus } from "@/lib/types"
+import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
 
@@ -54,7 +54,23 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(): FormValues {
+function defaultValues(entry?: SaleListEntry): FormValues {
+  if (entry) {
+    return {
+      orderNumber: entry.orderNumber,
+      installedDate: entry.installedDate ?? "",
+      customerId: entry.customerId ?? "",
+      productNo: entry.productNo,
+      sc: entry.sc,
+      cf: entry.cf,
+      ct: entry.ct,
+      cpY1Y2: entry.cpY1Y2,
+      cpStart: entry.cpStart ?? "",
+      cpEnd: entry.cpEnd ?? "",
+      note: entry.note ?? "",
+      status: entry.status,
+    }
+  }
   return {
     orderNumber: "",
     installedDate: "",
@@ -74,41 +90,55 @@ function defaultValues(): FormValues {
 export function SaleListFormDialog({
   open,
   onOpenChange,
+  entry,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Editing an existing entry instead of creating a new one.
+  entry?: SaleListEntry
 }) {
+  const isEdit = !!entry
   const createEntry = useCreateSaleListEntry()
+  const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(),
+    defaultValues: defaultValues(entry),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues())
+    if (open) form.reset(defaultValues(entry))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, entry])
 
   async function onSubmit(values: FormValues) {
-    await createEntry.mutateAsync({
+    const input = {
       ...values,
       productNo: values.productNo ?? "",
       sc: values.sc ?? "",
       cf: values.cf ?? "",
       ct: values.ct ?? "",
       cpY1Y2: values.cpY1Y2 ?? "",
-    })
+    }
+    if (isEdit) {
+      await updateEntry.mutateAsync({ id: entry.id, input })
+    } else {
+      await createEntry.mutateAsync(input)
+    }
     onOpenChange(false)
   }
+
+  const pending = createEntry.isPending || updateEntry.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Add Sale List Entry</DialogTitle>
-          <DialogDescription>Track a member&apos;s install / care-plan coverage.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Sale List Entry" : "Add Sale List Entry"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update this member's install / care-plan coverage." : "Track a member's install / care-plan coverage."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -297,8 +327,8 @@ export function SaleListFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createEntry.isPending}>
-                {createEntry.isPending ? "Saving..." : "Add"}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
               </Button>
             </DialogFooter>
           </form>

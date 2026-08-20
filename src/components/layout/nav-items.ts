@@ -9,6 +9,7 @@ import {
   CalendarClock,
   UserCog,
   Settings,
+  Banknote,
   type LucideIcon,
 } from "lucide-react"
 import type { Permission } from "@/lib/auth/auth-context"
@@ -28,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/install", label: "Install", icon: HardHat },
   { href: "/filter-change", label: "Filter Change", icon: Droplets },
   { href: "/repair-plan", label: "Repair Plan", icon: Wrench },
+  { href: "/collection-plan", label: "Collection Plan", icon: Banknote },
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/sale-list", label: "Sale List", icon: ClipboardCheck },
   { href: "/users", label: "Users", icon: UserCog, adminOnly: true },

@@ -14,6 +14,7 @@ import {
   QrCode,
   Droplet,
   Hash,
+  Download,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,10 +30,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DataTable } from "@/components/data-table/data-table"
 import { ContractStatusBadge } from "@/components/shared/status-badge"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
+import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
+import { getSaleListColumns, getSaleListRowClassName, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
@@ -47,9 +52,21 @@ export default function CustomerProfilePage() {
   const { user } = useAuth()
   const { data: customer, isPending } = useCustomer(params.id)
   const { data: settings } = useSettings()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const updateCustomer = useUpdateCustomer(user?.id ?? "")
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
+  const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
+  // Resolved client-side only (window.location.origin, same as the printable-
+  // card dialog) — computing this inline during render would disagree between
+  // the server render (no window) and the client's first render, causing a
+  // hydration mismatch. params.id is used rather than customer.id so this
+  // doesn't have to wait on the customer query to resolve.
+  const [scanUrl, setScanUrl] = React.useState("")
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setScanUrl(getScanUrl(params.id))
+  }, [params.id])
   const [technicianOpen, setTechnicianOpen] = React.useState(false)
   const [technicianDraft, setTechnicianDraft] = React.useState(TECHNICIAN_NA)
   const [installedDateOpen, setInstalledDateOpen] = React.useState(false)
@@ -83,6 +100,21 @@ export default function CustomerProfilePage() {
   const status = getContractStatus(customer.contractEnd)
   const serviceHistory = getServiceHistory(customer)
 
+  const relatedSales: SaleListRow[] = saleListEntries
+    .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
+    .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName }))
+  const saleListColumns = getSaleListColumns({ canDelete: false, onDelete: () => {} })
+
+  const orderNumber = customer.orderNumber
+  function handleDownloadQr() {
+    const dataUrl = qrCanvasRef.current?.toDataURL("image/png")
+    if (!dataUrl) return
+    const a = document.createElement("a")
+    a.href = dataUrl
+    a.download = `${orderNumber}-qr.png`
+    a.click()
+  }
+
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" onClick={() => router.push("/customers")}>
@@ -107,13 +139,32 @@ export default function CustomerProfilePage() {
               {formatDate(customer.createdAt)}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-1.5" onClick={() => setQrOpen(true)}>
-              <QrCode className="h-4 w-4" /> QR Code
-            </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-4 w-4" /> Edit
-            </Button>
+          <div className="flex items-center gap-3">
+            {/* Persistent on the page itself (not just inside the printable-card
+                dialog below) — same scan link/QR generation, just always visible. */}
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="rounded-md border bg-white p-1.5">
+                <CustomerQrCanvas ref={qrCanvasRef} value={scanUrl} size={256} style={{ width: 72, height: 72 }} />
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title="Download QR"
+                onClick={handleDownloadQr}
+                disabled={!scanUrl}
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="gap-1.5" onClick={() => setQrOpen(true)}>
+                <QrCode className="h-4 w-4" /> QR Code
+              </Button>
+              <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -122,6 +173,7 @@ export default function CustomerProfilePage() {
         <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
           <TabsTrigger value="personal">Personal Info</TabsTrigger>
           <TabsTrigger value="service">Service History</TabsTrigger>
+          <TabsTrigger value="sales">Related Sales</TabsTrigger>
         </TabsList>
 
         <div className="flex flex-wrap gap-2">
@@ -384,6 +436,24 @@ export default function CustomerProfilePage() {
                   </div>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sales">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Related Sales</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={saleListColumns}
+                data={relatedSales}
+                searchPlaceholder="Search by order number, product..."
+                emptyMessage="No sale list entries for this member."
+                getRowClassName={getSaleListRowClassName}
+                onRowClick={(row) => router.push(`/sale-list/${row.id}`)}
+              />
             </CardContent>
           </Card>
         </TabsContent>

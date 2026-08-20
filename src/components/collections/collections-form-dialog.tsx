@@ -23,7 +23,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useCreateCollection } from "@/lib/hooks/use-collections"
+import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
+import type { CollectionPlan } from "@/lib/types"
 
 const schema = z.object({
   orderNo: z.string().min(1, "Order number is required"),
@@ -38,9 +39,21 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(defaultDate: string): FormValues {
+function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: CollectionPlan): FormValues {
+  if (entry) {
+    return {
+      orderNo: entry.orderNo,
+      accountName: entry.accountName,
+      amount: String(entry.amount),
+      ct: entry.ct,
+      collectionDate: entry.collectionDate,
+      preD: entry.preD ?? "",
+      accD: entry.accD ?? "",
+      note: entry.note ?? "",
+    }
+  }
   return {
-    orderNo: "",
+    orderNo: defaultOrderNo ?? "",
     accountName: "",
     amount: "0",
     ct: "",
@@ -55,38 +68,50 @@ export function CollectionsFormDialog({
   open,
   onOpenChange,
   defaultDate,
+  defaultOrderNo,
+  entry,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
+  // Pre-fills Order Number when opened from an order's own detail page.
+  defaultOrderNo?: string
+  // Editing an existing collection instead of creating a new one.
+  entry?: CollectionPlan
 }) {
+  const isEdit = !!entry
   const createCollection = useCreateCollection()
+  const updateCollection = useUpdateCollection()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(defaultDate),
+    defaultValues: defaultValues(defaultDate, defaultOrderNo, entry),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate))
+    if (open) form.reset(defaultValues(defaultDate, defaultOrderNo, entry))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate])
+  }, [open, defaultDate, defaultOrderNo, entry])
 
   async function onSubmit(values: FormValues) {
-    await createCollection.mutateAsync({
-      ...values,
-      amount: Number(values.amount),
-      ct: values.ct ?? "",
-      status: "Pending",
-    })
+    const input = { ...values, amount: Number(values.amount), ct: values.ct ?? "" }
+    if (isEdit) {
+      await updateCollection.mutateAsync({ id: entry.id, input })
+    } else {
+      await createCollection.mutateAsync({ ...input, status: "Pending" })
+    }
     onOpenChange(false)
   }
+
+  const pending = createCollection.isPending || updateCollection.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Add Collection Plan</DialogTitle>
-          <DialogDescription>Schedule a payment collection.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Collection Plan" : "Add Collection Plan"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update this collection record." : "Schedule a payment collection."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -200,8 +225,8 @@ export function CollectionsFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createCollection.isPending}>
-                {createCollection.isPending ? "Saving..." : "Add"}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
               </Button>
             </DialogFooter>
           </form>

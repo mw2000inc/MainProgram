@@ -7,27 +7,34 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
-import { getScheduleColumns } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useAuth } from "@/lib/auth/auth-context"
+import { formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
 
 export default function SchedulePage() {
   const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
   const { data: jobs = [], isPending } = useScheduleJobs()
   const deleteJob = useDeleteScheduleJob()
 
   const [formOpen, setFormOpen] = React.useState(false)
+  const [editing, setEditing] = React.useState<ScheduleJob | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<ScheduleJob | undefined>(undefined)
+  const [filteredRows, setFilteredRows] = React.useState<ScheduleJob[]>(jobs)
+
+  const selection = useSplitViewSelection(filteredRows)
 
   const columns = React.useMemo(
     () =>
       getScheduleColumns({
-        canDelete: user?.role === "admin",
+        canDelete: isAdmin,
         onDelete: (job) => setDeleting(job),
       }),
-    [user?.role]
+    [isAdmin]
   )
 
   if (isPending) {
@@ -39,6 +46,8 @@ export default function SchedulePage() {
     )
   }
 
+  const selected = selection.selected
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -48,23 +57,78 @@ export default function SchedulePage() {
           </h1>
           <p className="text-sm text-muted-foreground">Technician job agenda across all dates.</p>
         </div>
-        <Button className="gap-1.5" onClick={() => setFormOpen(true)}>
+        <Button
+          className="gap-1.5"
+          onClick={() => {
+            setEditing(undefined)
+            setFormOpen(true)
+          }}
+        >
           <Plus className="h-4 w-4" /> Schedule Job
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <DataTable
-            columns={columns}
-            data={jobs}
-            searchPlaceholder="Search by technician, order no, notes..."
-            emptyMessage="No scheduled jobs found."
-          />
-        </CardContent>
-      </Card>
+      <SplitViewLayout
+        isOpen={selection.isOpen}
+        expanded={selection.expanded}
+        list={
+          <Card>
+            <CardContent className="pt-6">
+              <DataTable
+                columns={columns}
+                data={jobs}
+                searchPlaceholder="Search by technician, order no, notes..."
+                emptyMessage="No scheduled jobs found."
+                onFilteredRowsChange={setFilteredRows}
+                onRowClick={(row) => selection.open(row)}
+              />
+            </CardContent>
+          </Card>
+        }
+        detail={
+          selected && (
+            <DetailPanel
+              title={JOB_TYPE_LABELS[selected.jobType]}
+              icon={CalendarClock}
+              subtitle={selected.orderNo || selected.technician}
+              onEdit={
+                isAdmin
+                  ? () => {
+                      setEditing(selected)
+                      setFormOpen(true)
+                    }
+                  : undefined
+              }
+              onDelete={isAdmin ? () => setDeleting(selected) : undefined}
+              onPrev={selection.prev}
+              onNext={selection.next}
+              hasPrev={selection.hasPrev}
+              hasNext={selection.hasNext}
+              expanded={selection.expanded}
+              onToggleExpand={() => selection.setExpanded((v) => !v)}
+              onClose={selection.close}
+            >
+              <DetailField label="Date" value={formatDate(selected.scheduledDate)} />
+              <DetailField label="Job Type" value={JOB_TYPE_LABELS[selected.jobType]} />
+              <DetailField label="Technician" value={selected.technician} />
+              <DetailField label="Order No" value={selected.orderNo} />
+              <DetailField label="Status" value={selected.status} />
+              <DetailField label="Notes" value={selected.notes} className="sm:col-span-2" />
+              <DetailField label="Remarks" value={selected.remarks} className="sm:col-span-2" />
+            </DetailPanel>
+          )
+        }
+      />
 
-      <ScheduleFormDialog open={formOpen} onOpenChange={setFormOpen} defaultDate={new Date().toISOString().slice(0, 10)} />
+      <ScheduleFormDialog
+        open={formOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o)
+          if (!o) setEditing(undefined)
+        }}
+        defaultDate={new Date().toISOString().slice(0, 10)}
+        job={editing}
+      />
 
       <ConfirmDialog
         open={!!deleting}
@@ -74,8 +138,10 @@ export default function SchedulePage() {
         loading={deleteJob.isPending}
         onConfirm={async () => {
           if (!deleting) return
+          const wasSelected = selected?.id === deleting.id
           await deleteJob.mutateAsync(deleting.id)
           setDeleting(undefined)
+          if (wasSelected) selection.close()
         }}
       />
     </div>

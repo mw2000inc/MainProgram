@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, Plus, ArrowRight } from "lucide-react"
+import { CalendarClock, Plus, ArrowRight, Printer } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -17,9 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
-import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { printTable } from "@/lib/export/print"
+import { formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
 
 function MarkJobDoneDialog({
@@ -79,12 +82,29 @@ export function ScheduleAgenda({ date }: { date: string }) {
     [jobs, date]
   )
 
+  // Export/print read jobType off the row directly (same {header,key} pattern
+  // as every other panel's export), so swap in the human label here rather
+  // than the raw "filter_change"-style enum value.
+  const exportRows = React.useMemo(
+    () => todaysJobs.map((j) => ({ ...j, jobType: JOB_TYPE_LABELS[j.jobType] })),
+    [todaysJobs]
+  )
+
   function toggleComplete(job: ScheduleJob) {
     if (job.status === "completed") {
       updateJob.mutate({ id: job.id, input: { status: "pending" } })
       return
     }
     setMarkingDone(job)
+  }
+
+  function handlePrint() {
+    printTable({
+      title: "Schedule",
+      subtitle: formatDate(date),
+      columns: SCHEDULE_EXPORT_COLUMNS,
+      rows: exportRows,
+    })
   }
 
   return (
@@ -102,6 +122,12 @@ export function ScheduleAgenda({ date }: { date: string }) {
               Full Schedule <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </Link>
+          <div className="flex items-center gap-1">
+            <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="Print" onClick={handlePrint}>
+              <Printer className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

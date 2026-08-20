@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,8 +17,10 @@ import { DataTable } from "@/components/data-table/data-table"
 import { MonthYearFilter, type MonthYearValue } from "@/components/data-table/month-year-filter"
 import { ExportButtons } from "@/components/shared/export-buttons"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { getCustomerColumns, type CustomerRow } from "@/components/customers/customers-columns"
+import { ContractStatusBadge } from "@/components/shared/status-badge"
 import { useCustomers, useDeleteCustomer } from "@/lib/hooks/use-customers"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate, getContractStatus } from "@/lib/utils"
@@ -25,6 +28,7 @@ import type { ContractStatus, Customer } from "@/lib/types"
 import { parseISO } from "date-fns"
 
 export default function CustomersPage() {
+  const router = useRouter()
   const { user, can } = useAuth()
   const { data: customers = [], isPending } = useCustomers()
   const deleteCustomer = useDeleteCustomer(user?.id ?? "")
@@ -57,6 +61,8 @@ export default function CustomersPage() {
       return true
     })
   }, [rows, statusFilter, monthYear])
+
+  const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
 
   const columns = React.useMemo(
     () =>
@@ -120,40 +126,100 @@ export default function CustomersPage() {
         )}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <DataTable
-            columns={columns}
-            data={scopedRows}
-            searchPlaceholder="Search by name, account number, email..."
-            onFilteredRowsChange={setFilteredRows}
-            emptyMessage="No members found."
-            toolbar={
-              <>
-                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                  <SelectTrigger className="h-9 w-[150px]">
-                    <SelectValue placeholder="Contract Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="expiring">Expiring Soon</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
-                  </SelectContent>
-                </Select>
-                <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                <ExportButtons
-                  title="Member List"
-                  subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                  fileName="members"
-                  columns={exportColumns}
-                  rows={filteredRows}
-                />
-              </>
-            }
-          />
-        </CardContent>
-      </Card>
+      <SplitViewLayout
+        isOpen={selection.isOpen}
+        expanded={selection.expanded}
+        list={
+          <Card>
+            <CardContent className="pt-6">
+              <DataTable
+                columns={columns}
+                data={scopedRows}
+                searchPlaceholder="Search by name, account number, email..."
+                onFilteredRowsChange={setFilteredRows}
+                emptyMessage="No members found."
+                onRowClick={(row) => selection.open(row)}
+                toolbar={
+                  <>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                      <SelectTrigger className="h-9 w-[150px]">
+                        <SelectValue placeholder="Contract Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="expiring">Expiring Soon</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+                    <ExportButtons
+                      title="Member List"
+                      subtitle={`Generated ${formatDate(new Date().toISOString())}`}
+                      fileName="members"
+                      columns={exportColumns}
+                      rows={filteredRows}
+                    />
+                  </>
+                }
+              />
+            </CardContent>
+          </Card>
+        }
+        detail={
+          selection.selected && (
+            <DetailPanel
+              title={selection.selected.companyName || selection.selected.fullName}
+              icon={Users}
+              subtitle={selection.selected.memberAccountNumber}
+              onEdit={
+                can("customers:edit")
+                  ? () => {
+                      setEditing(selection.selected ?? undefined)
+                      setFormOpen(true)
+                    }
+                  : undefined
+              }
+              onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
+              onPrev={selection.prev}
+              onNext={selection.next}
+              hasPrev={selection.hasPrev}
+              hasNext={selection.hasNext}
+              expanded={selection.expanded}
+              // Expand goes to the full profile page (QR code, service history,
+              // related sales) instead of a generic fullscreen field dump.
+              onToggleExpand={() => router.push(`/customers/${selection.selected!.id}`)}
+              onClose={selection.close}
+            >
+              <DetailField label="Member Account#" value={selection.selected.memberAccountNumber} />
+              <DetailField label="Order Number" value={selection.selected.orderNumber} />
+              <DetailField label="Account Name" value={selection.selected.companyName} />
+              <DetailField label="Contact Person" value={selection.selected.fullName} />
+              <DetailField label="Contact Number 1 (Main)" value={selection.selected.contactNumber} />
+              <DetailField label="Contact Number 2 (Sub)" value={selection.selected.contactNumber2} />
+              <DetailField label="Address" value={selection.selected.address} className="sm:col-span-2" />
+              <DetailField label="Email Address 1 (Main)" value={selection.selected.email} />
+              <DetailField label="Email Address 2 (Sub)" value={selection.selected.email2} />
+              <DetailField label="TIN #" value={selection.selected.tin} />
+              <DetailField label="Contract Number" value={selection.selected.contractNumber} />
+              <DetailField
+                label="Status"
+                value={<ContractStatusBadge status={selection.selected.contractStatus} />}
+              />
+              <DetailField label="Contract Start" value={formatDate(selection.selected.contractStart)} />
+              <DetailField label="Contract End" value={formatDate(selection.selected.contractEnd)} />
+              <DetailField label="Water Purification Type" value={selection.selected.dispenserType} />
+              <DetailField label="Water Filter Installed" value={selection.selected.filterInstalled ? "Yes" : "No"} />
+              <DetailField
+                label="Installed Date"
+                value={selection.selected.installedDate ? formatDate(selection.selected.installedDate) : undefined}
+              />
+              <DetailField label="Assigned Technician" value={selection.selected.assignedTechnician} />
+              <DetailField label="Notes" value={selection.selected.notes} className="sm:col-span-2" />
+            </DetailPanel>
+          )
+        }
+      />
 
       <CustomerFormDialog open={formOpen} onOpenChange={setFormOpen} customer={editing} />
 
@@ -168,8 +234,10 @@ export default function CustomersPage() {
           // The mutation's onError already toasts the reason — catch here so that
           // rejection doesn't also surface as an unhandled-error dev overlay.
           try {
+            const wasSelected = selection.selected?.id === deleting.id
             await deleteCustomer.mutateAsync(deleting.id)
             setDeleting(undefined)
+            if (wasSelected) selection.close()
           } catch {
             // handled by the mutation's onError toast
           }

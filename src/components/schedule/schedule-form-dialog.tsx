@@ -31,9 +31,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TECHNICIANS } from "@/lib/constants"
-import { useCreateScheduleJob } from "@/lib/hooks/use-schedule"
+import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
-import type { ScheduleJobType } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
 
@@ -47,37 +47,63 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
+  if (job) {
+    return {
+      jobType: job.jobType,
+      technician: job.technician,
+      orderNo: job.orderNo ?? "",
+      scheduledDate: job.scheduledDate,
+      notes: job.notes ?? "",
+    }
+  }
+  return { jobType: "other", technician: "", orderNo: "", scheduledDate: defaultDate, notes: "" }
+}
+
 export function ScheduleFormDialog({
   open,
   onOpenChange,
   defaultDate,
+  job,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
+  // Editing an existing job instead of scheduling a new one.
+  job?: ScheduleJob
 }) {
+  const isEdit = !!job
   const createJob = useCreateScheduleJob()
+  const updateJob = useUpdateScheduleJob()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { jobType: "other", technician: "", orderNo: "", scheduledDate: defaultDate, notes: "" },
+    defaultValues: defaultValues(defaultDate, job),
   })
 
   React.useEffect(() => {
-    if (open) form.reset({ jobType: "other", technician: "", orderNo: "", scheduledDate: defaultDate, notes: "" })
+    if (open) form.reset(defaultValues(defaultDate, job))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate])
+  }, [open, defaultDate, job])
 
   async function onSubmit(values: FormValues) {
-    await createJob.mutateAsync({ ...values, status: "pending" })
+    if (isEdit) {
+      await updateJob.mutateAsync({ id: job.id, input: values })
+    } else {
+      await createJob.mutateAsync({ ...values, status: "pending" })
+    }
     onOpenChange(false)
   }
+
+  const pending = createJob.isPending || updateJob.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Schedule a Job</DialogTitle>
-          <DialogDescription>Add a technician job to the daily agenda.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Job" : "Schedule a Job"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update this scheduled job." : "Add a technician job to the daily agenda."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -172,8 +198,8 @@ export function ScheduleFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createJob.isPending}>
-                {createJob.isPending ? "Saving..." : "Schedule"}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Schedule"}
               </Button>
             </DialogFooter>
           </form>

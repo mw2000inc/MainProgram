@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { QRCodeCanvas } from "qrcode.react"
 import { Copy, Download, Printer, FileText } from "lucide-react"
+import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
 import jsPDF from "jspdf"
 import {
   Dialog,
@@ -44,10 +44,9 @@ export function CustomerQrDialog({
   const [scanUrl, setScanUrl] = React.useState("")
 
   React.useEffect(() => {
-    // window.location.origin is a client-only external value, unavailable during SSR.
-    if (open && typeof window !== "undefined") {
+    if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setScanUrl(`${window.location.origin}/scan/${customer.id}`)
+      setScanUrl(getScanUrl(customer.id))
     }
   }, [open, customer.id])
 
@@ -230,18 +229,12 @@ function PreviewCard({
       }}
       className="flex items-center rounded-sm overflow-hidden shrink-0"
     >
-      {scanUrl ? (
-        <QRCodeCanvas
-          ref={qrCanvasRef}
-          value={scanUrl}
-          size={512}
-          level="M"
-          marginSize={2}
-          style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }}
-        />
-      ) : (
-        <div style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }} className="bg-neutral-100 animate-pulse" />
-      )}
+      <CustomerQrCanvas
+        ref={qrCanvasRef}
+        value={scanUrl}
+        size={512}
+        style={{ width: `${QR_CM}cm`, height: `${QR_CM}cm` }}
+      />
       <div className="flex flex-1 flex-col justify-center min-w-0">
         <div style={{ fontSize: "8pt", letterSpacing: "0.5px", color: LABEL_COLOR }} className="uppercase">
           Order #

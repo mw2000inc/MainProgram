@@ -23,7 +23,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useCreateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import type { FilterChangePlan } from "@/lib/types"
 
 const schema = z.object({
   orderNumber: z.string().min(1, "Order number is required"),
@@ -42,9 +43,25 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(defaultDate: string): FormValues {
+function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: FilterChangePlan): FormValues {
+  if (plan) {
+    return {
+      orderNumber: plan.orderNumber,
+      memberAccount: plan.memberAccount,
+      filterType: plan.filterType,
+      planDate: plan.planDate,
+      contactNumber: plan.contactNumber,
+      address: plan.address,
+      sc: plan.sc,
+      productNo: plan.productNo,
+      preD: plan.preD ?? "",
+      accD: plan.accD ?? "",
+      serviceman: plan.serviceman,
+      note: plan.note ?? "",
+    }
+  }
   return {
-    orderNumber: "",
+    orderNumber: defaultOrderNumber ?? "",
     memberAccount: "",
     filterType: "",
     planDate: defaultDate,
@@ -63,41 +80,58 @@ export function FilterChangeFormDialog({
   open,
   onOpenChange,
   defaultDate,
+  defaultOrderNumber,
+  plan,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
+  // Pre-fills Order Number when opened from an order's own detail page, so the
+  // new record is tied to that order without the admin retyping it.
+  defaultOrderNumber?: string
+  // Editing an existing plan instead of creating a new one.
+  plan?: FilterChangePlan
 }) {
+  const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
+  const updatePlan = useUpdateFilterChangePlan()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(defaultDate),
+    defaultValues: defaultValues(defaultDate, defaultOrderNumber, plan),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate))
+    if (open) form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate])
+  }, [open, defaultDate, defaultOrderNumber, plan])
 
   async function onSubmit(values: FormValues) {
-    await createPlan.mutateAsync({
+    const input = {
       ...values,
       contactNumber: values.contactNumber ?? "",
       address: values.address ?? "",
       sc: values.sc ?? "",
       productNo: values.productNo ?? "",
       serviceman: values.serviceman ?? "",
-      status: "Pending",
-    })
+    }
+    if (isEdit) {
+      await updatePlan.mutateAsync({ id: plan.id, input })
+    } else {
+      await createPlan.mutateAsync({ ...input, status: "Pending" })
+    }
     onOpenChange(false)
   }
+
+  const pending = createPlan.isPending || updatePlan.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Add Filter Change Plan</DialogTitle>
-          <DialogDescription>Schedule a filter change for a customer&apos;s order.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Filter Change Plan" : "Add Filter Change Plan"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update this filter change plan." : "Schedule a filter change for a customer's order."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -263,8 +297,8 @@ export function FilterChangeFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending ? "Saving..." : "Add"}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
               </Button>
             </DialogFooter>
           </form>

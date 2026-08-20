@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DISPENSER_TYPES } from "@/lib/constants"
-import { useCreateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import type { InstallPlan } from "@/lib/types"
 
 const money = z
   .string()
@@ -56,7 +57,25 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(defaultDate: string): FormValues {
+function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
+  if (plan) {
+    return {
+      inputDate: plan.inputDate,
+      name: plan.name,
+      address: plan.address,
+      contactNumber: plan.contactNumber,
+      model: plan.model,
+      unitPrice: String(plan.unitPrice),
+      cpPrice: String(plan.cpPrice),
+      deliveryInstallationFee: String(plan.deliveryInstallationFee),
+      preInstalledDate: plan.preInstalledDate ?? "",
+      installedDate: plan.installedDate ?? "",
+      note: plan.note ?? "",
+      modelDp: plan.modelDp ?? "",
+      orderNo: plan.orderNo,
+      inOut: plan.inOut,
+    }
+  }
   return {
     inputDate: defaultDate,
     name: "",
@@ -79,41 +98,52 @@ export function InstallFormDialog({
   open,
   onOpenChange,
   defaultDate,
+  plan,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
+  // Editing an existing plan instead of creating a new one.
+  plan?: InstallPlan
 }) {
+  const isEdit = !!plan
   const createPlan = useCreateInstallPlan()
+  const updatePlan = useUpdateInstallPlan()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(defaultDate),
+    defaultValues: defaultValues(defaultDate, plan),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate))
+    if (open) form.reset(defaultValues(defaultDate, plan))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate])
+  }, [open, defaultDate, plan])
 
   async function onSubmit(values: FormValues) {
-    await createPlan.mutateAsync({
+    const input = {
       ...values,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
       unitPrice: Number(values.unitPrice),
       cpPrice: Number(values.cpPrice),
       deliveryInstallationFee: Number(values.deliveryInstallationFee),
-      status: "Pending",
-    })
+    }
+    if (isEdit) {
+      await updatePlan.mutateAsync({ id: plan.id, input })
+    } else {
+      await createPlan.mutateAsync({ ...input, status: "Pending" })
+    }
     onOpenChange(false)
   }
+
+  const pending = createPlan.isPending || updatePlan.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Add Install Plan</DialogTitle>
-          <DialogDescription>Schedule a new installation.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Install Plan" : "Add Install Plan"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Update this installation." : "Schedule a new installation."}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -336,8 +366,8 @@ export function InstallFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending ? "Saving..." : "Add"}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
               </Button>
             </DialogFooter>
           </form>

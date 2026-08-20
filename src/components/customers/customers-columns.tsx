@@ -34,13 +34,12 @@ export function getCustomerColumns({
     },
     {
       // Account Name — falls back to Contact Person when there's no separate company.
+      // Plain text, not a Link: the row itself is now clickable (opens the
+      // split-view detail panel) — "View Profile" in the row menu below is
+      // the direct link to the full page.
       id: "accountName",
       header: "Account Name",
-      cell: ({ row }) => (
-        <Link href={`/customers/${row.original.id}`} className="hover:underline font-medium">
-          {row.original.companyName || row.original.fullName}
-        </Link>
-      ),
+      cell: ({ row }) => <span className="font-medium">{row.original.companyName || row.original.fullName}</span>,
     },
     {
       accessorKey: "fullName",
