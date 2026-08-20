@@ -193,6 +193,8 @@ export default function CustomersPage() {
         <MemberOrderDetail
           customer={selection.selected}
           entry={orderSelection.selected}
+          rows={relatedSaleRows}
+          onSelectOrder={orderSelection.open}
           can={can}
           onPrev={orderSelection.prev}
           onNext={orderSelection.next}
