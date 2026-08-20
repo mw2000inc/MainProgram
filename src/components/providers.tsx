@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth/auth-context"
+import { SidebarCollapseProvider } from "@/lib/sidebar-collapse-context"
 
 // Navigating away (e.g. clicking a sidebar link) while a Radix Dialog/Popover is
 // still open skips its normal close cleanup, leaving `body { pointer-events: none }`
@@ -38,9 +39,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
-            <RouteChangeCleanup />
-            {children}
-            <Toaster richColors position="top-right" closeButton />
+            <SidebarCollapseProvider>
+              <RouteChangeCleanup />
+              {children}
+              <Toaster richColors position="top-right" closeButton />
+            </SidebarCollapseProvider>
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>

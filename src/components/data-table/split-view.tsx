@@ -5,6 +5,7 @@ import { Pencil, Trash2, ChevronLeft, ChevronRight, Maximize2, Minimize2, X, typ
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 
 // AppSheet-style split view: a list on the left, a persistent (non-modal, non-
 // portal) detail panel on the right for whichever row is selected. Nothing
@@ -42,6 +43,10 @@ export function useSplitViewSelection<T extends { id: string }>(rows: T[]) {
 
   const index = selectedId ? rows.findIndex((r) => r.id === selectedId) : -1
   const selected = index >= 0 ? rows[index] : null
+
+  // Collapses the main nav rail to icon-only for as long as this panel is
+  // open, freeing up horizontal space for the list + detail split.
+  useReportDetailPanelOpen(!!selected)
 
   // If the selected row drops out of the current filtered set (search
   // narrows it out, or it was just deleted), close instead of showing stale
@@ -83,22 +88,34 @@ export function SplitViewLayout({
   // month-group list) would get a cramped 3-way split at "lg" — bump the
   // breakpoint for those so the detail column only kicks in on wider screens.
   breakpoint = "lg",
+  // "wide" (default): list fills remaining space, detail is a fixed 400px
+  // sidebar — the usual data-table-plus-preview split. "narrow": the list is
+  // just a slim record picker (e.g. a single "Order Number" column) and the
+  // detail panel takes the remaining space instead, matching AppSheet's own
+  // list-is-a-picker layout once a record is drilled into.
+  listWidth = "wide",
 }: {
   list: React.ReactNode
   detail: React.ReactNode
   isOpen: boolean
   expanded: boolean
   breakpoint?: "lg" | "xl"
+  listWidth?: "wide" | "narrow"
 }) {
   if (isOpen && expanded) {
     return <div>{detail}</div>
   }
+  const narrow = listWidth === "narrow"
   return (
     <div
       className={cn(
         "grid grid-cols-1 items-start gap-4",
-        isOpen && breakpoint === "lg" && "lg:grid-cols-[minmax(0,1fr)_400px]",
-        isOpen && breakpoint === "xl" && "xl:grid-cols-[minmax(0,1fr)_400px]"
+        // Both arbitrary-value classes are written out in full (not built via
+        // string interpolation) so Tailwind's static scanner picks them up.
+        isOpen && breakpoint === "lg" && !narrow && "lg:grid-cols-[minmax(0,1fr)_400px]",
+        isOpen && breakpoint === "lg" && narrow && "lg:grid-cols-[280px_minmax(0,1fr)]",
+        isOpen && breakpoint === "xl" && !narrow && "xl:grid-cols-[minmax(0,1fr)_400px]",
+        isOpen && breakpoint === "xl" && narrow && "xl:grid-cols-[280px_minmax(0,1fr)]"
       )}
     >
       <div className="min-w-0">{list}</div>
@@ -151,41 +168,44 @@ export function DetailPanel({
           </div>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {onEdit && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" title="Edit" onClick={onEdit}>
-              <Pencil className="h-4 w-4" />
+            <Button className="gap-1.5 rounded-full px-3.5" title="Edit" onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
             </Button>
           )}
-          {onDelete && (
+          <div className="flex items-center gap-0.5">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-danger hover:text-danger"
+                title="Delete"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Previous" onClick={onPrev} disabled={!hasPrev}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Next" onClick={onNext} disabled={!hasNext}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-danger hover:text-danger"
-              title="Delete"
-              onClick={onDelete}
+              className="h-8 w-8"
+              title={expanded ? "Collapse" : "Expand"}
+              onClick={onToggleExpand}
             >
-              <Trash2 className="h-4 w-4" />
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Previous" onClick={onPrev} disabled={!hasPrev}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Next" onClick={onNext} disabled={!hasNext}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title={expanded ? "Collapse" : "Expand"}
-            onClick={onToggleExpand}
-          >
-            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Close" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Close" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-6">

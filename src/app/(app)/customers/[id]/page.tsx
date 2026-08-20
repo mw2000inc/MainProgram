@@ -103,7 +103,7 @@ export default function CustomerProfilePage() {
   const relatedSales: SaleListRow[] = saleListEntries
     .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
     .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName }))
-  const saleListColumns = getSaleListColumns({ canDelete: false, onDelete: () => {} })
+  const saleListColumns = getSaleListColumns({ canEdit: false, canDelete: false, onEdit: () => {}, onDelete: () => {} })
 
   const orderNumber = customer.orderNumber
   function handleDownloadQr() {

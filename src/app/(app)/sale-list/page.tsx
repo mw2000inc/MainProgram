@@ -10,10 +10,12 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
+import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
 import { OrderRelatedSection } from "@/components/sale-list/order-related-section"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
 import {
   getSaleListColumns,
+  getSaleListOrderNumberColumn,
   getSaleListRowClassName,
   SALE_LIST_EXPORT_COLUMNS,
   type SaleListRow,
@@ -73,19 +75,28 @@ export default function SaleListPage() {
     [entries, customers]
   )
 
-  const [filteredRows, setFilteredRows] = React.useState<SaleListRow[]>(rows)
-  const selection = useSplitViewSelection(filteredRows)
+  // Drives both modes: closed = the full-width table below; open = the
+  // narrow Order-Number list + detail panel split. Fed the full unfiltered
+  // `rows` (not a search-narrowed subset) so Previous/Next and the narrow
+  // list always cover every order, matching "keep scrolling and clicking
+  // through other orders without leaving this mode."
+  const selection = useSplitViewSelection(rows)
+  const selected = selection.selected
 
-  const columns = React.useMemo(
+  const tableColumns = React.useMemo(
     () =>
       getSaleListColumns({
+        canEdit: isAdmin,
         canDelete: isAdmin,
+        onEdit: (entry) => {
+          setEditing(entry)
+          setFormOpen(true)
+        },
         onDelete: (entry) => setDeleting(entry),
       }),
     [isAdmin]
   )
-
-  const selected = selection.selected
+  const narrowColumns = React.useMemo(() => getSaleListOrderNumberColumn(), [])
 
   const orderFilterChanges = React.useMemo(
     () => (selected ? filterChangePlans.filter((p) => p.orderNumber === selected.orderNumber) : []),
@@ -111,6 +122,14 @@ export default function SaleListPage() {
 
   return (
     <div className="space-y-6">
+      <BreadcrumbTrail
+        items={
+          selected
+            ? [{ label: "MW CP" }, { label: "Sales List", onClick: selection.close }, { label: selected.orderNumber }]
+            : [{ label: "MW CP" }, { label: "Sales List" }]
+        }
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
@@ -132,26 +151,26 @@ export default function SaleListPage() {
         </div>
       </div>
 
-      <SplitViewLayout
-        isOpen={selection.isOpen}
-        expanded={selection.expanded}
-        list={
-          <Card>
-            <CardContent className="pt-6">
-              <DataTable
-                columns={columns}
-                data={rows}
-                searchPlaceholder="Search by order number, account, product..."
-                emptyMessage="No sale list entries found."
-                getRowClassName={getSaleListRowClassName}
-                onFilteredRowsChange={setFilteredRows}
-                onRowClick={(row) => selection.open(row)}
-              />
-            </CardContent>
-          </Card>
-        }
-        detail={
-          selected && (
+      {selected ? (
+        <SplitViewLayout
+          isOpen={selection.isOpen}
+          expanded={selection.expanded}
+          listWidth="narrow"
+          list={
+            <Card>
+              <CardContent className="pt-6">
+                <DataTable
+                  columns={narrowColumns}
+                  data={rows}
+                  searchPlaceholder="Search by order number..."
+                  emptyMessage="No sale list entries found."
+                  getRowClassName={getSaleListRowClassName}
+                  onRowClick={(row) => selection.open(row)}
+                />
+              </CardContent>
+            </Card>
+          }
+          detail={
             <DetailPanel
               title={selected.accountLabel || selected.orderNumber}
               icon={ClipboardCheck}
@@ -232,9 +251,22 @@ export default function SaleListPage() {
               <DetailField label="Status" value={selected.status} />
               <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
-          )
-        }
-      />
+          }
+        />
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            <DataTable
+              columns={tableColumns}
+              data={rows}
+              searchPlaceholder="Search by order number, account, product..."
+              emptyMessage="No sale list entries found."
+              getRowClassName={getSaleListRowClassName}
+              onRowClick={(row) => selection.open(row)}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <SaleListFormDialog
         open={formOpen}

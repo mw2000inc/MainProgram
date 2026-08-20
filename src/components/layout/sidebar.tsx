@@ -6,8 +6,17 @@ import { cn } from "@/lib/utils"
 import { NAV_ITEMS } from "@/components/layout/nav-items"
 import { useAuth } from "@/lib/auth/auth-context"
 import { Logo } from "@/components/shared/logo"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarNav({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void
+  // Icon-only rail, e.g. while a split-view detail panel is open and needs
+  // the extra horizontal space. Labels move into a hover tooltip instead.
+  collapsed?: boolean
+}) {
   const pathname = usePathname()
   const { user } = useAuth()
 
@@ -15,38 +24,52 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-5 py-5">
+      <div className={cn("flex items-center gap-2 px-5 py-5", collapsed && "justify-center px-3")}>
         <Logo className="h-9 w-9 shrink-0" />
-        <div className="flex flex-col leading-tight">
-          <span className="font-semibold text-sm">MW2000</span>
-          <span className="text-xs text-muted-foreground">Water Purification ERP</span>
-        </div>
+        {!collapsed && (
+          <div className="flex flex-col leading-tight">
+            <span className="font-semibold text-sm">MW2000</span>
+            <span className="text-xs text-muted-foreground">Water Purification ERP</span>
+          </div>
+        )}
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto">
+      <nav className={cn("flex-1 space-y-1 py-2 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
           const Icon = item.icon
-          return (
+          const link = (
             <Link
               key={item.href}
               href={item.href}
               onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                collapsed && "justify-center px-2",
                 active
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              {!collapsed && item.label}
             </Link>
+          )
+          if (!collapsed) {
+            return link
+          }
+          return (
+            <Tooltip key={item.href}>
+              <TooltipTrigger asChild>{link}</TooltipTrigger>
+              <TooltipContent side="right">{item.label}</TooltipContent>
+            </Tooltip>
           )
         })}
       </nav>
-      <div className="px-5 py-4 text-xs text-muted-foreground border-t">
-        &copy; {new Date().getFullYear()} MW2000 Inc.
-      </div>
+      {!collapsed && (
+        <div className="px-5 py-4 text-xs text-muted-foreground border-t">
+          &copy; {new Date().getFullYear()} MW2000 Inc.
+        </div>
+      )}
     </div>
   )
 }

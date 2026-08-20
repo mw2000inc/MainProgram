@@ -38,6 +38,9 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // When provided, shows a CSV/Excel export menu in the panel header.
   exportColumns?: ExportColumn[]
   exportFileName?: string
+  // When provided, rows become clickable (e.g. to open a nested detail panel)
+  // instead of being purely informational.
+  onRowClick?: (row: TData) => void
 }
 
 // One shared "compact daily panel" shell for the dashboard's Filter Change / Install /
@@ -58,6 +61,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   onDeleteSelected,
   exportColumns,
   exportFileName,
+  onRowClick,
 }: DashboardPlanPanelProps<TData>) {
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
@@ -198,7 +202,13 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   )
 
   const table = (cols: ColumnDef<TData, unknown>[], pageSize: number) => (
-    <DataTable columns={cols} data={filteredData} emptyMessage={emptyMessage} pageSize={pageSize} />
+    <DataTable
+      columns={cols}
+      data={filteredData}
+      emptyMessage={emptyMessage}
+      pageSize={pageSize}
+      onRowClick={selectMode ? undefined : onRowClick}
+    />
   )
 
   return (

@@ -54,7 +54,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(entry?: SaleListEntry): FormValues {
+function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormValues {
   if (entry) {
     return {
       orderNumber: entry.orderNumber,
@@ -74,7 +74,7 @@ function defaultValues(entry?: SaleListEntry): FormValues {
   return {
     orderNumber: "",
     installedDate: "",
-    customerId: "",
+    customerId: defaultCustomerId ?? "",
     productNo: "",
     sc: "",
     cf: "",
@@ -91,11 +91,15 @@ export function SaleListFormDialog({
   open,
   onOpenChange,
   entry,
+  defaultCustomerId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   // Editing an existing entry instead of creating a new one.
   entry?: SaleListEntry
+  // Pre-selects the Account# (Member) field when adding a new entry from a
+  // member's own Related Sales section.
+  defaultCustomerId?: string
 }) {
   const isEdit = !!entry
   const createEntry = useCreateSaleListEntry()
@@ -104,13 +108,13 @@ export function SaleListFormDialog({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(entry),
+    defaultValues: defaultValues(entry, defaultCustomerId),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(entry))
+    if (open) form.reset(defaultValues(entry, defaultCustomerId))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, entry])
+  }, [open, entry, defaultCustomerId])
 
   async function onSubmit(values: FormValues) {
     const input = {

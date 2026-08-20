@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn, formatDate } from "@/lib/utils"
@@ -31,12 +31,18 @@ export function StatusCell({ status }: { status: SaleListEntry["status"] }) {
   )
 }
 
-// Matches the old AppSheet "MW CP > Sales List" screen's column layout.
+// Matches the old AppSheet "MW CP > Sales List" screen's column layout —
+// the plain full-width table, with per-row Edit/Delete actions since there's
+// no side detail panel here to reach them from otherwise.
 export function getSaleListColumns({
+  canEdit,
   canDelete,
+  onEdit,
   onDelete,
 }: {
+  canEdit: boolean
   canDelete: boolean
+  onEdit: (entry: SaleListRow) => void
   onDelete: (entry: SaleListRow) => void
 }): ColumnDef<SaleListRow, unknown>[] {
   const columns: ColumnDef<SaleListRow, unknown>[] = [
@@ -82,27 +88,82 @@ export function getSaleListColumns({
     },
   ]
 
-  if (canDelete) {
+  if (canEdit || canDelete) {
     columns.push({
-      id: "delete",
+      id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-danger hover:text-danger"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(row.original)
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(row.original)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-danger hover:text-danger"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(row.original)
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       ),
     })
   }
 
   return columns
+}
+
+// Single "Order Number" column for the Sale List page's narrow list once an
+// order is open — a slim record picker next to the detail panel, so the
+// admin can keep clicking through other orders without leaving that view.
+export function getSaleListOrderNumberColumn(): ColumnDef<SaleListRow, unknown>[] {
+  return [
+    {
+      accessorKey: "orderNumber",
+      header: "Order Number",
+      cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
+    },
+  ]
+}
+
+// Compact 5-column set matching the AppSheet "MW CP > Sales List" reference —
+// used for a member's inline "Related Sales_Lists" table, which only
+// surfaces the identifying columns, not the full care-plan detail.
+export function getSaleListSummaryColumns(): ColumnDef<SaleListRow, unknown>[] {
+  return [
+    {
+      accessorKey: "orderNumber",
+      header: "Order Number",
+      cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
+    },
+    {
+      accessorKey: "installedDate",
+      header: "Installed Date",
+      cell: ({ row }) => (row.original.installedDate ? formatDate(row.original.installedDate) : "—"),
+    },
+    {
+      accessorKey: "accountLabel",
+      header: "Account#",
+      cell: ({ row }) => row.original.accountLabel || "—",
+    },
+    { accessorKey: "productNo", header: "Product#" },
+    { accessorKey: "sc", header: "S/C" },
+  ]
 }
 
 // INACTIVE renders strikethrough; RENT is highlighted (via StatusCell) but not

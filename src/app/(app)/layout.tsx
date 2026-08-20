@@ -6,10 +6,13 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { SidebarNav } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { Logo } from "@/components/shared/logo"
+import { useSidebarCollapse } from "@/lib/sidebar-collapse-context"
+import { cn } from "@/lib/utils"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const { collapsed } = useSidebarCollapse()
 
   React.useEffect(() => {
     if (!loading && !user) router.replace("/login")
@@ -28,8 +31,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background print:h-auto print:overflow-visible">
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r bg-sidebar print:hidden">
-        <SidebarNav />
+      <aside
+        className={cn(
+          "hidden lg:flex shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 print:hidden",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        <SidebarNav collapsed={collapsed} />
       </aside>
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar />
