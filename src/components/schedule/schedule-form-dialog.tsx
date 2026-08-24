@@ -32,17 +32,38 @@ import {
 } from "@/components/ui/select"
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { useProducts } from "@/lib/hooks/use-inventory"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
-import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
+const STATUSES: ScheduleJobStatus[] = ["pending", "completed", "cancelled"]
+const STATUS_LABELS: Record<ScheduleJobStatus, string> = {
+  pending: "Pending",
+  completed: "Completed",
+  cancelled: "Cancelled",
+}
+
+// Radix Select forbids an empty-string item value, so "no second technician"
+// needs its own sentinel — mapped back to "" (unset) on submit.
+const NO_SECOND_TECHNICIAN = "__none__"
 
 const schema = z.object({
   jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, "Select a job type"),
   technician: z.string().min(1, "Select a technician"),
+  // Optional second technician — most jobs only need the one above; this is
+  // only for jobs that genuinely need two people (e.g. pull-out + install).
+  technician2: z.string().optional(),
   orderNo: z.string().optional(),
   scheduledDate: z.string().min(1, "Date is required"),
+  status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, "Select a status"),
   notes: z.string().optional(),
+  // Filter-change inventory deduction — which item + how many units to
+  // deduct once this job is marked completed. Only meaningful when jobType
+  // is "filter_change", but kept as plain optional fields on the shared form
+  // rather than a separate dialog.
+  productId: z.string().optional(),
+  quantity: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -52,12 +73,26 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     return {
       jobType: job.jobType,
       technician: job.technician,
+      technician2: job.technician2 ?? NO_SECOND_TECHNICIAN,
       orderNo: job.orderNo ?? "",
       scheduledDate: job.scheduledDate,
+      status: job.status,
       notes: job.notes ?? "",
+      productId: job.productId ?? "",
+      quantity: job.quantity !== undefined ? String(job.quantity) : "",
     }
   }
-  return { jobType: "other", technician: "", orderNo: "", scheduledDate: defaultDate, notes: "" }
+  return {
+    jobType: "other",
+    technician: "",
+    technician2: NO_SECOND_TECHNICIAN,
+    orderNo: "",
+    scheduledDate: defaultDate,
+    status: "pending",
+    notes: "",
+    productId: "",
+    quantity: "",
+  }
 }
 
 export function ScheduleFormDialog({
@@ -75,6 +110,7 @@ export function ScheduleFormDialog({
   const isEdit = !!job
   const createJob = useCreateScheduleJob()
   const updateJob = useUpdateScheduleJob()
+  const { data: products = [] } = useProducts()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, job),
@@ -85,11 +121,22 @@ export function ScheduleFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, job])
 
+  const jobType = form.watch("jobType")
+  const isFilterChange = jobType === "filter_change"
+
   async function onSubmit(values: FormValues) {
+    const input = {
+      ...values,
+      technician2: values.technician2 && values.technician2 !== NO_SECOND_TECHNICIAN ? values.technician2 : undefined,
+      // Deduction fields only mean anything for filter-change jobs — don't
+      // carry a stale product/quantity along if the type gets switched away.
+      productId: isFilterChange ? values.productId || undefined : undefined,
+      quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
+    }
     if (isEdit) {
-      await updateJob.mutateAsync({ id: job.id, input: values })
+      await updateJob.mutateAsync({ id: job.id, input })
     } else {
-      await createJob.mutateAsync({ ...values, status: "pending" })
+      await createJob.mutateAsync(input)
     }
     onOpenChange(false)
   }
@@ -157,6 +204,31 @@ export function ScheduleFormDialog({
             />
             <FormField
               control={form.control}
+              name="technician2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Second Technician (Optional)</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Add a second technician if this job needs two" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_SECOND_TECHNICIAN}>None</SelectItem>
+                      {TECHNICIANS.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="orderNo"
               render={({ field }) => (
                 <FormItem>
@@ -181,6 +253,71 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {STATUS_LABELS[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {isFilterChange && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="productId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Filter to Deduct (Optional)</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select inventory item" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {products.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name} ({p.sku})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quantity to Deduct</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="1" step="1" placeholder="1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
             <FormField
               control={form.control}
               name="notes"

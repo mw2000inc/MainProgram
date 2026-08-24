@@ -26,6 +26,13 @@ export const SCHEDULE_EXPORT_COLUMNS = [
   { header: "Remarks", key: "remarks" },
 ]
 
+// Combines the primary + optional second technician into one display string
+// ("Eubert and Jerson") — used everywhere a job's technician is shown, so a
+// two-technician job always reads the same way.
+export function formatTechnicians(technician: string, technician2?: string): string {
+  return technician2 ? `${technician} and ${technician2}` : technician
+}
+
 export function getScheduleColumns({
   canDelete,
   onDelete,
@@ -47,6 +54,7 @@ export function getScheduleColumns({
     {
       accessorKey: "technician",
       header: "Technician",
+      cell: ({ row }) => formatTechnicians(row.original.technician, row.original.technician2),
     },
     {
       accessorKey: "orderNo",

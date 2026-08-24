@@ -305,7 +305,9 @@ export default function InAndOutSummaryPage() {
         description={
           deleting?.reason === "Sale"
             ? `This movement was auto-generated from a sale. Deleting it will adjust ${deleting?.productName ?? "the product"}'s stock but won't change the original invoice.`
-            : `This will permanently remove this movement and adjust ${deleting?.productName ?? "the product"}'s stock accordingly.`
+            : deleting?.reason === "Filter Change"
+              ? `This movement was auto-generated from a completed filter-change schedule job. Deleting it will adjust ${deleting?.productName ?? "the product"}'s stock but won't change the original schedule entry.`
+              : `This will permanently remove this movement and adjust ${deleting?.productName ?? "the product"}'s stock accordingly.`
         }
         loading={deleteMovement.isPending}
         onConfirm={async () => {

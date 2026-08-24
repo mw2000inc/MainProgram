@@ -115,8 +115,9 @@ type StockMovementRow = {
   second_hand_repair_quantity: number
   demo_quantity: number
   reason: string
-  user_id: string
+  user_id: string | null
   reference_number: string
+  schedule_job_id: string | null
 }
 
 function movementFromRow(row: StockMovementRow): StockMovement {
@@ -131,8 +132,9 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     secondHandRepairQuantity: row.second_hand_repair_quantity,
     demoQuantity: row.demo_quantity,
     reason: row.reason as StockMovement["reason"],
-    userId: row.user_id,
+    userId: row.user_id ?? undefined,
     referenceNumber: row.reference_number,
+    scheduleJobId: row.schedule_job_id ?? undefined,
   }
 }
 

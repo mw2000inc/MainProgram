@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Banknote, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +22,16 @@ function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
 }
 
-export default function CollectionPlanPage() {
+function CollectionPlanPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: entries = [], isPending } = useCollections()
   const deleteEntries = useDeleteCollections()
+
+  // Deep link from e.g. the Daily Report's Collection Plan panel
+  // (?id=<entryId>) — opens that record's detail panel directly.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
 
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
   const [formOpen, setFormOpen] = React.useState(false)
@@ -33,7 +39,7 @@ export default function CollectionPlanPage() {
   const [deleting, setDeleting] = React.useState<CollectionPlan | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<CollectionPlan[]>(entries)
 
-  const selection = useSplitViewSelection(filteredRows)
+  const selection = useSplitViewSelection(filteredRows, initialId)
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()
@@ -205,5 +211,22 @@ export default function CollectionPlanPage() {
         }}
       />
     </div>
+  )
+}
+
+function CollectionPlanPageFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function CollectionPlanPage() {
+  return (
+    <React.Suspense fallback={<CollectionPlanPageFallback />}>
+      <CollectionPlanPageContent />
+    </React.Suspense>
   )
 }

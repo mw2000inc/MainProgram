@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Droplets, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +22,16 @@ function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
 }
 
-export default function FilterChangePage() {
+function FilterChangePageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useFilterChangePlans()
   const deletePlans = useDeleteFilterChangePlans()
+
+  // Deep link from e.g. the Daily Report's Filter Change Plan panel
+  // (?id=<planId>) — opens that record's detail panel directly.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
 
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
   const [formOpen, setFormOpen] = React.useState(false)
@@ -33,7 +39,7 @@ export default function FilterChangePage() {
   const [deleting, setDeleting] = React.useState<FilterChangePlan | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<FilterChangePlan[]>(plans)
 
-  const selection = useSplitViewSelection(filteredRows)
+  const selection = useSplitViewSelection(filteredRows, initialId)
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()
@@ -210,5 +216,22 @@ export default function FilterChangePage() {
         }}
       />
     </div>
+  )
+}
+
+function FilterChangePageFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function FilterChangePage() {
+  return (
+    <React.Suspense fallback={<FilterChangePageFallback />}>
+      <FilterChangePageContent />
+    </React.Suspense>
   )
 }

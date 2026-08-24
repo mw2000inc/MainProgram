@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Wrench, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,18 +17,23 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
-export default function RepairPlanPage() {
+function RepairPlanPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useRepairPlans()
   const deletePlans = useDeleteRepairPlans()
+
+  // Deep link from e.g. the Daily Report's Repair Plan panel (?id=<planId>)
+  // — opens that record's detail panel directly.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
 
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<RepairPlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<RepairPlan | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<RepairPlan[]>(plans)
 
-  const selection = useSplitViewSelection(filteredRows)
+  const selection = useSplitViewSelection(filteredRows, initialId)
 
   const columns = React.useMemo(
     () =>
@@ -154,5 +160,22 @@ export default function RepairPlanPage() {
         }}
       />
     </div>
+  )
+}
+
+function RepairPlanPageFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function RepairPlanPage() {
+  return (
+    <React.Suspense fallback={<RepairPlanPageFallback />}>
+      <RepairPlanPageContent />
+    </React.Suspense>
   )
 }

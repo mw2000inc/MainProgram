@@ -139,6 +139,7 @@ export type StockMovementReason =
   | "Return"
   | "Damaged"
   | "Adjustment"
+  | "Filter Change"
 
 export interface StockMovement {
   id: string
@@ -151,8 +152,13 @@ export interface StockMovement {
   secondHandRepairQuantity: number
   demoQuantity: number
   reason: StockMovementReason
-  userId: string
+  // Absent for system-triggered movements (e.g. the filter-change deduction
+  // cron) — every manual movement still always sets this.
+  userId?: string
   referenceNumber: string
+  // Traceability back to the schedule job that triggered this movement, when
+  // applicable (currently only the filter-change auto-deduction).
+  scheduleJobId?: string
 }
 
 export type NotificationType =
@@ -247,6 +253,9 @@ export interface ScheduleJob {
   id: string
   jobType: ScheduleJobType
   technician: string
+  // Optional second technician for jobs that need two people (e.g. a
+  // pull-out + install combo) — most jobs leave this unset.
+  technician2?: string
   customerId?: string
   orderNo?: string
   scheduledDate: string
@@ -254,6 +263,13 @@ export interface ScheduleJob {
   notes?: string
   remarks?: string
   createdAt: string
+  // The following three only apply to jobType "filter_change" — which
+  // Inventory item + how many units to deduct once this job is marked
+  // completed, and when that deduction actually happened (the idempotency
+  // guard: the cron only ever deducts a given job once).
+  productId?: string
+  quantity?: number
+  inventoryDeductedAt?: string
 }
 
 export interface FilterChangePlan {

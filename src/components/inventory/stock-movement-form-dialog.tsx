@@ -71,11 +71,14 @@ const editSchema = z.object({
 
 type EditFormValues = z.infer<typeof editSchema>
 
+const AUTOMATED_ONLY_REASONS = ["Sale", "Filter Change"] as const
+
 function editDefaultValues(m: StockMovement): EditFormValues {
   return {
-    // "Sale" movements never reach this dialog (the actions menu hides them), but the
-    // reason field only accepts the manually-selectable reasons — fall back defensively.
-    reason: m.reason === "Sale" ? "Adjustment" : m.reason,
+    // "Sale"/"Filter Change" movements never reach this dialog (the actions menu
+    // hides them), but the reason field only accepts the manually-selectable
+    // reasons — fall back defensively.
+    reason: (AUTOMATED_ONLY_REASONS as readonly string[]).includes(m.reason) ? "Adjustment" : (m.reason as EditFormValues["reason"]),
     quantityAdded: m.quantityAdded,
     quantityRemoved: m.quantityRemoved,
     secondHandReadyQuantity: m.secondHandReadyQuantity,
@@ -339,6 +342,7 @@ function EditMovementForm({
   const updateMovement = useUpdateStockMovement(user?.id ?? "")
   const selectedProduct = products.find((p) => p.id === movement.productId)
   const isSaleOrigin = movement.reason === "Sale"
+  const isFilterChangeOrigin = movement.reason === "Filter Change"
 
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
@@ -381,6 +385,11 @@ function EditMovementForm({
         {isSaleOrigin && (
           <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-md px-3 py-2">
             This movement was auto-generated from a sale. Correcting it here won&apos;t update the original invoice.
+          </p>
+        )}
+        {isFilterChangeOrigin && (
+          <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-md px-3 py-2">
+            This movement was auto-generated from a completed filter-change schedule job. Correcting it here won&apos;t update the original schedule entry.
           </p>
         )}
         <FormField

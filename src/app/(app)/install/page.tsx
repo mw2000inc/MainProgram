@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { HardHat, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,18 +17,23 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
 
-export default function InstallPage() {
+function InstallPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useInstallPlans()
   const deletePlans = useDeleteInstallPlans()
+
+  // Deep link from e.g. the Daily Report's Installation Plan panel
+  // (?id=<planId>) — opens that record's detail panel directly.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
 
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<InstallPlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<InstallPlan | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<InstallPlan[]>(plans)
 
-  const selection = useSplitViewSelection(filteredRows)
+  const selection = useSplitViewSelection(filteredRows, initialId)
 
   const columns = React.useMemo(
     () =>
@@ -163,5 +169,22 @@ export default function InstallPage() {
         }}
       />
     </div>
+  )
+}
+
+function InstallPageFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function InstallPage() {
+  return (
+    <React.Suspense fallback={<InstallPageFallback />}>
+      <InstallPageContent />
+    </React.Suspense>
   )
 }

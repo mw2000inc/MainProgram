@@ -19,7 +19,7 @@ import {
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
-import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS } from "@/components/schedule/schedule-columns"
+import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { printTable } from "@/lib/export/print"
 import { formatDate } from "@/lib/utils"
@@ -82,11 +82,17 @@ export function ScheduleAgenda({ date }: { date: string }) {
     [jobs, date]
   )
 
-  // Export/print read jobType off the row directly (same {header,key} pattern
-  // as every other panel's export), so swap in the human label here rather
-  // than the raw "filter_change"-style enum value.
+  // Export/print read jobType and technician off the row directly (same
+  // {header,key} pattern as every other panel's export), so swap in the
+  // human label / combined technician names here rather than the raw
+  // "filter_change"-style enum value or a lone primary technician.
   const exportRows = React.useMemo(
-    () => todaysJobs.map((j) => ({ ...j, jobType: JOB_TYPE_LABELS[j.jobType] })),
+    () =>
+      todaysJobs.map((j) => ({
+        ...j,
+        jobType: JOB_TYPE_LABELS[j.jobType],
+        technician: formatTechnicians(j.technician, j.technician2),
+      })),
     [todaysJobs]
   )
 
@@ -155,7 +161,9 @@ export function ScheduleAgenda({ date }: { date: string }) {
                     <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
                     {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{job.technician}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {formatTechnicians(job.technician, job.technician2)}
+                  </p>
                   {job.remarks && (
                     <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>
                   )}

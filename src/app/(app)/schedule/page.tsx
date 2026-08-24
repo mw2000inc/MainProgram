@@ -9,7 +9,7 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
-import { getScheduleColumns, JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate } from "@/lib/utils"
@@ -90,7 +90,7 @@ export default function SchedulePage() {
             <DetailPanel
               title={JOB_TYPE_LABELS[selected.jobType]}
               icon={CalendarClock}
-              subtitle={selected.orderNo || selected.technician}
+              subtitle={selected.orderNo || formatTechnicians(selected.technician, selected.technician2)}
               onEdit={
                 isAdmin
                   ? () => {
@@ -110,7 +110,7 @@ export default function SchedulePage() {
             >
               <DetailField label="Date" value={formatDate(selected.scheduledDate)} />
               <DetailField label="Job Type" value={JOB_TYPE_LABELS[selected.jobType]} />
-              <DetailField label="Technician" value={selected.technician} />
+              <DetailField label="Technician" value={formatTechnicians(selected.technician, selected.technician2)} />
               <DetailField label="Order No" value={selected.orderNo} />
               <DetailField label="Status" value={selected.status} />
               <DetailField label="Notes" value={selected.notes} className="sm:col-span-2" />

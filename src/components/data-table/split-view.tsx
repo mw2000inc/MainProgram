@@ -37,8 +37,12 @@ export function DetailField({
 // currently-visible (post search/filter) rows, not necessarily the full
 // unfiltered dataset, so Previous/Next follows what the admin is actually
 // looking at.
-export function useSplitViewSelection<T extends { id: string }>(rows: T[]) {
-  const [selectedId, setSelectedId] = React.useState<string | null>(null)
+//
+// `initialId` seeds the initial selection (e.g. from a `?id=` deep link) —
+// pass it once on first render, not on every render, since it only affects
+// the `useState` initializer.
+export function useSplitViewSelection<T extends { id: string }>(rows: T[], initialId?: string) {
+  const [selectedId, setSelectedId] = React.useState<string | null>(initialId ?? null)
   const [expanded, setExpanded] = React.useState(false)
 
   const index = selectedId ? rows.findIndex((r) => r.id === selectedId) : -1
@@ -50,14 +54,16 @@ export function useSplitViewSelection<T extends { id: string }>(rows: T[]) {
 
   // If the selected row drops out of the current filtered set (search
   // narrows it out, or it was just deleted), close instead of showing stale
-  // or empty content.
+  // or empty content. Gated on `rows.length > 0` so a `?id=` deep link isn't
+  // immediately cleared while the backing query is still loading (`rows` is
+  // briefly `[]` before react-query resolves).
   React.useEffect(() => {
-    if (selectedId && index === -1) {
+    if (selectedId && index === -1 && rows.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedId(null)
       setExpanded(false)
     }
-  }, [selectedId, index])
+  }, [selectedId, index, rows.length])
 
   return {
     selected,

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   DndContext,
   KeyboardSensor,
@@ -91,6 +92,7 @@ const FROZEN_IN_GRID_IDS: PanelId[] = ["announcements", "schedule"]
 // (drag-and-drop) and persisted to the shared company_settings row, so every
 // viewer sees the same saved layout — staff get it read-only, with no handles.
 export function DailyReportSection() {
+  const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
 
@@ -205,6 +207,7 @@ export function DailyReportSection() {
         onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
         exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
         exportFileName="filter-change-plan"
+        onRowClick={(row) => router.push(`/filter-change?id=${row.id}`)}
       />
     ),
     installation: (
@@ -222,6 +225,7 @@ export function DailyReportSection() {
         onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
         exportColumns={INSTALL_EXPORT_COLUMNS}
         exportFileName="install-plan"
+        onRowClick={(row) => router.push(`/install?id=${row.id}`)}
       />
     ),
     repair: (
@@ -239,6 +243,7 @@ export function DailyReportSection() {
         onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
         exportColumns={REPAIR_EXPORT_COLUMNS}
         exportFileName="repair-plan"
+        onRowClick={(row) => router.push(`/repair-plan?id=${row.id}`)}
       />
     ),
     collection: (
@@ -256,6 +261,7 @@ export function DailyReportSection() {
         onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
         exportColumns={COLLECTIONS_EXPORT_COLUMNS}
         exportFileName="collection-plan"
+        onRowClick={(row) => router.push(`/collection-plan?id=${row.id}`)}
       />
     ),
   }

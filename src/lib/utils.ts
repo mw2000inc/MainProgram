@@ -51,6 +51,18 @@ export function getMonitoringEndDate(anchorDate: string, intervalMonths: number)
   return addMonths(parseISO(anchorDate), intervalMonths)
 }
 
+// Same due-date concept as getMonitoringEndDate above, bundled for callers that
+// only have the customer + settings on hand (e.g. the filter-change auto-
+// schedule cron) rather than a pre-picked anchor/interval.
+export function getCustomerFilterChangeDueDate(
+  customer: { installedDate?: string; contractStart: string; dispenserType: string },
+  settings?: { monitoringDefaultMonths?: number; monitoringIntervals?: Record<string, number> } | null
+): Date {
+  const anchor = customer.installedDate ?? customer.contractStart
+  const months = getMonitoringIntervalMonths(customer.dispenserType, settings)
+  return getMonitoringEndDate(anchor, months)
+}
+
 // Three-bucket customer-facing status derived from the monitoring End Date:
 // past due -> for replacement, within the expiry window -> expiring, else active.
 export function getMonitoringStatus(endDate: Date | string, today: Date = new Date()): MonitoringViewStatus {
