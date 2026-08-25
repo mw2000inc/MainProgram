@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Plus, QrCode, Users } from "lucide-react"
+import { MapPin, Plus, Printer, QrCode, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -32,6 +32,7 @@ import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { ensurePrimaryOrderRow } from "@/lib/sale-list"
+import { printFieldsAndTable } from "@/lib/export/print"
 import { formatDate, getContractStatus } from "@/lib/utils"
 import type { ContractStatus, Customer } from "@/lib/types"
 import { parseISO } from "date-fns"
@@ -125,6 +126,38 @@ export default function CustomersPage() {
     { header: "Water Purification Type", key: "dispenserType" },
     { header: "Technician", key: "assignedTechnician" },
   ]
+
+  // Mirrors exactly what's shown in the Member detail panel below (the six
+  // read-only fields plus Related Sales_Lists) — not the fuller exportColumns
+  // set above, which includes fields the panel itself doesn't display.
+  function handlePrint() {
+    const member = selection.selected
+    if (!member) return
+    printFieldsAndTable({
+      title: member.companyName || member.fullName,
+      subtitle: `Member Account# ${member.memberAccountNumber}`,
+      fields: [
+        { label: "Member Account#", value: member.memberAccountNumber },
+        { label: "Account Name", value: member.companyName || "" },
+        { label: "Account Contact Person", value: member.fullName },
+        { label: "Contact Number 1 (Main)", value: member.contactNumber },
+        { label: "Contact Number 2 (Sub)", value: member.contactNumber2 || "" },
+        { label: "Address", value: member.address },
+      ],
+      tableTitle: "Related Sales_Lists",
+      columns: [
+        { header: "Order Number", key: "orderNumber" },
+        { header: "Installed Date", key: "installedDate" },
+        { header: "Account#", key: "accountLabel" },
+        { header: "Product#", key: "productNo" },
+        { header: "S/C", key: "sc" },
+      ],
+      rows: relatedSaleRows.map((r) => ({
+        ...r,
+        installedDate: r.installedDate ? formatDate(r.installedDate) : "",
+      })),
+    })
+  }
 
   if (isPending) {
     return (
@@ -240,9 +273,14 @@ export default function CustomersPage() {
             }
             onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
             headerActions={
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
-                <QrCode className="h-3.5 w-3.5" /> QR Code
-              </Button>
+              <>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
+                  <Printer className="h-3.5 w-3.5" /> Print
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
+                  <QrCode className="h-3.5 w-3.5" /> QR Code
+                </Button>
+              </>
             }
             onPrev={selection.prev}
             onNext={selection.next}
