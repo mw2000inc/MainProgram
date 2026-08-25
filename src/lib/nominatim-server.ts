@@ -76,6 +76,20 @@ export async function geocodeWithFallback(address: string): Promise<GeoPoint | n
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
+
+  // Drop exactly one middle segment (never the first — house/street, the
+  // most specific part — or the last — city, needed for context) and keep
+  // the rest in order. Handles a single bad token poisoning the whole
+  // query even though everything else is well-mapped — e.g. a barangay
+  // stored as "Balongbato" but mapped in OSM as "Balong Bato": Nominatim
+  // fails "31 Leland Drive, Balongbato, Quezon City" outright, but
+  // "31 Leland Drive, Quezon City" (that one segment omitted) resolves at
+  // full street precision. Tried before the broader front-truncation
+  // fallback below since it keeps more of the address intact.
+  for (let omit = 1; omit < segments.length - 1; omit++) {
+    add([...segments.slice(0, omit), ...segments.slice(omit + 1)].join(", "))
+  }
+
   for (let i = 1; i < segments.length - 1; i++) {
     add(segments.slice(i).join(", "))
   }
