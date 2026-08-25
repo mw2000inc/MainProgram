@@ -5,6 +5,7 @@ import { Pencil, QrCode, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn, formatDate } from "@/lib/utils"
+import { isPrimaryOrderRow } from "@/lib/sale-list"
 import type { SaleListEntry } from "@/lib/types"
 
 export type SaleListRow = SaleListEntry & { accountLabel: string }
@@ -99,6 +100,7 @@ export function getSaleListColumns({
               variant="ghost"
               size="icon"
               className="h-7 w-7"
+              title="Edit"
               onClick={(e) => {
                 e.stopPropagation()
                 onEdit(row.original)
@@ -107,11 +109,15 @@ export function getSaleListColumns({
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
-          {canDelete && (
+          {/* The synthesized primary row (see ensurePrimaryOrderRow) isn't a
+              real row yet — nothing to delete until the first edit creates
+              one. */}
+          {canDelete && !isPrimaryOrderRow(row.original.id) && (
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-danger hover:text-danger"
+              title="Delete"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete(row.original)
@@ -144,15 +150,17 @@ export function getSaleListOrderNumberColumn(): ColumnDef<SaleListRow, unknown>[
 // Compact 5-column set matching the AppSheet "MW CP > Sales List" reference —
 // used for a member's inline "Related Sales_Lists" table, which only
 // surfaces the identifying columns, not the full care-plan detail. Also
-// reused as-is (no `onQrClick`/`onEditClick`) by the public/read-only scan
-// page's own Orders tab, so those action buttons only appear when explicitly
-// requested by an admin-facing caller.
+// reused as-is (no `onQrClick`/`onEditClick`/`onDeleteClick`) by the
+// public/read-only scan page's own Orders tab, so those action buttons only
+// appear when explicitly requested by an admin-facing caller.
 export function getSaleListSummaryColumns({
   onQrClick,
   onEditClick,
+  onDeleteClick,
 }: {
   onQrClick?: (entry: SaleListRow) => void
   onEditClick?: (entry: SaleListRow) => void
+  onDeleteClick?: (entry: SaleListRow) => void
 } = {}): ColumnDef<SaleListRow, unknown>[] {
   const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
@@ -174,7 +182,7 @@ export function getSaleListSummaryColumns({
     { accessorKey: "sc", header: "S/C" },
   ]
 
-  if (onEditClick || onQrClick) {
+  if (onEditClick || onQrClick || onDeleteClick) {
     columns.push({
       id: "actions",
       header: "",
@@ -206,6 +214,23 @@ export function getSaleListSummaryColumns({
               }}
             >
               <QrCode className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {/* The synthesized primary row (see ensurePrimaryOrderRow) isn't a
+              real row yet — nothing to delete until the first edit creates
+              one. */}
+          {onDeleteClick && !isPrimaryOrderRow(row.original.id) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-danger hover:text-danger"
+              title="Delete"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeleteClick(row.original)
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

@@ -36,10 +36,11 @@ import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
 import { getSaleListColumns, getSaleListRowClassName, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
-import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useSaleListEntries, useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { ensurePrimaryOrderRow, isPrimaryOrderRow } from "@/lib/sale-list"
@@ -66,6 +67,10 @@ export default function CustomerProfilePage() {
   // (prefilled with this order's number + customer) for the primary row,
   // which has no /sale-list/[id] page of its own yet.
   const [editingRow, setEditingRow] = React.useState<SaleListRow | undefined>(undefined)
+  // Set by the row's own Delete icon — never offered for the primary row
+  // (see getSaleListColumns), so this is always a real row.
+  const [deletingRow, setDeletingRow] = React.useState<SaleListRow | undefined>(undefined)
+  const deleteEntries = useDeleteSaleListEntries()
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   // Resolved client-side only (window.location.origin, same as the printable-
   // card dialog) — computing this inline during render would disagree between
@@ -118,9 +123,9 @@ export default function CustomerProfilePage() {
   )
   const saleListColumns = getSaleListColumns({
     canEdit: can("sales:edit"),
-    canDelete: false,
+    canDelete: can("sales:delete"),
     onEdit: setEditingRow,
-    onDelete: () => {},
+    onDelete: setDeletingRow,
   })
 
   const orderNumber = customer.orderNumber
@@ -514,6 +519,18 @@ export default function CustomerProfilePage() {
         originAddress={settings?.address ?? ""}
         destinationAddress={customer.address}
         destinationLabel={customer.companyName || customer.fullName}
+      />
+      <ConfirmDialog
+        open={!!deletingRow}
+        onOpenChange={(o) => !o && setDeletingRow(undefined)}
+        title="Delete this sale list entry?"
+        description="This will permanently remove this record."
+        loading={deleteEntries.isPending}
+        onConfirm={async () => {
+          if (!deletingRow) return
+          await deleteEntries.mutateAsync([deletingRow.id])
+          setDeletingRow(undefined)
+        }}
       />
     </div>
   )

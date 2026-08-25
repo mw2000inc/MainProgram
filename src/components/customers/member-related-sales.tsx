@@ -5,8 +5,10 @@ import { ClipboardCheck } from "lucide-react"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { isPrimaryOrderRow } from "@/lib/sale-list"
+import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
 
@@ -33,11 +35,16 @@ export function MemberRelatedSalesTable({
   // defaultOrderNumber below) for the synthesized primary row.
   const [editingRow, setEditingRow] = React.useState<SaleListRow | undefined>(undefined)
   const [qrEntry, setQrEntry] = React.useState<SaleListRow | undefined>(undefined)
+  // Set by the row's own Delete icon — never offered for the primary row
+  // (see getSaleListSummaryColumns), so this is always a real row.
+  const [deletingRow, setDeletingRow] = React.useState<SaleListRow | undefined>(undefined)
+  const deleteEntries = useDeleteSaleListEntries()
   const columns = React.useMemo(
     () =>
       getSaleListSummaryColumns({
         onQrClick: setQrEntry,
         onEditClick: can("sales:edit") ? setEditingRow : undefined,
+        onDeleteClick: can("sales:delete") ? setDeletingRow : undefined,
       }),
     [can]
   )
@@ -78,6 +85,19 @@ export function MemberRelatedSalesTable({
         onOpenChange={(o) => !o && setQrEntry(undefined)}
         customer={customer}
         orderNumber={qrEntry?.orderNumber}
+      />
+
+      <ConfirmDialog
+        open={!!deletingRow}
+        onOpenChange={(o) => !o && setDeletingRow(undefined)}
+        title="Delete this sale list entry?"
+        description="This will permanently remove this record."
+        loading={deleteEntries.isPending}
+        onConfirm={async () => {
+          if (!deletingRow) return
+          await deleteEntries.mutateAsync([deletingRow.id])
+          setDeletingRow(undefined)
+        }}
       />
     </>
   )
