@@ -20,8 +20,19 @@ export function isPrimaryOrderRow(id: string): boolean {
 // already has that order number, nothing is added (no duplicate).
 export function ensurePrimaryOrderRow(
   rows: SaleListRow[],
-  customer: { id: string; orderNumber: string; companyName?: string | null; fullName: string }
+  customer: {
+    id: string
+    orderNumber: string
+    companyName?: string | null
+    fullName: string
+    // Per-customer opt-out (see 20260826010000_customer_hide_primary_order.sql)
+    // for the rare case where a customer's own order_number genuinely
+    // shouldn't appear as a row here — a business decision, not something
+    // derivable from other customers' data.
+    hidePrimaryOrder?: boolean
+  }
 ): SaleListRow[] {
+  if (customer.hidePrimaryOrder) return rows
   if (!customer.orderNumber || rows.some((r) => r.orderNumber === customer.orderNumber)) return rows
   const primaryRow: SaleListRow = {
     id: primaryOrderRowId(customer.id),
