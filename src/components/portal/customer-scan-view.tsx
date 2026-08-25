@@ -129,7 +129,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
               </div>
               {customer.companyName && <p className="text-sm text-muted-foreground">{customer.companyName}</p>}
               <p className="text-xs text-muted-foreground mt-1">
-                Order #: <span className="font-mono">{customer.orderNumber}</span>
+                Member Account#: <span className="font-mono">{customer.memberAccountNumber}</span>
               </p>
             </div>
           </CardContent>
