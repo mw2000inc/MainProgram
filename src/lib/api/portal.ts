@@ -1,15 +1,17 @@
 import { supabase } from "@/lib/supabase/client"
-import type { PaymentMethod, PaymentStatus } from "@/lib/types"
+import type { PaymentMethod, PaymentStatus, FilterChangePlan, CollectionPlan, RepairPlan } from "@/lib/types"
 
 export interface PortalCustomer {
   id: string
   orderNumber: string
+  memberAccountNumber: string
   fullName: string
   companyName: string | null
   contractNumber: string
   contractStart: string
   contractEnd: string
   address: string
+  contactNumber2: string
   email: string
   contactNumber: string
   dispenserType: string
@@ -17,6 +19,13 @@ export interface PortalCustomer {
   installedDate: string | null
   assignedTechnician: string
 }
+
+// Reuse the same shapes the admin panels' column definitions are typed
+// against (getFilterChangeColumns() etc.), so this read-only page can render
+// with those exact same columns instead of a parallel column set.
+export type PortalFilterChange = FilterChangePlan
+export type PortalCollection = CollectionPlan
+export type PortalRepair = RepairPlan
 
 export interface PortalSale {
   id: string
@@ -46,6 +55,9 @@ export interface PortalProfile {
   customer: PortalCustomer
   sales: PortalSale[]
   products: PortalProduct[]
+  filterChanges: PortalFilterChange[]
+  collections: PortalCollection[]
+  repairs: PortalRepair[]
   settings: PortalSettings | null
 }
 
@@ -53,12 +65,14 @@ type RpcRow = {
   customer: {
     id: string
     order_number: string
+    member_account_number: string
     full_name: string
     company_name: string | null
     contract_number: string
     contract_start: string
     contract_end: string
     address: string
+    contact_number2: string
     email: string
     contact_number: string
     dispenser_type: string
@@ -76,6 +90,52 @@ type RpcRow = {
     items: { productId: string; quantity: number }[]
   }[]
   products: PortalProduct[]
+  filterChanges: {
+    id: string
+    order_number: string
+    member_account: string
+    filter_type: string
+    plan_date: string
+    status: string
+    contact_number: string
+    address: string
+    s_c: string
+    product_no: string
+    pre_d: string | null
+    acc_d: string | null
+    serviceman: string
+    note: string | null
+    created_at: string
+  }[]
+  collections: {
+    id: string
+    order_no: string
+    account_name: string
+    collection_date: string
+    amount: number
+    status: string
+    c_t: string
+    pre_d: string | null
+    acc_d: string | null
+    note: string | null
+    created_at: string
+  }[]
+  repairs: {
+    id: string
+    issued_date: string
+    account_name: string
+    order_no: string
+    status: string
+    problem: string
+    solution_status: string | null
+    pre_d: string | null
+    acc_d: string | null
+    th: string
+    part_no: string | null
+    amt: number
+    unit_in_out: string
+    created_at: string
+  }[]
   settings: {
     company_name: string
     address: string
@@ -100,12 +160,14 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
     customer: {
       id: row.customer.id,
       orderNumber: row.customer.order_number,
+      memberAccountNumber: row.customer.member_account_number,
       fullName: row.customer.full_name,
       companyName: row.customer.company_name,
       contractNumber: row.customer.contract_number,
       contractStart: row.customer.contract_start,
       contractEnd: row.customer.contract_end,
       address: row.customer.address,
+      contactNumber2: row.customer.contact_number2,
       email: row.customer.email,
       contactNumber: row.customer.contact_number,
       dispenserType: row.customer.dispenser_type,
@@ -123,6 +185,52 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       items: s.items,
     })),
     products: row.products,
+    filterChanges: row.filterChanges.map((f) => ({
+      id: f.id,
+      orderNumber: f.order_number,
+      memberAccount: f.member_account,
+      filterType: f.filter_type,
+      planDate: f.plan_date,
+      status: f.status,
+      contactNumber: f.contact_number,
+      address: f.address,
+      sc: f.s_c,
+      productNo: f.product_no,
+      preD: f.pre_d ?? undefined,
+      accD: f.acc_d ?? undefined,
+      serviceman: f.serviceman,
+      note: f.note ?? undefined,
+      createdAt: f.created_at,
+    })),
+    collections: row.collections.map((c) => ({
+      id: c.id,
+      orderNo: c.order_no,
+      accountName: c.account_name,
+      collectionDate: c.collection_date,
+      amount: Number(c.amount),
+      status: c.status,
+      ct: c.c_t,
+      preD: c.pre_d ?? undefined,
+      accD: c.acc_d ?? undefined,
+      note: c.note ?? undefined,
+      createdAt: c.created_at,
+    })),
+    repairs: row.repairs.map((r) => ({
+      id: r.id,
+      issuedDate: r.issued_date,
+      accountName: r.account_name,
+      orderNo: r.order_no,
+      status: r.status,
+      problem: r.problem,
+      solutionStatus: r.solution_status ?? undefined,
+      preD: r.pre_d ?? undefined,
+      accD: r.acc_d ?? undefined,
+      th: r.th,
+      partNo: r.part_no ?? undefined,
+      amt: Number(r.amt),
+      unitInOut: r.unit_in_out,
+      createdAt: r.created_at,
+    })),
     settings: row.settings
       ? {
           companyName: row.settings.company_name,

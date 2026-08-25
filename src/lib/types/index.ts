@@ -255,6 +255,16 @@ export interface ScheduleJob {
   technician: string
   // Optional second technician for jobs that need two people (e.g. a
   // pull-out + install combo) — most jobs leave this unset.
+  //
+  // technician2 is deliberately just a second name column on this SAME row,
+  // not a link to a second schedule_jobs record. That's what guarantees the
+  // shared-schedule invariant: scheduledDate/status/customerId/orderNo below
+  // are singular fields on the one row, so both technicians read the exact
+  // same date/status/customer/order by construction — there is no way for
+  // them to diverge, because there's nowhere on this type to store a second
+  // value for any of those fields. If a future change ever needs a
+  // per-technician date or status, do NOT add it here — that would silently
+  // break every job that currently has two technicians sharing one schedule.
   technician2?: string
   customerId?: string
   orderNo?: string

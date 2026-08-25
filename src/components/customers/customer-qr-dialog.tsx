@@ -25,10 +25,11 @@ const QR_CM = 2.2
 const PAD_CM = 0.2
 
 // Card color scheme: plain white card, no background fill and no border. The QR
-// is black-on-white (qrcode.react renders its own white quiet-zone), and both
-// the label and order number are dark navy so they read on the white card.
+// is black-on-white (qrcode.react renders its own white quiet-zone). The "ORDER #"
+// label is a small muted gray so the bold navy order number is the clear focal
+// point next to it, matching the reference card layout.
 const CARD_BG = "#ffffff"
-const LABEL_COLOR = "#0f1729"
+const LABEL_COLOR = "#6b7280"
 const VALUE_COLOR = "#0f1729"
 
 export function CustomerQrDialog({
@@ -313,7 +314,7 @@ function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, orderN
   const textX = x + pad + qr + 2
   const maxTextW = x + cardW - pad - textX
 
-  doc.setTextColor(15, 23, 41) // #0f1729 navy
+  doc.setTextColor(107, 114, 128) // #6b7280 gray
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.text("ORDER #", textX, cardH / 2 + y - 1.5)

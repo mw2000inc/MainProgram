@@ -1,15 +1,33 @@
 "use client"
 
 import * as React from "react"
-import { Mail, MapPin, Phone, Wrench, Droplet, Building2, ShieldCheck, CalendarDays, Hash, ClipboardList } from "lucide-react"
+import {
+  Mail,
+  MapPin,
+  Phone,
+  Wrench,
+  Droplet,
+  Droplets,
+  Banknote,
+  Building2,
+  ShieldCheck,
+  CalendarDays,
+  Hash,
+  ClipboardList,
+  IdCard,
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTable } from "@/components/data-table/data-table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MonitoringViewStatusBadge } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
 import { usePortalProfile } from "@/lib/hooks/use-portal"
+import { getFilterChangeColumns } from "@/components/filter-change/filter-change-columns"
+import { getCollectionsColumns } from "@/components/collections/collections-columns"
+import { getRepairColumns } from "@/components/repair/repair-columns"
 import {
   formatDate,
   getMonitoringEndDate,
@@ -26,6 +44,13 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const { data: profile, isPending } = usePortalProfile(customerId)
   const customer = profile?.customer
   const settings = profile?.settings
+  const filterChanges = profile?.filterChanges ?? []
+  const collections = profile?.collections ?? []
+  const repairs = profile?.repairs ?? []
+
+  const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
+  const collectionsColumns = React.useMemo(() => getCollectionsColumns(), [])
+  const repairColumns = React.useMemo(() => getRepairColumns(), [])
 
   const content = (() => {
     if (isPending) {
@@ -89,6 +114,22 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
+              <IdCard className="h-4 w-4" /> Member Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <InfoRow label="Member Account#" value={customer.memberAccountNumber || "N/A"} />
+            <InfoRow label="Account Name" value={customer.companyName || "N/A"} />
+            <InfoRow label="Account Contact Person" value={customer.fullName || "N/A"} />
+            <InfoRow label="Contact Number 1 (Main)" value={customer.contactNumber || "N/A"} />
+            <InfoRow label="Contact Number 2 (Sub)" value={customer.contactNumber2 || "N/A"} />
+            <InfoRow label="Address" value={customer.address || "N/A"} className="sm:col-span-2" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
               <ClipboardList className="h-4 w-4" /> Quarterly Monitoring
             </CardTitle>
           </CardHeader>
@@ -134,6 +175,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
           <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="service">Service History</TabsTrigger>
+            <TabsTrigger value="history">Order History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="personal">
@@ -188,6 +230,56 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Droplets className="h-4 w-4" /> Filter Changes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={filterChangeColumns}
+                  data={filterChanges}
+                  searchPlaceholder="Search filter changes..."
+                  emptyMessage="No filter change history for this order."
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Banknote className="h-4 w-4" /> Collections
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={collectionsColumns}
+                  data={collections}
+                  searchPlaceholder="Search collections..."
+                  emptyMessage="No collection history for this order."
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wrench className="h-4 w-4" /> Repairs
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={repairColumns}
+                  data={repairs}
+                  searchPlaceholder="Search repairs..."
+                  emptyMessage="No repair history for this order."
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         <Card>
@@ -232,7 +324,7 @@ function InfoRow({
   value,
   className,
 }: {
-  icon: React.ElementType
+  icon?: React.ElementType
   label: string
   value: React.ReactNode
   className?: string
@@ -240,7 +332,7 @@ function InfoRow({
   return (
     <div className={className}>
       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
-        <Icon className="h-3.5 w-3.5" /> {label}
+        {Icon && <Icon className="h-3.5 w-3.5" />} {label}
       </p>
       <div className="font-medium">{value}</div>
     </div>

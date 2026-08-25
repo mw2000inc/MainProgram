@@ -21,6 +21,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { useAuth } from "@/lib/auth/auth-context"
 import { printTable } from "@/lib/export/print"
 import { formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
@@ -72,6 +73,8 @@ function MarkJobDoneDialog({
 }
 
 export function ScheduleAgenda({ date }: { date: string }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
   const { data: jobs = [], isPending } = useScheduleJobs()
   const updateJob = useUpdateScheduleJob()
   const [formOpen, setFormOpen] = React.useState(false)
@@ -97,6 +100,7 @@ export function ScheduleAgenda({ date }: { date: string }) {
   )
 
   function toggleComplete(job: ScheduleJob) {
+    if (!isAdmin) return
     if (job.status === "completed") {
       updateJob.mutate({ id: job.id, input: { status: "pending" } })
       return
@@ -120,9 +124,11 @@ export function ScheduleAgenda({ date }: { date: string }) {
           <CalendarClock className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Schedule</span>
         </CardTitle>
         <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap">
-          <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={() => setFormOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> Schedule Job
-          </Button>
+          {isAdmin && (
+            <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={() => setFormOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Schedule Job
+            </Button>
+          )}
           <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
             <Button size="sm" variant="outline" className="w-full gap-1.5">
               Full Schedule <ArrowRight className="h-3.5 w-3.5" />
@@ -153,7 +159,9 @@ export function ScheduleAgenda({ date }: { date: string }) {
                 <Checkbox
                   checked={job.status === "completed"}
                   onCheckedChange={() => toggleComplete(job)}
+                  disabled={!isAdmin}
                   aria-label="Mark complete"
+                  title={isAdmin ? undefined : "Only admins can change a job's status"}
                   className="mt-0.5"
                 />
                 <div className="flex-1 min-w-0">
@@ -161,6 +169,10 @@ export function ScheduleAgenda({ date }: { date: string }) {
                     <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
                     {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
                   </div>
+                  {/* One scheduledDate on the shared job — shown explicitly (even
+                      though every row here is already scoped to this same day)
+                      so a two-technician job visibly reads as one date, not two. */}
+                  <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
                   <p className="text-xs text-muted-foreground truncate">
                     {formatTechnicians(job.technician, job.technician2)}
                   </p>

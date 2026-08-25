@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Users } from "lucide-react"
+import { Plus, QrCode, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -19,6 +19,7 @@ import { ExportButtons } from "@/components/shared/export-buttons"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { DetailField, DetailPanel, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
+import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { MemberRelatedSalesTable } from "@/components/customers/member-related-sales"
 import { MemberOrderDetail } from "@/components/customers/member-order-detail"
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
@@ -43,6 +44,7 @@ export default function CustomersPage() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Customer | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<Customer | undefined>(undefined)
+  const [qrOpen, setQrOpen] = React.useState(false)
   const [filteredRows, setFilteredRows] = React.useState<CustomerRow[]>([])
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
@@ -224,6 +226,11 @@ export default function CustomersPage() {
                 : undefined
             }
             onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
+            headerActions={
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
+                <QrCode className="h-3.5 w-3.5" /> QR Code
+              </Button>
+            }
             onPrev={selection.prev}
             onNext={selection.next}
             hasPrev={selection.hasPrev}
@@ -273,6 +280,10 @@ export default function CustomersPage() {
       )}
 
       <CustomerFormDialog open={formOpen} onOpenChange={setFormOpen} customer={editing} />
+
+      {selection.selected && (
+        <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={selection.selected} />
+      )}
 
       <ConfirmDialog
         open={!!deleting}

@@ -148,6 +148,9 @@ export function DetailPanel({
   // field grid, in the same scrollable panel — not part of the label/value
   // grid itself, so it isn't forced into a two-column cell.
   extra,
+  // One-off header button rendered before Edit (e.g. Member's "QR Code")
+  // for pages that need an action beyond the generic Edit/Delete pair.
+  headerActions,
 }: {
   title: string
   icon?: LucideIcon
@@ -163,6 +166,7 @@ export function DetailPanel({
   onClose: () => void
   children: React.ReactNode
   extra?: React.ReactNode
+  headerActions?: React.ReactNode
 }) {
   return (
     <Card className={cn(expanded && "min-h-[70vh]")}>
@@ -175,6 +179,7 @@ export function DetailPanel({
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {headerActions}
           {onEdit && (
             <Button className="gap-1.5 rounded-full px-3.5" title="Edit" onClick={onEdit}>
               <Pencil className="h-3.5 w-3.5" />

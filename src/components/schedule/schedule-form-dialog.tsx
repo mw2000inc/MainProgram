@@ -123,6 +123,9 @@ export function ScheduleFormDialog({
 
   const jobType = form.watch("jobType")
   const isFilterChange = jobType === "filter_change"
+  const technician2Value = form.watch("technician2")
+  const technicianValue = form.watch("technician")
+  const hasSecondTechnician = !!technician2Value && technician2Value !== NO_SECOND_TECHNICIAN
 
   async function onSubmit(values: FormValues) {
     const input = {
@@ -223,6 +226,14 @@ export function ScheduleFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* There's deliberately no separate date field for the second
+                      technician — the Date field below applies to this one
+                      shared job, so both technicians are always on it together. */}
+                  {field.value && field.value !== NO_SECOND_TECHNICIAN && (
+                    <p className="text-xs text-muted-foreground">
+                      Shares the same date, order, and status as the primary technician below — this is one job, not two.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -249,6 +260,12 @@ export function ScheduleFormDialog({
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
+                  {hasSecondTechnician && (
+                    <p className="text-xs text-muted-foreground">
+                      Both {technicianValue || "the first technician"} and {technician2Value} are scheduled for this
+                      date — there&apos;s a single Date field for the whole job, so changing it moves both.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
