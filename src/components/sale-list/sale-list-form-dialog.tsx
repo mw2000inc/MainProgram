@@ -54,7 +54,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormValues {
+function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string, defaultOrderNumber?: string): FormValues {
   if (entry) {
     return {
       orderNumber: entry.orderNumber,
@@ -72,7 +72,7 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
     }
   }
   return {
-    orderNumber: "",
+    orderNumber: defaultOrderNumber ?? "",
     installedDate: "",
     customerId: defaultCustomerId ?? "",
     productNo: "",
@@ -92,6 +92,7 @@ export function SaleListFormDialog({
   onOpenChange,
   entry,
   defaultCustomerId,
+  defaultOrderNumber,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -100,6 +101,11 @@ export function SaleListFormDialog({
   // Pre-selects the Account# (Member) field when adding a new entry from a
   // member's own Related Sales section.
   defaultCustomerId?: string
+  // Pre-fills Order Number — used when "editing" a member's synthesized
+  // primary-order row (see ensurePrimaryOrderRow), which has no real entry to
+  // pass as `entry`: this creates the first real row for that order number
+  // instead of updating a row that doesn't exist.
+  defaultOrderNumber?: string
 }) {
   const isEdit = !!entry
   const createEntry = useCreateSaleListEntry()
@@ -108,13 +114,13 @@ export function SaleListFormDialog({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(entry, defaultCustomerId),
+    defaultValues: defaultValues(entry, defaultCustomerId, defaultOrderNumber),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(entry, defaultCustomerId))
+    if (open) form.reset(defaultValues(entry, defaultCustomerId, defaultOrderNumber))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, entry, defaultCustomerId])
+  }, [open, entry, defaultCustomerId, defaultOrderNumber])
 
   async function onSubmit(values: FormValues) {
     const input = {

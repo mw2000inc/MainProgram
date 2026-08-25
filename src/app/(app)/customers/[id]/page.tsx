@@ -35,6 +35,7 @@ import { ContractStatusBadge } from "@/components/shared/status-badge"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
+import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
 import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
 import { getSaleListColumns, getSaleListRowClassName, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
@@ -59,6 +60,11 @@ export default function CustomerProfilePage() {
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
   const [directionsOpen, setDirectionsOpen] = React.useState(false)
+  // Set when clicking the synthesized primary-order row (see
+  // ensurePrimaryOrderRow) — opens SaleListFormDialog in create mode
+  // (prefilled with this order's number + customer) instead of navigating to
+  // a /sale-list/[id] page that doesn't exist for it yet.
+  const [creatingFromRow, setCreatingFromRow] = React.useState<SaleListRow | undefined>(undefined)
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   // Resolved client-side only (window.location.origin, same as the printable-
   // card dialog) — computing this inline during render would disagree between
@@ -478,8 +484,12 @@ export default function CustomerProfilePage() {
                 getRowClassName={getSaleListRowClassName}
                 // The synthesized "primary order" row (see ensurePrimaryOrderRow)
                 // isn't a real sale_list_entries row, so there's no /sale-list/[id]
-                // page for it to open — clicking it is a no-op rather than a 404.
-                onRowClick={(row) => !isPrimaryOrderRow(row.id) && router.push(`/sale-list/${row.id}`)}
+                // page for it — clicking it opens the create dialog instead
+                // (prefilled with this order's number + customer), which turns
+                // it into a normal row going forward.
+                onRowClick={(row) =>
+                  isPrimaryOrderRow(row.id) ? setCreatingFromRow(row) : router.push(`/sale-list/${row.id}`)
+                }
               />
             </CardContent>
           </Card>
@@ -488,6 +498,12 @@ export default function CustomerProfilePage() {
 
       <CustomerFormDialog open={editOpen} onOpenChange={setEditOpen} customer={customer} />
       <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={customer} />
+      <SaleListFormDialog
+        open={!!creatingFromRow}
+        onOpenChange={(o) => !o && setCreatingFromRow(undefined)}
+        defaultCustomerId={customer.id}
+        defaultOrderNumber={creatingFromRow?.orderNumber}
+      />
       <MemberDirectionsDialog
         open={directionsOpen}
         onOpenChange={setDirectionsOpen}

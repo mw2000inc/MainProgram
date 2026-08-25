@@ -105,10 +105,13 @@ export function MemberOrderDetail({
 
   const accountLabel = customer.companyName || customer.fullName
   // The synthesized "primary order" row (see ensurePrimaryOrderRow) isn't a
-  // real sale_list_entries row — editing/deleting/expanding it would hit a
-  // 0-row update or a broken /sale-list/[id] link, so those are disabled for
-  // it. It's still fully viewable, and its Filter Changes/Collections/
-  // Repairs still resolve normally since those match on order number, not id.
+  // real sale_list_entries row. Edit is allowed — SaleListFormDialog below
+  // creates a real row (using this order's number + customer) instead of
+  // updating one that doesn't exist, and it's a normal row from then on.
+  // Delete/expand-to-standalone-page stay disabled until it's real — nothing
+  // to delete yet, and no /sale-list/[id] page exists for it. Its Filter
+  // Changes/Collections/Repairs still resolve normally either way, since
+  // those match on order number, not id.
   const isPrimary = isPrimaryOrderRow(entry.id)
 
   return (
@@ -143,7 +146,7 @@ export function MemberOrderDetail({
             title={entry.orderNumber}
             icon={ClipboardCheck}
             subtitle={accountLabel}
-            onEdit={!isPrimary && can("sales:edit") ? () => setFormOpen(true) : undefined}
+            onEdit={can("sales:edit") ? () => setFormOpen(true) : undefined}
             onDelete={!isPrimary && can("sales:delete") ? () => setDeleting(true) : undefined}
             onPrev={onPrev}
             onNext={onNext}
@@ -228,7 +231,13 @@ export function MemberOrderDetail({
         }
       />
 
-      <SaleListFormDialog open={formOpen} onOpenChange={setFormOpen} entry={entry} defaultCustomerId={customer.id} />
+      <SaleListFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        entry={isPrimary ? undefined : entry}
+        defaultCustomerId={customer.id}
+        defaultOrderNumber={isPrimary ? entry.orderNumber : undefined}
+      />
 
       <ConfirmDialog
         open={deleting}
