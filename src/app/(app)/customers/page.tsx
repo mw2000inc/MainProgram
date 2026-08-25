@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Plus, Printer, QrCode, Users } from "lucide-react"
+import { MapPin, Plus, Printer, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -19,7 +19,6 @@ import { ExportButtons } from "@/components/shared/export-buttons"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { DetailField, DetailPanel, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
-import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { MemberMapPanel } from "@/components/customers/member-map-panel"
 import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
 import { MemberRelatedSalesTable } from "@/components/customers/member-related-sales"
@@ -50,7 +49,6 @@ export default function CustomersPage() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Customer | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<Customer | undefined>(undefined)
-  const [qrOpen, setQrOpen] = React.useState(false)
   // Independent of `selection` — a pin click on the Map panel (only rendered
   // in the un-selected list+map view) needs to open directions for a member
   // that was never drilled into via the split-view panel.
@@ -273,14 +271,9 @@ export default function CustomersPage() {
             }
             onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
             headerActions={
-              <>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
-                  <QrCode className="h-3.5 w-3.5" /> QR Code
-                </Button>
-              </>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
+                <Printer className="h-3.5 w-3.5" /> Print
+              </Button>
             }
             onPrev={selection.prev}
             onNext={selection.next}
@@ -346,10 +339,6 @@ export default function CustomersPage() {
       )}
 
       <CustomerFormDialog open={formOpen} onOpenChange={setFormOpen} customer={editing} />
-
-      {selection.selected && (
-        <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={selection.selected} />
-      )}
 
       <MemberDirectionsDialog
         open={!!directionsTarget}

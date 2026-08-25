@@ -163,10 +163,9 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
-            <TabsTrigger value="personal">Personal Info</TabsTrigger>
+            <TabsTrigger value="personal">Member Information</TabsTrigger>
             <TabsTrigger value="service">Service History</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
-            <TabsTrigger value="history">Order History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="personal">
@@ -325,56 +324,6 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 </Card>
               </>
             )}
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Droplets className="h-4 w-4" /> Filter Changes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={filterChangeColumns}
-                  data={filterChanges}
-                  searchPlaceholder="Search filter changes..."
-                  emptyMessage="No filter change history for this order."
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Banknote className="h-4 w-4" /> Collections
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={collectionsColumns}
-                  data={collections}
-                  searchPlaceholder="Search collections..."
-                  emptyMessage="No collection history for this order."
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Wrench className="h-4 w-4" /> Repairs
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={repairColumns}
-                  data={repairs}
-                  searchPlaceholder="Search repairs..."
-                  emptyMessage="No repair history for this order."
-                />
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
 
