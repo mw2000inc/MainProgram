@@ -26,7 +26,6 @@ type CustomerRow = {
   assigned_technician: string
   notes: string | null
   created_at: string
-  hide_primary_order: boolean
 }
 
 function fromRow(row: CustomerRow): Customer {
@@ -55,7 +54,6 @@ function fromRow(row: CustomerRow): Customer {
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
     isSystem: false,
-    hidePrimaryOrder: row.hide_primary_order,
   }
 }
 
@@ -83,7 +81,6 @@ function toRow(input: Partial<Omit<Customer, "id" | "createdAt">>) {
   if (input.installedDate !== undefined) row.installed_date = input.installedDate || null
   if (input.assignedTechnician !== undefined) row.assigned_technician = input.assignedTechnician
   if (input.notes !== undefined) row.notes = input.notes || null
-  if (input.hidePrimaryOrder !== undefined) row.hide_primary_order = input.hidePrimaryOrder
   return row
 }
 

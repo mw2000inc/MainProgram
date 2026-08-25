@@ -41,10 +41,6 @@ export interface Customer {
   notes?: string
   createdAt: string
   isSystem?: boolean
-  // Per-customer opt-out from the synthesized "primary order" row in Related
-  // Sales_Lists (see ensurePrimaryOrderRow) — a rare, explicit business
-  // exception rather than something inferable from the customer's data.
-  hidePrimaryOrder?: boolean
 }
 
 export type MonitoringStatus = "active" | "for-replacement"

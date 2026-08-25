@@ -5,7 +5,6 @@ import { Pencil, QrCode, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn, formatDate } from "@/lib/utils"
-import { isPrimaryOrderRow } from "@/lib/sale-list"
 import type { SaleListEntry } from "@/lib/types"
 
 export type SaleListRow = SaleListEntry & { accountLabel: string }
@@ -109,10 +108,7 @@ export function getSaleListColumns({
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
-          {/* The synthesized primary row (see ensurePrimaryOrderRow) isn't a
-              real row yet — nothing to delete until the first edit creates
-              one. */}
-          {canDelete && !isPrimaryOrderRow(row.original.id) && (
+          {canDelete && (
             <Button
               variant="ghost"
               size="icon"
@@ -216,10 +212,7 @@ export function getSaleListSummaryColumns({
               <QrCode className="h-3.5 w-3.5" />
             </Button>
           )}
-          {/* The synthesized primary row (see ensurePrimaryOrderRow) isn't a
-              real row yet — nothing to delete until the first edit creates
-              one. */}
-          {onDeleteClick && !isPrimaryOrderRow(row.original.id) && (
+          {onDeleteClick && (
             <Button
               variant="ghost"
               size="icon"

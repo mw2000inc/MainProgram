@@ -7,7 +7,6 @@ import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
-import { isPrimaryOrderRow } from "@/lib/sale-list"
 import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
@@ -31,12 +30,9 @@ export function MemberRelatedSalesTable({
 }) {
   const [formOpen, setFormOpen] = React.useState(false)
   // Set by the row's own Edit icon — opens the same SaleListFormDialog as
-  // "Add", but in edit mode for a real row, or create mode (via
-  // defaultOrderNumber below) for the synthesized primary row.
+  // "Add", but in edit mode.
   const [editingRow, setEditingRow] = React.useState<SaleListRow | undefined>(undefined)
   const [qrEntry, setQrEntry] = React.useState<SaleListRow | undefined>(undefined)
-  // Set by the row's own Delete icon — never offered for the primary row
-  // (see getSaleListSummaryColumns), so this is always a real row.
   const [deletingRow, setDeletingRow] = React.useState<SaleListRow | undefined>(undefined)
   const deleteEntries = useDeleteSaleListEntries()
   const columns = React.useMemo(
@@ -48,7 +44,6 @@ export function MemberRelatedSalesTable({
       }),
     [can]
   )
-  const editingPrimary = editingRow ? isPrimaryOrderRow(editingRow.id) : false
 
   return (
     <>
@@ -71,9 +66,8 @@ export function MemberRelatedSalesTable({
           setFormOpen(false)
           setEditingRow(undefined)
         }}
-        entry={editingRow && !editingPrimary ? editingRow : undefined}
+        entry={editingRow}
         defaultCustomerId={customer.id}
-        defaultOrderNumber={editingPrimary ? editingRow!.orderNumber : undefined}
       />
 
       {/* Deep-links into this one order on the customer's scan page

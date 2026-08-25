@@ -31,7 +31,6 @@ import { getFilterChangeColumns } from "@/components/filter-change/filter-change
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
-import { ensurePrimaryOrderRow } from "@/lib/sale-list"
 import {
   formatDate,
   getMonitoringEndDate,
@@ -54,21 +53,15 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const [selectedOrder, setSelectedOrder] = React.useState<SaleListRow | null>(null)
   const [activeTab, setActiveTab] = React.useState("personal")
 
-  // The customer's own order_number always shows up as its own row here too
-  // — synthesized if no sale_list_entries row already shares that exact
-  // number — so it's never possible to "lose" that order just because it was
-  // never entered as a formal sale-list line item.
   const saleListRows: SaleListRow[] = React.useMemo(() => {
     if (!customer) return []
     const accountLabel = customer.companyName || customer.fullName
-    const rows = (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
-    return ensurePrimaryOrderRow(rows, customer)
+    return (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
   }, [profile, customer])
 
   // Deep link from a per-order QR (?order=001-0009, see member-related-sales.tsx)
   // — once the profile loads, jump straight to that order instead of the
-  // default tab, if it's actually one of this customer's own orders
-  // (including the synthesized primary-order row above).
+  // default tab, if it's actually one of this customer's own orders.
   const searchParams = useSearchParams()
   const orderParam = searchParams.get("order")
   React.useEffect(() => {

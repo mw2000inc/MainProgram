@@ -18,7 +18,6 @@ export interface PortalCustomer {
   filterInstalled: boolean
   installedDate: string | null
   assignedTechnician: string
-  hidePrimaryOrder: boolean
 }
 
 // Reuse the same shapes the admin panels' column definitions are typed
@@ -84,7 +83,6 @@ type RpcRow = {
     filter_installed: boolean
     installed_date: string | null
     assigned_technician: string
-    hide_primary_order: boolean
   } | null
   sales: {
     id: string
@@ -195,7 +193,6 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       filterInstalled: row.customer.filter_installed,
       installedDate: row.customer.installed_date,
       assignedTechnician: row.customer.assigned_technician,
-      hidePrimaryOrder: row.customer.hide_primary_order,
     },
     sales: row.sales.map((s) => ({
       id: s.id,

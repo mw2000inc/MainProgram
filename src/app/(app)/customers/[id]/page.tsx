@@ -43,7 +43,6 @@ import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries, useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
-import { ensurePrimaryOrderRow, isPrimaryOrderRow } from "@/lib/sale-list"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
 import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
@@ -61,14 +60,9 @@ export default function CustomerProfilePage() {
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
   const [directionsOpen, setDirectionsOpen] = React.useState(false)
-  // Set by the row's own Edit icon, or by clicking the synthesized
-  // primary-order row (see ensurePrimaryOrderRow) directly — opens
-  // SaleListFormDialog in edit mode for a real row, or create mode
-  // (prefilled with this order's number + customer) for the primary row,
-  // which has no /sale-list/[id] page of its own yet.
+  // Set by the row's own Edit icon — opens SaleListFormDialog in edit mode.
   const [editingRow, setEditingRow] = React.useState<SaleListRow | undefined>(undefined)
-  // Set by the row's own Delete icon — never offered for the primary row
-  // (see getSaleListColumns), so this is always a real row.
+  // Set by the row's own Delete icon.
   const [deletingRow, setDeletingRow] = React.useState<SaleListRow | undefined>(undefined)
   const deleteEntries = useDeleteSaleListEntries()
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
@@ -115,12 +109,9 @@ export default function CustomerProfilePage() {
   const status = getContractStatus(customer.contractEnd)
   const serviceHistory = getServiceHistory(customer)
 
-  const relatedSales: SaleListRow[] = ensurePrimaryOrderRow(
-    saleListEntries
-      .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
-      .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName })),
-    customer
-  )
+  const relatedSales: SaleListRow[] = saleListEntries
+    .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
+    .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName }))
   const saleListColumns = getSaleListColumns({
     canEdit: can("sales:edit"),
     canDelete: can("sales:delete"),
@@ -493,11 +484,7 @@ export default function CustomerProfilePage() {
                 searchPlaceholder="Search by order number, product..."
                 emptyMessage="No sale list entries for this member."
                 getRowClassName={getSaleListRowClassName}
-                // The synthesized "primary order" row (see ensurePrimaryOrderRow)
-                // isn't a real sale_list_entries row, so there's no /sale-list/[id]
-                // page for it — clicking it opens the edit dialog (in create mode)
-                // instead, which turns it into a normal row going forward.
-                onRowClick={(row) => (isPrimaryOrderRow(row.id) ? setEditingRow(row) : router.push(`/sale-list/${row.id}`))}
+                onRowClick={(row) => router.push(`/sale-list/${row.id}`)}
               />
             </CardContent>
           </Card>
@@ -509,9 +496,8 @@ export default function CustomerProfilePage() {
       <SaleListFormDialog
         open={!!editingRow}
         onOpenChange={(o) => !o && setEditingRow(undefined)}
-        entry={editingRow && !isPrimaryOrderRow(editingRow.id) ? editingRow : undefined}
+        entry={editingRow}
         defaultCustomerId={customer.id}
-        defaultOrderNumber={editingRow && isPrimaryOrderRow(editingRow.id) ? editingRow.orderNumber : undefined}
       />
       <MemberDirectionsDialog
         open={directionsOpen}
