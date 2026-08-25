@@ -14,6 +14,7 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -41,8 +42,9 @@ import { useFilterChangePlans, useDeleteFilterChangePlans } from "@/lib/hooks/us
 import { useInstallPlans, useDeleteInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
-import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
+import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import type { PanelSize } from "@/lib/types"
 
 function today() {
@@ -71,38 +73,36 @@ function resolveOrder(saved: string[] | undefined): PanelId[] {
   return [...savedValid, ...missing]
 }
 
-// The four plan panels that arrange into a fixed 2x2 grid in "grid" layout
-// mode — Filter Change + Installation on top, Repair + Collection below,
-// left-to-right in this exact order (matches the old AppSheet reference).
-// Not draggable or individually resizable while in that mode, since the
-// arrangement is fixed.
-const GRID_PANEL_IDS: PanelId[] = ["filter-change", "installation", "repair", "collection"]
-
-// Same fixed, non-draggable/non-resizable treatment as the four above while
-// in "grid" mode — rendered as their own side-by-side pair (Announcements
-// left, Schedule right) directly above the 2x2 block, not merged into it.
-// Date Control is deliberately not in this list: it keeps its handles in
-// both modes.
-const FROZEN_IN_GRID_IDS: PanelId[] = ["announcements", "schedule"]
-
-// Shared operational panel layout — Announcements, Schedule, the Date Control,
-// and the Filter Change/Installation/Repair/Collection panels. Rendered on both
-// the Dashboard and the standalone Daily Report page so they stay in sync
-// rather than drifting as two separate copies. Panel order is admin-editable
-// (drag-and-drop) and persisted to the shared company_settings row, so every
-// viewer sees the same saved layout — staff get it read-only, with no handles.
+// Every panel is freely draggable and resizable by admins in both layout
+// modes — "stacked" lays them out one per row; "grid" wraps them left-to-
+// right based on each panel's own width, so resizing narrower fits more per
+// row. Shared operational panel layout — Announcements, Schedule, the Date
+// Control, and the Filter Change/Installation/Repair/Collection panels.
+// Rendered on both the Dashboard and the standalone Daily Report page so they
+// stay in sync rather than drifting as two separate copies. Order/sizes/mode
+// are saved per-admin (see use-daily-report-layout.ts) — each admin has their
+// own arrangement; staff always see the fixed default, read-only.
 export function DailyReportSection() {
   const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
 
-  const { data: settings } = useSettings()
-  const updateSettings = useUpdateSettings(user?.id ?? "")
+  // Same collapse mechanism as a split-view detail panel — the nav rail goes
+  // icon-only for as long as this section is mounted (i.e. the Daily Report
+  // page is active) and re-expands on navigating away, via the effect's
+  // cleanup unregistering it. Reference-counted, so it coexists cleanly with
+  // any split-view panel collapse request elsewhere.
+  useReportDetailPanelOpen(true)
 
-  // The saved order, derived straight from settings — no effect needed. A local
-  // override holds the just-dropped order for immediate feedback until the
-  // mutation round-trips and settings refetches to match it.
-  const savedOrder = React.useMemo(() => resolveOrder(settings?.dailyReportLayout), [settings])
+  // Staff never fetch or save a layout at all (the query is disabled below) —
+  // they always render the hardcoded default order/sizes/mode.
+  const { data: myLayout } = useMyDailyReportLayout(isAdmin ? user?.id : undefined)
+  const saveLayout = useSaveMyDailyReportLayout(user?.id)
+
+  // The saved order, derived straight from the fetched layout — no effect
+  // needed. A local override holds the just-dropped order for immediate
+  // feedback until the mutation round-trips and the layout refetches to match.
+  const savedOrder = React.useMemo(() => resolveOrder(myLayout?.layout), [myLayout])
   const [localOrder, setLocalOrder] = React.useState<PanelId[] | null>(null)
   const order = localOrder ?? savedOrder
 
@@ -118,30 +118,30 @@ export function DailyReportSection() {
     const newIndex = order.indexOf(over.id as PanelId)
     const next = arrayMove(order, oldIndex, newIndex)
     setLocalOrder(next)
-    updateSettings.mutate({ dailyReportLayout: next })
+    saveLayout.mutate({ layout: next })
   }
 
-  // Same shared-settings pattern as the order above, but keyed per panel — a
+  // Same saved-layout pattern as the order above, but keyed per panel — a
   // local override per panel id holds its just-dropped size for immediate
-  // feedback until settings refetches to match.
-  const savedSizes = settings?.dailyReportPanelSizes ?? {}
+  // feedback until the layout refetches to match.
+  const savedSizes = myLayout?.panelSizes ?? {}
   const [localSizes, setLocalSizes] = React.useState<Record<string, PanelSize>>({})
   const sizes = { ...savedSizes, ...localSizes }
 
   function handleResizeEnd(panelId: string, size: PanelSize) {
     setLocalSizes((prev) => ({ ...prev, [panelId]: size }))
-    updateSettings.mutate({ dailyReportPanelSizes: { ...sizes, [panelId]: size } })
+    saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size } })
   }
 
-  // Same shared-settings pattern as order/sizes above.
-  const savedLayoutMode = settings?.dailyReportLayoutMode ?? "stacked"
+  // Same saved-layout pattern as order/sizes above.
+  const savedLayoutMode = myLayout?.layoutMode ?? "stacked"
   const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
   const layoutMode = localLayoutMode ?? savedLayoutMode
 
   function handleLayoutModeChange(mode: "stacked" | "grid") {
     if (mode === layoutMode) return
     setLocalLayoutMode(mode)
-    updateSettings.mutate({ dailyReportLayoutMode: mode })
+    saveLayout.mutate({ layoutMode: mode })
   }
 
   const [reportDate, setReportDate] = React.useState(today)
@@ -184,9 +184,9 @@ export function DailyReportSection() {
     [collectionPlans, reportDate]
   )
 
-  // Raw panel content, unwrapped — reused as-is inside the fixed grid cells in
-  // "grid" mode, and wrapped in ResizablePanel below for "stacked" mode. Only
-  // the arrangement changes between modes, never the panel internals.
+  // Raw panel content, unwrapped — always wrapped in SortablePanel +
+  // ResizablePanel below (see resizable()); only the outer arrangement
+  // differs between "stacked" and "grid" mode, never the panel internals.
   const rawContent: Record<PanelId, React.ReactNode> = {
     announcements: <AnnouncementPanel />,
     schedule: <ScheduleAgenda date={reportDate} />,
@@ -275,13 +275,9 @@ export function DailyReportSection() {
   }
 
   const isGrid = layoutMode === "grid"
-  const firstGridIndex = order.findIndex((id) => GRID_PANEL_IDS.includes(id))
-  const firstFrozenIndex = order.findIndex((id) => FROZEN_IN_GRID_IDS.includes(id))
-  // In grid mode, the four grid panels and the frozen ones aren't individually
-  // sortable — only the remaining ids (Date Control) are real drag targets.
-  const sortableItems = isGrid
-    ? order.filter((id) => !GRID_PANEL_IDS.includes(id) && !FROZEN_IN_GRID_IDS.includes(id))
-    : order
+  // Every panel is a real drag target in both modes now — nothing is frozen
+  // or grouped into a fixed block.
+  const sortableItems = order
 
   return (
     <div className="space-y-6">
@@ -312,59 +308,19 @@ export function DailyReportSection() {
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
-          <div className="space-y-6">
-            {order.map((id, index) => {
-              if (GRID_PANEL_IDS.includes(id)) {
-                if (!isGrid) {
-                  return (
-                    <SortablePanel key={id} id={id} isAdmin={isAdmin}>
-                      {resizable(id)}
-                    </SortablePanel>
-                  )
-                }
-                // Render the whole fixed 2x2 block once, at the position the
-                // first grid panel occupies in the saved order — the other
-                // three grid-panel ids are skipped below so they don't repeat.
-                if (index !== firstGridIndex) return null
-                return (
-                  <div key="grid-block" className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    {GRID_PANEL_IDS.map((gridId) => (
-                      <div key={gridId} className="min-w-0">
-                        {rawContent[gridId]}
-                      </div>
-                    ))}
-                  </div>
-                )
-              }
-              if (FROZEN_IN_GRID_IDS.includes(id)) {
-                if (!isGrid) {
-                  return (
-                    <SortablePanel key={id} id={id} isAdmin={isAdmin}>
-                      {resizable(id)}
-                    </SortablePanel>
-                  )
-                }
-                // Same pairing treatment as the 2x2 block below — rendered
-                // once, at the position the first of the two occupies in the
-                // saved order, side by side, no drag/resize handles.
-                if (index !== firstFrozenIndex) return null
-                return (
-                  <div key="frozen-pair-block" className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    {FROZEN_IN_GRID_IDS.map((frozenId) => (
-                      <div key={frozenId} className="min-w-0">
-                        {rawContent[frozenId]}
-                      </div>
-                    ))}
-                  </div>
-                )
-              }
-              return (
-                <SortablePanel key={id} id={id} isAdmin={isAdmin}>
-                  {resizable(id)}
-                </SortablePanel>
-              )
-            })}
+        <SortableContext items={sortableItems} strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}>
+          <div className={isGrid ? "flex flex-wrap items-start gap-6" : "space-y-6"}>
+            {order.map((id) => (
+              <SortablePanel
+                key={id}
+                id={id}
+                isAdmin={isAdmin}
+                width={sizes[id]?.width}
+                defaultWidthClassName={isGrid ? "w-full md:w-[calc(50%-12px)]" : "w-full"}
+              >
+                {resizable(id)}
+              </SortablePanel>
+            ))}
           </div>
         </SortableContext>
       </DndContext>

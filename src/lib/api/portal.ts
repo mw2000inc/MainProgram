@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
-import type { PaymentMethod, PaymentStatus, FilterChangePlan, CollectionPlan, RepairPlan } from "@/lib/types"
+import type { PaymentMethod, PaymentStatus, FilterChangePlan, CollectionPlan, RepairPlan, SaleListEntry } from "@/lib/types"
 
 export interface PortalCustomer {
   id: string
@@ -26,6 +26,9 @@ export interface PortalCustomer {
 export type PortalFilterChange = FilterChangePlan
 export type PortalCollection = CollectionPlan
 export type PortalRepair = RepairPlan
+// customerId is never populated here — the RPC scopes this to the caller's
+// own customer already, so there's nothing for the client to need it for.
+export type PortalSaleListEntry = SaleListEntry
 
 export interface PortalSale {
   id: string
@@ -55,6 +58,7 @@ export interface PortalProfile {
   customer: PortalCustomer
   sales: PortalSale[]
   products: PortalProduct[]
+  saleList: PortalSaleListEntry[]
   filterChanges: PortalFilterChange[]
   collections: PortalCollection[]
   repairs: PortalRepair[]
@@ -90,6 +94,21 @@ type RpcRow = {
     items: { productId: string; quantity: number }[]
   }[]
   products: PortalProduct[]
+  saleList: {
+    id: string
+    order_number: string
+    installed_date: string | null
+    product_no: string
+    s_c: string
+    c_f: string
+    c_t: string
+    cp_y1_y2: string
+    cp_start: string | null
+    cp_end: string | null
+    note: string | null
+    status: string
+    created_at: string
+  }[]
   filterChanges: {
     id: string
     order_number: string
@@ -185,6 +204,21 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       items: s.items,
     })),
     products: row.products,
+    saleList: row.saleList.map((sl) => ({
+      id: sl.id,
+      orderNumber: sl.order_number,
+      installedDate: sl.installed_date ?? undefined,
+      productNo: sl.product_no,
+      sc: sl.s_c,
+      cf: sl.c_f,
+      ct: sl.c_t,
+      cpY1Y2: sl.cp_y1_y2,
+      cpStart: sl.cp_start ?? undefined,
+      cpEnd: sl.cp_end ?? undefined,
+      note: sl.note ?? undefined,
+      status: sl.status as SaleListEntry["status"],
+      createdAt: sl.created_at,
+    })),
     filterChanges: row.filterChanges.map((f) => ({
       id: f.id,
       orderNumber: f.order_number,

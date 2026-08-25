@@ -9,14 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { AnnouncementFormDialog } from "@/components/announcements/announcement-form-dialog"
 import { CommentThread } from "@/components/announcements/comment-thread"
+import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { useAnnouncements, useDeleteAnnouncement } from "@/lib/hooks/use-announcements"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatDateTime } from "@/lib/utils"
+import { cn, formatDateTime } from "@/lib/utils"
 import type { Announcement } from "@/lib/types"
 
 export function AnnouncementPanel() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const dragHandle = useDragHandle()
   const { data: announcements = [], isPending } = useAnnouncements()
   const deleteAnnouncement = useDeleteAnnouncement()
 
@@ -26,7 +28,13 @@ export function AnnouncementPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex min-w-0 max-w-full flex-col items-stretch gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between">
+      <CardHeader
+        {...dragHandle}
+        className={cn(
+          "flex min-w-0 max-w-full flex-col items-stretch gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between",
+          dragHandle && "touch-none cursor-grab select-none active:cursor-grabbing"
+        )}
+      >
         <CardTitle className="flex min-w-0 items-center gap-2 text-base">
           <Megaphone className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Announcements</span>
         </CardTitle>

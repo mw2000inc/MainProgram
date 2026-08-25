@@ -13,6 +13,8 @@ type CustomerRow = {
   contract_end: string
   address: string
   address2: string
+  latitude: number | null
+  longitude: number | null
   email: string
   email2: string
   contact_number: string
@@ -38,6 +40,8 @@ function fromRow(row: CustomerRow): Customer {
     contractEnd: row.contract_end,
     address: row.address,
     address2: row.address2 || undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
     email: row.email,
     email2: row.email2 || undefined,
     contactNumber: row.contact_number,
@@ -121,6 +125,15 @@ export async function updateCustomer(
   }
   await logActivity(actorId, "Customer Edited")
   return fromRow(data as CustomerRow)
+}
+
+// Caches a client-side geocoding result on the customer row (see the
+// coordinates migration) — deliberately silent (no activity log entry, no
+// "Customer updated" toast) since this isn't an admin edit, just background
+// bookkeeping so the Member List map doesn't re-geocode this address next time.
+export async function updateCustomerCoordinates(id: string, latitude: number, longitude: number): Promise<void> {
+  const { error } = await supabase.from("customers").update({ latitude, longitude }).eq("id", id)
+  if (error) throw error
 }
 
 export async function deleteCustomer(id: string, actorId: string): Promise<void> {

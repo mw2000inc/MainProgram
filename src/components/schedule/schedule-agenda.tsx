@@ -19,11 +19,12 @@ import {
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
+import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useAuth } from "@/lib/auth/auth-context"
 import { printTable } from "@/lib/export/print"
-import { formatDate } from "@/lib/utils"
+import { cn, formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
 
 function MarkJobDoneDialog({
@@ -75,6 +76,7 @@ function MarkJobDoneDialog({
 export function ScheduleAgenda({ date }: { date: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const dragHandle = useDragHandle()
   const { data: jobs = [], isPending } = useScheduleJobs()
   const updateJob = useUpdateScheduleJob()
   const [formOpen, setFormOpen] = React.useState(false)
@@ -119,7 +121,13 @@ export function ScheduleAgenda({ date }: { date: string }) {
 
   return (
     <Card>
-      <CardHeader className="flex min-w-0 max-w-full flex-col items-stretch gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between">
+      <CardHeader
+        {...dragHandle}
+        className={cn(
+          "flex min-w-0 max-w-full flex-col items-stretch gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between",
+          dragHandle && "touch-none cursor-grab select-none active:cursor-grabbing"
+        )}
+      >
         <CardTitle className="flex min-w-0 items-center gap-2 text-base">
           <CalendarClock className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Schedule</span>
         </CardTitle>

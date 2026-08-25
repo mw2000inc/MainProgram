@@ -10,6 +10,13 @@ const MIN_HEIGHT = 140
 // bottom-right corner — admin-only, same permission shape as the drag-reorder
 // handles: the handle simply isn't rendered for staff, so there's nothing for
 // them to grab regardless of any other state.
+//
+// This div only ever sets its own `height` — `width` is applied one level up,
+// on SortablePanel's root div, since that's the element that's actually a
+// flex/grid item in "grid" layout mode (flex-basis/width on a non-flex-item
+// nested div has no effect on the wrapping layout). The resize handle still
+// measures and reports both dimensions; the caller just routes `width` to
+// the right place.
 export function ResizablePanel({
   panelId,
   isAdmin,
@@ -65,18 +72,15 @@ export function ResizablePanel({
   return (
     <div
       ref={containerRef}
-      style={{
-        width: size?.width ? `${size.width}px` : undefined,
-        height: size?.height ? `${size.height}px` : undefined,
-        maxWidth: "100%",
-      }}
+      style={{ height: size?.height ? `${size.height}px` : undefined }}
       // Horizontal overflow is intentionally never scrollable at this outer
-      // level — the header must always fit within `width` (it shrinks/wraps via
-      // container queries), and any inner content that's legitimately wide (a
-      // data table) has its own dedicated overflow-x-auto wrapper. If this div
-      // scrolled horizontally too, dragging that inner scrollbar would drag the
-      // header out of view along with it, which is exactly the bug being fixed.
-      className="relative min-w-0 max-w-full overflow-x-hidden overflow-y-auto"
+      // level — the header must always fit within the panel's width (it
+      // shrinks/wraps via container queries), and any inner content that's
+      // legitimately wide (a data table) has its own dedicated
+      // overflow-x-auto wrapper. If this div scrolled horizontally too,
+      // dragging that inner scrollbar would drag the header out of view
+      // along with it, which is exactly the bug being fixed.
+      className="relative min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto"
     >
       {children}
       {isAdmin && (

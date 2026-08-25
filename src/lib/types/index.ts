@@ -25,6 +25,10 @@ export interface Customer {
   contractEnd: string
   address: string
   address2?: string
+  // Geocoded from `address`, client-side, on first Member List map render —
+  // see 20260825010000_customer_geocoded_coordinates.sql. Absent until then.
+  latitude?: number
+  longitude?: number
   email: string
   email2?: string
   contactNumber: string
@@ -207,24 +211,20 @@ export interface CompanySettings {
   // the map fall back to `monitoringDefaultMonths`.
   monitoringDefaultMonths: number
   monitoringIntervals: Record<string, number>
-  // Admin-customized panel order for the Daily Report page, shared across every
-  // viewer. Empty until an admin drags a panel, at which point it holds every
-  // known panel id in order — see DAILY_REPORT_PANEL_IDS.
-  dailyReportLayout: string[]
-  // Admin-customized, shared panel sizes for the Daily Report page, keyed by the
-  // same panel id used for dailyReportLayout. Missing entries mean "natural size."
-  dailyReportPanelSizes: Record<string, PanelSize>
-  // "stacked" (default): every panel in one draggable, individually-resizable
-  // column. "grid": Filter Change/Installation/Repair/Collection render as a
-  // fixed 2x2 block instead (not draggable or resizable while in this mode) —
-  // everything else is unaffected. Shared across every viewer, same as the
-  // fields above.
-  dailyReportLayoutMode: "stacked" | "grid"
 }
 
 export interface PanelSize {
   width?: number
   height?: number
+}
+
+// Each admin's own Daily Report layout — see daily_report_layouts (one row
+// per user, RLS-scoped to its owner). Staff never read or write this; they
+// always see the hardcoded default order/sizes/mode.
+export interface DailyReportLayout {
+  layout: string[]
+  panelSizes: Record<string, PanelSize>
+  layoutMode: "stacked" | "grid"
 }
 
 export interface Announcement {

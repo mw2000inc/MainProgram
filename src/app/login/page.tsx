@@ -96,7 +96,17 @@ export default function LoginPage() {
       password: values.password,
     })
     if (error) {
-      signInForm.setError("password", { message: "Incorrect email or password." })
+      // Supabase returns this distinct error (not "invalid credentials") when
+      // the password is actually correct but the account's email hasn't been
+      // confirmed yet — surface that accurately instead of telling someone
+      // with a correct password that it's wrong.
+      if (error.code === "email_not_confirmed") {
+        signInForm.setError("email", {
+          message: "Please confirm your email first — check your inbox for the confirmation link from signup.",
+        })
+      } else {
+        signInForm.setError("password", { message: "Incorrect email or password." })
+      }
       return
     }
     if (rememberMe) {
@@ -152,7 +162,10 @@ export default function LoginPage() {
       }
       return
     }
-    toast.success("Account created! Welcome to MW2000.")
+    // The account can't actually sign in yet until email confirmation is
+    // completed (Auth has "Confirm email" enabled on this project) — say so
+    // rather than implying they can use the app immediately.
+    toast.success("Account created! Check your email to confirm your address before signing in.")
   }
 
   const signInEmailError = signInForm.formState.errors.email?.message

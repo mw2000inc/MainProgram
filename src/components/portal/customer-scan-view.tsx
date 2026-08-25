@@ -14,7 +14,10 @@ import {
   CalendarDays,
   Hash,
   ClipboardList,
+  ClipboardCheck,
   IdCard,
+  Receipt,
+  ArrowLeft,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -28,6 +31,7 @@ import { usePortalProfile } from "@/lib/hooks/use-portal"
 import { getFilterChangeColumns } from "@/components/filter-change/filter-change-columns"
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
+import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import {
   formatDate,
   getMonitoringEndDate,
@@ -47,10 +51,12 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const filterChanges = profile?.filterChanges ?? []
   const collections = profile?.collections ?? []
   const repairs = profile?.repairs ?? []
+  const [selectedOrder, setSelectedOrder] = React.useState<SaleListRow | null>(null)
 
   const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
   const collectionsColumns = React.useMemo(() => getCollectionsColumns(), [])
   const repairColumns = React.useMemo(() => getRepairColumns(), [])
+  const saleListColumns = React.useMemo(() => getSaleListSummaryColumns(), [])
 
   const content = (() => {
     if (isPending) {
@@ -78,6 +84,8 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     const endDate = getMonitoringEndDate(anchor, intervalMonths)
     const status = getMonitoringStatus(endDate)
     const serviceHistory = getServiceHistory(customer)
+    const accountLabel = customer.companyName || customer.fullName
+    const saleListRows: SaleListRow[] = (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
 
     return (
       <>
@@ -175,6 +183,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
           <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="service">Service History</TabsTrigger>
+            <TabsTrigger value="orders">Orders</TabsTrigger>
             <TabsTrigger value="history">Order History</TabsTrigger>
           </TabsList>
 
@@ -229,6 +238,111 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 ))}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="orders" className="space-y-6">
+            {!selectedOrder ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Receipt className="h-4 w-4" /> Related Sales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DataTable
+                    columns={saleListColumns}
+                    data={saleListRows}
+                    searchPlaceholder="Search orders..."
+                    emptyMessage="No related sales for this account."
+                    onRowClick={(row) => setSelectedOrder(row)}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders
+                </button>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ClipboardCheck className="h-4 w-4" /> Order {selectedOrder.orderNumber}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <InfoRow label="Order Number" value={selectedOrder.orderNumber} />
+                    <InfoRow
+                      label="Installed Date"
+                      value={selectedOrder.installedDate ? formatDate(selectedOrder.installedDate) : "N/A"}
+                    />
+                    <InfoRow label="Account#" value={selectedOrder.accountLabel} />
+                    <InfoRow label="Product#" value={selectedOrder.productNo || "N/A"} />
+                    <InfoRow label="S/C" value={selectedOrder.sc || "N/A"} />
+                    <InfoRow label="C/F" value={selectedOrder.cf || "N/A"} />
+                    <InfoRow label="C/T" value={selectedOrder.ct || "N/A"} />
+                    <InfoRow label="CP y1/y2" value={selectedOrder.cpY1Y2 || "N/A"} />
+                    <InfoRow
+                      label="CP start"
+                      value={selectedOrder.cpStart ? formatDate(selectedOrder.cpStart) : "N/A"}
+                    />
+                    <InfoRow label="CP end" value={selectedOrder.cpEnd ? formatDate(selectedOrder.cpEnd) : "N/A"} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Droplets className="h-4 w-4" /> Filter Changes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DataTable
+                      columns={filterChangeColumns}
+                      data={filterChanges.filter((f) => f.orderNumber === selectedOrder.orderNumber)}
+                      searchPlaceholder="Search filter changes..."
+                      emptyMessage="No filter change history for this order."
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Banknote className="h-4 w-4" /> Collections
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DataTable
+                      columns={collectionsColumns}
+                      data={collections.filter((c) => c.orderNo === selectedOrder.orderNumber)}
+                      searchPlaceholder="Search collections..."
+                      emptyMessage="No collection history for this order."
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Wrench className="h-4 w-4" /> Repairs
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DataTable
+                      columns={repairColumns}
+                      data={repairs.filter((r) => r.orderNo === selectedOrder.orderNumber)}
+                      searchPlaceholder="Search repairs..."
+                      emptyMessage="No repair history for this order."
+                    />
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">

@@ -17,6 +17,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
+import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import type { ExportColumn } from "@/components/shared/export-buttons"
 import { cn } from "@/lib/utils"
 
@@ -63,6 +64,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   exportFileName,
   onRowClick,
 }: DashboardPlanPanelProps<TData>) {
+  const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [selectMode, setSelectMode] = React.useState(false)
@@ -214,7 +216,10 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   return (
     <>
       <Card className="flex flex-col">
-        <CardHeader className="gap-2 pb-2">
+        <CardHeader
+          {...dragHandle}
+          className={cn("gap-2 pb-2", dragHandle && "touch-none cursor-grab select-none active:cursor-grabbing")}
+        >
           {header}
           {statusRow}
         </CardHeader>

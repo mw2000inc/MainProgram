@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Plus, QrCode, Users } from "lucide-react"
+import { MapPin, Plus, QrCode, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -20,6 +20,8 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { DetailField, DetailPanel, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
+import { MemberMapPanel } from "@/components/customers/member-map-panel"
+import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
 import { MemberRelatedSalesTable } from "@/components/customers/member-related-sales"
 import { MemberOrderDetail } from "@/components/customers/member-order-detail"
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
@@ -27,6 +29,7 @@ import { getCustomerColumns, type CustomerRow } from "@/components/customers/cus
 import type { SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomers, useDeleteCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate, getContractStatus } from "@/lib/utils"
 import type { ContractStatus, Customer } from "@/lib/types"
@@ -37,6 +40,7 @@ export default function CustomersPage() {
   const { user, can } = useAuth()
   const { data: customers = [], isPending } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  const { data: settings } = useSettings()
   const deleteCustomer = useDeleteCustomer(user?.id ?? "")
 
   const [statusFilter, setStatusFilter] = React.useState<"all" | ContractStatus>("all")
@@ -45,6 +49,10 @@ export default function CustomersPage() {
   const [editing, setEditing] = React.useState<Customer | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<Customer | undefined>(undefined)
   const [qrOpen, setQrOpen] = React.useState(false)
+  // Independent of `selection` — a pin click on the Map panel (only rendered
+  // in the un-selected list+map view) needs to open directions for a member
+  // that was never drilled into via the split-view panel.
+  const [directionsTarget, setDirectionsTarget] = React.useState<Customer | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<CustomerRow[]>([])
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
@@ -155,41 +163,44 @@ export default function CustomersPage() {
             )}
           </div>
 
-          <Card>
-            <CardContent className="pt-6">
-              <DataTable
-                columns={columns}
-                data={scopedRows}
-                searchPlaceholder="Search by name, account number, email..."
-                onFilteredRowsChange={setFilteredRows}
-                emptyMessage="No members found."
-                onRowClick={(row) => selection.open(row)}
-                toolbar={
-                  <>
-                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                      <SelectTrigger className="h-9 w-[150px]">
-                        <SelectValue placeholder="Contract Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="expiring">Expiring Soon</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                    <ExportButtons
-                      title="Member List"
-                      subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                      fileName="members"
-                      columns={exportColumns}
-                      rows={filteredRows}
-                    />
-                  </>
-                }
-              />
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+            <Card>
+              <CardContent className="pt-6">
+                <DataTable
+                  columns={columns}
+                  data={scopedRows}
+                  searchPlaceholder="Search by name, account number, email..."
+                  onFilteredRowsChange={setFilteredRows}
+                  emptyMessage="No members found."
+                  onRowClick={(row) => selection.open(row)}
+                  toolbar={
+                    <>
+                      <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                        <SelectTrigger className="h-9 w-[150px]">
+                          <SelectValue placeholder="Contract Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Statuses</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="expiring">Expiring Soon</SelectItem>
+                          <SelectItem value="expired">Expired</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+                      <ExportButtons
+                        title="Member List"
+                        subtitle={`Generated ${formatDate(new Date().toISOString())}`}
+                        fileName="members"
+                        columns={exportColumns}
+                        rows={filteredRows}
+                      />
+                    </>
+                  }
+                />
+              </CardContent>
+            </Card>
+            <MemberMapPanel customers={scopedRows} onOpenDirections={setDirectionsTarget} />
+          </div>
         </>
       ) : orderSelection.selected ? (
         <MemberOrderDetail
@@ -274,7 +285,22 @@ export default function CustomersPage() {
               value={selection.selected.contactNumber2}
               className="sm:col-span-2"
             />
-            <DetailField label="Address" value={selection.selected.address} className="sm:col-span-2" />
+            <div className="sm:col-span-2">
+              <p className="mb-1.5 text-sm text-muted-foreground">Address</p>
+              {selection.selected.address ? (
+                <button
+                  type="button"
+                  onClick={() => setDirectionsTarget(selection.selected ?? undefined)}
+                  title="Get driving directions from the MW2000 office"
+                  className="inline-flex items-start gap-1.5 text-left text-base font-medium wrap-break-word text-primary hover:underline"
+                >
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {selection.selected.address}
+                </button>
+              ) : (
+                <div className="text-base font-medium">—</div>
+              )}
+            </div>
           </DetailPanel>
         </>
       )}
@@ -284,6 +310,14 @@ export default function CustomersPage() {
       {selection.selected && (
         <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={selection.selected} />
       )}
+
+      <MemberDirectionsDialog
+        open={!!directionsTarget}
+        onOpenChange={(o) => !o && setDirectionsTarget(undefined)}
+        originAddress={settings?.address ?? ""}
+        destinationAddress={directionsTarget?.address ?? ""}
+        destinationLabel={directionsTarget?.companyName || directionsTarget?.fullName || ""}
+      />
 
       <ConfirmDialog
         open={!!deleting}

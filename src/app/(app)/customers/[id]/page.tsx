@@ -34,6 +34,7 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ContractStatusBadge } from "@/components/shared/status-badge"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
+import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
 import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
 import { getSaleListColumns, getSaleListRowClassName, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
@@ -56,6 +57,7 @@ export default function CustomerProfilePage() {
   const updateCustomer = useUpdateCustomer(user?.id ?? "")
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
+  const [directionsOpen, setDirectionsOpen] = React.useState(false)
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   // Resolved client-side only (window.location.origin, same as the printable-
   // card dialog) — computing this inline during render would disagree between
@@ -400,7 +402,25 @@ export default function CustomerProfilePage() {
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <InfoRow icon={Mail} label="Email Address" value={customer.email} />
               <InfoRow icon={Phone} label="Contact Number" value={customer.contactNumber} />
-              <InfoRow icon={MapPin} label="Address" value={customer.address} className="sm:col-span-2" />
+              <InfoRow
+                icon={MapPin}
+                label="Address"
+                className="sm:col-span-2"
+                value={
+                  customer.address ? (
+                    <button
+                      type="button"
+                      onClick={() => setDirectionsOpen(true)}
+                      title="Get driving directions from the MW2000 office"
+                      className="text-left text-primary hover:underline"
+                    >
+                      {customer.address}
+                    </button>
+                  ) : (
+                    "N/A"
+                  )
+                }
+              />
               <InfoRow icon={Droplet} label="Water Purification Type" value={customer.dispenserType} />
               <InfoRow
                 icon={CalendarDays}
@@ -461,6 +481,13 @@ export default function CustomerProfilePage() {
 
       <CustomerFormDialog open={editOpen} onOpenChange={setEditOpen} customer={customer} />
       <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={customer} />
+      <MemberDirectionsDialog
+        open={directionsOpen}
+        onOpenChange={setDirectionsOpen}
+        originAddress={settings?.address ?? ""}
+        destinationAddress={customer.address}
+        destinationLabel={customer.companyName || customer.fullName}
+      />
     </div>
   )
 }
