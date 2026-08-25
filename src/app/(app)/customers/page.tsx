@@ -31,6 +31,7 @@ import { useCustomers, useDeleteCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
+import { ensurePrimaryOrderRow } from "@/lib/sale-list"
 import { formatDate, getContractStatus } from "@/lib/utils"
 import type { ContractStatus, Customer } from "@/lib/types"
 import { parseISO } from "date-fns"
@@ -86,9 +87,10 @@ export default function CustomersPage() {
     const member = selection.selected
     if (!member) return []
     const accountLabel = member.companyName || member.fullName
-    return saleListEntries
+    const rows = saleListEntries
       .filter((e) => (e.customerId ? e.customerId === member.id : e.orderNumber === member.orderNumber))
       .map((e) => ({ ...e, accountLabel }))
+    return ensurePrimaryOrderRow(rows, member)
   }, [saleListEntries, selection.selected])
 
   const orderSelection = useSplitViewSelection(relatedSaleRows)

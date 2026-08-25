@@ -36,20 +36,28 @@ export function CustomerQrDialog({
   open,
   onOpenChange,
   customer,
+  // When given, this is a per-order QR for one of the customer's
+  // sale_list_entries rows (see MemberRelatedSalesTable) — the printed card
+  // shows this order number instead of the customer's own, and the encoded
+  // link deep-links into that order on the scan page. Omitted, behavior is
+  // unchanged from before: the customer's own order number, plain scan link.
+  orderNumber,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   customer: Customer
+  orderNumber?: string
 }) {
+  const displayOrderNumber = orderNumber ?? customer.orderNumber
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   const [scanUrl, setScanUrl] = React.useState("")
 
   React.useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setScanUrl(getScanUrl(customer.id))
+      setScanUrl(getScanUrl(customer.id, orderNumber))
     }
-  }, [open, customer.id])
+  }, [open, customer.id, orderNumber])
 
   // The QR is rendered directly in the preview (see below) rather than snapshotted
   // asynchronously — so the exports just read that same already-painted canvas at
@@ -84,11 +92,11 @@ export function CustomerQrDialog({
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     const qrImg = await loadImage(dataUrl)
-    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, customer.orderNumber)
+    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, displayOrderNumber)
 
     const a = document.createElement("a")
     a.href = canvas.toDataURL("image/png")
-    a.download = `${customer.orderNumber}-qr-card.png`
+    a.download = `${displayOrderNumber}-qr-card.png`
     a.click()
   }
 
@@ -103,9 +111,9 @@ export function CustomerQrDialog({
     const pageH = margin * 2 + cardH
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [pageW, pageH] })
 
-    drawCardPdf(doc, margin, margin, dataUrl, customer.orderNumber)
+    drawCardPdf(doc, margin, margin, dataUrl, displayOrderNumber)
 
-    doc.save(`${customer.orderNumber}-qr-card.pdf`)
+    doc.save(`${displayOrderNumber}-qr-card.pdf`)
   }
 
   // --- Browser print at true physical size via cm dimensions + @page ---
@@ -119,14 +127,14 @@ export function CustomerQrDialog({
         <img src="${dataUrl}" alt="QR" />
         <div class="meta">
           <div class="label">Order #</div>
-          <div class="value">${customer.orderNumber}</div>
+          <div class="value">${displayOrderNumber}</div>
         </div>
       </div>`
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${customer.orderNumber} — QR Card</title>
+          <title>${displayOrderNumber} — QR Card</title>
           <style>
             @page { size: auto; margin: 8mm; }
             * { box-sizing: border-box; }
@@ -160,7 +168,7 @@ export function CustomerQrDialog({
         <DialogHeader>
           <DialogTitle>Printable QR Card</DialogTitle>
           <DialogDescription>
-            One 4.5 × 3 cm card for order #{customer.orderNumber}. Scanning opens a read-only profile — no login
+            One 4.5 × 3 cm card for order #{displayOrderNumber}. Scanning opens a read-only profile — no login
             required.
           </DialogDescription>
         </DialogHeader>
@@ -170,7 +178,7 @@ export function CustomerQrDialog({
             CSS, so it's always visible and doubles as the export source (read
             through qrCanvasRef at click time). */}
         <div className="flex justify-center overflow-x-auto py-2">
-          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} orderNumber={customer.orderNumber} />
+          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} orderNumber={displayOrderNumber} />
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-4">

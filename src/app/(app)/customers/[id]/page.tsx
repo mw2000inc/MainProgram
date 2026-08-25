@@ -41,6 +41,7 @@ import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
+import { ensurePrimaryOrderRow, isPrimaryOrderRow } from "@/lib/sale-list"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
 import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
@@ -102,9 +103,12 @@ export default function CustomerProfilePage() {
   const status = getContractStatus(customer.contractEnd)
   const serviceHistory = getServiceHistory(customer)
 
-  const relatedSales: SaleListRow[] = saleListEntries
-    .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
-    .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName }))
+  const relatedSales: SaleListRow[] = ensurePrimaryOrderRow(
+    saleListEntries
+      .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
+      .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName })),
+    customer
+  )
   const saleListColumns = getSaleListColumns({ canEdit: false, canDelete: false, onEdit: () => {}, onDelete: () => {} })
 
   const orderNumber = customer.orderNumber
@@ -472,7 +476,10 @@ export default function CustomerProfilePage() {
                 searchPlaceholder="Search by order number, product..."
                 emptyMessage="No sale list entries for this member."
                 getRowClassName={getSaleListRowClassName}
-                onRowClick={(row) => router.push(`/sale-list/${row.id}`)}
+                // The synthesized "primary order" row (see ensurePrimaryOrderRow)
+                // isn't a real sale_list_entries row, so there's no /sale-list/[id]
+                // page for it to open — clicking it is a no-op rather than a 404.
+                onRowClick={(row) => !isPrimaryOrderRow(row.id) && router.push(`/sale-list/${row.id}`)}
               />
             </CardContent>
           </Card>

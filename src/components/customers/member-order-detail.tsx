@@ -11,6 +11,7 @@ import { OrderRelatedSection } from "@/components/sale-list/order-related-sectio
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
 import { getSaleListOrderNumberColumn, type SaleListRow } from "@/components/sale-list/sale-list-columns"
+import { isPrimaryOrderRow } from "@/lib/sale-list"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import {
   getFilterChangeColumns,
@@ -103,6 +104,12 @@ export function MemberOrderDetail({
   )
 
   const accountLabel = customer.companyName || customer.fullName
+  // The synthesized "primary order" row (see ensurePrimaryOrderRow) isn't a
+  // real sale_list_entries row — editing/deleting/expanding it would hit a
+  // 0-row update or a broken /sale-list/[id] link, so those are disabled for
+  // it. It's still fully viewable, and its Filter Changes/Collections/
+  // Repairs still resolve normally since those match on order number, not id.
+  const isPrimary = isPrimaryOrderRow(entry.id)
 
   return (
     <>
@@ -136,16 +143,17 @@ export function MemberOrderDetail({
             title={entry.orderNumber}
             icon={ClipboardCheck}
             subtitle={accountLabel}
-            onEdit={can("sales:edit") ? () => setFormOpen(true) : undefined}
-            onDelete={can("sales:delete") ? () => setDeleting(true) : undefined}
+            onEdit={!isPrimary && can("sales:edit") ? () => setFormOpen(true) : undefined}
+            onDelete={!isPrimary && can("sales:delete") ? () => setDeleting(true) : undefined}
             onPrev={onPrev}
             onNext={onNext}
             hasPrev={hasPrev}
             hasNext={hasNext}
             expanded={false}
             // Opens the standalone order page (its own URL, for linking/printing)
-            // without losing this in-place view.
-            onToggleExpand={() => router.push(`/sale-list/${entry.id}`)}
+            // without losing this in-place view. No-op for the synthesized
+            // primary row, which has no standalone page of its own.
+            onToggleExpand={() => !isPrimary && router.push(`/sale-list/${entry.id}`)}
             onClose={onClose}
             extra={
               <>

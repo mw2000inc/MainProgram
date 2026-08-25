@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import {
   Mail,
   MapPin,
@@ -32,6 +33,7 @@ import { getFilterChangeColumns } from "@/components/filter-change/filter-change
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
+import { ensurePrimaryOrderRow } from "@/lib/sale-list"
 import {
   formatDate,
   getMonitoringEndDate,
@@ -52,6 +54,34 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const collections = profile?.collections ?? []
   const repairs = profile?.repairs ?? []
   const [selectedOrder, setSelectedOrder] = React.useState<SaleListRow | null>(null)
+  const [activeTab, setActiveTab] = React.useState("personal")
+
+  // The customer's own order_number always shows up as its own row here too
+  // — synthesized if no sale_list_entries row already shares that exact
+  // number — so it's never possible to "lose" that order just because it was
+  // never entered as a formal sale-list line item.
+  const saleListRows: SaleListRow[] = React.useMemo(() => {
+    if (!customer) return []
+    const accountLabel = customer.companyName || customer.fullName
+    const rows = (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
+    return ensurePrimaryOrderRow(rows, customer)
+  }, [profile, customer])
+
+  // Deep link from a per-order QR (?order=001-0009, see member-related-sales.tsx)
+  // — once the profile loads, jump straight to that order instead of the
+  // default tab, if it's actually one of this customer's own orders
+  // (including the synthesized primary-order row above).
+  const searchParams = useSearchParams()
+  const orderParam = searchParams.get("order")
+  React.useEffect(() => {
+    if (!orderParam || saleListRows.length === 0) return
+    const match = saleListRows.find((sl) => sl.orderNumber === orderParam)
+    if (match) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedOrder(match)
+      setActiveTab("orders")
+    }
+  }, [orderParam, saleListRows])
 
   const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
   const collectionsColumns = React.useMemo(() => getCollectionsColumns(), [])
@@ -84,8 +114,6 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     const endDate = getMonitoringEndDate(anchor, intervalMonths)
     const status = getMonitoringStatus(endDate)
     const serviceHistory = getServiceHistory(customer)
-    const accountLabel = customer.companyName || customer.fullName
-    const saleListRows: SaleListRow[] = (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
 
     return (
       <>
@@ -179,7 +207,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="personal">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="service">Service History</TabsTrigger>

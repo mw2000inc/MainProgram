@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Pencil, Trash2 } from "lucide-react"
+import { Pencil, QrCode, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn, formatDate } from "@/lib/utils"
@@ -143,9 +143,16 @@ export function getSaleListOrderNumberColumn(): ColumnDef<SaleListRow, unknown>[
 
 // Compact 5-column set matching the AppSheet "MW CP > Sales List" reference —
 // used for a member's inline "Related Sales_Lists" table, which only
-// surfaces the identifying columns, not the full care-plan detail.
-export function getSaleListSummaryColumns(): ColumnDef<SaleListRow, unknown>[] {
-  return [
+// surfaces the identifying columns, not the full care-plan detail. Also
+// reused as-is (no `onQrClick`) by the public/read-only scan page's own
+// Orders tab, so the QR column only appears when explicitly requested by an
+// admin-facing caller.
+export function getSaleListSummaryColumns({
+  onQrClick,
+}: {
+  onQrClick?: (entry: SaleListRow) => void
+} = {}): ColumnDef<SaleListRow, unknown>[] {
+  const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
       accessorKey: "orderNumber",
       header: "Order Number",
@@ -164,6 +171,29 @@ export function getSaleListSummaryColumns(): ColumnDef<SaleListRow, unknown>[] {
     { accessorKey: "productNo", header: "Product#" },
     { accessorKey: "sc", header: "S/C" },
   ]
+
+  if (onQrClick) {
+    columns.push({
+      id: "qr",
+      header: "",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="QR Code"
+          onClick={(e) => {
+            e.stopPropagation()
+            onQrClick(row.original)
+          }}
+        >
+          <QrCode className="h-3.5 w-3.5" />
+        </Button>
+      ),
+    })
+  }
+
+  return columns
 }
 
 // INACTIVE renders strikethrough; RENT is highlighted (via StatusCell) but not

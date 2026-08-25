@@ -4,6 +4,7 @@ import * as React from "react"
 import { ClipboardCheck } from "lucide-react"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
+import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
@@ -25,7 +26,8 @@ export function MemberRelatedSalesTable({
   onSelectOrder: (row: SaleListRow) => void
 }) {
   const [formOpen, setFormOpen] = React.useState(false)
-  const columns = React.useMemo(() => getSaleListSummaryColumns(), [])
+  const [qrEntry, setQrEntry] = React.useState<SaleListRow | undefined>(undefined)
+  const columns = React.useMemo(() => getSaleListSummaryColumns({ onQrClick: setQrEntry }), [])
 
   return (
     <>
@@ -42,6 +44,17 @@ export function MemberRelatedSalesTable({
       />
 
       <SaleListFormDialog open={formOpen} onOpenChange={setFormOpen} defaultCustomerId={customer.id} />
+
+      {/* Deep-links into this one order on the customer's scan page
+          (?order=...) — same public/no-login QR dialog as the Member panel's
+          own QR button, just scoped to a single sale-list order instead of
+          the customer's own order number. */}
+      <CustomerQrDialog
+        open={!!qrEntry}
+        onOpenChange={(o) => !o && setQrEntry(undefined)}
+        customer={customer}
+        orderNumber={qrEntry?.orderNumber}
+      />
     </>
   )
 }
