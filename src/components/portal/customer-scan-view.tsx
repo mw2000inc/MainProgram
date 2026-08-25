@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   CalendarDays,
   Hash,
-  ClipboardList,
   ClipboardCheck,
   IdCard,
   Receipt,
@@ -22,7 +21,6 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DataTable } from "@/components/data-table/data-table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -160,50 +158,6 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
             <InfoRow label="Contact Number 1 (Main)" value={customer.contactNumber || "N/A"} />
             <InfoRow label="Contact Number 2 (Sub)" value={customer.contactNumber2 || "N/A"} />
             <InfoRow label="Address" value={customer.address || "N/A"} className="sm:col-span-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" /> Quarterly Monitoring
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order #</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Installed Date</TableHead>
-                    <TableHead>End Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium whitespace-nowrap">{customer.orderNumber}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="font-medium">{customer.fullName}</div>
-                      {customer.companyName && (
-                        <div className="text-xs text-muted-foreground">{customer.companyName}</div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <MonitoringViewStatusBadge status={status} />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {customer.installedDate ? formatDate(customer.installedDate) : "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{formatDate(endDate)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-            <p className="text-xs text-muted-foreground mt-3">
-              Next monitoring/replacement is due {intervalMonths} months after installation.
-            </p>
           </CardContent>
         </Card>
 

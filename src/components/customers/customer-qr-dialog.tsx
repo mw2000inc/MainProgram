@@ -25,9 +25,9 @@ const QR_CM = 2.2
 const PAD_CM = 0.2
 
 // Card color scheme: plain white card, no background fill and no border. The QR
-// is black-on-white (qrcode.react renders its own white quiet-zone). The "ORDER #"
-// label is a small muted gray so the bold navy order number is the clear focal
-// point next to it, matching the reference card layout.
+// is black-on-white (qrcode.react renders its own white quiet-zone). The small
+// label is a muted gray so the bold navy value is the clear focal point next
+// to it, matching the reference card layout.
 const CARD_BG = "#ffffff"
 const LABEL_COLOR = "#6b7280"
 const VALUE_COLOR = "#0f1729"
@@ -38,9 +38,10 @@ export function CustomerQrDialog({
   customer,
   // When given, this is a per-order QR for one of the customer's
   // sale_list_entries rows (see MemberRelatedSalesTable) — the printed card
-  // shows this order number instead of the customer's own, and the encoded
-  // link deep-links into that order on the scan page. Omitted, behavior is
-  // unchanged from before: the customer's own order number, plain scan link.
+  // shows "ORDER #" + this order number instead of the member's own account
+  // number, and the encoded link deep-links into that order on the scan
+  // page. Omitted, this is the member-level QR: "MEMBER ACCOUNT #" + the
+  // customer's own member_account_number, plain (non-deep-linked) scan link.
   orderNumber,
 }: {
   open: boolean
@@ -48,7 +49,9 @@ export function CustomerQrDialog({
   customer: Customer
   orderNumber?: string
 }) {
-  const displayOrderNumber = orderNumber ?? customer.orderNumber
+  const isOrderCard = orderNumber !== undefined
+  const displayLabel = isOrderCard ? "Order #" : "Member Account #"
+  const displayValue = isOrderCard ? orderNumber : customer.memberAccountNumber
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   const [scanUrl, setScanUrl] = React.useState("")
 
@@ -92,11 +95,11 @@ export function CustomerQrDialog({
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     const qrImg = await loadImage(dataUrl)
-    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, displayOrderNumber)
+    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, displayLabel, displayValue)
 
     const a = document.createElement("a")
     a.href = canvas.toDataURL("image/png")
-    a.download = `${displayOrderNumber}-qr-card.png`
+    a.download = `${displayValue}-qr-card.png`
     a.click()
   }
 
@@ -111,9 +114,9 @@ export function CustomerQrDialog({
     const pageH = margin * 2 + cardH
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [pageW, pageH] })
 
-    drawCardPdf(doc, margin, margin, dataUrl, displayOrderNumber)
+    drawCardPdf(doc, margin, margin, dataUrl, displayLabel, displayValue)
 
-    doc.save(`${displayOrderNumber}-qr-card.pdf`)
+    doc.save(`${displayValue}-qr-card.pdf`)
   }
 
   // --- Browser print at true physical size via cm dimensions + @page ---
@@ -126,15 +129,15 @@ export function CustomerQrDialog({
       <div class="card">
         <img src="${dataUrl}" alt="QR" />
         <div class="meta">
-          <div class="label">Order #</div>
-          <div class="value">${displayOrderNumber}</div>
+          <div class="label">${displayLabel}</div>
+          <div class="value">${displayValue}</div>
         </div>
       </div>`
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${displayOrderNumber} — QR Card</title>
+          <title>${displayValue} — QR Card</title>
           <style>
             @page { size: auto; margin: 8mm; }
             * { box-sizing: border-box; }
@@ -147,9 +150,11 @@ export function CustomerQrDialog({
             .card img { width: ${QR_CM}cm; height: ${QR_CM}cm; display: block; }
             .meta { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
             .label { font-size: 8pt; color: ${LABEL_COLOR}; text-transform: uppercase; letter-spacing: 0.5px; }
-            /* 8pt keeps a 10-char order number (e.g. SK001-0015) on one line in
-               the ~1.7cm text column — matches the auto-fit the PNG/PDF do. */
-            .value { font-size: 8pt; font-weight: 700; font-family: 'Courier New', monospace; white-space: nowrap; color: ${VALUE_COLOR}; }
+            /* No white-space: nowrap — a short order number still reads as
+               one line at this width/size, but a longer member account
+               number wraps onto a second line (breaking after a "-" where
+               possible) instead of running off the card. */
+            .value { font-size: 8pt; font-weight: 700; font-family: 'Courier New', monospace; color: ${VALUE_COLOR}; }
           </style>
         </head>
         <body>
@@ -168,8 +173,8 @@ export function CustomerQrDialog({
         <DialogHeader>
           <DialogTitle>Printable QR Card</DialogTitle>
           <DialogDescription>
-            One 4.5 × 3 cm card for order #{displayOrderNumber}. Scanning opens a read-only profile — no login
-            required.
+            One 4.5 × 3 cm card for {isOrderCard ? `order #${displayValue}` : `member account #${displayValue}`}.
+            Scanning opens a read-only profile — no login required.
           </DialogDescription>
         </DialogHeader>
 
@@ -178,7 +183,7 @@ export function CustomerQrDialog({
             CSS, so it's always visible and doubles as the export source (read
             through qrCanvasRef at click time). */}
         <div className="flex justify-center overflow-x-auto py-2">
-          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} orderNumber={displayOrderNumber} />
+          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} label={displayLabel} value={displayValue} />
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -203,29 +208,38 @@ export function CustomerQrDialog({
 function PreviewCard({
   qrCanvasRef,
   scanUrl,
-  orderNumber,
+  label,
+  value,
 }: {
   qrCanvasRef: React.Ref<HTMLCanvasElement>
   scanUrl: string
-  orderNumber: string
+  label: string
+  value: string
 }) {
   const valueRef = React.useRef<HTMLDivElement>(null)
   const [valueFontPt, setValueFontPt] = React.useState(12)
+  // A ~10-char order number always ends up fitting on one line well above
+  // the shrink floor. A member account number (e.g. "0001-000-0000-0011")
+  // can be long enough that it still overflows even at the smallest
+  // readable size — rather than clipping it, this switches that value to
+  // wrap onto a second line (word-break naturally prefers the "-"s in it).
+  const [valueWraps, setValueWraps] = React.useState(false)
 
-  // Shrink the order number until it fits its column on a single line —
-  // mirrors the auto-fit the PNG/PDF exports do on canvas, so a 10-char order
-  // number like SK001-0015 stays on one line in the narrow (~1.7cm) text area.
+  // Shrink the value until it fits its column on a single line — mirrors the
+  // auto-fit the PNG/PDF exports do on canvas.
   React.useEffect(() => {
     const el = valueRef.current
     if (!el) return
     let size = 12
+    el.style.whiteSpace = "nowrap"
     el.style.fontSize = `${size}pt`
     while (el.scrollWidth > el.clientWidth && size > 5) {
       size -= 0.5
       el.style.fontSize = `${size}pt`
     }
+    setValueWraps(el.scrollWidth > el.clientWidth)
     setValueFontPt(size)
-  }, [orderNumber, scanUrl])
+  }, [value, scanUrl])
 
   return (
     <div
@@ -246,14 +260,14 @@ function PreviewCard({
       />
       <div className="flex flex-1 flex-col justify-center min-w-0">
         <div style={{ fontSize: "8pt", letterSpacing: "0.5px", color: LABEL_COLOR }} className="uppercase">
-          Order #
+          {label}
         </div>
         <div
           ref={valueRef}
-          style={{ fontSize: `${valueFontPt}pt`, color: VALUE_COLOR }}
-          className="font-mono font-bold leading-tight whitespace-nowrap overflow-hidden"
+          style={{ fontSize: `${valueFontPt}pt`, color: VALUE_COLOR, whiteSpace: valueWraps ? "normal" : "nowrap" }}
+          className="font-mono font-bold leading-tight overflow-hidden"
         >
-          {orderNumber}
+          {value}
         </div>
       </div>
     </div>
@@ -269,6 +283,20 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+// A member account number is long enough that even the smallest readable
+// font can still overflow the ~1.7cm text column that comfortably fits a
+// ~10-char order number. Rather than let it run off the card, split it onto
+// two lines — canvas/PDF text never wraps on its own the way HTML does —
+// preferring to break right after a "-" near the middle if there is one.
+function splitNearMiddle(text: string): [string, string] {
+  const mid = Math.floor(text.length / 2)
+  for (let offset = 0; offset < 4; offset++) {
+    if (text[mid + offset] === "-") return [text.slice(0, mid + offset + 1), text.slice(mid + offset + 1)]
+    if (text[mid - offset] === "-") return [text.slice(0, mid - offset + 1), text.slice(mid - offset + 1)]
+  }
+  return [text.slice(0, mid), text.slice(mid)]
+}
+
 function drawCardCanvas(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -277,7 +305,8 @@ function drawCardCanvas(
   cardH: number,
   pxPerCm: number,
   qrImg: HTMLImageElement,
-  orderNumber: string
+  label: string,
+  value: string
 ) {
   const pad = PAD_CM * pxPerCm
   const qr = QR_CM * pxPerCm
@@ -292,23 +321,37 @@ function drawCardCanvas(
   const textX = x + pad + qr + 0.2 * pxPerCm
   const maxTextW = x + cardW - pad - textX
 
+  // Auto-fit the label too — canvas text never wraps, and "Member Account #"
+  // is much longer than "Order #".
   ctx.textBaseline = "alphabetic"
   ctx.fillStyle = LABEL_COLOR
-  ctx.font = `${0.28 * pxPerCm}px Arial`
-  ctx.fillText("ORDER #", textX, y + cardH / 2 - 0.15 * pxPerCm)
+  let labelFs = 0.28 * pxPerCm
+  ctx.font = `${labelFs}px Arial`
+  while (ctx.measureText(label).width > maxTextW && labelFs > 0.12 * pxPerCm) {
+    labelFs -= 1
+    ctx.font = `${labelFs}px Arial`
+  }
+  ctx.fillText(label, textX, y + cardH / 2 - 0.15 * pxPerCm)
 
-  // Auto-fit the order number to the available width.
+  // Auto-fit the value to the available width; if it still doesn't fit even
+  // at the smallest readable size, split it onto two lines instead.
   ctx.fillStyle = VALUE_COLOR
   let fs = 0.46 * pxPerCm
   ctx.font = `bold ${fs}px 'Courier New', monospace`
-  while (ctx.measureText(orderNumber).width > maxTextW && fs > 0.2 * pxPerCm) {
+  while (ctx.measureText(value).width > maxTextW && fs > 0.2 * pxPerCm) {
     fs -= 1
     ctx.font = `bold ${fs}px 'Courier New', monospace`
   }
-  ctx.fillText(orderNumber, textX, y + cardH / 2 + 0.42 * pxPerCm)
+  if (ctx.measureText(value).width > maxTextW) {
+    const [line1, line2] = splitNearMiddle(value)
+    ctx.fillText(line1, textX, y + cardH / 2 + 0.22 * pxPerCm)
+    ctx.fillText(line2, textX, y + cardH / 2 + 0.6 * pxPerCm)
+  } else {
+    ctx.fillText(value, textX, y + cardH / 2 + 0.42 * pxPerCm)
+  }
 }
 
-function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, orderNumber: string) {
+function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, label: string, value: string) {
   const cardW = CARD_W_CM * 10
   const cardH = CARD_H_CM * 10
   const pad = PAD_CM * 10
@@ -322,18 +365,32 @@ function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, orderN
   const textX = x + pad + qr + 2
   const maxTextW = x + cardW - pad - textX
 
+  // Auto-fit the label too — "Member Account #" is much longer than "Order #".
   doc.setTextColor(107, 114, 128) // #6b7280 gray
   doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.text("ORDER #", textX, cardH / 2 + y - 1.5)
+  let labelFs = 7
+  doc.setFontSize(labelFs)
+  while (doc.getTextWidth(label) > maxTextW && labelFs > 4) {
+    labelFs -= 0.5
+    doc.setFontSize(labelFs)
+  }
+  doc.text(label, textX, cardH / 2 + y - 1.5)
 
+  // Auto-fit the value; if it still doesn't fit even at the smallest
+  // readable size, split it onto two lines instead.
   doc.setTextColor(15, 23, 41) // #0f1729 navy
   doc.setFont("courier", "bold")
   let fs = 12
   doc.setFontSize(fs)
-  while (doc.getTextWidth(orderNumber) > maxTextW && fs > 5) {
+  while (doc.getTextWidth(value) > maxTextW && fs > 5) {
     fs -= 0.5
     doc.setFontSize(fs)
   }
-  doc.text(orderNumber, textX, cardH / 2 + y + 3)
+  if (doc.getTextWidth(value) > maxTextW) {
+    const [line1, line2] = splitNearMiddle(value)
+    doc.text(line1, textX, cardH / 2 + y + 1.5)
+    doc.text(line2, textX, cardH / 2 + y + 4.5)
+  } else {
+    doc.text(value, textX, cardH / 2 + y + 3)
+  }
 }
