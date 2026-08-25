@@ -144,13 +144,15 @@ export function getSaleListOrderNumberColumn(): ColumnDef<SaleListRow, unknown>[
 // Compact 5-column set matching the AppSheet "MW CP > Sales List" reference —
 // used for a member's inline "Related Sales_Lists" table, which only
 // surfaces the identifying columns, not the full care-plan detail. Also
-// reused as-is (no `onQrClick`) by the public/read-only scan page's own
-// Orders tab, so the QR column only appears when explicitly requested by an
-// admin-facing caller.
+// reused as-is (no `onQrClick`/`onEditClick`) by the public/read-only scan
+// page's own Orders tab, so those action buttons only appear when explicitly
+// requested by an admin-facing caller.
 export function getSaleListSummaryColumns({
   onQrClick,
+  onEditClick,
 }: {
   onQrClick?: (entry: SaleListRow) => void
+  onEditClick?: (entry: SaleListRow) => void
 } = {}): ColumnDef<SaleListRow, unknown>[] {
   const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
@@ -172,23 +174,41 @@ export function getSaleListSummaryColumns({
     { accessorKey: "sc", header: "S/C" },
   ]
 
-  if (onQrClick) {
+  if (onEditClick || onQrClick) {
     columns.push({
-      id: "qr",
+      id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          title="QR Code"
-          onClick={(e) => {
-            e.stopPropagation()
-            onQrClick(row.original)
-          }}
-        >
-          <QrCode className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          {onEditClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Edit"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEditClick(row.original)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onQrClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="QR Code"
+              onClick={(e) => {
+                e.stopPropagation()
+                onQrClick(row.original)
+              }}
+            >
+              <QrCode className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       ),
     })
   }

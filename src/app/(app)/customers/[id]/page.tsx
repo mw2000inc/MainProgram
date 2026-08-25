@@ -52,7 +52,7 @@ const TECHNICIAN_NA = "N/A"
 export default function CustomerProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, can } = useAuth()
   const { data: customer, isPending } = useCustomer(params.id)
   const { data: settings } = useSettings()
   const { data: saleListEntries = [] } = useSaleListEntries()
@@ -60,11 +60,12 @@ export default function CustomerProfilePage() {
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
   const [directionsOpen, setDirectionsOpen] = React.useState(false)
-  // Set when clicking the synthesized primary-order row (see
-  // ensurePrimaryOrderRow) — opens SaleListFormDialog in create mode
-  // (prefilled with this order's number + customer) instead of navigating to
-  // a /sale-list/[id] page that doesn't exist for it yet.
-  const [creatingFromRow, setCreatingFromRow] = React.useState<SaleListRow | undefined>(undefined)
+  // Set by the row's own Edit icon, or by clicking the synthesized
+  // primary-order row (see ensurePrimaryOrderRow) directly — opens
+  // SaleListFormDialog in edit mode for a real row, or create mode
+  // (prefilled with this order's number + customer) for the primary row,
+  // which has no /sale-list/[id] page of its own yet.
+  const [editingRow, setEditingRow] = React.useState<SaleListRow | undefined>(undefined)
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   // Resolved client-side only (window.location.origin, same as the printable-
   // card dialog) — computing this inline during render would disagree between
@@ -115,7 +116,12 @@ export default function CustomerProfilePage() {
       .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName })),
     customer
   )
-  const saleListColumns = getSaleListColumns({ canEdit: false, canDelete: false, onEdit: () => {}, onDelete: () => {} })
+  const saleListColumns = getSaleListColumns({
+    canEdit: can("sales:edit"),
+    canDelete: false,
+    onEdit: setEditingRow,
+    onDelete: () => {},
+  })
 
   const orderNumber = customer.orderNumber
   function handleDownloadQr() {
@@ -484,12 +490,9 @@ export default function CustomerProfilePage() {
                 getRowClassName={getSaleListRowClassName}
                 // The synthesized "primary order" row (see ensurePrimaryOrderRow)
                 // isn't a real sale_list_entries row, so there's no /sale-list/[id]
-                // page for it — clicking it opens the create dialog instead
-                // (prefilled with this order's number + customer), which turns
-                // it into a normal row going forward.
-                onRowClick={(row) =>
-                  isPrimaryOrderRow(row.id) ? setCreatingFromRow(row) : router.push(`/sale-list/${row.id}`)
-                }
+                // page for it — clicking it opens the edit dialog (in create mode)
+                // instead, which turns it into a normal row going forward.
+                onRowClick={(row) => (isPrimaryOrderRow(row.id) ? setEditingRow(row) : router.push(`/sale-list/${row.id}`))}
               />
             </CardContent>
           </Card>
@@ -499,10 +502,11 @@ export default function CustomerProfilePage() {
       <CustomerFormDialog open={editOpen} onOpenChange={setEditOpen} customer={customer} />
       <CustomerQrDialog open={qrOpen} onOpenChange={setQrOpen} customer={customer} />
       <SaleListFormDialog
-        open={!!creatingFromRow}
-        onOpenChange={(o) => !o && setCreatingFromRow(undefined)}
+        open={!!editingRow}
+        onOpenChange={(o) => !o && setEditingRow(undefined)}
+        entry={editingRow && !isPrimaryOrderRow(editingRow.id) ? editingRow : undefined}
         defaultCustomerId={customer.id}
-        defaultOrderNumber={creatingFromRow?.orderNumber}
+        defaultOrderNumber={editingRow && isPrimaryOrderRow(editingRow.id) ? editingRow.orderNumber : undefined}
       />
       <MemberDirectionsDialog
         open={directionsOpen}
