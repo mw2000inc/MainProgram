@@ -4,6 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { addYears, format, parseISO } from "date-fns"
 import {
   Dialog,
   DialogContent,
@@ -30,12 +31,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
-import { useCpSystems } from "@/lib/hooks/use-cp-systems"
+import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
+
+const PRODUCT_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
+  g.items.map((item) => ({ value: formatProductOption(item.code, item.name), group: g.group }))
+)
+
+// Suggestions offered in the C/T combobox — still a real text input (a
+// custom value is always accepted if none of these fit), just with these
+// offered below it.
+const CT_OPTIONS: ComboboxOption[] = ["Yearly", "Half Year", "Quarterly", "Monthly"].map((value) => ({ value }))
 
 const schema = z.object({
   orderNumber: z.string().min(1, "Order number is required"),
@@ -51,9 +62,6 @@ const schema = z.object({
   cpEnd: z.string().optional(),
   note: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "RENT"]),
-  // Which CP System catalog entry (see /cp-system) is installed for this
-  // order — optional, since not every order has been tagged yet.
-  cpSystemId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -73,7 +81,6 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
       cpEnd: entry.cpEnd ?? "",
       note: entry.note ?? "",
       status: entry.status,
-      cpSystemId: entry.cpSystemId ?? "",
     }
   }
   return {
@@ -89,8 +96,11 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
     cpEnd: "",
     note: "",
     status: "ACTIVE",
-    cpSystemId: "",
   }
+}
+
+function oneYearLater(dateStr: string): string {
+  return format(addYears(parseISO(dateStr), 1), "yyyy-MM-dd")
 }
 
 export function SaleListFormDialog({
@@ -111,17 +121,31 @@ export function SaleListFormDialog({
   const createEntry = useCreateSaleListEntry()
   const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
-  const { data: cpSystems = [] } = useCpSystems()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(entry, defaultCustomerId),
   })
 
+  // Tracks whether CP end has been set by the admin directly (typing in that
+  // field — see the Input's onChange below) rather than by our own auto-fill.
+  // Starts true on edit when a CP end is already saved, so opening an
+  // existing entry never silently overwrites it; starts false for a new
+  // entry / a blank CP end, so the very next CP start edit fills it in.
+  const cpEndTouchedRef = React.useRef(!!entry?.cpEnd)
+  const cpStartValue = form.watch("cpStart")
+
   React.useEffect(() => {
     if (open) form.reset(defaultValues(entry, defaultCustomerId))
+    cpEndTouchedRef.current = !!entry?.cpEnd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry, defaultCustomerId])
+
+  React.useEffect(() => {
+    if (!cpStartValue || cpEndTouchedRef.current) return
+    form.setValue("cpEnd", oneYearLater(cpStartValue))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpStartValue])
 
   async function onSubmit(values: FormValues) {
     const input = {
@@ -131,7 +155,6 @@ export function SaleListFormDialog({
       cf: values.cf ?? "",
       ct: values.ct ?? "",
       cpY1Y2: values.cpY1Y2 ?? "",
-      cpSystemId: values.cpSystemId ?? "",
     }
     if (isEdit) {
       await updateEntry.mutateAsync({ id: entry.id, input })
@@ -213,7 +236,16 @@ export function SaleListFormDialog({
                   <FormItem>
                     <FormLabel>Product#</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 101 / MW) F7" {...field} />
+                      {/* Same combobox pattern as C/T below — a real text input
+                          (so a value outside the catalog, e.g. legacy data, is
+                          still typable/editable), with the catalog offered as
+                          a dropdown anchored directly below the field. */}
+                      <Combobox
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        options={PRODUCT_OPTIONS}
+                        placeholder="e.g. 101 / MW) F7"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -228,31 +260,6 @@ export function SaleListFormDialog({
                     <FormControl>
                       <Input placeholder="Optional" {...field} />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cpSystemId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>CP System</FormLabel>
-                    <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select system" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">—</SelectItem>
-                        {cpSystems.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.systemCode}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -275,9 +282,14 @@ export function SaleListFormDialog({
                 name="ct"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>C/T</FormLabel>
+                    <FormLabel>C/T (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Combobox
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        options={CT_OPTIONS}
+                        placeholder="e.g. Yearly"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -316,7 +328,17 @@ export function SaleListFormDialog({
                   <FormItem>
                     <FormLabel>CP end</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      {/* Auto-filled to one year after CP start (see the effect
+                          above) until the admin edits this field directly —
+                          marked here, not on the auto-fill's own setValue call. */}
+                      <Input
+                        type="date"
+                        {...field}
+                        onChange={(e) => {
+                          cpEndTouchedRef.current = true
+                          field.onChange(e)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
