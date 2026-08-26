@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AdminGuard } from "@/components/shared/admin-guard"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
-import { DISPENSER_TYPES } from "@/lib/constants"
 import type { ContactEntry } from "@/lib/types"
 
 function ContactEntryList({
@@ -85,8 +84,6 @@ export default function SettingsPage() {
   const [address, setAddress] = React.useState("")
   const [contactNumbers, setContactNumbers] = React.useState<ContactEntry[]>([])
   const [contactEmails, setContactEmails] = React.useState<ContactEntry[]>([])
-  const [monitoringDefaultMonths, setMonitoringDefaultMonths] = React.useState(6)
-  const [monitoringIntervals, setMonitoringIntervals] = React.useState<Record<string, number>>({})
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
@@ -102,8 +99,6 @@ export default function SettingsPage() {
       setAddress(settings.address)
       setContactNumbers(settings.contactNumbers)
       setContactEmails(settings.contactEmails)
-      setMonitoringDefaultMonths(settings.monitoringDefaultMonths)
-      setMonitoringIntervals(settings.monitoringIntervals)
     }
   }, [settings])
 
@@ -126,18 +121,6 @@ export default function SettingsPage() {
       address,
       contactNumbers,
       contactEmails,
-      monitoringDefaultMonths,
-      monitoringIntervals,
-    })
-  }
-
-  function handleIntervalChange(type: string, raw: number) {
-    setMonitoringIntervals((prev) => {
-      const next = { ...prev }
-      // Blank / non-positive means "use the default" — drop the override entirely.
-      if (!raw || Number.isNaN(raw) || raw <= 0) delete next[type]
-      else next[type] = Math.round(raw)
-      return next
     })
   }
 
@@ -223,52 +206,6 @@ export default function SettingsPage() {
               labelPlaceholder="Department"
               valuePlaceholder="dept@aquatrack.ph"
             />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quarterly Monitoring Intervals</CardTitle>
-            <CardDescription>
-              How far after the installed date each product&apos;s next monitoring/replacement is due. Used to
-              compute the &quot;End Date&quot; and status shown on the customer&apos;s public scan page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2 max-w-xs">
-              <Label>Default Interval (months)</Label>
-              <Input
-                type="number"
-                min={1}
-                value={monitoringDefaultMonths}
-                onChange={(e) => setMonitoringDefaultMonths(Math.max(1, Math.round(e.target.valueAsNumber || 1)))}
-              />
-              <p className="text-xs text-muted-foreground">Applied to any product type without a specific interval below.</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Per Water Purification Type</Label>
-              <div className="space-y-2">
-                {DISPENSER_TYPES.map((type) => (
-                  <div key={type} className="flex items-center justify-between gap-3 rounded-md border p-2.5">
-                    <span className="text-sm">{type}</span>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        className="w-24"
-                        placeholder={`${monitoringDefaultMonths} (default)`}
-                        value={monitoringIntervals[type] ?? ""}
-                        onChange={(e) => handleIntervalChange(type, e.target.valueAsNumber)}
-                      />
-                      <span className="text-xs text-muted-foreground w-12">months</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Leave blank to use the default. E.g. set smaller units to 6 and larger units to 12.
-              </p>
-            </div>
           </CardContent>
         </Card>
 
