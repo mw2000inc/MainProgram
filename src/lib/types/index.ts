@@ -290,10 +290,18 @@ export interface ScheduleJob {
   customerId?: string
   orderNo?: string
   scheduledDate: string
+  // Free text ("ANYTIME", "MORNING", "2:00 PM") rather than a strict time
+  // type — matches how these were actually recorded in the old AppSheet
+  // source. Only rendered on the Table View; not required.
+  scheduledTime?: string
   status: ScheduleJobStatus
   notes?: string
   remarks?: string
   createdAt: string
+  // A second location for this same job (e.g. a pull-out address distinct
+  // from the install address) — see the technician2 comment above for why
+  // this is a second field on the one row rather than a second job.
+  secondaryAddress?: string
   // The following three only apply to jobType "filter_change" — which
   // Inventory item + how many units to deduct once this job is marked
   // completed, and when that deduction actually happened (the idempotency

@@ -56,8 +56,12 @@ const schema = z.object({
   technician2: z.string().optional(),
   orderNo: z.string().optional(),
   scheduledDate: z.string().min(1, "Date is required"),
+  // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
+  scheduledTime: z.string().optional(),
   status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, "Select a status"),
   notes: z.string().optional(),
+  // A second location for this same job (e.g. pull-out vs install address).
+  secondaryAddress: z.string().optional(),
   // Filter-change inventory deduction — which item + how many units to
   // deduct once this job is marked completed. Only meaningful when jobType
   // is "filter_change", but kept as plain optional fields on the shared form
@@ -76,10 +80,12 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
       technician2: job.technician2 ?? NO_SECOND_TECHNICIAN,
       orderNo: job.orderNo ?? "",
       scheduledDate: job.scheduledDate,
+      scheduledTime: job.scheduledTime ?? "",
       status: job.status,
       notes: job.notes ?? "",
       productId: job.productId ?? "",
       quantity: job.quantity !== undefined ? String(job.quantity) : "",
+      secondaryAddress: job.secondaryAddress ?? "",
     }
   }
   return {
@@ -88,10 +94,12 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     technician2: NO_SECOND_TECHNICIAN,
     orderNo: "",
     scheduledDate: defaultDate,
+    scheduledTime: "",
     status: "pending",
     notes: "",
     productId: "",
     quantity: "",
+    secondaryAddress: "",
   }
 }
 
@@ -266,6 +274,32 @@ export function ScheduleFormDialog({
                       date — there&apos;s a single Date field for the whole job, so changing it moves both.
                     </p>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="scheduledTime"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Time (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. ANYTIME, MORNING, 2:00 PM" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="secondaryAddress"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Secondary Address (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. pull-out address, if different from the install address" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

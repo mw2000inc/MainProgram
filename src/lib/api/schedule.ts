@@ -9,6 +9,7 @@ type ScheduleJobRow = {
   customer_id: string | null
   order_no: string | null
   scheduled_date: string
+  scheduled_time: string | null
   status: ScheduleJobStatus
   notes: string | null
   remarks: string | null
@@ -16,6 +17,7 @@ type ScheduleJobRow = {
   product_id: string | null
   quantity: number | null
   inventory_deducted_at: string | null
+  secondary_address: string | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -27,6 +29,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     customerId: row.customer_id ?? undefined,
     orderNo: row.order_no ?? undefined,
     scheduledDate: row.scheduled_date,
+    scheduledTime: row.scheduled_time ?? undefined,
     status: row.status,
     notes: row.notes ?? undefined,
     remarks: row.remarks ?? undefined,
@@ -34,6 +37,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     productId: row.product_id ?? undefined,
     quantity: row.quantity ?? undefined,
     inventoryDeductedAt: row.inventory_deducted_at ?? undefined,
+    secondaryAddress: row.secondary_address ?? undefined,
   }
 }
 
@@ -45,11 +49,13 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
   if (input.customerId !== undefined) row.customer_id = input.customerId || null
   if (input.orderNo !== undefined) row.order_no = input.orderNo || null
   if (input.scheduledDate !== undefined) row.scheduled_date = input.scheduledDate
+  if (input.scheduledTime !== undefined) row.scheduled_time = input.scheduledTime || null
   if (input.status !== undefined) row.status = input.status
   if (input.notes !== undefined) row.notes = input.notes || null
   if (input.remarks !== undefined) row.remarks = input.remarks || null
   if (input.productId !== undefined) row.product_id = input.productId || null
   if (input.quantity !== undefined) row.quantity = input.quantity ?? null
+  if (input.secondaryAddress !== undefined) row.secondary_address = input.secondaryAddress || null
   return row
 }
 
