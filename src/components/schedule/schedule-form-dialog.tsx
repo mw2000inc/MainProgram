@@ -70,6 +70,9 @@ const schema = z.object({
   // technician2 name fields above, which stay the source of truth for
   // display/print/export.
   technicianUserId: z.string().optional(),
+  // Same purpose as technicianUserId, for the technician2 name field — lets
+  // the second technician's own account see this shared job too.
+  technician2UserId: z.string().optional(),
   // Filter-change inventory deduction — which item + how many units to
   // deduct once this job is marked completed. Only meaningful when jobType
   // is "filter_change", but kept as plain optional fields on the shared form
@@ -95,6 +98,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
       quantity: job.quantity !== undefined ? String(job.quantity) : "",
       secondaryAddress: job.secondaryAddress ?? "",
       technicianUserId: job.technicianUserId ?? NONE_SENTINEL,
+      technician2UserId: job.technician2UserId ?? NONE_SENTINEL,
     }
   }
   return {
@@ -110,6 +114,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     quantity: "",
     secondaryAddress: "",
     technicianUserId: NONE_SENTINEL,
+    technician2UserId: NONE_SENTINEL,
   }
 }
 
@@ -156,6 +161,8 @@ export function ScheduleFormDialog({
       // back to "None" — undefined here would make toRow skip the field
       // entirely, silently leaving a stale link in place.
       technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
+      technician2UserId:
+        values.technician2UserId && values.technician2UserId !== NONE_SENTINEL ? values.technician2UserId : "",
       // Deduction fields only mean anything for filter-change jobs — don't
       // carry a stale product/quantity along if the type gets switched away.
       productId: isFilterChange ? values.productId || undefined : undefined,
@@ -296,6 +303,36 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
+            {hasSecondTechnician && (
+              <FormField
+                control={form.control}
+                name="technician2UserId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Technician 2 Account (Optional)</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Link to the second technician's login" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NONE_SENTINEL}>None</SelectItem>
+                        {technicianAccounts.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Lets the second technician also see this shared job on their own Schedule.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="orderNo"

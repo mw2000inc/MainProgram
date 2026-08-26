@@ -137,11 +137,13 @@ export function ScheduleAgenda({ date }: { date: string }) {
               <Plus className="h-3.5 w-3.5" /> Schedule Job
             </Button>
           )}
-          <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
-            <Button size="sm" variant="outline" className="w-full gap-1.5">
-              Full Schedule <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+          {isAdmin && (
+            <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
+              <Button size="sm" variant="outline" className="w-full gap-1.5">
+                Full Schedule <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
           <div className="flex items-center gap-1">
             <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />
             <Button variant="ghost" size="icon" className="h-7 w-7" title="Print" onClick={handlePrint}>

@@ -293,6 +293,12 @@ export interface ScheduleJob {
   // technician2 fields above are the source of truth for who's actually
   // display/print/exported as assigned; this is separate and admin-set.
   technicianUserId?: string
+  // Same purpose as technicianUserId above, for the technician2 name field —
+  // lets a shared two-technician job show up on BOTH linked accounts'
+  // Schedule views without creating a second schedule_jobs row (see
+  // schedule_jobs_select: technician_user_id = auth.uid() OR
+  // technician_2_user_id = auth.uid()).
+  technician2UserId?: string
   customerId?: string
   orderNo?: string
   scheduledDate: string

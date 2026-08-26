@@ -237,14 +237,14 @@ export function DailyReportSection() {
         data={dayFilterChangePlans}
         loading={pFilter}
         emptyMessage="No filter change plans for this date."
-        canAdd
+        canAdd={isAdmin}
         addLabel="Add"
         onAdd={() => setFilterChangeFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
         exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
         exportFileName="filter-change-plan"
-        onRowClick={(row) => router.push(`/filter-change?id=${row.id}`)}
+        onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
       />
     ),
     installation: (
@@ -255,14 +255,14 @@ export function DailyReportSection() {
         data={dayInstallPlans}
         loading={pInstall}
         emptyMessage="No installs for this date."
-        canAdd
+        canAdd={isAdmin}
         addLabel="Add"
         onAdd={() => setInstallFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
         exportColumns={INSTALL_EXPORT_COLUMNS}
         exportFileName="install-plan"
-        onRowClick={(row) => router.push(`/install?id=${row.id}`)}
+        onRowClick={isAdmin ? (row) => router.push(`/install?id=${row.id}`) : undefined}
       />
     ),
     repair: (
@@ -273,14 +273,14 @@ export function DailyReportSection() {
         data={dayRepairPlans}
         loading={pRepair}
         emptyMessage="No repair plans for this date."
-        canAdd
+        canAdd={isAdmin}
         addLabel="Add"
         onAdd={() => setRepairFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
         exportColumns={REPAIR_EXPORT_COLUMNS}
         exportFileName="repair-plan"
-        onRowClick={(row) => router.push(`/repair-plan?id=${row.id}`)}
+        onRowClick={isAdmin ? (row) => router.push(`/repair-plan?id=${row.id}`) : undefined}
       />
     ),
     collection: (
@@ -291,14 +291,14 @@ export function DailyReportSection() {
         data={dayCollectionPlans}
         loading={pCollections}
         emptyMessage="No collections for this date."
-        canAdd
+        canAdd={isAdmin}
         addLabel="Add"
         onAdd={() => setCollectionsFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
         exportColumns={COLLECTIONS_EXPORT_COLUMNS}
         exportFileName="collection-plan"
-        onRowClick={(row) => router.push(`/collection-plan?id=${row.id}`)}
+        onRowClick={isAdmin ? (row) => router.push(`/collection-plan?id=${row.id}`) : undefined}
       />
     ),
   }
