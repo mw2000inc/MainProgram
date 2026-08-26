@@ -16,6 +16,7 @@ type Row = {
   note: string | null
   status: string
   created_at: string
+  cp_system_id: string | null
 }
 
 function fromRow(row: Row): SaleListEntry {
@@ -34,6 +35,7 @@ function fromRow(row: Row): SaleListEntry {
     note: row.note ?? undefined,
     status: row.status as SaleListEntry["status"],
     createdAt: row.created_at,
+    cpSystemId: row.cp_system_id ?? undefined,
   }
 }
 
@@ -51,6 +53,7 @@ function toRow(input: Partial<Omit<SaleListEntry, "id" | "createdAt">>) {
   if (input.cpEnd !== undefined) row.cp_end = input.cpEnd || null
   if (input.note !== undefined) row.note = input.note || null
   if (input.status !== undefined) row.status = input.status
+  if (input.cpSystemId !== undefined) row.cp_system_id = input.cpSystemId || null
   return row
 }
 

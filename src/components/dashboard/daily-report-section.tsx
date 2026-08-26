@@ -14,7 +14,6 @@ import {
 import {
   SortableContext,
   arrayMove,
-  rectSortingStrategy,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -66,6 +65,31 @@ const DEFAULT_PANEL_ORDER = [
 
 type PanelId = (typeof DEFAULT_PANEL_ORDER)[number]
 
+// Grid mode's arrangement — fixed and identical for every admin, never
+// customizable: Announcements alone and full-width up top, then Date
+// Control/Repair Plan/Schedule, then Installation/Filter Change Plan/
+// Collection Plan, each row 3-across. Flex-wrap lays items out in row order
+// and wraps whenever the next one doesn't fit, so a full-width Announcements
+// forces its own row on its own, and each following trio of ~33%-wide
+// panels exactly fills the row after it — see getDefaultGridWidthClassName
+// below, which is what actually gives Announcements that full width. Grid
+// mode never reads order/sizes from a saved daily_report_layouts row (an
+// admin may well have one left over from before this was fixed) and never
+// writes to one either — drag/resize are disabled entirely in this mode.
+const DEFAULT_GRID_ORDER: PanelId[] = [
+  "announcements",
+  "date",
+  "repair",
+  "schedule",
+  "installation",
+  "filter-change",
+  "collection",
+]
+
+function getDefaultGridWidthClassName(id: PanelId): string {
+  return id === "announcements" ? "w-full" : "w-full md:w-[calc(33.333%-16px)]"
+}
+
 function resolveOrder(saved: string[] | undefined): PanelId[] {
   const known = new Set<string>(DEFAULT_PANEL_ORDER)
   const savedValid = (saved ?? []).filter((id): id is PanelId => known.has(id))
@@ -73,15 +97,16 @@ function resolveOrder(saved: string[] | undefined): PanelId[] {
   return [...savedValid, ...missing]
 }
 
-// Every panel is freely draggable and resizable by admins in both layout
-// modes — "stacked" lays them out one per row; "grid" wraps them left-to-
-// right based on each panel's own width, so resizing narrower fits more per
-// row. Shared operational panel layout — Announcements, Schedule, the Date
-// Control, and the Filter Change/Installation/Repair/Collection panels.
-// Rendered on both the Dashboard and the standalone Daily Report page so they
-// stay in sync rather than drifting as two separate copies. Order/sizes/mode
-// are saved per-admin (see use-daily-report-layout.ts) — each admin has their
-// own arrangement; staff always see the fixed default, read-only.
+// Two layout modes with very different customizability: "stacked" lays
+// panels out one per row, freely draggable/resizable by admins, with
+// order/sizes saved per-admin (see use-daily-report-layout.ts) — same as
+// it's always worked. "grid" is a fixed 3-across arrangement (see
+// DEFAULT_GRID_ORDER above) that's identical for every admin and can't be
+// rearranged at all — no drag handles, no resize handles. Only the mode
+// toggle itself is still saved per-admin. Rendered on both the Dashboard and
+// the standalone Daily Report page so they stay in sync rather than
+// drifting as two separate copies; staff always see the fixed stacked
+// default, read-only.
 export function DailyReportSection() {
   const router = useRouter()
   const { user } = useAuth()
@@ -99,12 +124,32 @@ export function DailyReportSection() {
   const { data: myLayout } = useMyDailyReportLayout(isAdmin ? user?.id : undefined)
   const saveLayout = useSaveMyDailyReportLayout(user?.id)
 
+  // Same saved-layout pattern as order/sizes below. The mode toggle itself
+  // is still per-admin — only the arrangement *within* Grid mode is fixed.
+  const savedLayoutMode = myLayout?.layoutMode ?? "stacked"
+  const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
+  const layoutMode = localLayoutMode ?? savedLayoutMode
+
+  function handleLayoutModeChange(mode: "stacked" | "grid") {
+    if (mode === layoutMode) return
+    setLocalLayoutMode(mode)
+    saveLayout.mutate({ layoutMode: mode })
+  }
+
+  const isGrid = layoutMode === "grid"
+  // Drag/resize only ever apply in Stacked mode — Grid is fixed for
+  // everyone, so neither SortablePanel nor ResizablePanel should treat this
+  // admin as able to arrange anything while it's active.
+  const canArrange = isAdmin && !isGrid
+
   // The saved order, derived straight from the fetched layout — no effect
   // needed. A local override holds the just-dropped order for immediate
-  // feedback until the mutation round-trips and the layout refetches to match.
+  // feedback until the mutation round-trips and the layout refetches to
+  // match. Only used in Stacked mode — Grid always renders DEFAULT_GRID_ORDER
+  // regardless of what's saved.
   const savedOrder = React.useMemo(() => resolveOrder(myLayout?.layout), [myLayout])
   const [localOrder, setLocalOrder] = React.useState<PanelId[] | null>(null)
-  const order = localOrder ?? savedOrder
+  const order = isGrid ? DEFAULT_GRID_ORDER : (localOrder ?? savedOrder)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -112,6 +157,7 @@ export function DailyReportSection() {
   )
 
   function handleDragEnd(event: DragEndEvent) {
+    if (isGrid) return
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = order.indexOf(active.id as PanelId)
@@ -123,25 +169,16 @@ export function DailyReportSection() {
 
   // Same saved-layout pattern as the order above, but keyed per panel — a
   // local override per panel id holds its just-dropped size for immediate
-  // feedback until the layout refetches to match.
+  // feedback until the layout refetches to match. Only applied in Stacked
+  // mode, same reasoning as order above.
   const savedSizes = myLayout?.panelSizes ?? {}
   const [localSizes, setLocalSizes] = React.useState<Record<string, PanelSize>>({})
   const sizes = { ...savedSizes, ...localSizes }
 
   function handleResizeEnd(panelId: string, size: PanelSize) {
+    if (isGrid) return
     setLocalSizes((prev) => ({ ...prev, [panelId]: size }))
     saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size } })
-  }
-
-  // Same saved-layout pattern as order/sizes above.
-  const savedLayoutMode = myLayout?.layoutMode ?? "stacked"
-  const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
-  const layoutMode = localLayoutMode ?? savedLayoutMode
-
-  function handleLayoutModeChange(mode: "stacked" | "grid") {
-    if (mode === layoutMode) return
-    setLocalLayoutMode(mode)
-    saveLayout.mutate({ layoutMode: mode })
   }
 
   const [reportDate, setReportDate] = React.useState(today)
@@ -268,16 +305,11 @@ export function DailyReportSection() {
 
   function resizable(id: PanelId) {
     return (
-      <ResizablePanel panelId={id} isAdmin={isAdmin} savedSize={sizes[id]} onResizeEnd={handleResizeEnd}>
+      <ResizablePanel panelId={id} isAdmin={canArrange} savedSize={isGrid ? undefined : sizes[id]} onResizeEnd={handleResizeEnd}>
         {rawContent[id]}
       </ResizablePanel>
     )
   }
-
-  const isGrid = layoutMode === "grid"
-  // Every panel is a real drag target in both modes now — nothing is frozen
-  // or grouped into a fixed block.
-  const sortableItems = order
 
   return (
     <div className="space-y-6">
@@ -308,15 +340,15 @@ export function DailyReportSection() {
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sortableItems} strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <div className={isGrid ? "flex flex-wrap items-start gap-6" : "space-y-6"}>
             {order.map((id) => (
               <SortablePanel
                 key={id}
                 id={id}
-                isAdmin={isAdmin}
-                width={sizes[id]?.width}
-                defaultWidthClassName={isGrid ? "w-full md:w-[calc(50%-12px)]" : "w-full"}
+                isAdmin={canArrange}
+                width={isGrid ? undefined : sizes[id]?.width}
+                defaultWidthClassName={!isGrid ? "w-full" : getDefaultGridWidthClassName(id)}
               >
                 {resizable(id)}
               </SortablePanel>

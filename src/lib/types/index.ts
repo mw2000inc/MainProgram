@@ -110,6 +110,27 @@ export interface SaleListEntry {
   note?: string
   status: SaleListStatus
   createdAt: string
+  // Which CP System (see CpSystem below) was actually installed for this
+  // order — not yet read by the filter-change scheduling cron, which still
+  // runs on the customer's dispenser_type + Settings' monitoring intervals.
+  cpSystemId?: string
+}
+
+// "CP System" — a catalog of system codes (UF71, RO71, etc.) and the filter
+// components each is built from, replacing the old AppSheet "MW CP > CP
+// System" reference table. Each component has its own replacement interval
+// rather than one combined free-text description, per-order via
+// SaleListEntry.cpSystemId above.
+export interface CpSystemComponent {
+  name: string
+  intervalMonths: number
+}
+
+export interface CpSystem {
+  id: string
+  systemCode: string
+  components: CpSystemComponent[]
+  createdAt: string
 }
 
 export type StockStatus = "in-stock" | "low-stock" | "out-of-stock"

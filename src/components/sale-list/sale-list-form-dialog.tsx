@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
@@ -50,6 +51,9 @@ const schema = z.object({
   cpEnd: z.string().optional(),
   note: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "RENT"]),
+  // Which CP System catalog entry (see /cp-system) is installed for this
+  // order — optional, since not every order has been tagged yet.
+  cpSystemId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -69,6 +73,7 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
       cpEnd: entry.cpEnd ?? "",
       note: entry.note ?? "",
       status: entry.status,
+      cpSystemId: entry.cpSystemId ?? "",
     }
   }
   return {
@@ -84,6 +89,7 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
     cpEnd: "",
     note: "",
     status: "ACTIVE",
+    cpSystemId: "",
   }
 }
 
@@ -105,6 +111,7 @@ export function SaleListFormDialog({
   const createEntry = useCreateSaleListEntry()
   const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
+  const { data: cpSystems = [] } = useCpSystems()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -124,6 +131,7 @@ export function SaleListFormDialog({
       cf: values.cf ?? "",
       ct: values.ct ?? "",
       cpY1Y2: values.cpY1Y2 ?? "",
+      cpSystemId: values.cpSystemId ?? "",
     }
     if (isEdit) {
       await updateEntry.mutateAsync({ id: entry.id, input })
@@ -220,6 +228,31 @@ export function SaleListFormDialog({
                     <FormControl>
                       <Input placeholder="Optional" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cpSystemId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CP System</FormLabel>
+                    <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select system" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        {cpSystems.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.systemCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

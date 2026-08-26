@@ -10,6 +10,7 @@ import {
   UserCog,
   Settings,
   Banknote,
+  Layers,
   type LucideIcon,
 } from "lucide-react"
 import type { Permission } from "@/lib/auth/auth-context"
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/collection-plan", label: "Collection Plan", icon: Banknote },
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/sale-list", label: "Sale List", icon: ClipboardCheck },
+  { href: "/cp-system", label: "CP System", icon: Layers },
   { href: "/users", label: "Users", icon: UserCog, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ]

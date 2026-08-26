@@ -3,7 +3,14 @@
 import * as React from "react"
 import type { PanelSize } from "@/lib/types"
 
-const MIN_WIDTH = 260
+// Low enough that 3 resized-down panels + 2 grid-mode gaps (gap-6 = 24px
+// each) still fit within a typical desktop's content width once the sidebar
+// (collapsed to 64px while Daily Report is open) and page padding are
+// subtracted — e.g. 3*220 + 48 = 708px, comfortably under even a ~900px
+// content area. A data table panel narrower than this still degrades
+// cleanly (its table scrolls internally; the header wraps), so this isn't a
+// usability floor, just the point where 3-per-row stops being reachable.
+const MIN_WIDTH = 220
 const MIN_HEIGHT = 140
 
 // Makes the whole panel (not a control inside it) resizable by dragging its
