@@ -117,10 +117,10 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold">{customer.fullName}</h1>
+                <h1 className="text-xl font-semibold">{customer.companyName || customer.fullName}</h1>
                 <MonitoringViewStatusBadge status={status} />
               </div>
-              {customer.companyName && <p className="text-sm text-muted-foreground">{customer.companyName}</p>}
+              {customer.companyName && <p className="text-sm text-muted-foreground">{customer.fullName}</p>}
               <p className="text-xs text-muted-foreground mt-1">
                 Member Account#: <span className="font-mono">{customer.memberAccountNumber}</span>
               </p>
