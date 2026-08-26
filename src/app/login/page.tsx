@@ -4,9 +4,8 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, Controller } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
-import { ShieldCheck, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/shared/logo"
@@ -17,20 +16,22 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth/auth-context"
 import { supabase } from "@/lib/supabase/client"
-import { cn } from "@/lib/utils"
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email address"),
   password: z.string().min(4, "Password must be at least 4 characters"),
 })
 
+// No role field — public self-signup always creates an Admin account.
+// Technician accounts are created exclusively by an admin via the Users
+// page, which has its own role picker and requires an authenticated admin
+// caller server-side (see /api/admin/users).
 const signUpSchema = z
   .object({
     name: z.string().min(2, "Full name is required"),
     email: z.string().email("Enter a valid email address"),
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string(),
-    role: z.enum(["admin", "staff"]),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -87,7 +88,7 @@ export default function LoginPage() {
 
   const signUpForm = useForm<z.infer<typeof signUpSchema>>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", email: "", password: "", confirmPassword: "", role: "staff" },
+    defaultValues: { name: "", email: "", password: "", confirmPassword: "" },
   })
 
   async function onSignIn(values: z.infer<typeof signInSchema>) {
@@ -122,7 +123,10 @@ export default function LoginPage() {
     // Redirects the browser to Google's own account chooser/consent screen.
     // Google sends the admin back to /auth/callback (not straight to /login)
     // — that route exchanges the one-time code for a session server-side,
-    // then redirects to "/", where the app's own auth guard takes over.
+    // then redirects to "/", where the app's own auth guard takes over. A
+    // first-time Google sign-in creates a new account same as email signup
+    // — Google's own identity data never includes a "role" key, so this
+    // also falls through to handle_new_user()'s 'admin' default.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
@@ -149,10 +153,17 @@ export default function LoginPage() {
   }
 
   async function onSignUp(values: z.infer<typeof signUpSchema>) {
+    // No role here (deliberately) — options.data only ever reaches
+    // raw_user_meta_data, which handle_new_user() no longer trusts for
+    // role at all (a public signUp() call has no way to set app_metadata,
+    // which is what the trigger actually reads role from now — see the
+    // technician_role migration). Every self-signup, this or Google's,
+    // falls through to that trigger's 'admin' default; only an admin
+    // creating a user via the Users page can produce a technician account.
     const { error } = await supabase.auth.signUp({
       email: values.email.trim(),
       password: values.password,
-      options: { data: { name: values.name.trim(), role: values.role } },
+      options: { data: { name: values.name.trim() } },
     })
     if (error) {
       if (error.message.toLowerCase().includes("already")) {
@@ -193,7 +204,7 @@ export default function LoginPage() {
             <CardDescription>
               {mode === "signin"
                 ? "Enter your work email to continue."
-                : "Register a new Admin or Staff account for your team."}
+                : "Create your Admin account — Technician accounts are set up by an admin from the Users page."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -298,43 +309,6 @@ export default function LoginPage() {
                     <p className="text-destructive text-sm">{signUpConfirmPasswordError}</p>
                   )}
                 </div>
-                <Controller
-                  control={signUpForm.control}
-                  name="role"
-                  render={({ field }) => (
-                    <div className="grid gap-2">
-                      <Label>Account Type</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => field.onChange("admin")}
-                          className={cn(
-                            "flex flex-col items-center gap-1 rounded-md border py-3 text-xs transition-colors",
-                            field.value === "admin"
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "text-muted-foreground hover:bg-muted"
-                          )}
-                        >
-                          <ShieldCheck className="h-4 w-4" />
-                          Admin
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => field.onChange("staff")}
-                          className={cn(
-                            "flex flex-col items-center gap-1 rounded-md border py-3 text-xs transition-colors",
-                            field.value === "staff"
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "text-muted-foreground hover:bg-muted"
-                          )}
-                        >
-                          <UserRound className="h-4 w-4" />
-                          Staff
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                />
                 <Button type="submit" className="w-full" disabled={signUpForm.formState.isSubmitting}>
                   {signUpForm.formState.isSubmitting ? "Creating account..." : "Sign up"}
                 </Button>

@@ -1,22 +1,29 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth/auth-context"
 import { SidebarNav } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { Logo } from "@/components/shared/logo"
+import { isTechnicianAllowedPath } from "@/components/layout/nav-items"
 import { useSidebarCollapse } from "@/lib/sidebar-collapse-context"
 import { cn } from "@/lib/utils"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const { collapsed } = useSidebarCollapse()
 
   React.useEffect(() => {
     if (!loading && !user) router.replace("/login")
   }, [loading, user, router])
+
+  React.useEffect(() => {
+    if (loading || !user || user.role !== "technician") return
+    if (!isTechnicianAllowedPath(pathname)) router.replace("/")
+  }, [loading, user, pathname, router])
 
   if (loading || !user) {
     return (

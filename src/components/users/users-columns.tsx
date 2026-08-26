@@ -52,7 +52,7 @@ export function getUsersColumns({
         row.original.role === "admin" ? (
           <StatusBadge tone="secondary" label="Admin" />
         ) : (
-          <StatusBadge tone="neutral" label="Staff" />
+          <StatusBadge tone="neutral" label="Technician" />
         ),
     },
     {

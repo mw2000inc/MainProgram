@@ -28,18 +28,28 @@ export async function POST(request: Request) {
     name: string
     email: string
     password: string
-    role: "admin" | "staff"
+    role: "admin" | "technician"
   }
   if (!name || !email || !password || password.length < 6) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 })
   }
 
   const admin = createAdminClient()
+  // role goes in app_metadata, not user_metadata — app_metadata can only be
+  // set here, via the privileged service-role Admin API. The public
+  // signUp() method (anon key, used by /login's self-signup) has no
+  // app_metadata parameter at all — verified against @supabase/auth-js's
+  // own SignUpWithPasswordCredentials type, which only exposes `data`
+  // (-> user_metadata). handle_new_user() reads role from app_metadata
+  // specifically so a self-signup can never choose it by sending a crafted
+  // `data: { role: "technician" }` payload straight to supabase.auth.signUp()
+  // — user_metadata is trusted for `name` only, never for role.
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { name, role },
+    user_metadata: { name },
+    app_metadata: { role },
   })
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })

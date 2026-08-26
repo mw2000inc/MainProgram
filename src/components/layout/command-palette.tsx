@@ -25,7 +25,11 @@ export function CommandPalette() {
   const { data: customers = [] } = useCustomers()
   const { data: products = [] } = useProducts()
 
-  const pages = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin")
+  const pages = NAV_ITEMS.filter((item) => {
+    if (item.adminOnly && user?.role !== "admin") return false
+    if (user?.role === "technician" && !item.technicianVisible) return false
+    return true
+  })
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {

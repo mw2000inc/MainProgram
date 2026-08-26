@@ -1,4 +1,4 @@
-export type Role = "admin" | "staff"
+export type Role = "admin" | "technician"
 
 export interface User {
   id: string
@@ -287,6 +287,12 @@ export interface ScheduleJob {
   // per-technician date or status, do NOT add it here — that would silently
   // break every job that currently has two technicians sharing one schedule.
   technician2?: string
+  // Links this job to a real technician account, purely for RLS scoping (a
+  // technician session can only ever read jobs where this equals their own
+  // id — see the schedule_jobs_select policy). The free-text technician/
+  // technician2 fields above are the source of truth for who's actually
+  // display/print/exported as assigned; this is separate and admin-set.
+  technicianUserId?: string
   customerId?: string
   orderNo?: string
   scheduledDate: string

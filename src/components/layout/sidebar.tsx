@@ -21,7 +21,11 @@ export function SidebarNav({
   const pathname = usePathname()
   const { user } = useAuth()
 
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin")
+  const items = NAV_ITEMS.filter((item) => {
+    if (item.adminOnly && user?.role !== "admin") return false
+    if (user?.role === "technician" && !item.technicianVisible) return false
+    return true
+  })
 
   return (
     <div className="flex h-full flex-col">
@@ -57,7 +61,7 @@ export function SidebarNav({
           // Between groups, not before the first item — computed off this
           // already-permission-filtered `items` list, so a divider never
           // shows for a group the current user can't see any of (e.g. Users/
-          // Settings' group 3 for staff).
+          // Settings' group 3 for a technician).
           const showDivider = index > 0 && item.group !== items[index - 1].group
           return (
             <div key={item.href}>

@@ -36,7 +36,7 @@ import type { User } from "@/lib/types"
 const schema = z.object({
   name: z.string().min(2, "Full name is required"),
   email: z.string().email("Enter a valid email address"),
-  role: z.enum(["admin", "staff"]),
+  role: z.enum(["admin", "technician"]),
   password: z.string(),
 })
 
@@ -46,7 +46,7 @@ function defaultValues(user?: User): FormValues {
   return {
     name: user?.name ?? "",
     email: user?.email ?? "",
-    role: user?.role ?? "staff",
+    role: user?.role ?? "technician",
     password: "",
   }
 }
@@ -97,7 +97,7 @@ export function UserFormDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit User" : "Add User"}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update this user's details and role." : "Create a new Admin or Staff account."}
+            {isEdit ? "Update this user's details and role." : "Create a new Admin or Technician account."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -157,7 +157,7 @@ export function UserFormDialog({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="technician">Technician</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

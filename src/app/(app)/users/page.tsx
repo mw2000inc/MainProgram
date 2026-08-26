@@ -53,7 +53,7 @@ export default function UsersPage() {
             <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
               <UserCog className="h-6 w-6 text-primary" /> Users
             </h1>
-            <p className="text-sm text-muted-foreground">Manage Admin and Staff accounts and permissions.</p>
+            <p className="text-sm text-muted-foreground">Manage Admin and Technician accounts and permissions.</p>
           </div>
           <Button
             onClick={() => {

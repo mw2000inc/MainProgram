@@ -18,6 +18,7 @@ type ScheduleJobRow = {
   quantity: number | null
   inventory_deducted_at: string | null
   secondary_address: string | null
+  technician_user_id: string | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -38,6 +39,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     quantity: row.quantity ?? undefined,
     inventoryDeductedAt: row.inventory_deducted_at ?? undefined,
     secondaryAddress: row.secondary_address ?? undefined,
+    technicianUserId: row.technician_user_id ?? undefined,
   }
 }
 
@@ -56,6 +58,7 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
   if (input.productId !== undefined) row.product_id = input.productId || null
   if (input.quantity !== undefined) row.quantity = input.quantity ?? null
   if (input.secondaryAddress !== undefined) row.secondary_address = input.secondaryAddress || null
+  if (input.technicianUserId !== undefined) row.technician_user_id = input.technicianUserId || null
   return row
 }
 

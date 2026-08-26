@@ -33,6 +33,7 @@ import {
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
+import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
@@ -44,9 +45,11 @@ const STATUS_LABELS: Record<ScheduleJobStatus, string> = {
   cancelled: "Cancelled",
 }
 
-// Radix Select forbids an empty-string item value, so "no second technician"
-// needs its own sentinel — mapped back to "" (unset) on submit.
-const NO_SECOND_TECHNICIAN = "__none__"
+// Radix Select forbids an empty-string item value, so "none selected" needs
+// its own sentinel — mapped back to "" (unset) on submit. Shared by every
+// optional Select on this form (second technician, linked technician
+// account).
+const NONE_SENTINEL = "__none__"
 
 const schema = z.object({
   jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, "Select a job type"),
@@ -62,6 +65,11 @@ const schema = z.object({
   notes: z.string().optional(),
   // A second location for this same job (e.g. pull-out vs install address).
   secondaryAddress: z.string().optional(),
+  // Links this job to a real technician account, purely for that
+  // technician's "my schedule" RLS scoping — separate from the technician/
+  // technician2 name fields above, which stay the source of truth for
+  // display/print/export.
+  technicianUserId: z.string().optional(),
   // Filter-change inventory deduction — which item + how many units to
   // deduct once this job is marked completed. Only meaningful when jobType
   // is "filter_change", but kept as plain optional fields on the shared form
@@ -77,7 +85,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     return {
       jobType: job.jobType,
       technician: job.technician,
-      technician2: job.technician2 ?? NO_SECOND_TECHNICIAN,
+      technician2: job.technician2 ?? NONE_SENTINEL,
       orderNo: job.orderNo ?? "",
       scheduledDate: job.scheduledDate,
       scheduledTime: job.scheduledTime ?? "",
@@ -86,12 +94,13 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
       productId: job.productId ?? "",
       quantity: job.quantity !== undefined ? String(job.quantity) : "",
       secondaryAddress: job.secondaryAddress ?? "",
+      technicianUserId: job.technicianUserId ?? NONE_SENTINEL,
     }
   }
   return {
     jobType: "other",
     technician: "",
-    technician2: NO_SECOND_TECHNICIAN,
+    technician2: NONE_SENTINEL,
     orderNo: "",
     scheduledDate: defaultDate,
     scheduledTime: "",
@@ -100,6 +109,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     productId: "",
     quantity: "",
     secondaryAddress: "",
+    technicianUserId: NONE_SENTINEL,
   }
 }
 
@@ -119,6 +129,8 @@ export function ScheduleFormDialog({
   const createJob = useCreateScheduleJob()
   const updateJob = useUpdateScheduleJob()
   const { data: products = [] } = useProducts()
+  const { data: users = [] } = useUsers()
+  const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, job),
@@ -133,12 +145,17 @@ export function ScheduleFormDialog({
   const isFilterChange = jobType === "filter_change"
   const technician2Value = form.watch("technician2")
   const technicianValue = form.watch("technician")
-  const hasSecondTechnician = !!technician2Value && technician2Value !== NO_SECOND_TECHNICIAN
+  const hasSecondTechnician = !!technician2Value && technician2Value !== NONE_SENTINEL
 
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
-      technician2: values.technician2 && values.technician2 !== NO_SECOND_TECHNICIAN ? values.technician2 : undefined,
+      technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
+      // "" (not undefined) so toRow's `!== undefined` check still fires and
+      // actually clears technician_user_id in the DB when an edit sets this
+      // back to "None" — undefined here would make toRow skip the field
+      // entirely, silently leaving a stale link in place.
+      technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
       // Deduction fields only mean anything for filter-change jobs — don't
       // carry a stale product/quantity along if the type gets switched away.
       productId: isFilterChange ? values.productId || undefined : undefined,
@@ -226,7 +243,7 @@ export function ScheduleFormDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NO_SECOND_TECHNICIAN}>None</SelectItem>
+                      <SelectItem value={NONE_SENTINEL}>None</SelectItem>
                       {TECHNICIANS.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
@@ -237,11 +254,44 @@ export function ScheduleFormDialog({
                   {/* There's deliberately no separate date field for the second
                       technician — the Date field below applies to this one
                       shared job, so both technicians are always on it together. */}
-                  {field.value && field.value !== NO_SECOND_TECHNICIAN && (
+                  {field.value && field.value !== NONE_SENTINEL && (
                     <p className="text-xs text-muted-foreground">
                       Shares the same date, order, and status as the primary technician below — this is one job, not two.
                     </p>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="technicianUserId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Technician Account (Optional)</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Link to a technician's login" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE_SENTINEL}>None</SelectItem>
+                      {technicianAccounts.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Separate from the Technician name field above — that one
+                      is what shows/prints/exports; this is only so the
+                      linked account's own Schedule view can find this job.
+                      Leave unset if this technician doesn't have a login
+                      yet. */}
+                  <p className="text-xs text-muted-foreground">
+                    Lets this technician see the job on their own Schedule. Unrelated to the Technician field above.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

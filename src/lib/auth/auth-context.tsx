@@ -19,11 +19,12 @@ export type Permission =
   | "users:manage"
   | "settings:manage"
 
-const STAFF_ALLOWED: Permission[] = [
-  "customers:add",
-  "customers:edit",
-  "sales:add",
-]
+// Empty: a technician's RLS access doesn't reach any table these permissions
+// would gate (Member/Sale List/Inventory are all admin-only reads now — see
+// the technician_role migration), so there's nothing to grant here. Kept as
+// an explicit empty list, not removed, so a future permission a technician
+// genuinely should have has an obvious place to go.
+const TECHNICIAN_ALLOWED: Permission[] = []
 
 interface AuthContextValue {
   user: User | null
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (permission: Permission) => {
       if (!user) return false
       if (user.role === "admin") return true
-      return STAFF_ALLOWED.includes(permission)
+      return TECHNICIAN_ALLOWED.includes(permission)
     },
     [user]
   )
@@ -150,5 +151,5 @@ export function useAuth() {
 }
 
 export function roleLabel(role: Role) {
-  return role === "admin" ? "Admin" : "Staff"
+  return role === "admin" ? "Admin" : "Technician"
 }
