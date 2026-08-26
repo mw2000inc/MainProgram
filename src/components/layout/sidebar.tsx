@@ -7,6 +7,7 @@ import { NAV_ITEMS } from "@/components/layout/nav-items"
 import { useAuth } from "@/lib/auth/auth-context"
 import { Logo } from "@/components/shared/logo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Separator } from "@/components/ui/separator"
 
 export function SidebarNav({
   onNavigate,
@@ -34,12 +35,11 @@ export function SidebarNav({
         )}
       </div>
       <nav className={cn("flex-1 space-y-1 py-2 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
-        {items.map((item) => {
+        {items.map((item, index) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
           const Icon = item.icon
           const link = (
             <Link
-              key={item.href}
               href={item.href}
               onClick={onNavigate}
               className={cn(
@@ -54,14 +54,23 @@ export function SidebarNav({
               {!collapsed && item.label}
             </Link>
           )
-          if (!collapsed) {
-            return link
-          }
+          // Between groups, not before the first item — computed off this
+          // already-permission-filtered `items` list, so a divider never
+          // shows for a group the current user can't see any of (e.g. Users/
+          // Settings' group 3 for staff).
+          const showDivider = index > 0 && item.group !== items[index - 1].group
           return (
-            <Tooltip key={item.href}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side="right">{item.label}</TooltipContent>
-            </Tooltip>
+            <div key={item.href}>
+              {showDivider && <Separator className={cn("mb-1", collapsed ? "mx-1" : "mx-2")} />}
+              {collapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              )}
+            </div>
           )
         })}
       </nav>
