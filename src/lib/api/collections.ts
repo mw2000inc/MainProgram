@@ -17,6 +17,8 @@ type Row = {
   schedule_job_id: string | null
   source: string
   filter_change_required: boolean
+  sale_list_entry_id: string | null
+  occurrence_index: number | null
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -36,6 +38,8 @@ function fromRow(row: Row): CollectionPlan {
     scheduleJobId: row.schedule_job_id ?? undefined,
     source: (row.source as CollectionPlan["source"]) ?? "manual",
     filterChangeRequired: row.filter_change_required ?? false,
+    saleListEntryId: row.sale_list_entry_id ?? undefined,
+    occurrenceIndex: row.occurrence_index ?? undefined,
   }
 }
 

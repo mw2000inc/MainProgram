@@ -59,7 +59,12 @@ function CollectionPlanPageContent() {
     () =>
       getCollectionsFullColumns({
         canDelete: isAdmin,
+        canEditDate: isAdmin,
         onDelete: (e) => setDeleting(e),
+        onEditDate: (e) => {
+          setEditing(e)
+          setFormOpen(true)
+        },
       }),
     [isAdmin]
   )
@@ -176,10 +181,42 @@ function CollectionPlanPageContent() {
               <DetailField label="Member Account#" value={selected.accountName} />
               <DetailField label="Amount" value={formatCurrency(selected.amount)} />
               <DetailField label="C/T" value={selected.ct} />
-              <DetailField label="Plan D" value={formatDate(selected.collectionDate)} />
+              <DetailField
+                label="Plan D"
+                value={
+                  isAdmin ? (
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-2 hover:underline"
+                      onClick={() => {
+                        setEditing(selected)
+                        setFormOpen(true)
+                      }}
+                    >
+                      {formatDate(selected.collectionDate)}
+                    </button>
+                  ) : (
+                    formatDate(selected.collectionDate)
+                  )
+                }
+              />
               <DetailField label="Pre D" value={selected.preD ? formatDate(selected.preD) : undefined} />
               <DetailField label="Acc D" value={selected.accD ? formatDate(selected.accD) : undefined} />
               <DetailField label="Status" value={selected.status} />
+              <DetailField
+                label="Filter Change"
+                value={selected.filterChangeRequired ? "Required" : undefined}
+              />
+              <DetailField
+                label="Source"
+                value={
+                  selected.source === "recurring_schedule"
+                    ? "Recurring Schedule"
+                    : selected.source === "ct_completion"
+                      ? "Auto (C/T Completion)"
+                      : "Manual"
+                }
+              />
               <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           )

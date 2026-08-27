@@ -79,7 +79,7 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
 export function PlanStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase()
   let tone: BadgeTone = "warning"
-  if (normalized === "completed" || normalized === "done" || normalized === "active") tone = "success"
+  if (normalized === "completed" || normalized === "done" || normalized === "active" || normalized === "collected") tone = "success"
   else if (normalized === "cancelled" || normalized === "canceled") tone = "danger"
   const label = status.charAt(0).toUpperCase() + status.slice(1)
   return <StatusBadge tone={tone} label={label} />

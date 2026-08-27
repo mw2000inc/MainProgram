@@ -17,6 +17,16 @@ function FilterChangeRequiredCell({ required }: { required: boolean | undefined 
   return <StatusBadge tone="warning" label="Required" />
 }
 
+// 'recurring_schedule' rows are auto-generated from a sale list entry's C/T
+// + CP Start/End (see the collection_recurring_schedule migration);
+// 'ct_completion' ones from a completed job's filter items; 'manual' (the
+// default) is anything typed in directly on this page.
+function SourceCell({ source }: { source: CollectionPlan["source"] }) {
+  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label="Recurring" />
+  if (source === "ct_completion") return <StatusBadge tone="secondary" label="Auto (C/T)" />
+  return <span className="text-muted-foreground">Manual</span>
+}
+
 // Matches the old AppSheet Collection Plan columns, minus Product, S/C, and R/N.
 export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
   return [
@@ -61,13 +71,23 @@ export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
 }
 
 // Full column set for the standalone /collection-plan list page — every
-// field, unlike the trimmed dashboard-panel view above.
+// field, unlike the trimmed dashboard-panel view above. When canEditDate is
+// set, the Plan D cell itself becomes a click-to-edit shortcut straight into
+// CollectionsFormDialog — skipping the row-click-then-Edit-button detour —
+// since the schedule/date is the one thing an admin is most likely to be
+// here to change. Non-admins (canEditDate false) still see the same cell,
+// just as plain text — RLS (collections_update_admin) is the real
+// enforcement either way, this is purely a UI affordance.
 export function getCollectionsFullColumns({
   canDelete,
+  canEditDate,
   onDelete,
+  onEditDate,
 }: {
   canDelete: boolean
+  canEditDate: boolean
   onDelete: (entry: CollectionPlan) => void
+  onEditDate: (entry: CollectionPlan) => void
 }): ColumnDef<CollectionPlan, unknown>[] {
   const columns: ColumnDef<CollectionPlan, unknown>[] = [
     {
@@ -85,7 +105,21 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "collectionDate",
       header: "Plan D",
-      cell: ({ row }) => formatDate(row.original.collectionDate),
+      cell: ({ row }) =>
+        canEditDate ? (
+          <button
+            type="button"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditDate(row.original)
+            }}
+          >
+            {formatDate(row.original.collectionDate)}
+          </button>
+        ) : (
+          formatDate(row.original.collectionDate)
+        ),
     },
     {
       accessorKey: "preD",
@@ -106,6 +140,11 @@ export function getCollectionsFullColumns({
       accessorKey: "filterChangeRequired",
       header: "Filter Change",
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
+    },
+    {
+      accessorKey: "source",
+      header: "Source",
+      cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
       accessorKey: "status",
@@ -146,5 +185,6 @@ export const COLLECTIONS_EXPORT_COLUMNS = [
   { header: "Pre D", key: "preD" },
   { header: "Acc D", key: "accD" },
   { header: "Note", key: "note" },
+  { header: "Source", key: "source" },
   { header: "Status", key: "status" },
 ]

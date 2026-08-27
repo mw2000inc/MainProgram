@@ -23,8 +23,23 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
 import type { CollectionPlan } from "@/lib/types"
+
+// This form had no way to actually mark a collection Collected before —
+// status could only ever be read, never changed, from this dialog. Matches
+// the Pending/Completed/Cancelled convention already used by every other
+// plan table's status (see PlanStatusBadge) — "Collected" instead of
+// "Completed" since that's this domain's own natural word for it (and
+// PlanStatusBadge already recognizes it as the same success tone).
+const STATUS_OPTIONS = ["Pending", "Collected", "Cancelled"] as const
 
 const schema = z.object({
   orderNo: z.string().min(1, "Order number is required"),
@@ -32,6 +47,7 @@ const schema = z.object({
   amount: z.string().min(1, "Amount is required").refine((v) => !Number.isNaN(Number(v)) && Number(v) >= 0, "Amount must be zero or more"),
   ct: z.string().optional(),
   collectionDate: z.string().min(1, "Date is required"),
+  status: z.string().min(1),
   preD: z.string().optional(),
   accD: z.string().optional(),
   note: z.string().optional(),
@@ -47,6 +63,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
       amount: String(entry.amount),
       ct: entry.ct,
       collectionDate: entry.collectionDate,
+      status: entry.status || "Pending",
       preD: entry.preD ?? "",
       accD: entry.accD ?? "",
       note: entry.note ?? "",
@@ -58,6 +75,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
     amount: "0",
     ct: "",
     collectionDate: defaultDate,
+    status: "Pending",
     preD: "",
     accD: "",
     note: "",
@@ -97,7 +115,7 @@ export function CollectionsFormDialog({
     if (isEdit) {
       await updateCollection.mutateAsync({ id: entry.id, input })
     } else {
-      await createCollection.mutateAsync({ ...input, status: "Pending" })
+      await createCollection.mutateAsync(input)
     }
     onOpenChange(false)
   }
@@ -108,9 +126,15 @@ export function CollectionsFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Collection Plan" : "Add Collection Plan"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? (entry.source === "recurring_schedule" ? "Edit Collection Schedule" : "Edit Collection Plan") : "Add Collection Plan"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update this collection record." : "Schedule a payment collection."}
+            {isEdit
+              ? entry.source === "recurring_schedule"
+                ? "This occurrence is part of an auto-generated recurring schedule. Changing its date reschedules every later still-Pending occurrence to follow from it, at the same C/T interval — an already-Collected occurrence is never affected."
+                : "Update this collection record."
+              : "Schedule a payment collection."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -177,6 +201,30 @@ export function CollectionsFormDialog({
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

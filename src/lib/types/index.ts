@@ -469,9 +469,10 @@ export interface CollectionPlan {
   collectionDate: string
   amount: number
   status: string
-  // The old AppSheet-imported "C/T" free-text field — unrelated to the C/T
-  // (job completion) automation below; left as-is for backward compatibility
-  // with existing manually-entered rows.
+  // The old AppSheet-imported "C/T" free-text field. Manually-entered rows
+  // leave it exactly as typed; a source='recurring_schedule' row (see
+  // saleListEntryId below) has it set from the sale list entry's own C/T,
+  // and a source='ct_completion' row (job completion) doesn't touch it.
   ct: string
   preD?: string
   accD?: string
@@ -483,9 +484,17 @@ export interface CollectionPlan {
   // column defaults ('manual' / false) apply whenever they're omitted.
   customerId?: string
   scheduleJobId?: string
-  source?: "manual" | "ct_completion"
+  source?: "manual" | "ct_completion" | "recurring_schedule"
   // Set true the moment a completed job records filter items for this
   // customer — the actual filter list lives on schedule_job_filter_items
   // (via scheduleJobId), not duplicated here.
   filterChangeRequired?: boolean
+  // Present only for a source='recurring_schedule' row — see the
+  // collection_recurring_schedule migration. occurrenceIndex is this
+  // occurrence's stable position in its series (0, 1, 2, ...) — it never
+  // changes even if collectionDate is later edited, which is exactly what
+  // lets editing one occurrence re-anchor the later ones without losing
+  // track of which row is which.
+  saleListEntryId?: string
+  occurrenceIndex?: number
 }

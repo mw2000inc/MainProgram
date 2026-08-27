@@ -4,7 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { addMonths, addYears, format, parseISO } from "date-fns"
+import { addMonths, format, parseISO } from "date-fns"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +35,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
+import { ctIntervalMonths } from "@/lib/ct-interval"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
@@ -99,23 +100,12 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
   }
 }
 
-// C/T is a free-typed combobox (see CT_OPTIONS), not a fixed enum, so this
-// always needs a default for anything that isn't one of the three shorter
-// intervals below — that covers "Yearly" itself, a blank/unset C/T, and any
-// other custom value someone types, all falling back to the original
-// add-one-year behavior.
+// Uses the centralized C/T-to-months mapping (see ct-interval.ts) — also
+// used by the Collection Plan's recurring collection schedule, so the two
+// features can never compute a different interval for the same C/T value.
 function calculateCpEnd(cpStartStr: string, ct: string | undefined): string {
   const start = parseISO(cpStartStr)
-  switch (ct) {
-    case "Monthly":
-      return format(addMonths(start, 1), "yyyy-MM-dd")
-    case "Quarterly":
-      return format(addMonths(start, 3), "yyyy-MM-dd")
-    case "Half Year":
-      return format(addMonths(start, 6), "yyyy-MM-dd")
-    default:
-      return format(addYears(start, 1), "yyyy-MM-dd")
-  }
+  return format(addMonths(start, ctIntervalMonths(ct)), "yyyy-MM-dd")
 }
 
 export function SaleListFormDialog({
