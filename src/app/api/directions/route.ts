@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { geocodeWithFallback, peekGeocodeCache } from "@/lib/nominatim-server"
 
+// This route geocodes two addresses sequentially, each of which can itself
+// make up to 8 staggered (~1.1s apart) Nominatim requests via the fallback
+// chain in nominatim-server.ts — worst case comfortably exceeds Vercel's
+// plan-default serverless timeout (commonly ~10s).
+export const maxDuration = 30
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

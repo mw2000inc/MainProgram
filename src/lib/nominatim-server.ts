@@ -26,11 +26,62 @@ async function geocodeOnce(query: string): Promise<GeoPoint | null> {
   url.searchParams.set("format", "json")
   url.searchParams.set("q", query)
   url.searchParams.set("limit", "1")
+  // Every address this app ever geocodes (office or a member's) is in the
+  // Philippines — without this, a short/generic fallback query (e.g. just
+  // an area name, once the fallback chain below has truncated all the way
+  // down) risks matching some unrelated place in another country instead
+  // of failing cleanly, or losing precision to Nominatim considering
+  // irrelevant candidates worldwide.
+  url.searchParams.set("countrycodes", "ph")
   const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } })
   if (!res.ok) return null
   const results = (await res.json()) as { lat: string; lon: string }[]
   if (!results.length) return null
   return { lat: Number(results[0].lat), lon: Number(results[0].lon) }
+}
+
+// Strips one or more leading floor/unit/suite/block/building fragments that
+// Nominatim's free-text parser almost never resolves through (e.g. "7th &
+// 8th Flr", "Unit 5", "Blk 3 Lot 12", "Bldg. A") — these describe a specific
+// spot inside a larger building/lot that OSM has no knowledge of at that
+// granularity, so keeping them in the query just makes an otherwise
+// resolvable address fail outright (e.g. "7th & 8th Flr Axis Tower One
+// Northgate Cyberzone Alabang Muntinlupa" — Axis Tower One itself may well
+// be mapped, but not down to a specific floor). Chainable ("7th Flr, Unit
+// 5, ..."), so this strips repeatedly until nothing more matches.
+const LEADING_UNIT_PATTERN =
+  /^(?:\d+(?:st|nd|rd|th)(?:\s*&\s*\d+(?:st|nd|rd|th))?\s+(?:flr\.?|floor)|unit\s+\S+|suite\s+\S+|rm\.?\s+\S+|room\s+\S+|blk\.?\s*\S+(?:\s+lot\.?\s*\S+)?|bldg\.?\s+\S+|building\s+\S+)\s*[,.]?\s*/i
+
+function stripLeadingUnitFragments(address: string): string {
+  let result = address.trim()
+  let stripped = result.replace(LEADING_UNIT_PATTERN, "")
+  while (stripped !== result) {
+    result = stripped
+    stripped = result.replace(LEADING_UNIT_PATTERN, "")
+  }
+  return result.trim()
+}
+
+// Drops words from the front, one at a time, of an already-cleaned address —
+// the fallback for addresses with few or no commas (very common in real
+// member addresses: a single free-typed line like "Axis Tower One Northgate
+// Cyberzone Alabang Muntinlupa" with no punctuation at all), where the
+// comma-segment strategies in geocodeWithFallback have nothing to work
+// with. Converges from "building/landmark name" toward "just the
+// area/city", the broadest fallback before giving up outright. Bounded
+// (maxAttempts) since this is combined with the other fallback tiers under
+// one overall candidate cap — see geocodeWithFallback.
+function wordTruncations(text: string, maxAttempts = 6): string[] {
+  const words = text
+    .replace(/,/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+  const maxDrop = Math.min(words.length - 1, maxAttempts)
+  const out: string[] = []
+  for (let drop = 1; drop <= maxDrop; drop++) {
+    out.push(words.slice(drop).join(" "))
+  }
+  return out
 }
 
 // Strips patterns Nominatim's free-text parser tends to choke on but that are
@@ -70,7 +121,9 @@ export async function geocodeWithFallback(address: string): Promise<GeoPoint | n
   }
 
   add(address)
-  const cleaned = cleanAddress(address)
+  const unitStripped = stripLeadingUnitFragments(address)
+  add(unitStripped)
+  const cleaned = cleanAddress(unitStripped)
   add(cleaned)
   const segments = cleaned
     .split(",")
@@ -94,9 +147,25 @@ export async function geocodeWithFallback(address: string): Promise<GeoPoint | n
     add(segments.slice(i).join(", "))
   }
 
-  for (let i = 0; i < candidates.length; i++) {
+  // Comma-based segments contribute nothing for addresses with 0-2 commas
+  // (very common in real free-typed input, e.g. "7th & 8th Flr Axis Tower
+  // One Northgate Cyberzone Alabang Muntinlupa" has none at all) — this
+  // covers those by dropping words from the front instead, converging
+  // toward just the area/city.
+  for (const candidate of wordTruncations(cleaned)) {
+    add(candidate)
+  }
+
+  // Bounds worst-case latency: each attempt after the first costs another
+  // ~1.1s to respect Nominatim's 1 req/sec usage policy, and
+  // /api/directions geocodes two addresses (origin + destination) per
+  // request. The list above is ordered most-specific-first, so truncating
+  // here keeps the attempts most likely to succeed.
+  const bounded = candidates.slice(0, 8)
+
+  for (let i = 0; i < bounded.length; i++) {
     if (i > 0) await sleep(1100)
-    const result = await geocodeOnce(candidates[i])
+    const result = await geocodeOnce(bounded[i])
     if (result) {
       geocodeCache.set(address, result)
       return result
