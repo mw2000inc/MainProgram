@@ -49,7 +49,10 @@ export const PRODUCT_CATALOG: { group: string; items: { code: string; name: stri
   },
   {
     group: "SK",
-    items: [{ code: "201-BK", name: "SK) Standard K (black)" }],
+    items: [
+      { code: "201-BK", name: "SK) Standard K (black)" },
+      { code: "201-WT", name: "SK) Standard K (white)" },
+    ],
   },
   {
     group: "AW",
