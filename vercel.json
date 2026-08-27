@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/filter-change-schedule",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/collection-schedule-extend",
+      "schedule": "0 3 * * *"
     }
   ]
 }
