@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth/auth-context"
 import { supabase } from "@/lib/supabase/client"
+import { authErrorMessage } from "@/lib/supabase/errors"
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -131,7 +132,7 @@ export default function LoginPage() {
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
-    if (error) toast.error(error.message)
+    if (error) toast.error(authErrorMessage(error))
   }
 
   async function handleForgotPassword() {
@@ -146,7 +147,7 @@ export default function LoginPage() {
     })
     setResetPending(false)
     if (error) {
-      toast.error(error.message)
+      toast.error(authErrorMessage(error))
       return
     }
     toast.success("Password reset link sent — check your email.")
@@ -169,7 +170,7 @@ export default function LoginPage() {
       if (error.message.toLowerCase().includes("already")) {
         signUpForm.setError("email", { message: "An account with this email already exists." })
       } else {
-        toast.error(error.message)
+        toast.error(authErrorMessage(error))
       }
       return
     }

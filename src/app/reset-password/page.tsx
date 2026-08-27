@@ -12,6 +12,7 @@ import { PasswordInput } from "@/components/shared/password-input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Logo } from "@/components/shared/logo"
 import { supabase } from "@/lib/supabase/client"
+import { authErrorMessage } from "@/lib/supabase/errors"
 
 const schema = z
   .object({
@@ -75,7 +76,7 @@ export default function ResetPasswordPage() {
   async function onSubmit(values: z.infer<typeof schema>) {
     const { error } = await supabase.auth.updateUser({ password: values.password })
     if (error) {
-      toast.error(error.message)
+      toast.error(authErrorMessage(error))
       return
     }
     toast.success("Password updated — please sign in with your new password.")
