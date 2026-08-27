@@ -92,8 +92,18 @@ export function DataTable<TData>({
   const endRow = Math.min(totalRows, (pageIndex + 1) * currentPageSize)
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+    // h-full + flex-1 only actually do anything when this is placed inside a
+    // sized flex ancestor (e.g. a resized Daily Report panel's flex-1
+    // CardContent, wrapped in its own flex-1 div — see dashboard-plan-panel's
+    // table()) — flex-1 is what reliably claims that space as a flex child
+    // (a bare percentage height on a flex item isn't a safe way to get it to
+    // grow); h-full covers being placed in a plain sized block instead. With
+    // no such ancestor (every other place this is used), both are simply
+    // inert and this sizes to its content exactly as before. Same idea for
+    // flex-1/min-h-0 on the table wrapper below: it only stretches/scrolls
+    // when there's actual extra height to fill.
+    <div className="h-full min-h-0 flex flex-1 flex-col space-y-3">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -106,7 +116,7 @@ export function DataTable<TData>({
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
       </div>
 
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="min-h-0 flex-1 rounded-lg border overflow-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -163,7 +173,7 @@ export function DataTable<TData>({
         </Table>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
         <div>
           {totalRows > 0 ? `Showing ${startRow}-${endRow} of ${totalRows}` : "No results"}
         </div>

@@ -15,7 +15,7 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatDateTime } from "@/lib/utils"
 import type { Announcement } from "@/lib/types"
 
-export function AnnouncementPanel() {
+export function AnnouncementPanel({ title = "Announcements" }: { title?: string } = {}) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const dragHandle = useDragHandle()
@@ -27,7 +27,7 @@ export function AnnouncementPanel() {
   const [deleting, setDeleting] = React.useState<Announcement | undefined>(undefined)
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader
         {...dragHandle}
         className={cn(
@@ -36,7 +36,7 @@ export function AnnouncementPanel() {
         )}
       >
         <CardTitle className="flex min-w-0 items-center gap-2 text-base">
-          <Megaphone className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Announcements</span>
+          <Megaphone className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">{title}</span>
         </CardTitle>
         {isAdmin && (
           <Button
@@ -51,7 +51,11 @@ export function AnnouncementPanel() {
           </Button>
         )}
       </CardHeader>
-      <CardContent className="space-y-5 max-h-[520px] overflow-y-auto">
+      {/* flex-1 (not a hardcoded max-h-[520px]) — fills exactly whatever
+          height this panel is resized to and scrolls internally past that,
+          instead of always capping out at the same fixed height regardless
+          of the panel's actual size. */}
+      <CardContent className="flex-1 flex flex-col space-y-5 overflow-y-auto">
         {isPending && (
           <div className="space-y-2">
             <Skeleton className="h-16 w-full" />
@@ -59,7 +63,9 @@ export function AnnouncementPanel() {
           </div>
         )}
         {!isPending && announcements.length === 0 && (
-          <p className="text-sm text-muted-foreground py-6 text-center">No announcements yet.</p>
+          <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
+            No announcements yet.
+          </p>
         )}
         {announcements.map((a, i) => (
           <div key={a.id}>

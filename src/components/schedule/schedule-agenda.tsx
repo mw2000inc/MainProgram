@@ -81,7 +81,7 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
   return isAdmin || (!!userId && (job.technicianUserId === userId || job.technician2UserId === userId))
 }
 
-export function ScheduleAgenda({ date }: { date: string }) {
+export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const dragHandle = useDragHandle()
@@ -128,7 +128,7 @@ export function ScheduleAgenda({ date }: { date: string }) {
   }
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader
         {...dragHandle}
         className={cn(
@@ -137,7 +137,7 @@ export function ScheduleAgenda({ date }: { date: string }) {
         )}
       >
         <CardTitle className="flex min-w-0 items-center gap-2 text-base">
-          <CalendarClock className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">Schedule</span>
+          <CalendarClock className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">{title}</span>
         </CardTitle>
         <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap">
           {isAdmin && (
@@ -160,7 +160,12 @@ export function ScheduleAgenda({ date }: { date: string }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      {/* flex-1 + overflow-y-auto: fills whatever height this panel is
+          resized to (previously this content just sat at its natural size
+          under the header, leaving dead space below on a taller panel) and
+          scrolls internally once the job list outgrows the available
+          height. */}
+      <CardContent className="flex-1 flex flex-col overflow-y-auto">
         {isPending && (
           <div className="space-y-2">
             <Skeleton className="h-10 w-full" />
@@ -168,7 +173,9 @@ export function ScheduleAgenda({ date }: { date: string }) {
           </div>
         )}
         {!isPending && todaysJobs.length === 0 && (
-          <p className="text-sm text-muted-foreground py-6 text-center">No jobs scheduled for this date.</p>
+          <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
+            No jobs scheduled for this date.
+          </p>
         )}
         {!isPending && todaysJobs.length > 0 && (
           <div className="divide-y">

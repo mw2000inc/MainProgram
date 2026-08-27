@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdminGuard } from "@/components/shared/admin-guard"
+import { DailyReportSectionsPanel } from "@/components/settings/daily-report-sections-panel"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
 import type { ContactEntry } from "@/lib/types"
 
@@ -229,6 +230,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Saves itself per action (each toggle/drag/edit is its own mutation) —
+            unlike the cards above, it isn't part of the "Save Settings" batch below. */}
+        <DailyReportSectionsPanel />
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={updateSettings.isPending}>

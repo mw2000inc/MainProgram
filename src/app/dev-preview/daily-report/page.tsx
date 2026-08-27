@@ -3,12 +3,14 @@
 import * as React from "react"
 import { notFound } from "next/navigation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { DndContext } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Droplets } from "lucide-react"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import { DateControl } from "@/components/dashboard/date-control"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
-import { ResizablePanel } from "@/components/dashboard/resizable-panel"
+import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { getFilterChangeColumns, getFilterChangeExpandedColumns } from "@/components/filter-change/filter-change-columns"
 import { announcementsKey, commentsKey } from "@/lib/hooks/use-announcements"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
@@ -193,47 +195,53 @@ export default function DailyReportPreviewPage() {
   const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
   const filterChangeExpandedColumns = React.useMemo(() => getFilterChangeExpandedColumns(), [])
 
+  const panelIds = ["announcements", "schedule", "date", "filter-change"]
+
   return (
     <MockProviders>
       <div className="min-h-screen bg-background p-4">
-        <div className="mx-auto max-w-4xl space-y-6" id="preview-root">
-          <div data-testid="panel-announcements">
-            <ResizablePanel panelId="announcements" isAdmin savedSize={undefined} onResizeEnd={() => {}}>
-              <AnnouncementPanel />
-            </ResizablePanel>
-          </div>
+        <DndContext>
+          <SortableContext items={panelIds} strategy={verticalListSortingStrategy}>
+            <div className="mx-auto max-w-4xl space-y-6" id="preview-root">
+              <div data-testid="panel-announcements">
+                <SortablePanel id="announcements" isAdmin>
+                  <AnnouncementPanel />
+                </SortablePanel>
+              </div>
 
-          <div data-testid="panel-schedule">
-            <ResizablePanel panelId="schedule" isAdmin savedSize={undefined} onResizeEnd={() => {}}>
-              <ScheduleAgenda date={today} />
-            </ResizablePanel>
-          </div>
+              <div data-testid="panel-schedule">
+                <SortablePanel id="schedule" isAdmin>
+                  <ScheduleAgenda date={today} />
+                </SortablePanel>
+              </div>
 
-          <div data-testid="panel-date">
-            <ResizablePanel panelId="date" isAdmin savedSize={undefined} onResizeEnd={() => {}}>
-              <DateControl value={today} onChange={() => {}} />
-            </ResizablePanel>
-          </div>
+              <div data-testid="panel-date">
+                <SortablePanel id="date" isAdmin>
+                  <DateControl value={today} onChange={() => {}} />
+                </SortablePanel>
+              </div>
 
-          <div data-testid="panel-filter-change">
-            <ResizablePanel panelId="filter-change" isAdmin savedSize={undefined} onResizeEnd={() => {}}>
-              <DashboardPlanPanel
-                title="Filter Change Plan"
-                icon={Droplets}
-                columns={filterChangeColumns}
-                expandedColumns={filterChangeExpandedColumns}
-                data={MOCK_FILTER_CHANGE_PLANS}
-                loading={false}
-                emptyMessage="No filter change plans for this date."
-                canAdd
-                addLabel="Add"
-                onAdd={() => {}}
-                canDelete
-                onDeleteSelected={async () => {}}
-              />
-            </ResizablePanel>
-          </div>
-        </div>
+              <div data-testid="panel-filter-change">
+                <SortablePanel id="filter-change" isAdmin>
+                  <DashboardPlanPanel
+                    title="Filter Change Plan"
+                    icon={Droplets}
+                    columns={filterChangeColumns}
+                    expandedColumns={filterChangeExpandedColumns}
+                    data={MOCK_FILTER_CHANGE_PLANS}
+                    loading={false}
+                    emptyMessage="No filter change plans for this date."
+                    canAdd
+                    addLabel="Add"
+                    onAdd={() => {}}
+                    canDelete
+                    onDeleteSelected={async () => {}}
+                  />
+                </SortablePanel>
+              </div>
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
     </MockProviders>
   )

@@ -42,6 +42,33 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // When provided, rows become clickable (e.g. to open a nested detail panel)
   // instead of being purely informational.
   onRowClick?: (row: TData) => void
+  // The panel's current resized height in px (from SortablePanel/PanelSize,
+  // via daily-report-section.tsx) — used only to compute how many rows the
+  // compact table shows (see computePageSize below). Omitted everywhere this
+  // panel is reused outside the Daily Report's resizable grid, which just
+  // falls back to the fixed 5-row default.
+  panelHeight?: number
+}
+
+// Everything in the compact table's chrome above/below the actual rows —
+// header, status filter row, search bar, table header row, pagination
+// footer, the panel's own vertical padding/gaps. Approximate (not measured),
+// deliberately generous so the estimate undershoots rather than overshoots —
+// DataTable's own overflow-auto is the safety net if it's still off.
+const TABLE_CHROME_HEIGHT = 250
+// h-10 header row + ~1px border-b per data row, from the shared Table/
+// TableCell components' own classes.
+const TABLE_ROW_HEIGHT = 41
+const DEFAULT_PAGE_SIZE = 5
+
+// More vertical room (a taller resized panel) shows more rows instead of
+// leaving blank space below a fixed 5-row table — this is what actually
+// makes a resize "count" for these panels, not just a bigger empty box.
+function computePageSize(panelHeight: number | undefined): number {
+  if (!panelHeight) return DEFAULT_PAGE_SIZE
+  const availableForRows = panelHeight - TABLE_CHROME_HEIGHT
+  if (availableForRows <= 0) return DEFAULT_PAGE_SIZE
+  return Math.max(DEFAULT_PAGE_SIZE, Math.floor(availableForRows / TABLE_ROW_HEIGHT))
 }
 
 // One shared "compact daily panel" shell for the dashboard's Filter Change / Install /
@@ -63,6 +90,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   exportColumns,
   exportFileName,
   onRowClick,
+  panelHeight,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
@@ -204,18 +232,27 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   )
 
   const table = (cols: ColumnDef<TData, unknown>[], pageSize: number) => (
-    <DataTable
-      columns={cols}
-      data={filteredData}
-      emptyMessage={emptyMessage}
-      pageSize={pageSize}
-      onRowClick={selectMode ? undefined : onRowClick}
-    />
+    // flex-1/min-h-0 here (not just DataTable's own internal h-full) is what
+    // actually makes DataTable grow to fill its share of CardContent's
+    // space — a bare percentage height on a flex child doesn't reliably
+    // fill available space without flex-grow. In the expanded dialog view
+    // below, this wrapper's parent isn't a flex container, so these classes
+    // are simply inert there — DataTable keeps sizing to its content as
+    // before (already showing every row, no scaling needed).
+    <div className="min-h-0 flex-1 flex flex-col">
+      <DataTable
+        columns={cols}
+        data={filteredData}
+        emptyMessage={emptyMessage}
+        pageSize={pageSize}
+        onRowClick={selectMode ? undefined : onRowClick}
+      />
+    </div>
   )
 
   return (
     <>
-      <Card className="flex flex-col">
+      <Card className="h-full flex flex-col">
         <CardHeader
           {...dragHandle}
           className={cn("gap-2 pb-2", dragHandle && "touch-none cursor-grab select-none active:cursor-grabbing")}
@@ -223,12 +260,18 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           {header}
           {statusRow}
         </CardHeader>
-        <CardContent className="space-y-2">
+        {/* flex-1 + min-h-0: fills whatever height this panel is resized to
+            (min-h-0 is what lets a flex child actually shrink/scroll instead
+            of being pushed to its content's natural size and overflowing
+            the parent) — DataTable's own pageSize scales with that same
+            height (see computePageSize) so a taller panel shows more rows
+            instead of just more blank space below a fixed 5-row table. */}
+        <CardContent className="flex-1 min-h-0 flex flex-col space-y-2">
           {selectionBar}
           {loading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading...</div>
           ) : (
-            table(compactColumns, 5)
+            table(compactColumns, computePageSize(panelHeight))
           )}
         </CardContent>
       </Card>

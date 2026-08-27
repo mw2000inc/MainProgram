@@ -248,6 +248,25 @@ export interface DailyReportLayout {
   layoutMode: "stacked" | "grid"
 }
 
+export type DailyReportSectionKey = "schedule" | "announcements" | "installation" | "filter_change" | "collection" | "repair"
+
+// The Daily Report's admin-configurable section list — see
+// daily_report_sections, a single SHARED table (unlike DailyReportLayout
+// above): an admin's changes here affect every viewer's Daily Report,
+// technicians included, who can only ever read it. sectionKey is fixed —
+// there's no way to add a section beyond these six (see the migration's own
+// comment for why) — enabled/label/displayOrder/visibleFields are what an
+// admin can actually change.
+export interface DailyReportSectionConfig {
+  sectionKey: DailyReportSectionKey
+  label: string
+  enabled: boolean
+  displayOrder: number
+  // Which of that section's columns to show — empty means "show all".
+  // Meaningless for "schedule"/"announcements" (not column-table panels).
+  visibleFields: string[]
+}
+
 // One row from public.activity_logs — written exclusively by the
 // log_audit_event() trigger (see the audit_logging migration), never by
 // application code, so userId always reflects the actual authenticated
