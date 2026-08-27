@@ -5,11 +5,11 @@ import { actionLabel, entityTypeLabel } from "@/lib/activity-log-config"
 import { formatDateTime } from "@/lib/utils"
 import type { ActivityLogEntry } from "@/lib/types"
 
-export function getActivityColumns(): ColumnDef<ActivityLogEntry, unknown>[] {
+export function getActivityColumns(actorLabel: string): ColumnDef<ActivityLogEntry, unknown>[] {
   return [
     {
       accessorKey: "userName",
-      header: "Admin",
+      header: actorLabel,
       cell: ({ row }) => <span className="font-medium">{row.original.userName}</span>,
     },
     {

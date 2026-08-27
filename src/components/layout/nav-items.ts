@@ -12,6 +12,7 @@ import {
   Banknote,
   Layers,
   History,
+  Hammer,
   type LucideIcon,
 } from "lucide-react"
 import type { Permission } from "@/lib/auth/auth-context"
@@ -57,6 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   { href: "/users", label: "Users", icon: UserCog, adminOnly: true, group: 3 },
   { href: "/activity", label: "Admin Activity", icon: History, adminOnly: true, group: 3 },
+  { href: "/technician-activity", label: "Technician Activity", icon: Hammer, adminOnly: true, group: 3 },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true, group: 3 },
 ]
 

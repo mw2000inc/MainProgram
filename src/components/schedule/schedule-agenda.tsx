@@ -73,6 +73,14 @@ function MarkJobDoneDialog({
   )
 }
 
+// A technician may change status/remarks on a job they're assigned to (see
+// the technician_job_status_update migration, which enforces the same
+// column-level restriction server-side via RLS + a trigger) — everything
+// else about a job (date, assignment, etc.) stays admin-only.
+function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | undefined): boolean {
+  return isAdmin || (!!userId && (job.technicianUserId === userId || job.technician2UserId === userId))
+}
+
 export function ScheduleAgenda({ date }: { date: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -102,7 +110,7 @@ export function ScheduleAgenda({ date }: { date: string }) {
   )
 
   function toggleComplete(job: ScheduleJob) {
-    if (!isAdmin) return
+    if (!canEditStatus(job, isAdmin, user?.id)) return
     if (job.status === "completed") {
       updateJob.mutate({ id: job.id, input: { status: "pending" } })
       return
@@ -169,9 +177,13 @@ export function ScheduleAgenda({ date }: { date: string }) {
                 <Checkbox
                   checked={job.status === "completed"}
                   onCheckedChange={() => toggleComplete(job)}
-                  disabled={!isAdmin}
+                  disabled={!canEditStatus(job, isAdmin, user?.id)}
                   aria-label="Mark complete"
-                  title={isAdmin ? undefined : "Only admins can change a job's status"}
+                  title={
+                    canEditStatus(job, isAdmin, user?.id)
+                      ? undefined
+                      : "Only an admin or the assigned technician can change a job's status"
+                  }
                   className="mt-0.5"
                 />
                 <div className="flex-1 min-w-0">
