@@ -78,7 +78,11 @@ export const PRODUCT_CATALOG: { group: string; items: { code: string; name: stri
   },
   {
     group: "PT",
-    items: [{ code: "1151", name: "Pre-Filtration Housing Package (1 stage)" }],
+    items: [
+      { code: "1151", name: "Pre-Filtration Housing Package (1 stage)" },
+      { code: "1173", name: "Pre-filtration Housing Package (4 stages)" },
+      { code: "1174", name: "Pre-filtration Housing Package (2 stages) 3/4\"" },
+    ],
   },
 ]
 
