@@ -21,9 +21,9 @@ export async function GET(request: Request) {
   const { data, error } = await admin.rpc("extend_collection_schedule_window")
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (data ?? []) as { sale_list_entry_id: string; occurrences_added: number }[]
+  const rows = (data ?? []) as { out_sale_list_entry_id: string; out_occurrences_added: number }[]
   return NextResponse.json({
     entriesExtended: rows.length,
-    totalOccurrencesAdded: rows.reduce((sum, r) => sum + r.occurrences_added, 0),
+    totalOccurrencesAdded: rows.reduce((sum, r) => sum + r.out_occurrences_added, 0),
   })
 }
