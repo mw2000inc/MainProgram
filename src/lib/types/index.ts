@@ -224,6 +224,12 @@ export interface CompanySettings {
   currency: string
   taxRate: number
   address: string
+  // Geocoded from `address`, client-side, on first successful "Directions"
+  // lookup — see updateSettingsCoordinates. Absent until then, or if the
+  // address hasn't been geocoded successfully. Cleared whenever `address`
+  // itself is edited, so a stale office pin can never linger.
+  latitude?: number
+  longitude?: number
   contactNumbers: ContactEntry[]
   contactEmails: ContactEntry[]
   // Quarterly-monitoring interval used to compute each customer's next

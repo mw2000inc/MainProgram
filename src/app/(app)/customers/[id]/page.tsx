@@ -41,8 +41,10 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { CustomerQrCanvas, getScanUrl } from "@/components/customers/customer-qr-code"
 import { getSaleListColumns, getSaleListRowClassName, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { updateCustomerCoordinates } from "@/lib/api/customers"
 import { useSaleListEntries, useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
+import { updateSettingsCoordinates } from "@/lib/api/misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
@@ -505,7 +507,19 @@ export default function CustomerProfilePage() {
         open={directionsOpen}
         onOpenChange={setDirectionsOpen}
         originAddress={settings?.address ?? ""}
+        originCoords={
+          settings?.latitude != null && settings?.longitude != null
+            ? { lat: settings.latitude, lon: settings.longitude }
+            : undefined
+        }
+        onOriginGeocoded={(lat, lon) => updateSettingsCoordinates(lat, lon).catch(() => {})}
         destinationAddress={customer.address}
+        destinationCoords={
+          customer.latitude != null && customer.longitude != null
+            ? { lat: customer.latitude, lon: customer.longitude }
+            : undefined
+        }
+        onDestinationGeocoded={(lat, lon) => updateCustomerCoordinates(customer.id, lat, lon).catch(() => {})}
         destinationLabel={customer.companyName || customer.fullName}
       />
       <ConfirmDialog

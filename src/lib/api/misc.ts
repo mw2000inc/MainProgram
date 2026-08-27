@@ -114,6 +114,8 @@ type SettingsRow = {
   currency: string
   tax_rate: number
   address: string
+  latitude: number | null
+  longitude: number | null
   contact_numbers: ContactEntry[]
   contact_emails: ContactEntry[]
   // Added by the monitoring-intervals migration; read defensively so the app
@@ -131,6 +133,8 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
     currency: row.currency,
     taxRate: Number(row.tax_rate),
     address: row.address,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
     contactNumbers: row.contact_numbers,
     contactEmails: row.contact_emails,
     monitoringDefaultMonths: row.monitoring_default_months ?? 6,
@@ -171,7 +175,16 @@ export async function updateSettings(input: Partial<CompanySettings>): Promise<C
   if (input.emailNotificationsEnabled !== undefined) row.email_notifications_enabled = input.emailNotificationsEnabled
   if (input.currency !== undefined) row.currency = input.currency
   if (input.taxRate !== undefined) row.tax_rate = input.taxRate
-  if (input.address !== undefined) row.address = input.address
+  // Whenever the address itself is saved (even to the same text — this
+  // form always submits the full address field, not just a diff), clear
+  // any cached coordinates so the next "Directions" lookup re-geocodes
+  // rather than keeping a pin for a possibly-now-wrong address. See
+  // updateSettingsCoordinates, which repopulates it.
+  if (input.address !== undefined) {
+    row.address = input.address
+    row.latitude = null
+    row.longitude = null
+  }
   if (input.contactNumbers !== undefined) row.contact_numbers = input.contactNumbers
   if (input.contactEmails !== undefined) row.contact_emails = input.contactEmails
   if (input.monitoringDefaultMonths !== undefined) row.monitoring_default_months = input.monitoringDefaultMonths
@@ -189,4 +202,15 @@ export async function updateSettings(input: Partial<CompanySettings>): Promise<C
     .single()
   if (error) throw error
   return settingsFromRow(data as SettingsRow)
+}
+
+// Mirrors updateCustomerCoordinates (see lib/api/customers.ts) — caches a
+// successful geocode of the office address so it never needs to be
+// re-resolved on every single "Directions" lookup. Called fire-and-forget
+// from the client right after a fresh geocode succeeds; failure here just
+// means the next lookup re-geocodes instead of reusing a cached pin, not a
+// user-facing error, so callers don't need to await/handle it.
+export async function updateSettingsCoordinates(latitude: number, longitude: number): Promise<void> {
+  const { error } = await supabase.from("company_settings").update({ latitude, longitude }).eq("id", 1)
+  if (error) throw error
 }

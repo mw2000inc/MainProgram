@@ -24,13 +24,27 @@ export interface DirectionsResult {
   durationSeconds: number
 }
 
+// originPoint/destinationPoint let a caller skip server-side geocoding
+// entirely for a side it already has cached coordinates for (e.g. the office
+// address in company_settings, or a member's customers.latitude/longitude)
+// — the corresponding address is still sent as a fallback label/query the
+// route can use if the point is omitted.
 export async function fetchDirections(
   originAddress: string,
-  destinationAddress: string
+  destinationAddress: string,
+  originPoint?: { lat: number; lon: number },
+  destinationPoint?: { lat: number; lon: number }
 ): Promise<DirectionsResult | { error: string }> {
-  const res = await fetch(
-    `/api/directions?origin=${encodeURIComponent(originAddress)}&destination=${encodeURIComponent(destinationAddress)}`
-  )
+  const params = new URLSearchParams({ origin: originAddress, destination: destinationAddress })
+  if (originPoint) {
+    params.set("originLat", String(originPoint.lat))
+    params.set("originLon", String(originPoint.lon))
+  }
+  if (destinationPoint) {
+    params.set("destinationLat", String(destinationPoint.lat))
+    params.set("destinationLon", String(destinationPoint.lon))
+  }
+  const res = await fetch(`/api/directions?${params.toString()}`)
   const data = await res.json()
   if (!res.ok) return { error: data.error ?? "Failed to fetch directions" }
   return data as DirectionsResult

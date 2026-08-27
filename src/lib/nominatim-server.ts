@@ -157,11 +157,15 @@ export async function geocodeWithFallback(address: string): Promise<GeoPoint | n
   }
 
   // Bounds worst-case latency: each attempt after the first costs another
-  // ~1.1s to respect Nominatim's 1 req/sec usage policy, and
-  // /api/directions geocodes two addresses (origin + destination) per
-  // request. The list above is ordered most-specific-first, so truncating
-  // here keeps the attempts most likely to succeed.
-  const bounded = candidates.slice(0, 8)
+  // ~1.1s to respect Nominatim's 1 req/sec usage policy, and /api/directions
+  // can geocode up to two addresses (origin + destination) per request —
+  // though a caller with already-known coordinates for one side (see
+  // originLat/originLon in that route) only ever pays this cost for the
+  // other, which is the common case now that the office address is cached
+  // in company_settings after its first successful lookup. The list above
+  // is ordered most-specific-first, so truncating here keeps the attempts
+  // most likely to succeed.
+  const bounded = candidates.slice(0, 10)
 
   for (let i = 0; i < bounded.length; i++) {
     if (i > 0) await sleep(1100)

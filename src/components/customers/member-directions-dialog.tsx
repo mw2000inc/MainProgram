@@ -25,17 +25,34 @@ const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyrigh
 // panel. A modal fits this better than a dedicated page/panel since it's a
 // one-off lookup, not something an admin browses between records. Routing
 // comes from OSRM's free public demo server (no key, no billing).
+type GeoPoint = { lat: number; lon: number }
+
 export function MemberDirectionsDialog({
   open,
   onOpenChange,
   originAddress,
+  originCoords,
+  onOriginGeocoded,
   destinationAddress,
+  destinationCoords,
+  onDestinationGeocoded,
   destinationLabel,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   originAddress: string
+  // Already-known coordinates (e.g. company_settings.latitude/longitude) —
+  // when given, this side skips server-side geocoding entirely instead of
+  // re-resolving the same fixed office address on every single lookup.
+  originCoords?: GeoPoint
+  // Called once, only when originCoords was absent and a fresh geocode just
+  // succeeded, so the caller can cache it (see updateSettingsCoordinates)
+  // for next time. Fire-and-forget — a failure to persist isn't a
+  // user-facing error, this lookup already succeeded either way.
+  onOriginGeocoded?: (lat: number, lon: number) => void
   destinationAddress: string
+  destinationCoords?: GeoPoint
+  onDestinationGeocoded?: (lat: number, lon: number) => void
   destinationLabel: string
 }) {
   const mapDivRef = React.useRef<HTMLDivElement>(null)
@@ -48,6 +65,18 @@ export function MemberDirectionsDialog({
   const [retryable, setRetryable] = React.useState(false)
   const [summary, setSummary] = React.useState<{ distanceKm: string; durationMin: string } | null>(null)
   const [retryToken, setRetryToken] = React.useState(0)
+
+  // originCoords/destinationCoords are plain object literals the caller
+  // typically constructs inline (a new reference every render), and the
+  // geocoded callbacks are usually inline too — putting any of these in the
+  // effect's dependency array would re-run (and re-fetch/re-render the map)
+  // on every unrelated parent re-render, not just when the addresses
+  // actually change or the user clicks retry. A ref always exposes the
+  // latest value to the effect without being a dependency itself.
+  const latestRef = React.useRef({ originCoords, onOriginGeocoded, destinationCoords, onDestinationGeocoded })
+  React.useEffect(() => {
+    latestRef.current = { originCoords, onOriginGeocoded, destinationCoords, onDestinationGeocoded }
+  })
 
   React.useEffect(() => {
     if (!open) return
@@ -65,9 +94,11 @@ export function MemberDirectionsDialog({
     let cancelled = false
 
     async function run() {
+      const { originCoords: knownOrigin, onOriginGeocoded, destinationCoords: knownDestination, onDestinationGeocoded } =
+        latestRef.current
       const [{ default: leaflet }, result] = await Promise.all([
         import("leaflet"),
-        fetchDirections(originAddress, destinationAddress),
+        fetchDirections(originAddress, destinationAddress, knownOrigin, knownDestination),
       ])
       if (cancelled || !mapDivRef.current) return
 
@@ -77,6 +108,9 @@ export function MemberDirectionsDialog({
         setErrorMessage(result.error)
         return
       }
+
+      if (!knownOrigin) onOriginGeocoded?.(result.origin.lat, result.origin.lon)
+      if (!knownDestination) onDestinationGeocoded?.(result.destination.lat, result.destination.lon)
 
       mapRef.current?.remove()
       const map = leaflet.map(mapDivRef.current)
