@@ -2,6 +2,8 @@ import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import type { Product, StockMovement, Supplier } from "@/lib/types"
 import { getStockStatus } from "@/lib/utils"
 import { toast } from "sonner"
@@ -13,6 +15,16 @@ export type StockMovementRow = StockMovement & {
   currentStock: number
   minStockLevel: number
   userName: string
+  // Present only for an approved movement — who approved it (see
+  // approveStockMovement). Used by the Daily Report's Inventory List, which
+  // needs this alongside userName (who created it) for its audit display.
+  approvedByName?: string
+  // Present only for a movement traceable back to a schedule job (the
+  // filter-change auto-deduction, old and new — see scheduleJobId) — the
+  // customer/order that job was for, joined client-side the same way
+  // productName/userName already are.
+  relatedCustomerName?: string
+  relatedJobOrderNo?: string
 }
 
 function warnIfLowStock(result: api.StockMovementResult) {
@@ -47,6 +59,8 @@ export function useStockMovementRows() {
   const { data: movements = [], isPending: p1 } = useStockMovements()
   const { data: products = [], isPending: p2 } = useProducts()
   const { data: users = [], isPending: p3 } = useUsers()
+  const { data: scheduleJobs = [], isPending: p4 } = useScheduleJobs()
+  const { data: customers = [], isPending: p5 } = useCustomers()
 
   const data = React.useMemo<StockMovementRow[]>(() => {
     // Group per product so we can walk each product's own history in true creation
@@ -102,6 +116,8 @@ export function useStockMovementRows() {
     return movements.map((m) => {
       const product = products.find((p) => p.id === m.productId)
       const actualStock = actualStockByMovementId.get(m.id) ?? product?.stockQuantity ?? 0
+      const job = m.scheduleJobId ? scheduleJobs.find((j) => j.id === m.scheduleJobId) : undefined
+      const customer = job?.customerId ? customers.find((c) => c.id === job.customerId) : undefined
       return {
         ...m,
         productName: product?.name ?? "Unknown",
@@ -110,11 +126,14 @@ export function useStockMovementRows() {
         currentStock: currentStockByMovementId.get(m.id) ?? actualStock,
         minStockLevel: product?.minStockLevel ?? 0,
         userName: users.find((u) => u.id === m.userId)?.name ?? "Unknown",
+        approvedByName: m.approvedBy ? (users.find((u) => u.id === m.approvedBy)?.name ?? "Unknown") : undefined,
+        relatedCustomerName: customer ? customer.companyName || customer.fullName : undefined,
+        relatedJobOrderNo: job?.orderNo,
       }
     })
-  }, [movements, products, users])
+  }, [movements, products, users, scheduleJobs, customers])
 
-  return { data, isPending: p1 || p2 || p3 }
+  return { data, isPending: p1 || p2 || p3 || p4 || p5 }
 }
 
 export function useCreateProduct() {

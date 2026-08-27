@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DateControl } from "@/components/dashboard/date-control"
@@ -37,10 +37,16 @@ import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/rep
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { getCollectionsColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
+import {
+  getInventoryListColumns,
+  getInventoryListExpandedColumns,
+  INVENTORY_LIST_EXPORT_COLUMNS,
+} from "@/components/inventory/inventory-list-columns"
 import { useFilterChangePlans, useDeleteFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
+import { useStockMovementRows } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
@@ -52,13 +58,25 @@ function today() {
   return new Date().toISOString().slice(0, 10)
 }
 
-// Every panel this section can render. "date" isn't one of the six
-// admin-configurable sections (see daily_report_sections) — it always shows,
-// pinned first — the other six map 1:1 to a section_key (see
-// SECTION_KEY_TO_PANEL_ID) and can be enabled/disabled/renamed/reordered
-// from Settings > Daily Report Sections, which every role (including a
-// technician) reads to decide what to render.
-type PanelId = "date" | "schedule" | "announcements" | "installation" | "filter-change" | "collection" | "repair"
+// Every panel this section can render. "date" and "inventory" aren't among
+// the six admin-configurable sections (see daily_report_sections) — the
+// other six map 1:1 to a section_key (see SECTION_KEY_TO_PANEL_ID) and can
+// be enabled/disabled/renamed/reordered from Settings > Daily Report
+// Sections, which every role (including a technician) reads to decide what
+// to render. "inventory" (a read-only history view over stock_movements —
+// see getInventoryListColumns) is additionally admin-only outright, not
+// just unconfigurable — a technician can't read stock_movements at all
+// (see the technician_role migration), so it's excluded entirely in the
+// `order` computation below rather than rendering an always-empty panel.
+type PanelId =
+  | "date"
+  | "schedule"
+  | "announcements"
+  | "installation"
+  | "filter-change"
+  | "collection"
+  | "repair"
+  | "inventory"
 
 const SECTION_KEY_TO_PANEL_ID: Record<DailyReportSectionKey, PanelId> = {
   schedule: "schedule",
@@ -75,12 +93,15 @@ const SECTION_KEY_TO_PANEL_ID: Record<DailyReportSectionKey, PanelId> = {
 // never-yet-customized Stacked dashboard already show Installation/Filter
 // Change and Collection/Repair as side-by-side pairs instead of every panel
 // starting full-width and needing a manual resize first.
-const HALF_WIDTH_PANELS = new Set<PanelId>(["installation", "filter-change", "collection", "repair"])
+const HALF_WIDTH_PANELS = new Set<PanelId>(["installation", "filter-change", "collection", "repair", "inventory"])
 
 // Same idea, for Grid mode's own default — its starting arrangement is a
 // fixed 3-across layout (Announcements alone full-width, then Date/Repair/
 // Schedule, then Installation/Filter Change/Collection), so every panel
-// except Announcements starts at ~33% width.
+// except Announcements starts at ~33% width. "inventory" isn't part of the
+// fixed 3-across arrangement (it's new, admin-only, and appended at the end
+// — see DEFAULT_GRID_ORDER) but still gets the same half-width default
+// outside Grid's own fixed rows, via HALF_WIDTH_PANELS above.
 const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["date", "repair", "schedule", "installation", "filter-change", "collection"])
 
 // Grid mode's fixed starting order — distinct from Stacked's (which follows
@@ -90,7 +111,16 @@ const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["date", "repair", "schedule",
 // admin drags/resizes anything in Grid mode, that saved layout (shared with
 // Stacked — see the order/sizes computation below) takes over from here,
 // same as Stacked already works.
-const DEFAULT_GRID_ORDER: PanelId[] = ["announcements", "date", "repair", "schedule", "installation", "filter-change", "collection"]
+const DEFAULT_GRID_ORDER: PanelId[] = [
+  "announcements",
+  "date",
+  "repair",
+  "schedule",
+  "installation",
+  "filter-change",
+  "collection",
+  "inventory",
+]
 
 function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
   if (isGrid) {
@@ -160,14 +190,23 @@ export function DailyReportSection() {
     return map
   }, [sections])
   const isPanelEnabled = React.useCallback(
-    (id: PanelId) => id === "date" || sectionByPanelId.get(id)?.enabled !== false,
-    [sectionByPanelId]
+    (id: PanelId) => {
+      // Read-only stock_movements history — a technician can't read that
+      // table at all (see the technician_role migration), so this is
+      // excluded outright rather than rendering a panel that would only
+      // ever show "no movements" for that role.
+      if (id === "inventory") return isAdmin
+      return id === "date" || sectionByPanelId.get(id)?.enabled !== false
+    },
+    [sectionByPanelId, isAdmin]
   )
   // The base order (before any admin's personal drag-reorder in Stacked
   // mode, and always in Grid mode) — Date pinned first, then the configured
-  // sections in their admin-set displayOrder.
+  // sections in their admin-set displayOrder, then Inventory List last (new,
+  // admin-only, not part of the configurable-section system — see
+  // isPanelEnabled above).
   const basePanelOrder = React.useMemo<PanelId[]>(
-    () => ["date", ...sections.map((s) => SECTION_KEY_TO_PANEL_ID[s.sectionKey])],
+    () => ["date", ...sections.map((s) => SECTION_KEY_TO_PANEL_ID[s.sectionKey]), "inventory"],
     [sections]
   )
   const labelFor = React.useCallback(
@@ -252,6 +291,11 @@ export function DailyReportSection() {
   const { data: installPlans = [], isPending: pInstall } = useInstallPlans()
   const { data: repairPlans = [], isPending: pRepair } = useRepairPlans()
   const { data: collectionPlans = [], isPending: pCollections } = useCollections()
+  // RLS returns this empty for a technician (stock_movements is admin-only
+  // — see the technician_role migration) rather than erroring, so this is
+  // safe to call unconditionally; the panel itself is hidden for that role
+  // regardless (see isPanelEnabled above).
+  const { data: stockMovements = [], isPending: pInventory } = useStockMovementRows()
 
   const deleteFilterChangePlans = useDeleteFilterChangePlans()
   const deleteInstallPlans = useDeleteInstallPlans()
@@ -287,6 +331,11 @@ export function DailyReportSection() {
     () => filterColumnsByVisibility(getCollectionsColumns(), visibleFieldsFor("collection")),
     [visibleFieldsFor]
   )
+  // Not one of the six admin-configurable sections (see the PanelId comment
+  // above), so no visibleFieldsFor entry exists for it — always the full
+  // compact/expanded set as defined in inventory-list-columns.tsx.
+  const inventoryListColumns = React.useMemo(() => getInventoryListColumns(), [])
+  const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(), [])
 
   const dayFilterChangePlans = React.useMemo(
     () => filterChangePlans.filter((p) => p.planDate === reportDate),
@@ -303,6 +352,15 @@ export function DailyReportSection() {
   const dayCollectionPlans = React.useMemo(
     () => collectionPlans.filter((p) => p.collectionDate === reportDate),
     [collectionPlans, reportDate]
+  )
+  // Filtered by the movement's own `date` (its as-of day — defaults to the
+  // day it was recorded, and matches the completed job's scheduledDate for
+  // the filter-change deduction path), same convention as every other
+  // section here filtering by its own date field. History only — this
+  // never approves/edits/creates anything; see getInventoryListColumns.
+  const dayStockMovements = React.useMemo(
+    () => stockMovements.filter((m) => m.date === reportDate),
+    [stockMovements, reportDate]
   )
 
   // Raw panel content, unwrapped — always wrapped in SortablePanel +
@@ -388,6 +446,27 @@ export function DailyReportSection() {
         exportFileName="collection-plan"
         onRowClick={isAdmin ? (row) => router.push(`/collection-plan?id=${row.id}`) : undefined}
         panelHeight={sizes.collection?.height}
+      />
+    ),
+    // Read-only — no canAdd/onAdd/canDelete/onDeleteSelected, deliberately:
+    // this panel only ever displays the existing stock_movements ledger, it
+    // never creates, edits, or approves anything itself. Approving a
+    // pending movement stays exactly where it already was, on Inventory >
+    // In & Out — clicking through there is a convenience, not a shortcut
+    // around that page's own admin-only approve action.
+    inventory: (
+      <DashboardPlanPanel
+        title="Inventory List"
+        icon={Package}
+        columns={inventoryListColumns}
+        expandedColumns={inventoryListExpandedColumns}
+        data={dayStockMovements}
+        loading={pInventory}
+        emptyMessage="No inventory movements for this date."
+        exportColumns={INVENTORY_LIST_EXPORT_COLUMNS}
+        exportFileName="inventory-list"
+        onRowClick={() => router.push("/inventory/in-and-out")}
+        panelHeight={sizes.inventory?.height}
       />
     ),
   }
