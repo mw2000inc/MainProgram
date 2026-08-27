@@ -17,6 +17,9 @@ type Row = {
   serviceman: string
   note: string | null
   created_at: string
+  customer_id: string | null
+  schedule_job_id: string | null
+  source: string
 }
 
 function fromRow(row: Row): FilterChangePlan {
@@ -36,6 +39,9 @@ function fromRow(row: Row): FilterChangePlan {
     serviceman: row.serviceman,
     note: row.note ?? undefined,
     createdAt: row.created_at,
+    customerId: row.customer_id ?? undefined,
+    scheduleJobId: row.schedule_job_id ?? undefined,
+    source: (row.source as FilterChangePlan["source"]) ?? "manual",
   }
 }
 

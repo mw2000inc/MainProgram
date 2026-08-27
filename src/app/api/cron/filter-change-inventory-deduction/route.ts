@@ -3,6 +3,16 @@ import { createAdminClient } from "@/lib/supabase/admin"
 
 export const dynamic = "force-dynamic"
 
+// Retired from vercel.json's cron schedule (see the ct_filter_change_
+// collection_inventory_link migration) — completing a job now records its
+// required filters via schedule_job_filter_items, which inserts its own
+// pending stock movement per item, gated on an admin's explicit approval
+// rather than deducting immediately and unconditionally the way this route
+// always has. Left in place, callable manually, purely for the older single-
+// product-per-job path (schedule_jobs.product_id/quantity, still settable in
+// the full Schedule form) — existing historical stock_movements rows it
+// already created are untouched by that migration.
+//
 // Runs on a schedule (see vercel.json) — for every "filter_change" schedule
 // job that's been marked completed (by an admin/technician — this never
 // fires off the scheduled date alone, since a job can be rescheduled or

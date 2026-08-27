@@ -182,8 +182,19 @@ export interface StockMovement {
   userId?: string
   referenceNumber: string
   // Traceability back to the schedule job that triggered this movement, when
-  // applicable (currently only the filter-change auto-deduction).
+  // applicable (the filter-change auto-deduction, old and new).
   scheduleJobId?: string
+  // 'pending' rows (from a completed job's recorded filter items — see
+  // ScheduleJobFilterItem) have NOT been applied to products.stockQuantity
+  // yet; every other write path in this app (manual entries, sale
+  // deductions) always inserts 'approved' and behaves exactly as before
+  // this status existed. An admin approving a pending row is what actually
+  // triggers the stock deduction — see approveStockMovement. Optional (not
+  // client-defaulted) so existing manual-entry code doesn't need to know
+  // about it — the database column defaults to 'approved' when omitted.
+  status?: "pending" | "approved"
+  approvedAt?: string
+  approvedBy?: string
 }
 
 export type NotificationType =
@@ -368,6 +379,23 @@ export interface ScheduleJob {
   inventoryDeductedAt?: string
 }
 
+// One row from public.schedule_job_filter_items — the filters (and
+// quantities) a technician/admin recorded as required when completing a job
+// (any jobType, not just "filter_change" — a repair or install visit can
+// surface the same need). This is the single source of truth for "which
+// filters, how many": filter_change_plans/collections link to the job via
+// scheduleJobId and read this list live rather than keeping their own copy.
+// Inserting one automatically creates/reuses that job's Filter Change and
+// Collection records and a pending stock movement — see the
+// ct_filter_change_collection_inventory_link migration.
+export interface ScheduleJobFilterItem {
+  id: string
+  scheduleJobId: string
+  productId: string
+  quantity: number
+  createdAt: string
+}
+
 export interface FilterChangePlan {
   id: string
   orderNumber: string
@@ -379,6 +407,17 @@ export interface FilterChangePlan {
   address: string
   sc: string
   productNo: string
+  // Links back to the real customer/job this plan is for — absent on any
+  // plan created the old way (typed in directly on this page), present on
+  // one auto-created from a completed job's filter items. Optional (rather
+  // than defaulted client-side) so existing manual-creation code doesn't
+  // need to know about it — the database column default ('manual') applies
+  // whenever it's omitted.
+  customerId?: string
+  scheduleJobId?: string
+  // 'ct_completion' for a plan auto-created/updated by a job completion;
+  // 'manual' (the default) for one an admin typed in directly on this page.
+  source?: "manual" | "ct_completion"
   preD?: string
   accD?: string
   serviceman: string
@@ -430,9 +469,23 @@ export interface CollectionPlan {
   collectionDate: string
   amount: number
   status: string
+  // The old AppSheet-imported "C/T" free-text field — unrelated to the C/T
+  // (job completion) automation below; left as-is for backward compatibility
+  // with existing manually-entered rows.
   ct: string
   preD?: string
   accD?: string
   note?: string
   createdAt: string
+  // Same linking/tagging pattern as FilterChangePlan — see its comments.
+  // Both optional (rather than defaulted client-side) so existing manual-
+  // creation code doesn't need to know about them at all — the database
+  // column defaults ('manual' / false) apply whenever they're omitted.
+  customerId?: string
+  scheduleJobId?: string
+  source?: "manual" | "ct_completion"
+  // Set true the moment a completed job records filter items for this
+  // customer — the actual filter list lives on schedule_job_filter_items
+  // (via scheduleJobId), not duplicated here.
+  filterChangeRequired?: boolean
 }

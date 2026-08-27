@@ -13,6 +13,10 @@ type Row = {
   acc_d: string | null
   note: string | null
   created_at: string
+  customer_id: string | null
+  schedule_job_id: string | null
+  source: string
+  filter_change_required: boolean
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -28,6 +32,10 @@ function fromRow(row: Row): CollectionPlan {
     accD: row.acc_d ?? undefined,
     note: row.note ?? undefined,
     createdAt: row.created_at,
+    customerId: row.customer_id ?? undefined,
+    scheduleJobId: row.schedule_job_id ?? undefined,
+    source: (row.source as CollectionPlan["source"]) ?? "manual",
+    filterChangeRequired: row.filter_change_required ?? false,
   }
 }
 
@@ -42,6 +50,7 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
   if (input.preD !== undefined) row.pre_d = input.preD || null
   if (input.accD !== undefined) row.acc_d = input.accD || null
   if (input.note !== undefined) row.note = input.note || null
+  if (input.filterChangeRequired !== undefined) row.filter_change_required = input.filterChangeRequired
   return row
 }
 

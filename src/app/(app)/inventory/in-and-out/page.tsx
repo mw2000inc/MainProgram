@@ -22,7 +22,7 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { getStockMovementsColumns, type StockMovementRow } from "@/components/inventory/stock-movements-columns"
-import { useDeleteStockMovement, useStockMovementRows } from "@/lib/hooks/use-inventory"
+import { useApproveStockMovement, useDeleteStockMovement, useStockMovementRows } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate } from "@/lib/utils"
 
@@ -190,9 +190,10 @@ function DateCountPanel({
 }
 
 export default function InAndOutSummaryPage() {
-  const { can } = useAuth()
+  const { user, can } = useAuth()
   const { data: rows, isPending } = useStockMovementRows()
   const deleteMovement = useDeleteStockMovement()
+  const approveMovement = useApproveStockMovement()
 
   const [selection, setSelection] = React.useState<Selection>(undefined)
   const [formOpen, setFormOpen] = React.useState(false)
@@ -221,13 +222,18 @@ export default function InAndOutSummaryPage() {
       getStockMovementsColumns({
         canEdit: can("inventory:edit"),
         canDelete: can("inventory:delete"),
+        canApprove: can("inventory:edit"),
         onEdit: (m) => {
           setEditing(m)
           setFormOpen(true)
         },
         onDelete: (m) => setDeleting(m),
+        onApprove: (m) => {
+          if (!user) return
+          approveMovement.mutate({ id: m.id, approvedBy: user.id })
+        },
       }),
-    [can]
+    [can, user, approveMovement]
   )
 
   if (isPending) {

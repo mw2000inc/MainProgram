@@ -20,6 +20,7 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
   daily_report_sections: "Daily Report Settings",
   sale_list_entries: "Sale List Entry",
   cp_systems: "CP System",
+  schedule_job_filter_items: "Filter Item",
 }
 
 export function entityTypeLabel(entityType: string | undefined): string {

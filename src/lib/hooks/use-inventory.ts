@@ -65,11 +65,20 @@ export function useStockMovementRows() {
     // Qty Removed + 2nd Hand). Both pools count toward this single running total —
     // only the product's own stock_quantity column tracks the regular pool, so we
     // back-solve the combined opening balance from the live totals of both.
+    //
+    // A 'pending' entry (from a completed job's recorded filter items, not yet
+    // admin-approved) has NOT actually been applied to stock_quantity — it must
+    // be excluded from both the opening back-solve and the running walk, or it
+    // would show a stock change that hasn't really happened yet, and corrupt
+    // the balance shown for every later movement on the same product.
     const actualStockByMovementId = new Map<string, number>()
     const currentStockByMovementId = new Map<string, number>()
     byProduct.forEach((entries, productId) => {
       const product = products.find((p) => p.id === productId)
-      const netRegular = entries.reduce((sum, e) => sum + e.quantityAdded - e.quantityRemoved, 0)
+      const netRegular = entries.reduce(
+        (sum, e) => (e.status === "pending" ? sum : sum + e.quantityAdded - e.quantityRemoved),
+        0
+      )
       const liveRegular = product?.stockQuantity ?? netRegular
       const opening = liveRegular - netRegular
 
@@ -78,12 +87,14 @@ export function useStockMovementRows() {
       let running = opening
       for (const entry of chronological) {
         currentStockByMovementId.set(entry.id, running)
-        running +=
-          entry.quantityAdded -
-          entry.quantityRemoved +
-          entry.secondHandReadyQuantity +
-          entry.secondHandRepairQuantity +
-          entry.demoQuantity
+        if (entry.status !== "pending") {
+          running +=
+            entry.quantityAdded -
+            entry.quantityRemoved +
+            entry.secondHandReadyQuantity +
+            entry.secondHandRepairQuantity +
+            entry.demoQuantity
+        }
         actualStockByMovementId.set(entry.id, running)
       }
     })
@@ -197,6 +208,22 @@ export function useUpdateStockMovement() {
       warnIfLowStock(result)
     },
     onError: (error: Error) => toast.error(error.message || "Failed to update stock movement"),
+  })
+}
+
+export function useApproveStockMovement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, approvedBy }: { id: string; approvedBy: string }) => api.approveStockMovement(id, approvedBy),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
+      qc.invalidateQueries({ queryKey: productsKey })
+      qc.invalidateQueries({ queryKey: ["notifications"] })
+      qc.invalidateQueries({ queryKey: ["activityLogs"] })
+      toast.success(`${result.productName} stock updated`)
+      warnIfLowStock(result)
+    },
+    onError: (error: Error) => toast.error(error.message || "Failed to approve stock movement"),
   })
 }
 

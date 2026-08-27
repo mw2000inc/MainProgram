@@ -3,9 +3,17 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+
+// 'ct_completion' rows were auto-created/updated by a completed job
+// recording its required filters (see the
+// ct_filter_change_collection_inventory_link migration) — 'manual' (the
+// default) is anything typed in directly on this page, same as always.
+function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
+  return source === "ct_completion" ? <StatusBadge tone="secondary" label="Auto (C/T)" /> : <span className="text-muted-foreground">Manual</span>
+}
 
 export function getFilterChangeColumns(): ColumnDef<FilterChangePlan, unknown>[] {
   return [
@@ -56,6 +64,11 @@ export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, un
     },
     { accessorKey: "serviceman", header: "Serviceman" },
     {
+      accessorKey: "source",
+      header: "Source",
+      cell: ({ row }) => <SourceCell source={row.original.source} />,
+    },
+    {
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
@@ -100,6 +113,11 @@ export function getFilterChangeFullColumns({
     { accessorKey: "productNo", header: "Product #" },
     { accessorKey: "serviceman", header: "Serviceman" },
     {
+      accessorKey: "source",
+      header: "Source",
+      cell: ({ row }) => <SourceCell source={row.original.source} />,
+    },
+    {
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
@@ -141,6 +159,7 @@ export const FILTER_CHANGE_EXPORT_COLUMNS = [
   { header: "Acc D", key: "accD" },
   { header: "Product #", key: "productNo" },
   { header: "Serviceman", key: "serviceman" },
+  { header: "Source", key: "source" },
   { header: "Note", key: "note" },
   { header: "Status", key: "status" },
 ]

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { MoreHorizontal, Pencil, Trash2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -9,11 +9,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { StockStatusBadge } from "@/components/shared/status-badge"
+import { StockStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { formatDateTime, getStockStatus } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
 export type { StockMovementRow }
+
+// 'pending' rows are only ever produced by a completed job's recorded
+// filter items (see the ct_filter_change_collection_inventory_link
+// migration) — an ordinary manual/sale movement is always 'approved'.
+function ApprovalStatusBadge({ status }: { status: StockMovementRow["status"] }) {
+  return status === "pending" ? <StatusBadge tone="warning" label="Pending" /> : <StatusBadge tone="success" label="Approved" />
+}
 
 function signedQtyCell(qty: number) {
   if (qty > 0) return <span className="text-success font-medium">+{qty}</span>
@@ -24,13 +31,17 @@ function signedQtyCell(qty: number) {
 export function getStockMovementsColumns({
   canEdit,
   canDelete,
+  canApprove,
   onEdit,
   onDelete,
+  onApprove,
 }: {
   canEdit: boolean
   canDelete: boolean
+  canApprove: boolean
   onEdit: (movement: StockMovementRow) => void
   onDelete: (movement: StockMovementRow) => void
+  onApprove: (movement: StockMovementRow) => void
 }): ColumnDef<StockMovementRow, unknown>[] {
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
     {
@@ -110,9 +121,19 @@ export function getStockMovementsColumns({
       accessorKey: "userName",
       header: "User",
     },
+    {
+      id: "approval",
+      header: "Approval",
+      // Every existing movement (manual entries, sale deductions) is
+      // 'approved' the instant it's inserted, same as always — this column
+      // is only ever meaningfully "Pending" for a row auto-generated from a
+      // completed job's recorded filter items, awaiting an admin's approval
+      // before it actually affects stock.
+      cell: ({ row }) => <ApprovalStatusBadge status={row.original.status} />,
+    },
   ]
 
-  if (canEdit || canDelete) {
+  if (canEdit || canDelete || canApprove) {
     columns.push({
       id: "actions",
       header: "",
@@ -124,6 +145,11 @@ export function getStockMovementsColumns({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {canApprove && row.original.status === "pending" && (
+              <DropdownMenuItem onClick={() => onApprove(row.original)}>
+                <Check className="h-4 w-4" /> Approve
+              </DropdownMenuItem>
+            )}
             {canEdit && (
               <DropdownMenuItem onClick={() => onEdit(row.original)}>
                 <Pencil className="h-4 w-4" /> Edit

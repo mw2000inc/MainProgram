@@ -3,9 +3,19 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
+
+// Set automatically (never by hand) the moment a completed job records
+// filter items for this customer — see the
+// ct_filter_change_collection_inventory_link migration. The actual filter
+// list lives on schedule_job_filter_items, not duplicated here; this just
+// flags that one exists.
+function FilterChangeRequiredCell({ required }: { required: boolean | undefined }) {
+  if (!required) return <span className="text-muted-foreground">—</span>
+  return <StatusBadge tone="warning" label="Required" />
+}
 
 // Matches the old AppSheet Collection Plan columns, minus Product, S/C, and R/N.
 export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
@@ -41,6 +51,11 @@ export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+    },
+    {
+      accessorKey: "filterChangeRequired",
+      header: "Filter Change",
+      cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
   ]
 }
@@ -86,6 +101,11 @@ export function getCollectionsFullColumns({
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+    },
+    {
+      accessorKey: "filterChangeRequired",
+      header: "Filter Change",
+      cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
     {
       accessorKey: "status",

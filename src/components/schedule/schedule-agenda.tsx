@@ -2,12 +2,20 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, Plus, ArrowRight, Printer } from "lucide-react"
+import { CalendarClock, Plus, ArrowRight, Printer, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -22,11 +30,21 @@ import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
+import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
 
+type FilterItemDraft = { key: number; productId: string; quantity: string }
+let filterItemDraftKey = 0
+
+// Filters recorded here automatically create/update this job's Filter
+// Change and Collection records and a pending (not-yet-deducted) inventory
+// transaction per item — see the ct_filter_change_collection_inventory_link
+// migration. Available for any job type, not just "filter_change": a
+// technician can notice the same need during a repair or install visit.
 function MarkJobDoneDialog({
   job,
   onOpenChange,
@@ -35,7 +53,19 @@ function MarkJobDoneDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const updateJob = useUpdateScheduleJob()
+  const createFilterItems = useCreateScheduleJobFilterItems()
+  const { data: products = [] } = useProducts()
   const [remarks, setRemarks] = React.useState(() => job?.remarks ?? "")
+  const [filterChangeRequired, setFilterChangeRequired] = React.useState(false)
+  const [filterItems, setFilterItems] = React.useState<FilterItemDraft[]>([
+    { key: filterItemDraftKey++, productId: "", quantity: "1" },
+  ])
+
+  const saving = updateJob.isPending || createFilterItems.isPending
+
+  function updateItem(key: number, patch: Partial<FilterItemDraft>) {
+    setFilterItems((items) => items.map((i) => (i.key === key ? { ...i, ...patch } : i)))
+  }
 
   return (
     <Dialog open={!!job} onOpenChange={onOpenChange}>
@@ -53,19 +83,85 @@ function MarkJobDoneDialog({
           placeholder="What did you do on this job/errand?"
           autoFocus
         />
+
+        <div className="space-y-3 rounded-md border p-3">
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <Checkbox checked={filterChangeRequired} onCheckedChange={(v) => setFilterChangeRequired(v === true)} />
+            Filter Change Required
+          </label>
+          {filterChangeRequired && (
+            <div className="space-y-2">
+              {filterItems.map((item) => (
+                <div key={item.key} className="flex items-center gap-2">
+                  <Select value={item.productId} onValueChange={(v) => updateItem(item.key, { productId: v })}>
+                    <SelectTrigger className="flex-1 min-w-0">
+                      <SelectValue placeholder="Select filter..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={item.quantity}
+                    onChange={(e) => updateItem(item.key, { quantity: e.target.value })}
+                    className="w-16 shrink-0"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-danger hover:text-danger"
+                    disabled={filterItems.length === 1}
+                    onClick={() => setFilterItems((items) => items.filter((i) => i.key !== item.key))}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setFilterItems((items) => [...items, { key: filterItemDraftKey++, productId: "", quantity: "1" }])}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Filter
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Each filter creates its own inventory transaction, kept Pending until an admin approves it — actual
+                stock isn&apos;t deducted yet.
+              </p>
+            </div>
+          )}
+        </div>
+
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            disabled={updateJob.isPending}
+            disabled={saving}
             onClick={async () => {
               if (!job) return
+              const items = filterChangeRequired
+                ? filterItems
+                    .filter((i) => i.productId && Number(i.quantity) > 0)
+                    .map((i) => ({ productId: i.productId, quantity: Number(i.quantity) }))
+                : []
               await updateJob.mutateAsync({ id: job.id, input: { status: "completed", remarks } })
+              if (items.length > 0) {
+                await createFilterItems.mutateAsync({ scheduleJobId: job.id, items })
+              }
               onOpenChange(false)
             }}
           >
-            {updateJob.isPending ? "Saving..." : "Save & Mark Done"}
+            {saving ? "Saving..." : "Save & Mark Done"}
           </Button>
         </DialogFooter>
       </DialogContent>

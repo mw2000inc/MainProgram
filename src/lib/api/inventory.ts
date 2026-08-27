@@ -106,6 +106,9 @@ type StockMovementRow = {
   user_id: string | null
   reference_number: string
   schedule_job_id: string | null
+  status: string
+  approved_at: string | null
+  approved_by: string | null
 }
 
 function movementFromRow(row: StockMovementRow): StockMovement {
@@ -123,6 +126,9 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     userId: row.user_id ?? undefined,
     referenceNumber: row.reference_number,
     scheduleJobId: row.schedule_job_id ?? undefined,
+    status: (row.status as StockMovement["status"]) ?? "approved",
+    approvedAt: row.approved_at ?? undefined,
+    approvedBy: row.approved_by ?? undefined,
   }
 }
 
@@ -213,7 +219,26 @@ export async function updateStockMovement(
 }
 
 export async function deleteStockMovement(id: string): Promise<void> {
-  // A DB trigger reverses this movement's effect on products.stock_quantity.
+  // A DB trigger reverses this movement's effect on products.stock_quantity —
+  // a no-op for a still-pending row, since a pending one was never applied.
   const { error } = await supabase.from("stock_movements").delete().eq("id", id)
   if (error) throw error
+}
+
+// Admin-only (see stock_movements_update_admin RLS) — transitions a pending
+// movement (from a completed job's recorded filter items) to approved,
+// which is what a DB trigger actually reacts to by applying the quantity to
+// products.stock_quantity. approvedBy is the current admin's own id, a
+// real server-verified value the same way every other "who approved this"
+// field in this app is (see the admin-users API route's comment).
+export async function approveStockMovement(id: string, approvedBy: string): Promise<StockMovementResult> {
+  const { data, error } = await supabase
+    .from("stock_movements")
+    .update({ status: "approved", approved_at: new Date().toISOString(), approved_by: approvedBy })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  const movement = movementFromRow(data as StockMovementRow)
+  return resultingProductStock(movement.productId, movement)
 }
