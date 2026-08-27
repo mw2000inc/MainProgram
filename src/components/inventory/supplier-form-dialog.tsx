@@ -22,7 +22,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateSupplier } from "@/lib/hooks/use-inventory"
 import type { Supplier } from "@/lib/types"
 
@@ -44,8 +43,7 @@ export function SupplierFormDialog({
   onOpenChange: (open: boolean) => void
   onCreated?: (supplier: Supplier) => void
 }) {
-  const { user } = useAuth()
-  const createSupplier = useCreateSupplier(user?.id ?? "")
+  const createSupplier = useCreateSupplier()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),

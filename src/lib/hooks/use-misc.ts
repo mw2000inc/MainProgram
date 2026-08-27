@@ -12,11 +12,10 @@ export function useUsers() {
   return useQuery({ queryKey: usersKey, queryFn: api.listUsers })
 }
 
-export function useCreateUser(actorId: string) {
+export function useCreateUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { name: string; email: string; role: User["role"]; password: string }) =>
-      api.createUser(input, actorId),
+    mutationFn: (input: { name: string; email: string; role: User["role"]; password: string }) => api.createUser(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersKey })
       qc.invalidateQueries({ queryKey: activityLogsKey })
@@ -26,7 +25,7 @@ export function useCreateUser(actorId: string) {
   })
 }
 
-export function useUpdateUser(actorId: string) {
+export function useUpdateUser() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({
@@ -35,7 +34,7 @@ export function useUpdateUser(actorId: string) {
     }: {
       id: string
       input: Partial<Pick<User, "name" | "email" | "role" | "avatarUrl" | "phone">>
-    }) => api.updateUser(id, input, actorId),
+    }) => api.updateUser(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersKey })
       qc.invalidateQueries({ queryKey: activityLogsKey })
@@ -45,10 +44,10 @@ export function useUpdateUser(actorId: string) {
   })
 }
 
-export function useDeleteUser(actorId: string) {
+export function useDeleteUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.deleteUser(id, actorId),
+    mutationFn: (id: string) => api.deleteUser(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersKey })
       qc.invalidateQueries({ queryKey: activityLogsKey })
@@ -82,10 +81,10 @@ export function useSettings() {
   return useQuery({ queryKey: settingsKey, queryFn: api.getSettings })
 }
 
-export function useUpdateSettings(actorId: string) {
+export function useUpdateSettings() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Partial<CompanySettings>) => api.updateSettings(input, actorId),
+    mutationFn: (input: Partial<CompanySettings>) => api.updateSettings(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKey })
       qc.invalidateQueries({ queryKey: activityLogsKey })

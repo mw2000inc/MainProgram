@@ -36,7 +36,7 @@ export default function InventoryPage() {
   const { data: products = [], isPending: p1 } = useProducts()
   const { data: suppliers = [], isPending: p2 } = useSuppliers()
   const { data: movements = [], isPending: p3 } = useStockMovements()
-  const deleteProduct = useDeleteProduct(user?.id ?? "")
+  const deleteProduct = useDeleteProduct()
   const isAdmin = user?.role === "admin"
 
   const [selectedDate, setSelectedDate] = React.useState(today)

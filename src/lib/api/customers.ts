@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase/client"
-import { logActivity } from "@/lib/api/activity"
 import type { Customer } from "@/lib/types"
 
 type CustomerRow = {
@@ -99,20 +98,17 @@ export async function getCustomer(id: string): Promise<Customer | undefined> {
 export async function createCustomer(
   // contractNumber is optional on create — the DB auto-fills it from order_number
   // if omitted (see the set_customer_order_number trigger).
-  input: Omit<Customer, "id" | "createdAt" | "orderNumber" | "contractNumber"> & { contractNumber?: string },
-  actorId: string
+  input: Omit<Customer, "id" | "createdAt" | "orderNumber" | "contractNumber"> & { contractNumber?: string }
 ): Promise<Customer> {
   const { data, error } = await supabase.from("customers").insert(toRow(input)).select().single()
   if (error) throw error
-  await logActivity(actorId, "Customer Added")
   return fromRow(data as CustomerRow)
 }
 
 export async function updateCustomer(
   id: string,
   // orderNumber is editable here (unlike on create, where it's auto-generated).
-  input: Partial<Omit<Customer, "id" | "createdAt">>,
-  actorId: string
+  input: Partial<Omit<Customer, "id" | "createdAt">>
 ): Promise<Customer> {
   const { data, error } = await supabase.from("customers").update(toRow(input)).eq("id", id).select().single()
   if (error) {
@@ -123,7 +119,6 @@ export async function updateCustomer(
     }
     throw error
   }
-  await logActivity(actorId, "Customer Edited")
   return fromRow(data as CustomerRow)
 }
 
@@ -136,8 +131,7 @@ export async function updateCustomerCoordinates(id: string, latitude: number, lo
   if (error) throw error
 }
 
-export async function deleteCustomer(id: string, actorId: string): Promise<void> {
+export async function deleteCustomer(id: string): Promise<void> {
   const { error } = await supabase.from("customers").delete().eq("id", id)
   if (error) throw error
-  await logActivity(actorId, "Customer Deleted")
 }

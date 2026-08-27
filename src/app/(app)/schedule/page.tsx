@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
@@ -179,6 +180,7 @@ export default function SchedulePage() {
                 <DetailField label="Notes" value={selected.notes} className="sm:col-span-2" />
                 <DetailField label="Secondary Address" value={selected.secondaryAddress} className="sm:col-span-2" />
                 <DetailField label="Remarks" value={selected.remarks} className="sm:col-span-2" />
+                <LastEditedIndicator entityType="schedule_jobs" entityId={selected.id} className="text-xs text-muted-foreground sm:col-span-2" />
               </DetailPanel>
             )
           }

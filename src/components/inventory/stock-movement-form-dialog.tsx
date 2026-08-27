@@ -133,7 +133,7 @@ function AddMovementForm({
 }) {
   const { user } = useAuth()
   const { data: products = [] } = useProducts()
-  const addMovement = useAddStockMovement(user?.id ?? "")
+  const addMovement = useAddStockMovement()
 
   const defaultsFor = (direction: "in" | "out"): AddFormValues => ({
     productId: "",
@@ -337,9 +337,8 @@ function EditMovementForm({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { user } = useAuth()
   const { data: products = [] } = useProducts()
-  const updateMovement = useUpdateStockMovement(user?.id ?? "")
+  const updateMovement = useUpdateStockMovement()
   const selectedProduct = products.find((p) => p.id === movement.productId)
   const isSaleOrigin = movement.reason === "Sale"
   const isFilterChangeOrigin = movement.reason === "Filter Change"

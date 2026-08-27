@@ -55,5 +55,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  // handle_new_user() (the trigger that actually inserts the profiles row)
+  // runs under this service-role call, which has no browser session and so
+  // no auth.uid() — the audit trigger on profiles can't attribute the
+  // insert to an admin on its own here. `caller.id` above is a real,
+  // server-verified value (from this route's own session check, not
+  // anything the client sent), so it's safe to set explicitly; the audit
+  // trigger's coalesce(auth.uid(), ...) fallback picks it up since
+  // auth.uid() is null in exactly this one path.
+  await admin.from("profiles").update({ created_by: caller.id, updated_by: caller.id }).eq("id", data.user.id)
+
   return NextResponse.json({ id: data.user.id })
 }

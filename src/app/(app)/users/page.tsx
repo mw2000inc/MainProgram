@@ -17,7 +17,7 @@ import type { User } from "@/lib/types"
 export default function UsersPage() {
   const { user: actor } = useAuth()
   const { data: users = [], isPending } = useUsers()
-  const deleteUser = useDeleteUser(actor?.id ?? "")
+  const deleteUser = useDeleteUser()
 
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<User | undefined>(undefined)

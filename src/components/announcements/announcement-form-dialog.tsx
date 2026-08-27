@@ -23,7 +23,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateAnnouncement, useUpdateAnnouncement } from "@/lib/hooks/use-announcements"
 import type { Announcement } from "@/lib/types"
 
@@ -43,8 +42,7 @@ export function AnnouncementFormDialog({
   onOpenChange: (open: boolean) => void
   announcement?: Announcement
 }) {
-  const { user } = useAuth()
-  const createAnnouncement = useCreateAnnouncement(user?.id ?? "")
+  const createAnnouncement = useCreateAnnouncement()
   const updateAnnouncement = useUpdateAnnouncement()
   const isEdit = !!announcement
 

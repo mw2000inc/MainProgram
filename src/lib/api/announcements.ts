@@ -52,12 +52,8 @@ export async function listAnnouncements(): Promise<Announcement[]> {
   return (data as AnnouncementRow[]).map(fromRow)
 }
 
-export async function createAnnouncement(input: { title: string; body: string }, actorId: string): Promise<Announcement> {
-  const { data, error } = await supabase
-    .from("announcements")
-    .insert({ title: input.title, body: input.body, created_by: actorId })
-    .select()
-    .single()
+export async function createAnnouncement(input: { title: string; body: string }): Promise<Announcement> {
+  const { data, error } = await supabase.from("announcements").insert({ title: input.title, body: input.body }).select().single()
   if (error) throw error
   return fromRow(data as AnnouncementRow)
 }

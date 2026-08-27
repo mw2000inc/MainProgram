@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateUser, useUpdateUser } from "@/lib/hooks/use-misc"
 import type { User } from "@/lib/types"
 
@@ -60,9 +59,8 @@ export function UserFormDialog({
   onOpenChange: (open: boolean) => void
   user?: User
 }) {
-  const { user: actor } = useAuth()
-  const createUser = useCreateUser(actor?.id ?? "")
-  const updateUser = useUpdateUser(actor?.id ?? "")
+  const createUser = useCreateUser()
+  const updateUser = useUpdateUser()
   const isEdit = !!user
 
   const form = useForm<FormValues>({

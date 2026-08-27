@@ -32,6 +32,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ContractStatusBadge } from "@/components/shared/status-badge"
+import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
@@ -56,7 +57,7 @@ export default function CustomerProfilePage() {
   const { data: customer, isPending } = useCustomer(params.id)
   const { data: settings } = useSettings()
   const { data: saleListEntries = [] } = useSaleListEntries()
-  const updateCustomer = useUpdateCustomer(user?.id ?? "")
+  const updateCustomer = useUpdateCustomer()
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
   const [directionsOpen, setDirectionsOpen] = React.useState(false)
@@ -152,6 +153,7 @@ export default function CustomerProfilePage() {
               Member ID: <span className="font-mono">{customer.id}</span> &middot; Registered{" "}
               {formatDate(customer.createdAt)}
             </p>
+            <LastEditedIndicator entityType="customers" entityId={customer.id} className="text-xs text-muted-foreground mt-0.5" />
           </div>
           <div className="flex items-center gap-3">
             {/* Persistent on the page itself (not just inside the printable-card

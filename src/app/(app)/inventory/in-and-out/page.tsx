@@ -190,9 +190,9 @@ function DateCountPanel({
 }
 
 export default function InAndOutSummaryPage() {
-  const { user, can } = useAuth()
+  const { can } = useAuth()
   const { data: rows, isPending } = useStockMovementRows()
-  const deleteMovement = useDeleteStockMovement(user?.id ?? "")
+  const deleteMovement = useDeleteStockMovement()
 
   const [selection, setSelection] = React.useState<Selection>(undefined)
   const [formOpen, setFormOpen] = React.useState(false)

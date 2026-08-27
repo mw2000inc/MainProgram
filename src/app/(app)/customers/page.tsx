@@ -37,11 +37,11 @@ import { parseISO } from "date-fns"
 
 export default function CustomersPage() {
   const router = useRouter()
-  const { user, can } = useAuth()
+  const { can } = useAuth()
   const { data: customers = [], isPending } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const { data: settings } = useSettings()
-  const deleteCustomer = useDeleteCustomer(user?.id ?? "")
+  const deleteCustomer = useDeleteCustomer()
 
   const [statusFilter, setStatusFilter] = React.useState<"all" | ContractStatus>("all")
   const [monthYear, setMonthYear] = React.useState<MonthYearValue>({ month: "all", year: "all" })

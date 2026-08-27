@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase/client"
-import { logActivity } from "@/lib/api/activity"
 import type { AppNotification, CompanySettings, ContactEntry, User } from "@/lib/types"
 
 type ProfileRow = {
@@ -32,10 +31,7 @@ export async function listUsers(): Promise<User[]> {
 
 // Creating a user with a password requires the service-role key, so this goes
 // through a server route rather than a direct client-side insert.
-export async function createUser(
-  input: { name: string; email: string; role: User["role"]; password: string },
-  actorId: string
-): Promise<User> {
+export async function createUser(input: { name: string; email: string; role: User["role"]; password: string }): Promise<User> {
   const res = await fetch("/api/admin/users", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -46,15 +42,13 @@ export async function createUser(
     throw new Error(error ?? "Failed to create user")
   }
   const { id } = await res.json()
-  await logActivity(actorId, "User Created")
   const { data } = await supabase.from("profiles").select("*").eq("id", id).single()
   return userFromRow(data as ProfileRow)
 }
 
 export async function updateUser(
   id: string,
-  input: Partial<Pick<User, "name" | "email" | "role" | "avatarUrl" | "phone">>,
-  actorId: string
+  input: Partial<Pick<User, "name" | "email" | "role" | "avatarUrl" | "phone">>
 ): Promise<User> {
   const row: Record<string, unknown> = {}
   if (input.name !== undefined) row.name = input.name
@@ -65,17 +59,15 @@ export async function updateUser(
 
   const { data, error } = await supabase.from("profiles").update(row).eq("id", id).select().single()
   if (error) throw error
-  await logActivity(actorId, "User Edited")
   return userFromRow(data as ProfileRow)
 }
 
-export async function deleteUser(id: string, actorId: string): Promise<void> {
+export async function deleteUser(id: string): Promise<void> {
   const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" })
   if (!res.ok) {
     const { error } = await res.json()
     throw new Error(error ?? "Failed to delete user")
   }
-  await logActivity(actorId, "User Deleted")
 }
 
 type NotificationRow = {
@@ -171,7 +163,7 @@ export async function getSettings(): Promise<CompanySettings> {
   return data ? settingsFromRow(data as SettingsRow) : { ...DEFAULT_COMPANY_SETTINGS }
 }
 
-export async function updateSettings(input: Partial<CompanySettings>, actorId: string): Promise<CompanySettings> {
+export async function updateSettings(input: Partial<CompanySettings>): Promise<CompanySettings> {
   const row: Record<string, unknown> = {}
   if (input.companyName !== undefined) row.company_name = input.companyName
   if (input.companyLogoUrl !== undefined) row.company_logo_url = input.companyLogoUrl || null
@@ -196,6 +188,5 @@ export async function updateSettings(input: Partial<CompanySettings>, actorId: s
     .select()
     .single()
   if (error) throw error
-  await logActivity(actorId, "Settings Updated")
   return settingsFromRow(data as SettingsRow)
 }

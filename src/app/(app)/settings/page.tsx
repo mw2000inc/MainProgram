@@ -12,7 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdminGuard } from "@/components/shared/admin-guard"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
-import { useAuth } from "@/lib/auth/auth-context"
 import type { ContactEntry } from "@/lib/types"
 
 function ContactEntryList({
@@ -71,9 +70,8 @@ function ContactEntryList({
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth()
   const { data: settings, isPending } = useSettings()
-  const updateSettings = useUpdateSettings(user?.id ?? "")
+  const updateSettings = useUpdateSettings()
 
   const [companyName, setCompanyName] = React.useState("")
   const [logoUrl, setLogoUrl] = React.useState<string | undefined>(undefined)

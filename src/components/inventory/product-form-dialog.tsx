@@ -27,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
-import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
 import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
 import type { Product } from "@/lib/types"
@@ -71,11 +70,10 @@ export function ProductFormDialog({
   onOpenChange: (open: boolean) => void
   product?: Product
 }) {
-  const { user } = useAuth()
   const queryClient = useQueryClient()
   const { data: suppliers = [] } = useSuppliers()
-  const createProduct = useCreateProduct(user?.id ?? "")
-  const updateProduct = useUpdateProduct(user?.id ?? "")
+  const createProduct = useCreateProduct()
+  const updateProduct = useUpdateProduct()
   const isEdit = !!product
   const [newSupplierOpen, setNewSupplierOpen] = React.useState(false)
 

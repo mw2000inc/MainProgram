@@ -9,10 +9,10 @@ export function useAnnouncements() {
   return useQuery({ queryKey: announcementsKey, queryFn: api.listAnnouncements })
 }
 
-export function useCreateAnnouncement(actorId: string) {
+export function useCreateAnnouncement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { title: string; body: string }) => api.createAnnouncement(input, actorId),
+    mutationFn: (input: { title: string; body: string }) => api.createAnnouncement(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: announcementsKey })
       toast.success("Announcement posted")

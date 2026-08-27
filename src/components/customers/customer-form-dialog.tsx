@@ -23,7 +23,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useAuth } from "@/lib/auth/auth-context"
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import type { Customer } from "@/lib/types"
 
@@ -85,9 +84,8 @@ export function CustomerFormDialog({
   customer?: Customer
   onCreated?: (customer: Customer) => void
 }) {
-  const { user } = useAuth()
-  const createCustomer = useCreateCustomer(user?.id ?? "")
-  const updateCustomer = useUpdateCustomer(user?.id ?? "")
+  const createCustomer = useCreateCustomer()
+  const updateCustomer = useUpdateCustomer()
   const isEdit = !!customer
 
   const form = useForm<FormValues>({

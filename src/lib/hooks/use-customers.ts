@@ -17,11 +17,11 @@ export function useCustomer(id: string | undefined) {
   })
 }
 
-export function useCreateCustomer(actorId: string) {
+export function useCreateCustomer() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: Omit<Customer, "id" | "createdAt" | "orderNumber" | "contractNumber"> & { contractNumber?: string }) =>
-      api.createCustomer(input, actorId),
+      api.createCustomer(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: customersKey })
       qc.invalidateQueries({ queryKey: ["contracts"] })
@@ -33,11 +33,11 @@ export function useCreateCustomer(actorId: string) {
   })
 }
 
-export function useUpdateCustomer(actorId: string) {
+export function useUpdateCustomer() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<Omit<Customer, "id" | "createdAt">> }) =>
-      api.updateCustomer(id, input, actorId),
+      api.updateCustomer(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: customersKey })
       qc.invalidateQueries({ queryKey: ["contracts"] })
@@ -48,10 +48,10 @@ export function useUpdateCustomer(actorId: string) {
   })
 }
 
-export function useDeleteCustomer(actorId: string) {
+export function useDeleteCustomer() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.deleteCustomer(id, actorId),
+    mutationFn: (id: string) => api.deleteCustomer(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: customersKey })
       qc.invalidateQueries({ queryKey: ["contracts"] })

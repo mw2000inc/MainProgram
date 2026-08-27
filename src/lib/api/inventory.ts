@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase/client"
-import { logActivity } from "@/lib/api/activity"
 import type { Product, StockMovement, Supplier } from "@/lib/types"
 
 type ProductRow = {
@@ -54,29 +53,20 @@ export async function listProducts(): Promise<Product[]> {
   return (data as ProductRow[]).map(productFromRow)
 }
 
-export async function createProduct(
-  input: Omit<Product, "id" | "dateAdded" | "lastUpdated">,
-  actorId: string
-): Promise<Product> {
+export async function createProduct(input: Omit<Product, "id" | "dateAdded" | "lastUpdated">): Promise<Product> {
   const { data, error } = await supabase.from("products").insert(productToRow(input)).select().single()
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
   return productFromRow(data as ProductRow)
 }
 
-export async function updateProduct(
-  id: string,
-  input: Partial<Omit<Product, "id" | "dateAdded">>,
-  actorId: string
-): Promise<Product> {
+export async function updateProduct(id: string, input: Partial<Omit<Product, "id" | "dateAdded">>): Promise<Product> {
   const row = { ...productToRow(input), last_updated: new Date().toISOString().slice(0, 10) }
   const { data, error } = await supabase.from("products").update(row).eq("id", id).select().single()
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
   return productFromRow(data as ProductRow)
 }
 
-export async function deleteProduct(id: string, actorId: string): Promise<void> {
+export async function deleteProduct(id: string): Promise<void> {
   const { error } = await supabase.from("products").delete().eq("id", id)
   if (error) {
     // 23503 = foreign key violation. Stock movements cascade-delete with the product,
@@ -88,7 +78,6 @@ export async function deleteProduct(id: string, actorId: string): Promise<void> 
     }
     throw error
   }
-  await logActivity(actorId, "Inventory Updated")
 }
 
 export async function listSuppliers(): Promise<Supplier[]> {
@@ -97,10 +86,9 @@ export async function listSuppliers(): Promise<Supplier[]> {
   return data as Supplier[]
 }
 
-export async function createSupplier(input: Omit<Supplier, "id">, actorId: string): Promise<Supplier> {
+export async function createSupplier(input: Omit<Supplier, "id">): Promise<Supplier> {
   const { data, error } = await supabase.from("suppliers").insert(input).select().single()
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
   return data as Supplier
 }
 
@@ -174,10 +162,7 @@ async function resultingProductStock(productId: string, movement: StockMovement)
   }
 }
 
-export async function addStockMovement(
-  input: Omit<StockMovement, "id" | "createdAt">,
-  actorId: string
-): Promise<StockMovementResult> {
+export async function addStockMovement(input: Omit<StockMovement, "id" | "createdAt">): Promise<StockMovementResult> {
   const { data, error } = await supabase
     .from("stock_movements")
     .insert({
@@ -195,7 +180,6 @@ export async function addStockMovement(
     .select()
     .single()
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
   const movement = movementFromRow(data as StockMovementRow)
   return resultingProductStock(movement.productId, movement)
 }
@@ -208,8 +192,7 @@ export async function updateStockMovement(
   input: Pick<
     StockMovement,
     "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
-  >,
-  actorId: string
+  >
 ): Promise<StockMovementResult> {
   const { data, error } = await supabase
     .from("stock_movements")
@@ -225,14 +208,12 @@ export async function updateStockMovement(
     .select()
     .single()
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
   const movement = movementFromRow(data as StockMovementRow)
   return resultingProductStock(movement.productId, movement)
 }
 
-export async function deleteStockMovement(id: string, actorId: string): Promise<void> {
+export async function deleteStockMovement(id: string): Promise<void> {
   // A DB trigger reverses this movement's effect on products.stock_quantity.
   const { error } = await supabase.from("stock_movements").delete().eq("id", id)
   if (error) throw error
-  await logActivity(actorId, "Inventory Updated")
 }

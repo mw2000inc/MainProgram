@@ -106,10 +106,10 @@ export function useStockMovementRows() {
   return { data, isPending: p1 || p2 || p3 }
 }
 
-export function useCreateProduct(actorId: string) {
+export function useCreateProduct() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<Product, "id" | "dateAdded" | "lastUpdated">) => api.createProduct(input, actorId),
+    mutationFn: (input: Omit<Product, "id" | "dateAdded" | "lastUpdated">) => api.createProduct(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
@@ -119,11 +119,11 @@ export function useCreateProduct(actorId: string) {
   })
 }
 
-export function useUpdateProduct(actorId: string) {
+export function useUpdateProduct() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<Omit<Product, "id" | "dateAdded">> }) =>
-      api.updateProduct(id, input, actorId),
+      api.updateProduct(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["notifications"] })
@@ -134,10 +134,10 @@ export function useUpdateProduct(actorId: string) {
   })
 }
 
-export function useDeleteProduct(actorId: string) {
+export function useDeleteProduct() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.deleteProduct(id, actorId),
+    mutationFn: (id: string) => api.deleteProduct(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
@@ -147,10 +147,10 @@ export function useDeleteProduct(actorId: string) {
   })
 }
 
-export function useCreateSupplier(actorId: string) {
+export function useCreateSupplier() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<Supplier, "id">) => api.createSupplier(input, actorId),
+    mutationFn: (input: Omit<Supplier, "id">) => api.createSupplier(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: suppliersKey })
       toast.success("Supplier added successfully")
@@ -159,10 +159,10 @@ export function useCreateSupplier(actorId: string) {
   })
 }
 
-export function useAddStockMovement(actorId: string) {
+export function useAddStockMovement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<StockMovement, "id" | "createdAt">) => api.addStockMovement(input, actorId),
+    mutationFn: (input: Omit<StockMovement, "id" | "createdAt">) => api.addStockMovement(input),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: productsKey })
@@ -175,7 +175,7 @@ export function useAddStockMovement(actorId: string) {
   })
 }
 
-export function useUpdateStockMovement(actorId: string) {
+export function useUpdateStockMovement() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({
@@ -187,7 +187,7 @@ export function useUpdateStockMovement(actorId: string) {
         StockMovement,
         "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
       >
-    }) => api.updateStockMovement(id, input, actorId),
+    }) => api.updateStockMovement(id, input),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: productsKey })
@@ -200,10 +200,10 @@ export function useUpdateStockMovement(actorId: string) {
   })
 }
 
-export function useDeleteStockMovement(actorId: string) {
+export function useDeleteStockMovement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.deleteStockMovement(id, actorId),
+    mutationFn: (id: string) => api.deleteStockMovement(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: productsKey })
