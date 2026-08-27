@@ -240,12 +240,32 @@ export interface PanelSize {
 }
 
 // Each admin's own Daily Report layout — see daily_report_layouts (one row
-// per user, RLS-scoped to its owner). Staff never read or write this; they
-// always see the hardcoded default order/sizes/mode.
+// per user, RLS-scoped to its owner). A technician never reads or writes
+// this; they always see the hardcoded default order/sizes/mode.
 export interface DailyReportLayout {
   layout: string[]
   panelSizes: Record<string, PanelSize>
   layoutMode: "stacked" | "grid"
+}
+
+// One row from public.activity_logs — written exclusively by the
+// log_audit_event() trigger (see the audit_logging migration), never by
+// application code, so userId always reflects the actual authenticated
+// admin who made the change (or a technician, for the handful of tables
+// they can still write to, e.g. marking their own schedule job done).
+// oldValues/newValues hold only the columns that actually changed on an
+// update — the full row on insert/delete.
+export interface ActivityLogEntry {
+  id: string
+  userId?: string
+  userName: string
+  action: "insert" | "update" | "delete"
+  entityType?: string
+  entityId?: string
+  description?: string
+  oldValues: Record<string, unknown>
+  newValues: Record<string, unknown>
+  createdAt: string
 }
 
 export interface Announcement {
