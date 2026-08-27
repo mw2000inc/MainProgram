@@ -73,6 +73,10 @@ export const PRODUCT_CATALOG: { group: string; items: { code: string; name: stri
     group: "PR",
     items: [{ code: "600", name: "PR) Pureal DIY" }],
   },
+  {
+    group: "PT",
+    items: [{ code: "1151", name: "Pre-Filtration Housing Package (1 stage)" }],
+  },
 ]
 
 export function formatProductOption(code: string, name: string): string {

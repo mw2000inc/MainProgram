@@ -4,7 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { addYears, format, parseISO } from "date-fns"
+import { addMonths, addYears, format, parseISO } from "date-fns"
 import {
   Dialog,
   DialogContent,
@@ -99,8 +99,23 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
   }
 }
 
-function oneYearLater(dateStr: string): string {
-  return format(addYears(parseISO(dateStr), 1), "yyyy-MM-dd")
+// C/T is a free-typed combobox (see CT_OPTIONS), not a fixed enum, so this
+// always needs a default for anything that isn't one of the three shorter
+// intervals below — that covers "Yearly" itself, a blank/unset C/T, and any
+// other custom value someone types, all falling back to the original
+// add-one-year behavior.
+function calculateCpEnd(cpStartStr: string, ct: string | undefined): string {
+  const start = parseISO(cpStartStr)
+  switch (ct) {
+    case "Monthly":
+      return format(addMonths(start, 1), "yyyy-MM-dd")
+    case "Quarterly":
+      return format(addMonths(start, 3), "yyyy-MM-dd")
+    case "Half Year":
+      return format(addMonths(start, 6), "yyyy-MM-dd")
+    default:
+      return format(addYears(start, 1), "yyyy-MM-dd")
+  }
 }
 
 export function SaleListFormDialog({
@@ -134,6 +149,7 @@ export function SaleListFormDialog({
   // entry / a blank CP end, so the very next CP start edit fills it in.
   const cpEndTouchedRef = React.useRef(!!entry?.cpEnd)
   const cpStartValue = form.watch("cpStart")
+  const ctValue = form.watch("ct")
 
   React.useEffect(() => {
     if (open) form.reset(defaultValues(entry, defaultCustomerId))
@@ -143,9 +159,9 @@ export function SaleListFormDialog({
 
   React.useEffect(() => {
     if (!cpStartValue || cpEndTouchedRef.current) return
-    form.setValue("cpEnd", oneYearLater(cpStartValue))
+    form.setValue("cpEnd", calculateCpEnd(cpStartValue, ctValue))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cpStartValue])
+  }, [cpStartValue, ctValue])
 
   async function onSubmit(values: FormValues) {
     const input = {
