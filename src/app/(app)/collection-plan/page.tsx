@@ -14,6 +14,7 @@ import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
 import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
@@ -40,6 +41,7 @@ function CollectionPlanPageContent() {
   const [filteredRows, setFilteredRows] = React.useState<CollectionPlan[]>(entries)
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  useDeepLinkNotFoundToast(initialId, isPending, entries.some((e) => e.id === initialId))
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()

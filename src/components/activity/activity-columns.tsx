@@ -1,11 +1,19 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
+import { History } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { actionLabel, entityTypeLabel } from "@/lib/activity-log-config"
 import { formatDateTime } from "@/lib/utils"
 import type { ActivityLogEntry } from "@/lib/types"
 
-export function getActivityColumns(actorLabel: string): ColumnDef<ActivityLogEntry, unknown>[] {
+// The row itself now navigates to the record (see ActivityLogView's
+// onRowClick) — this button is the only way left to see the before/after
+// field diff, so it's kept as an explicit action rather than dropped.
+export function getActivityColumns(
+  actorLabel: string,
+  onViewDetails: (entry: ActivityLogEntry) => void
+): ColumnDef<ActivityLogEntry, unknown>[] {
   return [
     {
       accessorKey: "userName",
@@ -26,6 +34,24 @@ export function getActivityColumns(actorLabel: string): ColumnDef<ActivityLogEnt
       accessorKey: "createdAt",
       header: "Date & Time",
       cell: ({ row }) => formatDateTime(row.original.createdAt),
+    },
+    {
+      id: "details",
+      header: "",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="View field changes"
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewDetails(row.original)
+          }}
+        >
+          <History className="h-3.5 w-3.5" />
+        </Button>
+      ),
     },
   ]
 }

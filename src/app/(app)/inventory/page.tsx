@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { parseISO } from "date-fns"
 import { ArrowLeftRight, Package, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import { DateControl } from "@/components/dashboard/date-control"
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog"
 import { getInventoryColumns, type ProductRow } from "@/components/inventory/inventory-columns"
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { getStockStatus } from "@/lib/utils"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
@@ -31,13 +33,19 @@ function today() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function InventoryPage() {
+function InventoryContent() {
   const { user, can } = useAuth()
   const { data: products = [], isPending: p1 } = useProducts()
   const { data: suppliers = [], isPending: p2 } = useSuppliers()
   const { data: movements = [], isPending: p3 } = useStockMovements()
   const deleteProduct = useDeleteProduct()
   const isAdmin = user?.role === "admin"
+
+  // Deep link from the Activity Log (?id=<productId>) — opens that product's
+  // edit dialog directly, the only "view" a product has in this app.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
+  const openedInitialRef = React.useRef(false)
 
   const [selectedDate, setSelectedDate] = React.useState(today)
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
@@ -49,6 +57,18 @@ export default function InventoryPage() {
   const [filteredRows, setFilteredRows] = React.useState<ProductRow[]>([])
 
   const isPending = p1 || p2 || p3
+
+  useDeepLinkNotFoundToast(initialId, isPending, products.some((p) => p.id === initialId))
+
+  React.useEffect(() => {
+    if (!initialId || isPending || openedInitialRef.current) return
+    const match = products.find((p) => p.id === initialId)
+    if (!match) return
+    openedInitialRef.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditing(match)
+    setFormOpen(true)
+  }, [initialId, isPending, products])
 
   // Per-product balance as of the selected Date. Each bucket's live (all-time)
   // total is a real anchor — products.stock_quantity for Brand New (kept in sync
@@ -300,5 +320,22 @@ export default function InventoryPage() {
         }}
       />
     </div>
+  )
+}
+
+function InventoryFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function InventoryPage() {
+  return (
+    <React.Suspense fallback={<InventoryFallback />}>
+      <InventoryContent />
+    </React.Suspense>
   )
 }

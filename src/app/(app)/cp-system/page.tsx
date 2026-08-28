@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Layers, ClipboardCheck, Wrench, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,6 +25,7 @@ import { useCpSystems, useDeleteCpSystem, useUpdateCpSystem } from "@/lib/hooks/
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
 
@@ -34,10 +36,14 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 // Sales_Lists/Repairs) once a row is opened. Read-only for staff; admins
 // manage it here. Not yet wired into the filter-change scheduling cron (see
 // the migration's own comment) — this is just the catalog.
-export default function CpSystemPage() {
+function CpSystemContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: systems = [], isPending: p1 } = useCpSystems()
+
+  // Deep link from the Activity Log (?id=<systemId>).
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
   const { data: saleListEntries = [], isPending: p2 } = useSaleListEntries()
   const { data: repairPlans = [], isPending: p3 } = useRepairPlans()
   const { data: customers = [], isPending: p4 } = useCustomers()
@@ -59,8 +65,9 @@ export default function CpSystemPage() {
 
   const isPending = p1 || p2 || p3 || p4
 
-  const selection = useSplitViewSelection(systems)
+  const selection = useSplitViewSelection(systems, initialId)
   const selected = selection.selected
+  useDeepLinkNotFoundToast(initialId, isPending, systems.some((s) => s.id === initialId))
 
   const columns = React.useMemo(
     () =>
@@ -291,5 +298,22 @@ export default function CpSystemPage() {
         }}
       />
     </div>
+  )
+}
+
+function CpSystemFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function CpSystemPage() {
+  return (
+    <React.Suspense fallback={<CpSystemFallback />}>
+      <CpSystemContent />
+    </React.Suspense>
   )
 }

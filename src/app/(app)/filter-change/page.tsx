@@ -14,6 +14,7 @@ import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS } from "@/components/filter-change/filter-change-columns"
 import { useDeleteFilterChangePlans, useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
@@ -40,6 +41,7 @@ function FilterChangePageContent() {
   const [filteredRows, setFilteredRows] = React.useState<FilterChangePlan[]>(plans)
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  useDeepLinkNotFoundToast(initialId, isPending, plans.some((p) => p.id === initialId))
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()

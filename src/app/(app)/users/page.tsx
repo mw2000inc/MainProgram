@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Plus, UserCog } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,17 +12,36 @@ import { AdminGuard } from "@/components/shared/admin-guard"
 import { UserFormDialog } from "@/components/users/user-form-dialog"
 import { getUsersColumns } from "@/components/users/users-columns"
 import { useDeleteUser, useUsers } from "@/lib/hooks/use-misc"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import type { User } from "@/lib/types"
 
-export default function UsersPage() {
+function UsersContent() {
   const { user: actor } = useAuth()
   const { data: users = [], isPending } = useUsers()
   const deleteUser = useDeleteUser()
 
+  // Deep link from the Activity Log (?id=<userId>) — opens that user's edit
+  // dialog directly, the only "view" a profile has in this app.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
+  const openedInitialRef = React.useRef(false)
+
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<User | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<User | undefined>(undefined)
+
+  useDeepLinkNotFoundToast(initialId, isPending, users.some((u) => u.id === initialId))
+
+  React.useEffect(() => {
+    if (!initialId || isPending || openedInitialRef.current) return
+    const match = users.find((u) => u.id === initialId)
+    if (!match) return
+    openedInitialRef.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditing(match)
+    setFormOpen(true)
+  }, [initialId, isPending, users])
 
   const columns = React.useMemo(
     () =>
@@ -99,5 +119,22 @@ export default function UsersPage() {
         />
       </div>
     </AdminGuard>
+  )
+}
+
+function UsersFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function UsersPage() {
+  return (
+    <React.Suspense fallback={<UsersFallback />}>
+      <UsersContent />
+    </React.Suspense>
   )
 }

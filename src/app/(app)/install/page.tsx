@@ -13,6 +13,7 @@ import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getInstallFullColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
 import { useDeleteInstallPlans, useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
@@ -34,6 +35,7 @@ function InstallPageContent() {
   const [filteredRows, setFilteredRows] = React.useState<InstallPlan[]>(plans)
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  useDeepLinkNotFoundToast(initialId, isPending, plans.some((p) => p.id === initialId))
 
   const columns = React.useMemo(
     () =>

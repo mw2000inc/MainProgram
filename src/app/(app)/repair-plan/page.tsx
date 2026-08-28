@@ -13,6 +13,7 @@ import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { getRepairFullColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { useDeleteRepairPlans, useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
@@ -34,6 +35,7 @@ function RepairPlanPageContent() {
   const [filteredRows, setFilteredRows] = React.useState<RepairPlan[]>(plans)
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  useDeepLinkNotFoundToast(initialId, isPending, plans.some((p) => p.id === initialId))
 
   const columns = React.useMemo(
     () =>

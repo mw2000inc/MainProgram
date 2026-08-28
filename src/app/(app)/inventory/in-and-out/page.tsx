@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Filter, Maximize2, Plus } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { getStockMovementsColumns, type StockMovementRow } from "@/components/inventory/stock-movements-columns"
 import { useApproveStockMovement, useDeleteStockMovement, useStockMovementRows } from "@/lib/hooks/use-inventory"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate } from "@/lib/utils"
 
@@ -189,17 +191,37 @@ function DateCountPanel({
   )
 }
 
-export default function InAndOutSummaryPage() {
+function InAndOutSummaryContent() {
   const { user, can } = useAuth()
   const { data: rows, isPending } = useStockMovementRows()
   const deleteMovement = useDeleteStockMovement()
   const approveMovement = useApproveStockMovement()
+
+  // Deep link from the Activity Log (?id=<movementId>) — opens that
+  // movement's edit dialog directly, the closest thing this page has to a
+  // per-record view (the page itself is otherwise a date-bucket drilldown,
+  // not a flat list of individual movements).
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
+  const openedInitialRef = React.useRef(false)
 
   const [selection, setSelection] = React.useState<Selection>(undefined)
   const [formOpen, setFormOpen] = React.useState(false)
   const [addDirection, setAddDirection] = React.useState<Direction>("in")
   const [editing, setEditing] = React.useState<StockMovementRow | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<StockMovementRow | undefined>(undefined)
+
+  useDeepLinkNotFoundToast(initialId, isPending, (rows ?? []).some((r) => r.id === initialId))
+
+  React.useEffect(() => {
+    if (!initialId || isPending || openedInitialRef.current) return
+    const match = (rows ?? []).find((r) => r.id === initialId)
+    if (!match) return
+    openedInitialRef.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditing(match)
+    setFormOpen(true)
+  }, [initialId, isPending, rows])
 
   function handleAdd(direction: Direction) {
     setEditing(undefined)
@@ -327,5 +349,22 @@ export default function InAndOutSummaryPage() {
         }}
       />
     </div>
+  )
+}
+
+function InAndOutSummaryFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function InAndOutSummaryPage() {
+  return (
+    <React.Suspense fallback={<InAndOutSummaryFallback />}>
+      <InAndOutSummaryContent />
+    </React.Suspense>
   )
 }

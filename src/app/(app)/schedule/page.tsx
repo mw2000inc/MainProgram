@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { CalendarClock, Plus, List, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,16 +21,23 @@ import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
 import { getScheduleColumns, JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatDate } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
 import type { ScheduleJob } from "@/lib/types"
 
-export default function SchedulePage() {
+function ScheduleContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { data: jobs = [], isPending } = useScheduleJobs()
   const deleteJob = useDeleteScheduleJob()
+
+  // Deep link from the Activity Log (?id=<jobId>) — opens that job's detail
+  // panel directly. Only meaningful in the "list" view (see selection below);
+  // the "table" view has no per-job detail panel to open into.
+  const searchParams = useSearchParams()
+  const initialId = searchParams.get("id") ?? undefined
 
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ScheduleJob | undefined>(undefined)
@@ -47,7 +55,8 @@ export default function SchedulePage() {
     return jobs.filter((j) => j.technician === technicianFilter || j.technician2 === technicianFilter)
   }, [jobs, technicianFilter])
 
-  const selection = useSplitViewSelection(filteredRows)
+  const selection = useSplitViewSelection(filteredRows, initialId)
+  useDeepLinkNotFoundToast(initialId, isPending, jobs.some((j) => j.id === initialId))
 
   const columns = React.useMemo(
     () =>
@@ -212,5 +221,22 @@ export default function SchedulePage() {
         }}
       />
     </div>
+  )
+}
+
+function ScheduleFallback() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  )
+}
+
+export default function SchedulePage() {
+  return (
+    <React.Suspense fallback={<ScheduleFallback />}>
+      <ScheduleContent />
+    </React.Suspense>
   )
 }
