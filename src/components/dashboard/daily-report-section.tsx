@@ -357,8 +357,17 @@ export function DailyReportSection() {
   const inventoryListColumns = React.useMemo(() => getInventoryListColumns(), [])
   const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(), [])
 
+  // Pre D, when set, is the record's actual (re)scheduled date — it wins
+  // over Plan D for deciding which day's Daily Report a Filter Change or
+  // Collection belongs on, matching COALESCE(pre_d, plan_d) semantics: an
+  // admin who reschedules a filter change or collection to a new date via
+  // Pre D expects it to move to *that* day's report, not stay stuck under
+  // its original Plan D. Falls back to Plan D whenever Pre D is empty
+  // (the common case), so nothing already-unset changes behavior. Scoped to
+  // just these two sections, per spec — Install/Repair keep matching their
+  // own single date field (inputDate/issuedDate) unchanged.
   const dayFilterChangePlans = React.useMemo(
-    () => filterChangePlans.filter((p) => p.planDate === reportDate),
+    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate),
     [filterChangePlans, reportDate]
   )
   const dayInstallPlans = React.useMemo(
@@ -370,7 +379,7 @@ export function DailyReportSection() {
     [repairPlans, reportDate]
   )
   const dayCollectionPlans = React.useMemo(
-    () => collectionPlans.filter((p) => p.collectionDate === reportDate),
+    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate),
     [collectionPlans, reportDate]
   )
   // Filtered by the movement's own `date` (its as-of day — defaults to the
