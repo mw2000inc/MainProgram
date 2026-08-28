@@ -416,8 +416,15 @@ export interface FilterChangePlan {
   customerId?: string
   scheduleJobId?: string
   // 'ct_completion' for a plan auto-created/updated by a job completion;
-  // 'manual' (the default) for one an admin typed in directly on this page.
-  source?: "manual" | "ct_completion"
+  // 'recurring_schedule' for one generated automatically every 3 months
+  // from the sale list entry's Plan D (see the filter_change_recurring_
+  // schedule migration); 'manual' (the default) for one an admin typed in
+  // directly on this page.
+  source?: "manual" | "ct_completion" | "recurring_schedule"
+  // Present only on a 'recurring_schedule' row — which sale list entry and
+  // which occurrence (1 = month 3, 2 = month 6, ...) this plan is for.
+  saleListEntryId?: string
+  occurrenceIndex?: number
   preD?: string
   accD?: string
   serviceman: string

@@ -9,10 +9,14 @@ import type { FilterChangePlan } from "@/lib/types"
 
 // 'ct_completion' rows were auto-created/updated by a completed job
 // recording its required filters (see the
-// ct_filter_change_collection_inventory_link migration) — 'manual' (the
+// ct_filter_change_collection_inventory_link migration); 'recurring_schedule'
+// rows were auto-generated every 3 months from the sale list entry's Plan D
+// (see the filter_change_recurring_schedule migration) — 'manual' (the
 // default) is anything typed in directly on this page, same as always.
 function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
-  return source === "ct_completion" ? <StatusBadge tone="secondary" label="Auto (C/T)" /> : <span className="text-muted-foreground">Manual</span>
+  if (source === "ct_completion") return <StatusBadge tone="secondary" label="Auto (C/T)" />
+  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label="Recurring Schedule" />
+  return <span className="text-muted-foreground">Manual</span>
 }
 
 export function getFilterChangeColumns(): ColumnDef<FilterChangePlan, unknown>[] {

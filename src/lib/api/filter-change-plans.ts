@@ -20,6 +20,8 @@ type Row = {
   customer_id: string | null
   schedule_job_id: string | null
   source: string
+  sale_list_entry_id: string | null
+  occurrence_index: number | null
 }
 
 function fromRow(row: Row): FilterChangePlan {
@@ -42,6 +44,8 @@ function fromRow(row: Row): FilterChangePlan {
     customerId: row.customer_id ?? undefined,
     scheduleJobId: row.schedule_job_id ?? undefined,
     source: (row.source as FilterChangePlan["source"]) ?? "manual",
+    saleListEntryId: row.sale_list_entry_id ?? undefined,
+    occurrenceIndex: row.occurrence_index ?? undefined,
   }
 }
 
