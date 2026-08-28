@@ -15,7 +15,7 @@ import { getInstallFullColumns, INSTALL_EXPORT_COLUMNS } from "@/components/inst
 import { useDeleteInstallPlans, useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
 
 function InstallPageContent() {
@@ -152,7 +152,7 @@ function InstallPageContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayIso()}
         plan={editing}
       />
 

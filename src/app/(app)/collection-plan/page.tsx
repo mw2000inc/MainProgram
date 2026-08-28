@@ -16,7 +16,7 @@ import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/compone
 import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { cn, formatCurrency, formatDate } from "@/lib/utils"
+import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 
 function yearMonth(dateStr: string) {
@@ -231,7 +231,7 @@ function CollectionPlanPageContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayIso()}
         entry={editing}
       />
 

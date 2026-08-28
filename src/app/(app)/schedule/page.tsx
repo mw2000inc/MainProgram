@@ -23,7 +23,7 @@ import { getScheduleColumns, JOB_TYPE_LABELS, formatTechnicians } from "@/compon
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatDate } from "@/lib/utils"
+import { formatDate, todayIso } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
 import type { ScheduleJob } from "@/lib/types"
 
@@ -44,7 +44,7 @@ function ScheduleContent() {
   const [deleting, setDeleting] = React.useState<ScheduleJob | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<ScheduleJob[]>(jobs)
   const [view, setView] = React.useState<"list" | "table">("list")
-  const [tableDate, setTableDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [tableDate, setTableDate] = React.useState(todayIso)
   // "All Technicians" by default. A shared job (technician + technician2) shows
   // up for either name — filtering by "Eubert Montalbo" surfaces a job where
   // he's only the second technician, same as if he were primary.
@@ -202,7 +202,7 @@ function ScheduleContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayIso()}
         job={editing}
       />
 

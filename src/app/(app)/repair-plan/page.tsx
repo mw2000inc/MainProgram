@@ -15,7 +15,7 @@ import { getRepairFullColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair
 import { useDeleteRepairPlans, useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
 function RepairPlanPageContent() {
@@ -143,7 +143,7 @@ function RepairPlanPageContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayIso()}
         plan={editing}
       />
 

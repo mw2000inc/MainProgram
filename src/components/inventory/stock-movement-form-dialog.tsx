@@ -33,7 +33,7 @@ import {
 import { STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useAddStockMovement, useProducts, useUpdateStockMovement } from "@/lib/hooks/use-inventory"
-import { generateId } from "@/lib/utils"
+import { generateId, todayIso } from "@/lib/utils"
 import type { StockMovement } from "@/lib/types"
 
 const addSchema = z
@@ -163,7 +163,7 @@ function AddMovementForm({
     const sign = values.direction === "out" ? -1 : 1
 
     await addMovement.mutateAsync({
-      date: new Date().toISOString().slice(0, 10),
+      date: todayIso(),
       productId: values.productId,
       quantityAdded,
       quantityRemoved,

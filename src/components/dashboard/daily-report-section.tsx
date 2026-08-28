@@ -52,11 +52,8 @@ import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
+import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, PanelSize } from "@/lib/types"
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 // Every panel this section can render. "date" and "inventory" aren't among
 // the six admin-configurable sections (see daily_report_sections) — the
@@ -287,7 +284,7 @@ export function DailyReportSection() {
     saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size } })
   }
 
-  const [reportDate, setReportDate] = React.useState(today)
+  const [reportDate, setReportDate] = React.useState(todayIso)
 
   const { data: filterChangePlans = [], isPending: pFilter } = useFilterChangePlans()
   const { data: installPlans = [], isPending: pInstall } = useInstallPlans()

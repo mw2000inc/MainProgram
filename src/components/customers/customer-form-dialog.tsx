@@ -24,6 +24,8 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { todayIso } from "@/lib/utils"
+import { format } from "date-fns"
 import type { Customer } from "@/lib/types"
 
 const schema = z.object({
@@ -61,13 +63,12 @@ function defaultValues(customer?: Customer): FormValues {
 // insert — new members get these silent defaults; existing members are simply
 // left untouched on edit (the update payload never includes these keys).
 function newMemberDefaults() {
-  const today = new Date()
-  const oneYearLater = new Date(today)
+  const oneYearLater = new Date()
   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
   return {
     dispenserType: "",
-    contractStart: today.toISOString().slice(0, 10),
-    contractEnd: oneYearLater.toISOString().slice(0, 10),
+    contractStart: todayIso(),
+    contractEnd: format(oneYearLater, "yyyy-MM-dd"),
     assignedTechnician: "",
     filterInstalled: false,
   }

@@ -25,13 +25,9 @@ import { getInventoryColumns, type ProductRow } from "@/components/inventory/inv
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { getStockStatus } from "@/lib/utils"
+import { getStockStatus, todayIso } from "@/lib/utils"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import type { Product, StockStatus } from "@/lib/types"
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function InventoryContent() {
   const { user, can } = useAuth()
@@ -47,7 +43,7 @@ function InventoryContent() {
   const initialId = searchParams.get("id") ?? undefined
   const openedInitialRef = React.useRef(false)
 
-  const [selectedDate, setSelectedDate] = React.useState(today)
+  const [selectedDate, setSelectedDate] = React.useState(todayIso)
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
   const [statusFilter, setStatusFilter] = React.useState<"all" | StockStatus>("all")
   const [monthYear, setMonthYear] = React.useState<MonthYearValue>({ month: "all", year: "all" })

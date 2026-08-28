@@ -20,6 +20,20 @@ export function daysUntil(date: string, today: Date = new Date()): number {
   return differenceInCalendarDays(parseISO(date), today)
 }
 
+// Today's date as a plain YYYY-MM-DD string, in the browser's own local
+// timezone — NOT `new Date().toISOString().slice(0, 10)`, which converts to
+// UTC first. For a viewer ahead of UTC (e.g. the Philippines, UTC+8), that
+// pattern silently shows *yesterday's* date for hours after local midnight
+// (would show tomorrow's for a viewer behind UTC) — a new Filter Change/
+// Collection/Schedule/etc. record created during that window would default
+// to the wrong day and then not appear on that day's own Daily Report,
+// filtered by exact date-string match. Use this wherever a form or filter
+// needs to default to "today" the way the person looking at it understands
+// it, not UTC's version of today.
+export function todayIso(): string {
+  return format(new Date(), "yyyy-MM-dd")
+}
+
 // Rolls a date forward in 3-month increments so it always reflects the next quarterly checkpoint.
 // Compares by calendar day (not exact timestamp) so "today" itself counts as reached, not before.
 export function getNextQuarterlyDate(anchorDate: string, today: Date = new Date()): Date {

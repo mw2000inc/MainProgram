@@ -31,11 +31,7 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { formatDate, initials } from "@/lib/utils"
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { formatDate, initials, todayIso as today } from "@/lib/utils"
 
 export default function SaleListOrderDetailPage() {
   const params = useParams<{ id: string }>()

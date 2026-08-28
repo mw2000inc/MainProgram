@@ -25,13 +25,9 @@ import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { formatDate } from "@/lib/utils"
+import { formatDate, todayIso as today } from "@/lib/utils"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 // The FULL order detail view — same rich content as /sale-list/[id] (core
 // order fields plus Related Filter Changes/Collections/Repairs, each with its

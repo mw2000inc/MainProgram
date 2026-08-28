@@ -16,7 +16,7 @@ import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS } from "@/comp
 import { useDeleteFilterChangePlans, useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
-import { cn, formatDate } from "@/lib/utils"
+import { cn, formatDate, todayIso } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
 
 function yearMonth(dateStr: string) {
@@ -199,7 +199,7 @@ function FilterChangePageContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={new Date().toISOString().slice(0, 10)}
+        defaultDate={todayIso()}
         plan={editing}
       />
 
