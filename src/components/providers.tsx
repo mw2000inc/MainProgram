@@ -8,6 +8,8 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth/auth-context"
 import { SidebarCollapseProvider } from "@/lib/sidebar-collapse-context"
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker"
+import { InstallPromptProvider } from "@/components/pwa/install-prompt-context"
 
 // Navigating away (e.g. clicking a sidebar link) while a Radix Dialog/Popover is
 // still open skips its normal close cleanup, leaving `body { pointer-events: none }`
@@ -40,9 +42,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
             <SidebarCollapseProvider>
-              <RouteChangeCleanup />
-              {children}
-              <Toaster richColors position="top-right" closeButton />
+              <InstallPromptProvider>
+                <RouteChangeCleanup />
+                <RegisterServiceWorker />
+                {children}
+                <Toaster richColors position="top-right" closeButton />
+              </InstallPromptProvider>
             </SidebarCollapseProvider>
           </TooltipProvider>
         </AuthProvider>

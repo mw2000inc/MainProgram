@@ -17,6 +17,7 @@ import { SidebarNav } from "@/components/layout/sidebar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { NotificationsMenu } from "@/components/layout/notifications-menu"
 import { CommandPalette } from "@/components/layout/command-palette"
+import { InstallAppMenuItem } from "@/components/pwa/install-app-menu-item"
 import { useAuth, roleLabel } from "@/lib/auth/auth-context"
 import { initials } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +65,7 @@ export function Topbar() {
               {user && <Badge variant="outline" className="w-fit mt-1">{roleLabel(user.role)}</Badge>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <InstallAppMenuItem />
             <DropdownMenuItem variant="destructive" onClick={logout}>
               <LogOut className="h-4 w-4" />
               Log out
