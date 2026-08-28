@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
+import { CheckCircle2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { formatDate } from "@/lib/utils"
@@ -19,8 +19,17 @@ function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
   return <span className="text-muted-foreground">Manual</span>
 }
 
-export function getFilterChangeColumns(): ColumnDef<FilterChangePlan, unknown>[] {
-  return [
+// onMarkDone is a Daily Report-only quick action ("Mark Filter Changed") —
+// omitted everywhere else this compact column set is used (Sale List,
+// Member detail, the customer portal scan view), so those keep rendering
+// exactly as before. Only shown for a still-Pending row; there's nothing
+// left to "mark done" once it's already Completed.
+export function getFilterChangeColumns({
+  onMarkDone,
+}: {
+  onMarkDone?: (plan: FilterChangePlan) => void
+} = {}): ColumnDef<FilterChangePlan, unknown>[] {
+  const columns: ColumnDef<FilterChangePlan, unknown>[] = [
     {
       accessorKey: "orderNumber",
       header: "Order Number",
@@ -40,6 +49,29 @@ export function getFilterChangeColumns(): ColumnDef<FilterChangePlan, unknown>[]
       cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
     },
   ]
+
+  if (onMarkDone) {
+    columns.push({
+      id: "markDone",
+      header: "",
+      cell: ({ row }) =>
+        row.original.status.toLowerCase() === "pending" ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-success hover:text-success"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMarkDone(row.original)
+            }}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Mark Filter Changed
+          </Button>
+        ) : null,
+    })
+  }
+
+  return columns
 }
 
 // Full AppSheet-parity column set, shown only in the panel's expanded view.

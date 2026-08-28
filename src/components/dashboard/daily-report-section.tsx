@@ -42,10 +42,10 @@ import {
   getInventoryListExpandedColumns,
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
-import { useFilterChangePlans, useDeleteFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
+import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useStockMovementRows } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
@@ -141,13 +141,15 @@ function resolveOrder(saved: string[] | undefined, basePanelOrder: PanelId[]): P
 
 // Drops any column whose key isn't in an admin's configured visibleFields
 // for that section — empty visibleFields means "show all" (unedited/default
-// state), same convention used everywhere else this list is read.
+// state), same convention used everywhere else this list is read. An
+// `accessorKey`-less column (e.g. the Mark Filter Changed/Record Payment
+// quick-action columns) is a utility column, not a real data field a
+// visibleFields checklist could ever have referred to — always kept,
+// regardless of what's configured, same as the always-shown checkbox/
+// delete columns elsewhere in this app.
 function filterColumnsByVisibility<T>(columns: ColumnDef<T, unknown>[], visibleFields: string[]): ColumnDef<T, unknown>[] {
   if (visibleFields.length === 0) return columns
-  return columns.filter((col) => {
-    const key = "accessorKey" in col ? String(col.accessorKey) : col.id
-    return !key || visibleFields.includes(key)
-  })
+  return columns.filter((col) => !("accessorKey" in col) || visibleFields.includes(String(col.accessorKey)))
 }
 
 // Two layout modes, both fully draggable/resizable per-admin (see
@@ -301,6 +303,15 @@ export function DailyReportSection() {
   const deleteInstallPlans = useDeleteInstallPlans()
   const deleteRepairPlans = useDeleteRepairPlans()
   const deleteCollections = useDeleteCollections()
+  // Quick actions ("Mark Filter Changed" / "Record Payment") — a plain
+  // status update on the same record the full Filter Change/Collection Plan
+  // pages already edit, so the report and those pages can never drift: both
+  // read from the same useFilterChangePlans()/useCollections() query, and
+  // this mutation's onSuccess (see the hooks themselves) invalidates that
+  // exact query, which is what makes the report's own day-filtered rows
+  // update immediately without a manual refetch.
+  const updateFilterChangePlan = useUpdateFilterChangePlan()
+  const updateCollection = useUpdateCollection()
 
   const [filterChangeFormOpen, setFilterChangeFormOpen] = React.useState(false)
   const [installFormOpen, setInstallFormOpen] = React.useState(false)
@@ -312,8 +323,14 @@ export function DailyReportSection() {
   // means unedited/show-all, so this is a no-op until an admin actually
   // unchecks something.
   const filterChangeColumns = React.useMemo(
-    () => filterColumnsByVisibility(getFilterChangeColumns(), visibleFieldsFor("filter_change")),
-    [visibleFieldsFor]
+    () =>
+      filterColumnsByVisibility(
+        getFilterChangeColumns({
+          onMarkDone: isAdmin ? (plan) => updateFilterChangePlan.mutate({ id: plan.id, input: { status: "Completed" } }) : undefined,
+        }),
+        visibleFieldsFor("filter_change")
+      ),
+    [visibleFieldsFor, isAdmin, updateFilterChangePlan]
   )
   const filterChangeExpandedColumns = React.useMemo(
     () => filterColumnsByVisibility(getFilterChangeExpandedColumns(), visibleFieldsFor("filter_change")),
@@ -328,8 +345,14 @@ export function DailyReportSection() {
     [visibleFieldsFor]
   )
   const collectionsColumns = React.useMemo(
-    () => filterColumnsByVisibility(getCollectionsColumns(), visibleFieldsFor("collection")),
-    [visibleFieldsFor]
+    () =>
+      filterColumnsByVisibility(
+        getCollectionsColumns({
+          onRecordPayment: isAdmin ? (entry) => updateCollection.mutate({ id: entry.id, input: { status: "Collected" } }) : undefined,
+        }),
+        visibleFieldsFor("collection")
+      ),
+    [visibleFieldsFor, isAdmin, updateCollection]
   )
   // Not one of the six admin-configurable sections (see the PanelId comment
   // above), so no visibleFieldsFor entry exists for it — always the full

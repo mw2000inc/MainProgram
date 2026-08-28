@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
+import { Banknote, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -28,8 +28,16 @@ function SourceCell({ source }: { source: CollectionPlan["source"] }) {
 }
 
 // Matches the old AppSheet Collection Plan columns, minus Product, S/C, and R/N.
-export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
-  return [
+// onRecordPayment is a Daily Report-only quick action ("Record Payment") —
+// omitted everywhere else this compact column set is used (Sale List,
+// Member detail, the customer portal scan view), so those keep rendering
+// exactly as before. Only shown for a still-Pending row.
+export function getCollectionsColumns({
+  onRecordPayment,
+}: {
+  onRecordPayment?: (entry: CollectionPlan) => void
+} = {}): ColumnDef<CollectionPlan, unknown>[] {
+  const columns: ColumnDef<CollectionPlan, unknown>[] = [
     {
       accessorKey: "orderNo",
       header: "Order Number",
@@ -67,7 +75,35 @@ export function getCollectionsColumns(): ColumnDef<CollectionPlan, unknown>[] {
       header: "Filter Change",
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+    },
   ]
+
+  if (onRecordPayment) {
+    columns.push({
+      id: "recordPayment",
+      header: "",
+      cell: ({ row }) =>
+        row.original.status.toLowerCase() === "pending" ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-success hover:text-success"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRecordPayment(row.original)
+            }}
+          >
+            <Banknote className="h-3.5 w-3.5" /> Record Payment
+          </Button>
+        ) : null,
+    })
+  }
+
+  return columns
 }
 
 // Full column set for the standalone /collection-plan list page — every
