@@ -11,7 +11,9 @@ import { actionLabel, entityTypeLabel, fieldLabel } from "@/lib/activity-log-con
 import { formatDate, formatDateTime } from "@/lib/utils"
 import type { ActivityLogEntry } from "@/lib/types"
 
-function formatValue(value: unknown): string {
+// Shared with deleted-record-dialog.tsx — both render raw column values
+// straight from Postgres and need the exact same formatting.
+export function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—"
   if (typeof value === "boolean") return value ? "Yes" : "No"
   if (typeof value === "object") return JSON.stringify(value)
