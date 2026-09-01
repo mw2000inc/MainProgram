@@ -14,6 +14,19 @@ const MODULE_LABELS: Record<DispatchEntityType, string> = {
   repair_plans: "Repair",
 }
 
+// The friendly-tone message templates below (buildSmsMessage/
+// buildEmailContent) were written specifically around a Filter Change
+// visit's exact scope — "water dispenser filter replacement, general
+// cleaning, and Care Plan renewal" — so that phrase is used as-is only
+// for that module; the other three get an equivalent plain description of
+// what's actually happening, in the same warm wrapper.
+const MODULE_ACTION_PHRASES: Record<DispatchEntityType, string> = {
+  filter_change_plans: "your water dispenser filter replacement, general cleaning, and Care Plan renewal",
+  install_plans: "your water dispenser installation",
+  collections: "your scheduled collection",
+  repair_plans: "your repair service",
+}
+
 // Real SMS (Semaphore) + Email (Resend) dispatch-approval delivery — see
 // the dispatch_dual_channel_notifications migration's own comment for why
 // this lives here rather than in the approve_dispatch_item() RPC itself
@@ -65,7 +78,7 @@ export async function POST(request: Request) {
   if (!row?.out_token) {
     return NextResponse.json({ error: "This item is no longer awaiting approval." }, { status: 409 })
   }
-  const { out_token: token, out_label: label, out_scheduled_date: scheduledDate } = row
+  const { out_token: token, out_scheduled_date: scheduledDate } = row
 
   const admin = createAdminClient()
   const [{ data: settingsRow }, address] = await Promise.all([
@@ -74,12 +87,13 @@ export async function POST(request: Request) {
   ])
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]
+  const actionPhrase = MODULE_ACTION_PHRASES[entityType]
   const confirmUrl = `${appBaseUrl(request)}/confirm/${token}`
 
   const result: { sms?: ChannelResult; email?: ChannelResult } = {}
 
   if (notifyPhone) {
-    const message = buildSmsMessage({ companyName, moduleLabel, scheduledDate: scheduledDate ?? "", address, confirmUrl })
+    const message = buildSmsMessage({ companyName, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
     const sendResult = await sendSms(notifyPhone, message)
     result.sms = sendResult
     await admin.from("dispatch_notifications").insert({
@@ -94,7 +108,7 @@ export async function POST(request: Request) {
   }
 
   if (notifyEmail) {
-    const { subject, html, text } = buildEmailContent({ companyName, moduleLabel, label: label ?? "", scheduledDate: scheduledDate ?? "", address, confirmUrl })
+    const { subject, html, text } = buildEmailContent({ companyName, moduleLabel, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
     const sendResult = await sendEmail(notifyEmail, subject, html, text)
     result.email = sendResult
     await admin.from("dispatch_notifications").insert({
@@ -143,53 +157,84 @@ async function getEntityAddress(
   return null
 }
 
+// Warmer, more conversational copy (confirmed wording) — SMS asks for a
+// reply since that's the natural action on a phone, but still includes
+// the same functional confirm/reschedule link right after it (the reply
+// path is best-effort — see /api/webhooks/sms-reply — the link is the
+// one fully-working confirmation path for every case). Email points at
+// the button instead of "reply". Note: the two 😊 emoji force this SMS
+// into UCS-2 encoding — see sendSms's own comment on what that does to
+// segment count/cost.
 function buildSmsMessage({
   companyName,
-  moduleLabel,
+  actionPhrase,
   scheduledDate,
   address,
   confirmUrl,
 }: {
   companyName: string
-  moduleLabel: string
+  actionPhrase: string
   scheduledDate: string
   address: string | null
   confirmUrl: string
 }): string {
   const location = address ? ` at ${address}` : ""
-  return `${companyName}: Your ${moduleLabel} is scheduled for ${scheduledDate}${location}. Please confirm or request a reschedule here: ${confirmUrl}`
+  return [
+    "Hello Sir/Ma'am, good day! 😊 We hope you're doing well!",
+    "",
+    `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}${location}.`,
+    "",
+    `We'd be happy to assist you with the service. Kindly reply to this message to confirm if the scheduled date works for you, or tap this link to confirm or request a reschedule: ${confirmUrl}`,
+    "",
+    `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day! 😊`,
+  ].join("\n")
 }
 
 function buildEmailContent({
   companyName,
   moduleLabel,
-  label,
+  actionPhrase,
   scheduledDate,
   address,
   confirmUrl,
 }: {
   companyName: string
   moduleLabel: string
-  label: string
+  actionPhrase: string
   scheduledDate: string
   address: string | null
   confirmUrl: string
 }): { subject: string; html: string; text: string } {
   const subject = `${companyName}: Your ${moduleLabel} is scheduled for ${scheduledDate}`
   const addressLine = address ? `<p style="margin:0 0 16px;color:#475569;">Location: ${escapeHtml(address)}</p>` : ""
-  const addressLineText = address ? `Location: ${address}\n` : ""
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;">
       <h2 style="margin:0 0 16px;color:#0f172a;">${escapeHtml(companyName)}</h2>
-      <p style="margin:0 0 8px;color:#0f172a;">Hi ${escapeHtml(label)},</p>
-      <p style="margin:0 0 16px;color:#0f172a;">Your <strong>${escapeHtml(moduleLabel)}</strong> is scheduled for <strong>${escapeHtml(scheduledDate)}</strong>.</p>
+      <p style="margin:0 0 16px;color:#0f172a;">Hello Sir/Ma'am, good day! 😊 We hope you're doing well!</p>
+      <p style="margin:0 0 16px;color:#0f172a;">This is a friendly reminder from <strong>${escapeHtml(companyName)}</strong> that we have ${escapeHtml(actionPhrase)} scheduled for <strong>${escapeHtml(scheduledDate)}</strong>.</p>
       ${addressLine}
-      <p style="margin:0 0 24px;color:#475569;">Please confirm this date, or let us know if you need to reschedule.</p>
+      <p style="margin:0 0 24px;color:#475569;">We'd be happy to assist you with the service — please use the button below to confirm if this date works for you, or let us know if you'd like to reschedule.</p>
       <a href="${confirmUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Confirm or Reschedule</a>
-      <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${confirmUrl}</p>
+      <p style="margin:24px 0 8px;color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${confirmUrl}</p>
+      <p style="margin:24px 0 0;color:#0f172a;">Thank you for choosing ${escapeHtml(companyName)}! We look forward to serving you. Have a wonderful day! 😊</p>
     </div>
   `.trim()
-  const text = `${companyName}\n\nHi ${label},\n\nYour ${moduleLabel} is scheduled for ${scheduledDate}.\n${addressLineText}\nPlease confirm or request a reschedule here: ${confirmUrl}`
+  const textLines = [
+    "Hello Sir/Ma'am, good day! 😊 We hope you're doing well!",
+    "",
+    `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}.`,
+  ]
+  // Only the address line is conditional — the blank lines around it are
+  // deliberate paragraph breaks, not filler to strip.
+  if (address) textLines.push(`Location: ${address}`)
+  textLines.push(
+    "",
+    "We'd be happy to assist you with the service. Please use this link to confirm if this date works for you, or let us know if you'd like to reschedule:",
+    confirmUrl,
+    "",
+    `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day! 😊`
+  )
+  const text = textLines.join("\n")
   return { subject, html, text }
 }
 
@@ -213,6 +258,18 @@ function appBaseUrl(request: Request): string {
 // treated as "not configured yet" (status 'skipped_no_provider'), not an
 // error — lets the rest of the approval flow (the DB transition, and the
 // email channel) succeed even before SMS credentials are added.
+//
+// Character-set note (not a Semaphore-specific quirk — this is standard
+// GSM/SMPP behavior any SMS gateway follows): a plain-ASCII message is
+// sent as GSM-7, ~153 chars per segment when concatenated. The 😊 emoji
+// in buildSmsMessage's copy isn't in the GSM-7 alphabet, which forces the
+// *entire* message to UCS-2 encoding — dropping that to ~67 chars per
+// segment. The current friendly-tone template runs well past one segment
+// either way (it's a multi-paragraph message), so this isn't a "will it
+// fit" concern, but it does mean more billed segments per send than the
+// old one-liner version had. If per-message SMS cost matters, dropping
+// the emoji (or moving them to email only, where this has no effect at
+// all — see buildEmailContent) would meaningfully cut segment count.
 async function sendSms(phone: string, message: string): Promise<ChannelResult> {
   const apiKey = process.env.SEMAPHORE_API_KEY
   if (!apiKey) return { status: "skipped_no_provider", detail: "SEMAPHORE_API_KEY is not set" }
