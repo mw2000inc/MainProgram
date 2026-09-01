@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, ClipboardCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DateControl } from "@/components/dashboard/date-control"
@@ -37,6 +37,7 @@ import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/rep
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { getCollectionsColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
+import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-queue"
 import {
   getInventoryListColumns,
   getInventoryListExpandedColumns,
@@ -53,7 +54,7 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { todayIso } from "@/lib/utils"
-import type { DailyReportSectionKey, PanelSize } from "@/lib/types"
+import type { DailyReportSectionKey, DispatchStatus, PanelSize } from "@/lib/types"
 
 // Every panel this section can render. "date" and "inventory" aren't among
 // the six admin-configurable sections (see daily_report_sections) — the
@@ -127,6 +128,25 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
   // width or pair 50/50 with anything, just enough room for its own content.
   if (id === "date") return "w-full sm:w-80"
   return HALF_WIDTH_PANELS.has(id) ? "w-full md:w-[calc(50%-12px)]" : "w-full"
+}
+
+// Gates every Daily Report day-filter below (see the
+// dispatch_confirmation_workflow migration): a still-Draft item hasn't
+// been admin-approved yet, one that's Pending Customer Confirmation is
+// waiting on the customer's own response, and one the customer pushed
+// back on (Reschedule Requested) needs the admin to re-approve with a new
+// date — none of those three belong on the active daily dispatch list.
+// Only 'Confirmed' does. undefined also passes as a rollout safety net: if
+// this ships before the migration backfilling the column has actually run,
+// every row's dispatchStatus reads as undefined, and gating strictly on
+// === 'Confirmed' would blank out the whole Daily Report until someone
+// noticed. Once the migration has run, every pre-existing row (and
+// everything the recurring-schedule/C/T-completion generators still
+// create) defaults straight to 'Confirmed' at the database layer, so this
+// never actually excludes anything except a genuinely new, not-yet-
+// resolved record.
+function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
+  return status === undefined || status === "Confirmed"
 }
 
 function resolveOrder(saved: string[] | undefined, basePanelOrder: PanelId[]): PanelId[] {
@@ -296,6 +316,20 @@ export function DailyReportSection() {
   // regardless (see isPanelEnabled above).
   const { data: stockMovements = [], isPending: pInventory } = useStockMovementRows()
 
+  // Admin-only Pending Dispatch Approval queue (see the
+  // dispatch_confirmation_workflow migration) — counts every Draft item
+  // across all four modules so the header button can show how many are
+  // waiting without opening the dialog first.
+  const [dispatchQueueOpen, setDispatchQueueOpen] = React.useState(false)
+  const draftDispatchCount = React.useMemo(() => {
+    return (
+      filterChangePlans.filter((p) => p.dispatchStatus === "Draft").length +
+      installPlans.filter((p) => p.dispatchStatus === "Draft").length +
+      repairPlans.filter((p) => p.dispatchStatus === "Draft").length +
+      collectionPlans.filter((p) => p.dispatchStatus === "Draft").length
+    )
+  }, [filterChangePlans, installPlans, repairPlans, collectionPlans])
+
   const deleteFilterChangePlans = useDeleteFilterChangePlans()
   const deleteInstallPlans = useDeleteInstallPlans()
   const deleteRepairPlans = useDeleteRepairPlans()
@@ -382,8 +416,11 @@ export function DailyReportSection() {
   // base field whenever Pre D is empty (the common case), so nothing
   // already-unset changes behavior. All four modules (Filter Change,
   // Installation, Collection, Repair) get this same treatment.
+  //
+  // isDailyReportEligible() also gates every one of these — see its own
+  // comment for why (dispatch_confirmation_workflow migration).
   const dayFilterChangePlans = React.useMemo(
-    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate),
+    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [filterChangePlans, reportDate]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
@@ -391,15 +428,15 @@ export function DailyReportSection() {
   // is when it actually happened — see the InstallPlan type), so that's
   // what wins over inputDate here, same COALESCE semantics as the others.
   const dayInstallPlans = React.useMemo(
-    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate),
+    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [installPlans, reportDate]
   )
   const dayRepairPlans = React.useMemo(
-    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate),
+    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [repairPlans, reportDate]
   )
   const dayCollectionPlans = React.useMemo(
-    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate),
+    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [collectionPlans, reportDate]
   )
   // Filtered by the movement's own `date` (its as-of day — defaults to the
@@ -523,7 +560,7 @@ export function DailyReportSection() {
   return (
     <div className="space-y-6">
       {isAdmin && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-muted-foreground">Layout:</span>
           <div className="inline-flex rounded-lg border p-0.5">
             <Button
@@ -545,6 +582,17 @@ export function DailyReportSection() {
               <LayoutGrid className="h-3.5 w-3.5" /> Grid
             </Button>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={draftDispatchCount > 0 ? "default" : "outline"}
+            className="gap-1.5 ml-auto"
+            onClick={() => setDispatchQueueOpen(true)}
+          >
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Pending Dispatch Approval{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
+          </Button>
+          <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
         </div>
       )}
 

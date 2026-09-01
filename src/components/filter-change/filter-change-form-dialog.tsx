@@ -117,7 +117,11 @@ export function FilterChangeFormDialog({
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input })
     } else {
-      await createPlan.mutateAsync({ ...input, status: "Pending" })
+      // A new manually-scheduled dispatch enters the admin approval queue —
+      // unlike auto-generated recurring-schedule/C/T-completion rows, which
+      // stay at the 'Confirmed' default set at the database layer (see the
+      // dispatch_confirmation_workflow migration).
+      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
     }
     onOpenChange(false)
   }

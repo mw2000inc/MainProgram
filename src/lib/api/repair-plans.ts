@@ -16,6 +16,10 @@ type Row = {
   amt: number
   unit_in_out: string
   created_at: string
+  dispatch_status: string | null
+  notify_contact: string | null
+  customer_notified_at: string | null
+  customer_responded_at: string | null
 }
 
 function fromRow(row: Row): RepairPlan {
@@ -34,6 +38,10 @@ function fromRow(row: Row): RepairPlan {
     amt: row.amt,
     unitInOut: row.unit_in_out,
     createdAt: row.created_at,
+    dispatchStatus: (row.dispatch_status as RepairPlan["dispatchStatus"]) ?? undefined,
+    notifyContact: row.notify_contact ?? undefined,
+    customerNotifiedAt: row.customer_notified_at ?? undefined,
+    customerRespondedAt: row.customer_responded_at ?? undefined,
   }
 }
 
@@ -51,6 +59,7 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.partNo !== undefined) row.part_no = input.partNo || null
   if (input.amt !== undefined) row.amt = input.amt
   if (input.unitInOut !== undefined) row.unit_in_out = input.unitInOut
+  if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row
 }
 

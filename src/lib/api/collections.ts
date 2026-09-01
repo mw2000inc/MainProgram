@@ -19,6 +19,10 @@ type Row = {
   filter_change_required: boolean
   sale_list_entry_id: string | null
   occurrence_index: number | null
+  dispatch_status: string | null
+  notify_contact: string | null
+  customer_notified_at: string | null
+  customer_responded_at: string | null
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -40,6 +44,10 @@ function fromRow(row: Row): CollectionPlan {
     filterChangeRequired: row.filter_change_required ?? false,
     saleListEntryId: row.sale_list_entry_id ?? undefined,
     occurrenceIndex: row.occurrence_index ?? undefined,
+    dispatchStatus: (row.dispatch_status as CollectionPlan["dispatchStatus"]) ?? undefined,
+    notifyContact: row.notify_contact ?? undefined,
+    customerNotifiedAt: row.customer_notified_at ?? undefined,
+    customerRespondedAt: row.customer_responded_at ?? undefined,
   }
 }
 
@@ -55,6 +63,7 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
   if (input.accD !== undefined) row.acc_d = input.accD || null
   if (input.note !== undefined) row.note = input.note || null
   if (input.filterChangeRequired !== undefined) row.filter_change_required = input.filterChangeRequired
+  if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row
 }
 

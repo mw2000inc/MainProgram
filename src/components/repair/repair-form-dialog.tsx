@@ -119,7 +119,9 @@ export function RepairFormDialog({
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input })
     } else {
-      await createPlan.mutateAsync({ ...input, status: "Pending" })
+      // A new manually-scheduled dispatch enters the admin approval queue —
+      // see the dispatch_confirmation_workflow migration.
+      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
     }
     onOpenChange(false)
   }

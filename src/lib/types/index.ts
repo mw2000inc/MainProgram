@@ -396,7 +396,25 @@ export interface ScheduleJobFilterItem {
   createdAt: string
 }
 
-export interface FilterChangePlan {
+// Admin-gated customer dispatch confirmation workflow (see the
+// dispatch_confirmation_workflow migration) — shared by all four plan
+// tables. A record only becomes eligible for the Daily Report once
+// dispatchStatus reaches 'Confirmed': either it's grandfathered there by
+// the migration's own default (every pre-existing row, and every row any
+// other insert path — recurring-schedule generation, C/T completion —
+// still creates), or an admin explicitly approved it from 'Draft' (see
+// DispatchApprovalQueue) and the customer then confirmed via their
+// /confirm/[token] link.
+export type DispatchStatus = "Draft" | "Pending Customer Confirmation" | "Confirmed" | "Reschedule Requested"
+
+export interface DispatchFields {
+  dispatchStatus?: DispatchStatus
+  notifyContact?: string
+  customerNotifiedAt?: string
+  customerRespondedAt?: string
+}
+
+export interface FilterChangePlan extends DispatchFields {
   id: string
   orderNumber: string
   memberAccount: string
@@ -432,7 +450,7 @@ export interface FilterChangePlan {
   createdAt: string
 }
 
-export interface InstallPlan {
+export interface InstallPlan extends DispatchFields {
   id: string
   name: string
   orderNo: string
@@ -452,7 +470,7 @@ export interface InstallPlan {
   createdAt: string
 }
 
-export interface RepairPlan {
+export interface RepairPlan extends DispatchFields {
   id: string
   issuedDate: string
   accountName: string
@@ -469,7 +487,7 @@ export interface RepairPlan {
   createdAt: string
 }
 
-export interface CollectionPlan {
+export interface CollectionPlan extends DispatchFields {
   id: string
   orderNo: string
   accountName: string

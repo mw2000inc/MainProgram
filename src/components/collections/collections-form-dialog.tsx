@@ -115,7 +115,9 @@ export function CollectionsFormDialog({
     if (isEdit) {
       await updateCollection.mutateAsync({ id: entry.id, input })
     } else {
-      await createCollection.mutateAsync(input)
+      // A new manually-scheduled dispatch enters the admin approval queue —
+      // see the dispatch_confirmation_workflow migration.
+      await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft" })
     }
     onOpenChange(false)
   }
