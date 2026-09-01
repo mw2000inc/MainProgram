@@ -3,28 +3,38 @@ import type { DispatchStatus } from "@/lib/types"
 
 export type DispatchEntityType = "filter_change_plans" | "install_plans" | "collections" | "repair_plans"
 
-// Admin approval step (see the dispatch_confirmation_workflow migration's
-// approve_dispatch_item()) — re-checks admin-ness server-side (not just at
-// this call site), generates the confirmation token, moves the row to
-// 'Pending Customer Confirmation', and logs the stub notification (no real
-// SMS/Email provider is wired up yet — see dispatch_notifications).
+export type DispatchChannelResult = { status: "sent" | "failed" | "skipped_no_provider"; detail?: string }
+
+// Admin approval step — hits the server route (not the DB directly)
+// because sending a real SMS/email needs the Semaphore/Resend API keys,
+// which only ever live server-side (see
+// src/app/api/dispatch/approve/route.ts). That route re-checks
+// admin-ness itself (via approve_dispatch_item(), under the caller's own
+// session), generates the confirmation token, moves the row to 'Pending
+// Customer Confirmation', sends whichever of phone/email is provided, and
+// logs each channel's real outcome to dispatch_notifications — 'sent' or
+// 'failed' from the provider's own response, or 'skipped_no_provider' if
+// that channel's API key isn't configured yet.
 export async function approveDispatchItem(input: {
   entityType: DispatchEntityType
   entityId: string
-  notifyContact: string
-  channel: "sms" | "email"
-}): Promise<{ token: string; message: string } | null> {
-  const { data, error } = await supabase.rpc("approve_dispatch_item", {
-    p_entity_type: input.entityType,
-    p_entity_id: input.entityId,
-    p_notify_contact: input.notifyContact,
-    p_channel: input.channel,
-    p_confirm_base_url: window.location.origin,
+  notifyPhone?: string
+  notifyEmail?: string
+}): Promise<{ token: string; confirmUrl: string; sms?: DispatchChannelResult; email?: DispatchChannelResult } | null> {
+  const response = await fetch("/api/dispatch/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entityType: input.entityType,
+      entityId: input.entityId,
+      notifyPhone: input.notifyPhone,
+      notifyEmail: input.notifyEmail,
+    }),
   })
-  if (error) throw error
-  const row = (data as { out_token: string | null; out_message: string | null }[])?.[0]
-  if (!row?.out_token) return null
-  return { token: row.out_token, message: row.out_message ?? "" }
+  if (response.status === 409) return null
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error ?? "Failed to approve this dispatch item")
+  return data
 }
 
 export interface DispatchConfirmationDetails {

@@ -409,7 +409,13 @@ export type DispatchStatus = "Draft" | "Pending Customer Confirmation" | "Confir
 
 export interface DispatchFields {
   dispatchStatus?: DispatchStatus
+  // Superseded by notifyPhone/notifyEmail below (see the
+  // dispatch_dual_channel_notifications migration) — left in the type for
+  // any pre-existing row approved before that migration ran, but no longer
+  // written to by anything new.
   notifyContact?: string
+  notifyPhone?: string
+  notifyEmail?: string
   customerNotifiedAt?: string
   customerRespondedAt?: string
 }

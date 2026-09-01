@@ -24,6 +24,8 @@ type Row = {
   occurrence_index: number | null
   dispatch_status: string | null
   notify_contact: string | null
+  notify_phone: string | null
+  notify_email: string | null
   customer_notified_at: string | null
   customer_responded_at: string | null
 }
@@ -52,6 +54,8 @@ function fromRow(row: Row): FilterChangePlan {
     occurrenceIndex: row.occurrence_index ?? undefined,
     dispatchStatus: (row.dispatch_status as FilterChangePlan["dispatchStatus"]) ?? undefined,
     notifyContact: row.notify_contact ?? undefined,
+    notifyPhone: row.notify_phone ?? undefined,
+    notifyEmail: row.notify_email ?? undefined,
     customerNotifiedAt: row.customer_notified_at ?? undefined,
     customerRespondedAt: row.customer_responded_at ?? undefined,
   }

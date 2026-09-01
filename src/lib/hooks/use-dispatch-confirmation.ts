@@ -11,6 +11,18 @@ import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
 // calls if the others aren't mounted) and means the Pending Dispatch
 // Approval queue itself (which reads all four) always reflects the
 // just-approved item disappearing from the Draft list immediately.
+// Reports each channel's real outcome rather than a single generic
+// success toast — 'sent' means the provider actually accepted it,
+// 'skipped_no_provider' means that channel's API key isn't configured yet
+// (see the route's own comment), and 'failed' means the provider rejected
+// it (check server logs / dispatch_notifications for detail).
+function summarizeChannel(name: string, result?: api.DispatchChannelResult): string | null {
+  if (!result) return null
+  if (result.status === "sent") return `${name} sent`
+  if (result.status === "skipped_no_provider") return `${name} skipped (no provider configured)`
+  return `${name} failed`
+}
+
 export function useApproveDispatchItem() {
   const qc = useQueryClient()
   return useMutation({
@@ -20,13 +32,17 @@ export function useApproveDispatchItem() {
       qc.invalidateQueries({ queryKey: installPlansKey })
       qc.invalidateQueries({ queryKey: collectionsKey })
       qc.invalidateQueries({ queryKey: repairPlansKey })
-      if (result) {
-        toast.success("Approved — confirmation link generated (no real SMS/Email provider is connected yet, see the logged stub).")
-      } else {
+      if (!result) {
         toast.error("That item is no longer awaiting approval.")
+        return
       }
+      const summaries = [summarizeChannel("SMS", result.sms), summarizeChannel("Email", result.email)].filter(Boolean)
+      const anyFailed = result.sms?.status === "failed" || result.email?.status === "failed"
+      const message = summaries.length > 0 ? summaries.join(" · ") : "Approved"
+      if (anyFailed) toast.error(message)
+      else toast.success(message)
     },
-    onError: () => toast.error("Failed to approve this dispatch item"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to approve this dispatch item"),
   })
 }
 
