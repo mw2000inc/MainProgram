@@ -27,7 +27,7 @@ import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
   getFilterChangeDailyReportColumns,
-  getFilterChangeExpandedColumns,
+  getFilterChangeDailyReportExpandedColumns,
   FILTER_CHANGE_EXPORT_COLUMNS,
 } from "@/components/filter-change/filter-change-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
@@ -57,7 +57,7 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { todayIso } from "@/lib/utils"
-import type { DailyReportSectionKey, DispatchStatus, PanelSize } from "@/lib/types"
+import type { DailyReportSectionKey, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
 // Every panel this section can render. "date" and "inventory" aren't among
 // the six admin-configurable sections (see daily_report_sections) — the
@@ -363,32 +363,36 @@ export function DailyReportSection() {
   // unchecks something.
   // Deliberately NOT run through filterColumnsByVisibility, unlike every
   // other section's compact column memo below — an admin's saved Visible
-  // Fields selection for filter_change predates this panel's widened
-  // column set (it was configured back when the compact view only ever had
-  // 4 columns), so applying it here silently clipped the panel right back
-  // down to a handful of narrow columns, which is exactly what was hiding
-  // the horizontal scrollbar in the first place: with only a few short
-  // columns there's nothing to scroll. The Daily Report's whole point for
-  // this panel is to always show the complete working column set (Order
-  // Number, Member Account#, Filter, Contact #, Address, Plan D, Pre D,
-  // Acc D, Serviceman, Status) scrollable in place, so it always renders
-  // every column getFilterChangeDailyReportColumns() defines, regardless of
-  // that saved setting.
-  const filterChangeColumns = React.useMemo(
-    () =>
-      getFilterChangeDailyReportColumns({
-        onStatusChange: isAdmin ? (plan, status) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
-        // Pre D/Serviceman/Note edited straight from the panel cell (see
-        // getFilterChangeDailyReportColumns) — same mutate-and-invalidate
-        // hook the status column above already uses, so the panel's own
-        // day-filtered rows update immediately without a manual refetch.
-        onFieldChange: isAdmin ? (plan, patch) => updateFilterChangePlan.mutate({ id: plan.id, input: patch }) : undefined,
-      }),
+  // Fields selection for filter_change predates this panel's own
+  // compact/expanded split, so applying it here risks silently clipping
+  // columns this split already deliberately curates. The compact view is
+  // always exactly these 5 (Order Number, Filter, Plan D, Pre D, Acc D);
+  // the other 5 (Member Account#, Contact #, Address, Serviceman, Status)
+  // only ever show in the Maximize2 full-screen view — see
+  // getFilterChangeDailyReportColumns/getFilterChangeDailyReportExpandedColumns's
+  // own comments.
+  const filterChangeColumnParams = React.useMemo(
+    () => ({
+      onStatusChange: isAdmin ? (plan: FilterChangePlan, status: string) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
+      // Pre D/Serviceman edited straight from the cell (compact or
+      // expanded — both share the same cell renderers, see
+      // dailyReportColumnDefs) — same mutate-and-invalidate hook the status
+      // column already uses, so the panel's own day-filtered rows update
+      // immediately without a manual refetch.
+      onFieldChange: isAdmin
+        ? (plan: FilterChangePlan, patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman">>) =>
+            updateFilterChangePlan.mutate({ id: plan.id, input: patch })
+        : undefined,
+    }),
     [isAdmin, updateFilterChangePlan]
   )
+  const filterChangeColumns = React.useMemo(
+    () => getFilterChangeDailyReportColumns(filterChangeColumnParams),
+    [filterChangeColumnParams]
+  )
   const filterChangeExpandedColumns = React.useMemo(
-    () => filterColumnsByVisibility(getFilterChangeExpandedColumns(), visibleFieldsFor("filter_change")),
-    [visibleFieldsFor]
+    () => getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams),
+    [filterChangeColumnParams]
   )
   const installColumns = React.useMemo(
     () =>
@@ -497,15 +501,20 @@ export function DailyReportSection() {
         exportFileName="filter-change-plan"
         onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
         panelHeight={sizes["filter-change"]?.height}
+        // The compact view is deliberately just 5 narrow columns (see
+        // getFilterChangeDailyReportColumns) — no forced tableClassName
+        // here, since that set doesn't need to scroll under normal panel
+        // widths. overflow-x-auto/scrollbar-always-visible still apply so
+        // it CAN scroll on an unusually narrow resize, per "whenever
+        // columns exceed the view width" rather than always.
         tableContainerClassName="overflow-x-auto scrollbar-always-visible"
-        // Explicit floor on the <table> itself — 10 real columns
-        // (Order Number, Member Account#, Filter, Contact #, Address, Plan
-        // D, Pre D, Acc D, Serviceman, Status) plus their per-cell
-        // min-widths (see getFilterChangeDailyReportColumns) already add up
-        // to comfortably more than this, but pinning it explicitly means
-        // the horizontal scrollbar engages immediately and reliably rather
-        // than depending on every cell's own min-width summing correctly.
-        tableClassName="min-w-[1000px] w-full"
+        // The Maximize2 dialog reveals the other 5 columns (Member
+        // Account#, Contact #, Address, Serviceman, Status) on top of the
+        // compact 5, for 10 total — comfortably enough to need horizontal
+        // scrolling on most screens even before summing every cell's own
+        // min-width, so this pins it explicitly rather than depending on
+        // that sum alone.
+        expandedTableClassName="min-w-[1000px] w-full"
       />
     ),
     installation: (

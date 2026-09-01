@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { TECHNICIANS } from "@/lib/constants"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
@@ -69,59 +69,53 @@ export function getFilterChangeColumns({
   ]
 }
 
-// Widened, inline-editable column set for the Daily Report's own compact
-// panel (see daily-report-section.tsx) — unlike the plain 4-column
-// getFilterChangeColumns() above (reused read-only in several other
-// places: Sale List, Member detail, the customer portal scan view), this
-// surfaces the fields an admin most often needs to check or adjust for
-// today's dispatch (Address, Contact, Plan D, Pre D, Acc D, Serviceman)
-// directly in the panel — scrollable horizontally, no need to switch to
-// the Maximize2 full-screen view for them. onFieldChange is left undefined
-// for a non-admin (see daily-report-section.tsx), which falls every one of
-// these back to plain read-only text — same on/off convention onStatusChange
-// already uses on this file's other column sets. Every cell that can carry
-// real content gets an explicit min-width wrapper so the column can't be
-// squeezed narrower than that regardless of how little a given row's value
-// fills it, which is what actually makes the panel's horizontal scrollbar
-// engage reliably instead of every column just shrinking to fit.
-export function getFilterChangeDailyReportColumns({
+interface FilterChangeDailyReportColumnParams {
+  onStatusChange?: (plan: FilterChangePlan, status: string) => void
+  onFieldChange?: (plan: FilterChangePlan, patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman">>) => void
+}
+
+// One column-def builder shared by the compact and expanded (Maximize2)
+// variants below, keyed by field, so a cell's editing behavior/min-width
+// only ever has to be defined once regardless of which of the two lists
+// includes it. onFieldChange left undefined for a non-admin (see
+// daily-report-section.tsx) falls every editable cell back to plain
+// read-only text — same on/off convention onStatusChange already uses on
+// this file's other column sets.
+function dailyReportColumnDefs({
   onStatusChange,
   onFieldChange,
-}: {
-  onStatusChange?: (plan: FilterChangePlan, status: string) => void
-  onFieldChange?: (
-    plan: FilterChangePlan,
-    patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman" | "note">>
-  ) => void
-} = {}): ColumnDef<FilterChangePlan, unknown>[] {
-  return [
-    {
+}: FilterChangeDailyReportColumnParams): Record<
+  "orderNumber" | "memberAccount" | "filterType" | "contactNumber" | "address" | "planDate" | "preD" | "accD" | "serviceman" | "status",
+  ColumnDef<FilterChangePlan, unknown>
+> {
+  return {
+    orderNumber: {
       accessorKey: "orderNumber",
       header: "Order Number",
       cell: ({ row }) => <span className="inline-block min-w-[110px] font-medium">{row.original.orderNumber}</span>,
     },
-    {
+    memberAccount: {
       accessorKey: "memberAccount",
       header: "Member Account#",
       cell: ({ row }) => <span className="inline-block min-w-[140px]">{row.original.memberAccount}</span>,
     },
-    { accessorKey: "filterType", header: "Filter" },
-    {
+    filterType: { accessorKey: "filterType", header: "Filter" },
+    contactNumber: {
       accessorKey: "contactNumber",
       header: "Contact #",
       cell: ({ row }) => <span className="inline-block min-w-[130px]">{row.original.contactNumber || "—"}</span>,
     },
-    {
+    address: {
       accessorKey: "address",
       header: "Address",
       cell: ({ row }) => <span className="inline-block min-w-[220px]">{row.original.address || "—"}</span>,
     },
-    {
+    planDate: {
       accessorKey: "planDate",
       header: "Plan D",
       cell: ({ row }) => <span className="inline-block min-w-[100px]">{formatDate(row.original.planDate)}</span>,
     },
-    {
+    preD: {
       accessorKey: "preD",
       header: "Pre D",
       cell: ({ row }) => {
@@ -130,14 +124,14 @@ export function getFilterChangeDailyReportColumns({
         return <InlineDateCell value={plan.preD} onCommit={(next) => onFieldChange(plan, { preD: next })} />
       },
     },
-    {
+    accD: {
       accessorKey: "accD",
       header: "Acc D",
       cell: ({ row }) => (
         <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
       ),
     },
-    {
+    serviceman: {
       accessorKey: "serviceman",
       header: "Serviceman",
       cell: ({ row }) => {
@@ -152,29 +146,41 @@ export function getFilterChangeDailyReportColumns({
         )
       },
     },
-    {
-      accessorKey: "note",
-      header: "Note",
-      cell: ({ row }) => {
-        const plan = row.original
-        if (!onFieldChange)
-          return <span className="inline-block min-w-[180px] text-muted-foreground">{plan.note || "—"}</span>
-        return (
-          <InlineTextCell
-            value={plan.note}
-            placeholder="Note"
-            className="min-w-[180px]"
-            onCommit={(next) => onFieldChange(plan, { note: next })}
-          />
-        )
-      },
-    },
-    {
+    status: {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
-  ]
+  }
+}
+
+// The Daily Report's own compact Filter Change panel — exactly the 5
+// fields an admin needs at a glance for today's dispatch (Order Number,
+// Filter, Plan D, Pre D, Acc D), in that order. Every other field
+// (Member Account#, Contact #, Address, Serviceman, Status) is deliberately
+// held back for the Maximize2 full-screen view (see
+// getFilterChangeDailyReportExpandedColumns below) rather than crammed in
+// here scrollable — unlike the plain 4-column getFilterChangeColumns()
+// above (reused read-only in several other places: Sale List, Member
+// detail, the customer portal scan view), which this doesn't touch at all.
+export function getFilterChangeDailyReportColumns(
+  params: FilterChangeDailyReportColumnParams = {}
+): ColumnDef<FilterChangePlan, unknown>[] {
+  const c = dailyReportColumnDefs(params)
+  return [c.orderNumber, c.filterType, c.planDate, c.preD, c.accD]
+}
+
+// The same panel's Maximize2 full-screen view — the compact 5 above, plus
+// the 5 held back from it (Member Account#, Contact #, Address, Serviceman,
+// Status), for the full 10-column set with horizontal scrolling. Shares
+// the exact same cell renderers (and onFieldChange/onStatusChange editing)
+// as the compact view via dailyReportColumnDefs, so switching to full-
+// screen never loses the ability to edit Pre D/Serviceman/Status.
+export function getFilterChangeDailyReportExpandedColumns(
+  params: FilterChangeDailyReportColumnParams = {}
+): ColumnDef<FilterChangePlan, unknown>[] {
+  const c = dailyReportColumnDefs(params)
+  return [c.orderNumber, c.filterType, c.planDate, c.preD, c.accD, c.memberAccount, c.contactNumber, c.address, c.serviceman, c.status]
 }
 
 // Full AppSheet-parity column set, shown only in the panel's expanded view.

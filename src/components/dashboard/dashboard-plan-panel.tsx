@@ -52,10 +52,19 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // comment. Only the Filter Change/Collection Daily Report panels pass
   // this today (scrollbar-always-visible, see globals.css).
   tableContainerClassName?: string
-  // Forwarded straight to DataTable's tableClassName — see its own comment.
-  // Only the Filter Change Daily Report panel passes this today (an
-  // explicit min-w-[...] on the <table> itself).
+  // Forwarded straight to DataTable's tableClassName for the COMPACT table
+  // only — see its own comment. Only the Collection Daily Report panel
+  // passes this today; Filter Change's compact view is a deliberately
+  // narrow 5-column set (see getFilterChangeDailyReportColumns) that
+  // doesn't need a forced min-width, so it leaves this unset and uses
+  // expandedTableClassName instead (below).
   tableClassName?: string
+  // Same as tableClassName, but for the Maximize2 dialog's table only —
+  // falls back to tableClassName when omitted (every call site except
+  // Filter Change's Daily Report panel, where the dialog reveals 5 more
+  // columns that DO need a forced min-width even though the compact view
+  // doesn't).
+  expandedTableClassName?: string
   // The header's title + action buttons normally stack into two rows below
   // an @sm/card-header container-query breakpoint, so a panel resized down
   // to the Daily Report's MIN_WIDTH (220px) doesn't have its buttons
@@ -110,6 +119,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   panelHeight,
   tableContainerClassName,
   tableClassName,
+  expandedTableClassName,
   headerAlwaysRow,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
@@ -258,7 +268,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     </div>
   )
 
-  const table = (cols: ColumnDef<TData, unknown>[], pageSize: number) => (
+  const table = (cols: ColumnDef<TData, unknown>[], pageSize: number, isExpanded: boolean) => (
     // flex-1/min-h-0 here (not just DataTable's own internal h-full) is what
     // actually makes DataTable grow to fill its share of CardContent's
     // space — a bare percentage height on a flex child doesn't reliably
@@ -274,7 +284,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
         tableContainerClassName={tableContainerClassName}
-        tableClassName={tableClassName}
+        tableClassName={isExpanded ? (expandedTableClassName ?? tableClassName) : tableClassName}
       />
     </div>
   )
@@ -300,7 +310,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           {loading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading...</div>
           ) : (
-            table(compactColumns, computePageSize(panelHeight))
+            table(compactColumns, computePageSize(panelHeight), false)
           )}
         </CardContent>
       </Card>
@@ -315,7 +325,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {statusRow}
             {selectionBar}
-            {table(dialogColumns, Math.max(filteredData.length, 1))}
+            {table(dialogColumns, Math.max(filteredData.length, 1), true)}
           </div>
         </DialogContent>
       </Dialog>
