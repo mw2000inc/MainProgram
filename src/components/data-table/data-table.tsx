@@ -49,6 +49,13 @@ interface DataTableProps<TData> {
   // scroll gesture first. Every other call site leaves this unset and gets
   // the exact wrapper classes as before.
   tableContainerClassName?: string
+  // Extra classes merged onto the actual <table> element (not its wrapper)
+  // — e.g. an explicit min-w-[...] to guarantee the table itself is wide
+  // enough to force tableContainerClassName's overflow-x-auto to actually
+  // engage, regardless of how narrow any individual cell's own content
+  // happens to be. Every other call site leaves this unset and gets the
+  // plain w-full table as before.
+  tableClassName?: string
 }
 
 export function DataTable<TData>({
@@ -62,6 +69,7 @@ export function DataTable<TData>({
   onRowClick,
   getRowClassName,
   tableContainerClassName,
+  tableClassName,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -125,7 +133,7 @@ export function DataTable<TData>({
       </div>
 
       <div className={cn("min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto", tableContainerClassName)}>
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

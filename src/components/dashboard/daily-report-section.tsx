@@ -361,20 +361,30 @@ export function DailyReportSection() {
   // Fields (see Settings > Daily Report Sections > Edit Section) — empty
   // means unedited/show-all, so this is a no-op until an admin actually
   // unchecks something.
+  // Deliberately NOT run through filterColumnsByVisibility, unlike every
+  // other section's compact column memo below — an admin's saved Visible
+  // Fields selection for filter_change predates this panel's widened
+  // column set (it was configured back when the compact view only ever had
+  // 4 columns), so applying it here silently clipped the panel right back
+  // down to a handful of narrow columns, which is exactly what was hiding
+  // the horizontal scrollbar in the first place: with only a few short
+  // columns there's nothing to scroll. The Daily Report's whole point for
+  // this panel is to always show the complete working column set (Order
+  // Number, Member Account#, Filter, Contact #, Address, Plan D, Pre D,
+  // Acc D, Serviceman, Status) scrollable in place, so it always renders
+  // every column getFilterChangeDailyReportColumns() defines, regardless of
+  // that saved setting.
   const filterChangeColumns = React.useMemo(
     () =>
-      filterColumnsByVisibility(
-        getFilterChangeDailyReportColumns({
-          onStatusChange: isAdmin ? (plan, status) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
-          // Pre D/Serviceman/Note edited straight from the panel cell (see
-          // getFilterChangeDailyReportColumns) — same mutate-and-invalidate
-          // hook the status column above already uses, so the panel's own
-          // day-filtered rows update immediately without a manual refetch.
-          onFieldChange: isAdmin ? (plan, patch) => updateFilterChangePlan.mutate({ id: plan.id, input: patch }) : undefined,
-        }),
-        visibleFieldsFor("filter_change")
-      ),
-    [visibleFieldsFor, isAdmin, updateFilterChangePlan]
+      getFilterChangeDailyReportColumns({
+        onStatusChange: isAdmin ? (plan, status) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
+        // Pre D/Serviceman/Note edited straight from the panel cell (see
+        // getFilterChangeDailyReportColumns) — same mutate-and-invalidate
+        // hook the status column above already uses, so the panel's own
+        // day-filtered rows update immediately without a manual refetch.
+        onFieldChange: isAdmin ? (plan, patch) => updateFilterChangePlan.mutate({ id: plan.id, input: patch }) : undefined,
+      }),
+    [isAdmin, updateFilterChangePlan]
   )
   const filterChangeExpandedColumns = React.useMemo(
     () => filterColumnsByVisibility(getFilterChangeExpandedColumns(), visibleFieldsFor("filter_change")),
@@ -487,7 +497,15 @@ export function DailyReportSection() {
         exportFileName="filter-change-plan"
         onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
         panelHeight={sizes["filter-change"]?.height}
-        tableContainerClassName="scrollbar-always-visible"
+        tableContainerClassName="overflow-x-auto scrollbar-always-visible"
+        // Explicit floor on the <table> itself — 10 real columns
+        // (Order Number, Member Account#, Filter, Contact #, Address, Plan
+        // D, Pre D, Acc D, Serviceman, Status) plus their per-cell
+        // min-widths (see getFilterChangeDailyReportColumns) already add up
+        // to comfortably more than this, but pinning it explicitly means
+        // the horizontal scrollbar engages immediately and reliably rather
+        // than depending on every cell's own min-width summing correctly.
+        tableClassName="min-w-[1000px] w-full"
       />
     ),
     installation: (

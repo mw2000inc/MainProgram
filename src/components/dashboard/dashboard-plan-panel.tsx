@@ -52,6 +52,10 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // comment. Only the Filter Change/Collection Daily Report panels pass
   // this today (scrollbar-always-visible, see globals.css).
   tableContainerClassName?: string
+  // Forwarded straight to DataTable's tableClassName — see its own comment.
+  // Only the Filter Change Daily Report panel passes this today (an
+  // explicit min-w-[...] on the <table> itself).
+  tableClassName?: string
 }
 
 // Everything in the compact table's chrome above/below the actual rows —
@@ -96,6 +100,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   onRowClick,
   panelHeight,
   tableContainerClassName,
+  tableClassName,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
@@ -252,6 +257,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
         tableContainerClassName={tableContainerClassName}
+        tableClassName={tableClassName}
       />
     </div>
   )
