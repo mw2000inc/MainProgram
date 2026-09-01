@@ -30,6 +30,9 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
   emptyMessage,
   canAdd,
   onAdd,
+  tableContainerClassName,
+  tableClassName,
+  headerAlwaysRow,
 }: {
   title: string
   icon: LucideIcon
@@ -43,6 +46,10 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
   emptyMessage: string
   canAdd?: boolean
   onAdd?: () => void
+  // Forwarded straight to DashboardPlanPanel — see its own comments.
+  tableContainerClassName?: string
+  tableClassName?: string
+  headerAlwaysRow?: boolean
 }) {
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
 
@@ -109,6 +116,9 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
         onAdd={onAdd}
         exportColumns={exportColumns}
         exportFileName={exportFileName}
+        tableContainerClassName={tableContainerClassName}
+        tableClassName={tableClassName}
+        headerAlwaysRow={headerAlwaysRow}
       />
     </div>
   )

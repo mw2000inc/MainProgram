@@ -56,6 +56,15 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // Only the Filter Change Daily Report panel passes this today (an
   // explicit min-w-[...] on the <table> itself).
   tableClassName?: string
+  // The header's title + action buttons normally stack into two rows below
+  // an @sm/card-header container-query breakpoint, so a panel resized down
+  // to the Daily Report's MIN_WIDTH (220px) doesn't have its buttons
+  // clipped or overflowing. A panel that's never resized that narrow (e.g.
+  // OrderRelatedSection's full-width-or-half-grid usage on the order
+  // detail page) doesn't need that accommodation and reads cleaner without
+  // it — set this to skip the container query and always render the
+  // title/buttons on one row.
+  headerAlwaysRow?: boolean
 }
 
 // Everything in the compact table's chrome above/below the actual rows —
@@ -101,6 +110,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   panelHeight,
   tableContainerClassName,
   tableClassName,
+  headerAlwaysRow,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
@@ -161,7 +171,14 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   }
 
   const header = (
-    <div className="flex min-w-0 max-w-full flex-col gap-2 @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between">
+    <div
+      className={cn(
+        "flex min-w-0 max-w-full gap-2",
+        headerAlwaysRow
+          ? "flex-row items-center justify-between mb-4"
+          : "flex-col @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between"
+      )}
+    >
       <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
         <Icon className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">{title}</span>
       </div>

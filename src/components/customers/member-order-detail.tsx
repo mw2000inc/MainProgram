@@ -160,6 +160,8 @@ export function MemberOrderDetail({
                     emptyMessage="No filter change history for this order."
                     canAdd
                     onAdd={() => setFilterFormOpen(true)}
+                    tableContainerClassName="overflow-x-auto scrollbar-always-visible"
+                    tableClassName="min-w-[1000px] w-full"
                   />
                   <OrderRelatedSection
                     title="Collections"
@@ -172,19 +174,32 @@ export function MemberOrderDetail({
                     emptyMessage="No collection history for this order."
                     canAdd
                     onAdd={() => setCollectionFormOpen(true)}
+                    tableContainerClassName="overflow-x-auto scrollbar-always-visible"
+                    tableClassName="min-w-[1000px] w-full"
                   />
                 </div>
-                <OrderRelatedSection
-                  title="Repairs"
-                  icon={Wrench}
-                  data={orderRepairs}
-                  columns={repairColumns}
-                  exportColumns={REPAIR_EXPORT_COLUMNS}
-                  exportFileName={`repairs-${entry.orderNumber}`}
-                  emptyMessage="No repair history for this order."
-                  canAdd
-                  onAdd={() => setRepairFormOpen(true)}
-                />
+                {/* Explicit mt-6 (on top of the grid's own gap-6, which only
+                    ever spaces its own two children) + clear-both — this
+                    section renders full-width directly below the Filter
+                    Changes/Collections grid above, and needs its own
+                    guaranteed clearance so it can never crowd or overlap
+                    that grid's bottom edge (e.g. Filter Changes' own
+                    pagination bar) regardless of how tall either grid cell
+                    ends up. */}
+                <div className="mt-6 clear-both">
+                  <OrderRelatedSection
+                    title="Repairs"
+                    icon={Wrench}
+                    data={orderRepairs}
+                    columns={repairColumns}
+                    exportColumns={REPAIR_EXPORT_COLUMNS}
+                    exportFileName={`repairs-${entry.orderNumber}`}
+                    emptyMessage="No repair history for this order."
+                    canAdd
+                    onAdd={() => setRepairFormOpen(true)}
+                    headerAlwaysRow
+                  />
+                </div>
               </>
             }
           >
