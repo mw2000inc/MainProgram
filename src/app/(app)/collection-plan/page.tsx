@@ -13,7 +13,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
-import { useCollections, useDeleteCollections } from "@/lib/hooks/use-collections"
+import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
@@ -28,6 +28,7 @@ function CollectionPlanPageContent() {
   const isAdmin = user?.role === "admin"
   const { data: entries = [], isPending } = useCollections()
   const deleteEntries = useDeleteCollections()
+  const updateEntry = useUpdateCollection()
 
   // Deep link from e.g. the Daily Report's Collection Plan panel
   // (?id=<entryId>) — opens that record's detail panel directly.
@@ -67,8 +68,9 @@ function CollectionPlanPageContent() {
           setEditing(e)
           setFormOpen(true)
         },
+        onStatusChange: isAdmin ? (e, status) => updateEntry.mutate({ id: e.id, input: { status } }) : undefined,
       }),
-    [isAdmin]
+    [isAdmin, updateEntry]
   )
 
   if (isPending) {

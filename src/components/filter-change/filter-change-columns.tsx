@@ -1,11 +1,14 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { CheckCircle2, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+
+export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
 
 // 'ct_completion' rows were auto-created/updated by a completed job
 // recording its required filters (see the
@@ -19,17 +22,30 @@ function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
   return <span className="text-muted-foreground">Manual</span>
 }
 
-// onMarkDone is a Daily Report-only quick action ("Mark Filter Changed") —
-// omitted everywhere else this compact column set is used (Sale List,
-// Member detail, the customer portal scan view), so those keep rendering
-// exactly as before. Only shown for a still-Pending row; there's nothing
-// left to "mark done" once it's already Completed.
+// A single interactive Status column when onStatusChange is provided
+// (Daily Report + the standalone /filter-change page, admin-only) —
+// replaces the old read-only badge plus the separate one-click "Mark
+// Filter Changed" button with one Select that both shows and changes
+// status in place. Falls back to the plain read-only badge everywhere else
+// this column set is used (Sale List, Member detail, the customer portal
+// scan view), unchanged from before.
+function StatusCell({ plan, onStatusChange }: { plan: FilterChangePlan; onStatusChange?: (plan: FilterChangePlan, status: string) => void }) {
+  if (!onStatusChange) return <PlanStatusBadge status={plan.status} />
+  return (
+    <PlanStatusSelect
+      status={plan.status}
+      options={FILTER_CHANGE_STATUS_OPTIONS}
+      onChange={(next) => onStatusChange(plan, next)}
+    />
+  )
+}
+
 export function getFilterChangeColumns({
-  onMarkDone,
+  onStatusChange,
 }: {
-  onMarkDone?: (plan: FilterChangePlan) => void
+  onStatusChange?: (plan: FilterChangePlan, status: string) => void
 } = {}): ColumnDef<FilterChangePlan, unknown>[] {
-  const columns: ColumnDef<FilterChangePlan, unknown>[] = [
+  return [
     {
       accessorKey: "orderNumber",
       header: "Order Number",
@@ -46,32 +62,9 @@ export function getFilterChangeColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
-
-  if (onMarkDone) {
-    columns.push({
-      id: "markDone",
-      header: "",
-      cell: ({ row }) =>
-        row.original.status.toLowerCase() === "pending" ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-success hover:text-success"
-            onClick={(e) => {
-              e.stopPropagation()
-              onMarkDone(row.original)
-            }}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" /> Mark Filter Changed
-          </Button>
-        ) : null,
-    })
-  }
-
-  return columns
 }
 
 // Full AppSheet-parity column set, shown only in the panel's expanded view.
@@ -117,9 +110,11 @@ export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, un
 export function getFilterChangeFullColumns({
   canDelete,
   onDelete,
+  onStatusChange,
 }: {
   canDelete: boolean
   onDelete: (plan: FilterChangePlan) => void
+  onStatusChange?: (plan: FilterChangePlan, status: string) => void
 }): ColumnDef<FilterChangePlan, unknown>[] {
   const columns: ColumnDef<FilterChangePlan, unknown>[] = [
     {
@@ -161,7 +156,7 @@ export function getFilterChangeFullColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
 

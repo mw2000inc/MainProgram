@@ -12,7 +12,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getInstallFullColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
-import { useDeleteInstallPlans, useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useDeleteInstallPlans, useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
@@ -23,6 +23,7 @@ function InstallPageContent() {
   const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useInstallPlans()
   const deletePlans = useDeleteInstallPlans()
+  const updatePlan = useUpdateInstallPlan()
 
   // Deep link from e.g. the Daily Report's Installation Plan panel
   // (?id=<planId>) — opens that record's detail panel directly.
@@ -42,8 +43,9 @@ function InstallPageContent() {
       getInstallFullColumns({
         canDelete: isAdmin,
         onDelete: (plan) => setDeleting(plan),
+        onStatusChange: isAdmin ? (plan, status) => updatePlan.mutate({ id: plan.id, input: { status } }) : undefined,
       }),
-    [isAdmin]
+    [isAdmin, updatePlan]
   )
 
   if (isPending) {

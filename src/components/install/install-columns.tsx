@@ -4,13 +4,31 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
+
+export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
+
+// A single interactive Status column when onStatusChange is provided
+// (Daily Report + the standalone /install page, admin-only) — same pattern
+// as Filter Change/Collection/Repair. Falls back to the plain read-only
+// badge everywhere else this column set is used.
+function StatusCell({ plan, onStatusChange }: { plan: InstallPlan; onStatusChange?: (plan: InstallPlan, status: string) => void }) {
+  if (!onStatusChange) return <PlanStatusBadge status={plan.status} />
+  return (
+    <PlanStatusSelect status={plan.status} options={INSTALL_STATUS_OPTIONS} onChange={(next) => onStatusChange(plan, next)} />
+  )
+}
 
 // Compact dashboard view — trimmed of Input Date, Sales Person, Via, Year Month
 // Plan, Model(dp), and Delivery & Installation Fee to keep the daily glance
 // focused (all still captured on Add / available via export where applicable).
-export function getInstallColumns(): ColumnDef<InstallPlan, unknown>[] {
+export function getInstallColumns({
+  onStatusChange,
+}: {
+  onStatusChange?: (plan: InstallPlan, status: string) => void
+} = {}): ColumnDef<InstallPlan, unknown>[] {
   return [
     {
       accessorKey: "name",
@@ -50,7 +68,7 @@ export function getInstallColumns(): ColumnDef<InstallPlan, unknown>[] {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
 }
@@ -60,9 +78,11 @@ export function getInstallColumns(): ColumnDef<InstallPlan, unknown>[] {
 export function getInstallFullColumns({
   canDelete,
   onDelete,
+  onStatusChange,
 }: {
   canDelete: boolean
   onDelete: (plan: InstallPlan) => void
+  onStatusChange?: (plan: InstallPlan, status: string) => void
 }): ColumnDef<InstallPlan, unknown>[] {
   return [
     {
@@ -104,6 +124,11 @@ export function getInstallFullColumns({
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
     ...(canDelete
       ? [

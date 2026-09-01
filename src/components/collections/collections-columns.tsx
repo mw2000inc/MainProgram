@@ -1,11 +1,20 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Banknote, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
+
+// Kept as "Collected" rather than the other three modules' "Completed" —
+// this is a payment record, and "Collected" is what the rest of this app
+// (collections-form-dialog's own STATUS_OPTIONS, PlanStatusBadge's tone
+// mapping) already calls a finished one. Renaming it to "Completed" here
+// would leave every already-Collected row not matching any option in this
+// Select at all.
+export const COLLECTIONS_STATUS_OPTIONS = ["Pending", "Collected", "Cancelled"] as const
 
 // Set automatically (never by hand) the moment a completed job records
 // filter items for this customer — see the
@@ -27,17 +36,31 @@ function SourceCell({ source }: { source: CollectionPlan["source"] }) {
   return <span className="text-muted-foreground">Manual</span>
 }
 
+// A single interactive Status column when onStatusChange is provided
+// (Daily Report + the standalone /collection-plan page, admin-only) —
+// replaces the old read-only badge plus the separate one-click "Record
+// Payment" button with one Select that both shows and changes status in
+// place. Falls back to the plain read-only badge everywhere else this
+// column set is used (Sale List, Member detail, the customer portal scan
+// view), unchanged from before.
+function StatusCell({ entry, onStatusChange }: { entry: CollectionPlan; onStatusChange?: (entry: CollectionPlan, status: string) => void }) {
+  if (!onStatusChange) return <PlanStatusBadge status={entry.status} />
+  return (
+    <PlanStatusSelect
+      status={entry.status}
+      options={COLLECTIONS_STATUS_OPTIONS}
+      onChange={(next) => onStatusChange(entry, next)}
+    />
+  )
+}
+
 // Matches the old AppSheet Collection Plan columns, minus Product, S/C, and R/N.
-// onRecordPayment is a Daily Report-only quick action ("Record Payment") —
-// omitted everywhere else this compact column set is used (Sale List,
-// Member detail, the customer portal scan view), so those keep rendering
-// exactly as before. Only shown for a still-Pending row.
 export function getCollectionsColumns({
-  onRecordPayment,
+  onStatusChange,
 }: {
-  onRecordPayment?: (entry: CollectionPlan) => void
+  onStatusChange?: (entry: CollectionPlan, status: string) => void
 } = {}): ColumnDef<CollectionPlan, unknown>[] {
-  const columns: ColumnDef<CollectionPlan, unknown>[] = [
+  return [
     {
       accessorKey: "orderNo",
       header: "Order Number",
@@ -78,32 +101,9 @@ export function getCollectionsColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
     },
   ]
-
-  if (onRecordPayment) {
-    columns.push({
-      id: "recordPayment",
-      header: "",
-      cell: ({ row }) =>
-        row.original.status.toLowerCase() === "pending" ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-success hover:text-success"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRecordPayment(row.original)
-            }}
-          >
-            <Banknote className="h-3.5 w-3.5" /> Record Payment
-          </Button>
-        ) : null,
-    })
-  }
-
-  return columns
 }
 
 // Full column set for the standalone /collection-plan list page — every
@@ -119,11 +119,13 @@ export function getCollectionsFullColumns({
   canEditDate,
   onDelete,
   onEditDate,
+  onStatusChange,
 }: {
   canDelete: boolean
   canEditDate: boolean
   onDelete: (entry: CollectionPlan) => void
   onEditDate: (entry: CollectionPlan) => void
+  onStatusChange?: (entry: CollectionPlan, status: string) => void
 }): ColumnDef<CollectionPlan, unknown>[] {
   const columns: ColumnDef<CollectionPlan, unknown>[] = [
     {
@@ -185,7 +187,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
     },
   ]
 

@@ -13,7 +13,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS } from "@/components/filter-change/filter-change-columns"
-import { useDeleteFilterChangePlans, useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useDeleteFilterChangePlans, useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatDate, todayIso } from "@/lib/utils"
@@ -28,6 +28,7 @@ function FilterChangePageContent() {
   const isAdmin = user?.role === "admin"
   const { data: plans = [], isPending } = useFilterChangePlans()
   const deletePlans = useDeleteFilterChangePlans()
+  const updatePlan = useUpdateFilterChangePlan()
 
   // Deep link from e.g. the Daily Report's Filter Change Plan panel
   // (?id=<planId>) — opens that record's detail panel directly.
@@ -62,8 +63,9 @@ function FilterChangePageContent() {
       getFilterChangeFullColumns({
         canDelete: isAdmin,
         onDelete: (p) => setDeleting(p),
+        onStatusChange: isAdmin ? (p, status) => updatePlan.mutate({ id: p.id, input: { status } }) : undefined,
       }),
-    [isAdmin]
+    [isAdmin, updatePlan]
   )
 
   if (isPending) {

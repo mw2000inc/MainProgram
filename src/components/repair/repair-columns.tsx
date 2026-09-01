@@ -4,12 +4,30 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
+export const REPAIR_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
+
+// A single interactive Status column when onStatusChange is provided
+// (Daily Report + the standalone /repair-plan page, admin-only) — same
+// pattern as Filter Change/Collection/Installation. Falls back to the plain
+// read-only badge everywhere else this column set is used.
+function StatusCell({ plan, onStatusChange }: { plan: RepairPlan; onStatusChange?: (plan: RepairPlan, status: string) => void }) {
+  if (!onStatusChange) return <PlanStatusBadge status={plan.status} />
+  return (
+    <PlanStatusSelect status={plan.status} options={REPAIR_STATUS_OPTIONS} onChange={(next) => onStatusChange(plan, next)} />
+  )
+}
+
 // Compact dashboard view — trimmed of Issued Date and Part No (still captured on
 // Add and available via export) to keep the daily glance focused.
-export function getRepairColumns(): ColumnDef<RepairPlan, unknown>[] {
+export function getRepairColumns({
+  onStatusChange,
+}: {
+  onStatusChange?: (plan: RepairPlan, status: string) => void
+} = {}): ColumnDef<RepairPlan, unknown>[] {
   return [
     {
       accessorKey: "accountName",
@@ -47,7 +65,7 @@ export function getRepairColumns(): ColumnDef<RepairPlan, unknown>[] {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
 }
@@ -57,9 +75,11 @@ export function getRepairColumns(): ColumnDef<RepairPlan, unknown>[] {
 export function getRepairFullColumns({
   canDelete,
   onDelete,
+  onStatusChange,
 }: {
   canDelete: boolean
   onDelete: (plan: RepairPlan) => void
+  onStatusChange?: (plan: RepairPlan, status: string) => void
 }): ColumnDef<RepairPlan, unknown>[] {
   return [
     {
@@ -98,7 +118,7 @@ export function getRepairFullColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
     ...(canDelete
       ? [

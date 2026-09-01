@@ -43,8 +43,8 @@ import {
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
 import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
-import { useInstallPlans, useDeleteInstallPlans } from "@/lib/hooks/use-install-plans"
-import { useRepairPlans, useDeleteRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useStockMovementRows } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
@@ -300,14 +300,19 @@ export function DailyReportSection() {
   const deleteInstallPlans = useDeleteInstallPlans()
   const deleteRepairPlans = useDeleteRepairPlans()
   const deleteCollections = useDeleteCollections()
-  // Quick actions ("Mark Filter Changed" / "Record Payment") — a plain
-  // status update on the same record the full Filter Change/Collection Plan
-  // pages already edit, so the report and those pages can never drift: both
-  // read from the same useFilterChangePlans()/useCollections() query, and
-  // this mutation's onSuccess (see the hooks themselves) invalidates that
-  // exact query, which is what makes the report's own day-filtered rows
-  // update immediately without a manual refetch.
+  // Inline Status dropdown (Pending/Completed/Cancelled, or Pending/
+  // Collected/Cancelled for Collections) — a plain status update on the
+  // same record the full Filter Change/Install/Collection/Repair pages
+  // already edit, so the report and those pages can never drift: all four
+  // read from the same useFilterChangePlans()/useInstallPlans()/
+  // useCollections()/useRepairPlans() query, and each mutation's onSuccess
+  // (see the hooks themselves) invalidates that exact query, which is what
+  // makes the report's own day-filtered rows — and the standalone list
+  // pages, reading the same query — update immediately without a manual
+  // refetch.
   const updateFilterChangePlan = useUpdateFilterChangePlan()
+  const updateInstallPlan = useUpdateInstallPlan()
+  const updateRepairPlan = useUpdateRepairPlan()
   const updateCollection = useUpdateCollection()
 
   const [filterChangeFormOpen, setFilterChangeFormOpen] = React.useState(false)
@@ -323,7 +328,7 @@ export function DailyReportSection() {
     () =>
       filterColumnsByVisibility(
         getFilterChangeColumns({
-          onMarkDone: isAdmin ? (plan) => updateFilterChangePlan.mutate({ id: plan.id, input: { status: "Completed" } }) : undefined,
+          onStatusChange: isAdmin ? (plan, status) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
         }),
         visibleFieldsFor("filter_change")
       ),
@@ -334,18 +339,30 @@ export function DailyReportSection() {
     [visibleFieldsFor]
   )
   const installColumns = React.useMemo(
-    () => filterColumnsByVisibility(getInstallColumns(), visibleFieldsFor("installation")),
-    [visibleFieldsFor]
+    () =>
+      filterColumnsByVisibility(
+        getInstallColumns({
+          onStatusChange: isAdmin ? (plan, status) => updateInstallPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+        }),
+        visibleFieldsFor("installation")
+      ),
+    [visibleFieldsFor, isAdmin, updateInstallPlan]
   )
   const repairColumns = React.useMemo(
-    () => filterColumnsByVisibility(getRepairColumns(), visibleFieldsFor("repair")),
-    [visibleFieldsFor]
+    () =>
+      filterColumnsByVisibility(
+        getRepairColumns({
+          onStatusChange: isAdmin ? (plan, status) => updateRepairPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+        }),
+        visibleFieldsFor("repair")
+      ),
+    [visibleFieldsFor, isAdmin, updateRepairPlan]
   )
   const collectionsColumns = React.useMemo(
     () =>
       filterColumnsByVisibility(
         getCollectionsColumns({
-          onRecordPayment: isAdmin ? (entry) => updateCollection.mutate({ id: entry.id, input: { status: "Collected" } }) : undefined,
+          onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
         }),
         visibleFieldsFor("collection")
       ),
@@ -358,24 +375,27 @@ export function DailyReportSection() {
   const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(), [])
 
   // Pre D, when set, is the record's actual (re)scheduled date — it wins
-  // over Plan D for deciding which day's Daily Report a Filter Change or
-  // Collection belongs on, matching COALESCE(pre_d, plan_d) semantics: an
-  // admin who reschedules a filter change or collection to a new date via
-  // Pre D expects it to move to *that* day's report, not stay stuck under
-  // its original Plan D. Falls back to Plan D whenever Pre D is empty
-  // (the common case), so nothing already-unset changes behavior. Scoped to
-  // just these two sections, per spec — Install/Repair keep matching their
-  // own single date field (inputDate/issuedDate) unchanged.
+  // over each module's own base date field for deciding which day's Daily
+  // Report it belongs on, matching COALESCE(pre_d, plan_d) semantics: an
+  // admin who reschedules something via Pre D expects it to move to *that*
+  // day's report, not stay stuck under its original date. Falls back to the
+  // base field whenever Pre D is empty (the common case), so nothing
+  // already-unset changes behavior. All four modules (Filter Change,
+  // Installation, Collection, Repair) get this same treatment.
   const dayFilterChangePlans = React.useMemo(
     () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate),
     [filterChangePlans, reportDate]
   )
+  // InstallPlan has no preD field — its own equivalent "rescheduled date"
+  // is preInstalledDate (input date is the plan/entry date, installedDate
+  // is when it actually happened — see the InstallPlan type), so that's
+  // what wins over inputDate here, same COALESCE semantics as the others.
   const dayInstallPlans = React.useMemo(
-    () => installPlans.filter((p) => p.inputDate === reportDate),
+    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate),
     [installPlans, reportDate]
   )
   const dayRepairPlans = React.useMemo(
-    () => repairPlans.filter((p) => p.issuedDate === reportDate),
+    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate),
     [repairPlans, reportDate]
   )
   const dayCollectionPlans = React.useMemo(
