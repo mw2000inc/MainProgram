@@ -13,7 +13,7 @@ import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog
 import { getSaleListOrderNumberColumn, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import {
-  getFilterChangeColumns,
+  getFilterChangeDailyReportColumns,
   getFilterChangeExpandedColumns,
   FILTER_CHANGE_EXPORT_COLUMNS,
 } from "@/components/filter-change/filter-change-columns"
@@ -80,7 +80,17 @@ export function MemberOrderDetail({
   const [repairFormOpen, setRepairFormOpen] = React.useState(false)
 
   const narrowColumns = React.useMemo(() => getSaleListOrderNumberColumn(), [])
-  const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
+  // The compact Filter Changes card on this page shows exactly 5 fields,
+  // in order: Order Number, Filter, Plan D, Pre D, Acc D — the same
+  // curated compact set the Daily Report's own Filter Change panel uses
+  // (see getFilterChangeDailyReportColumns's own comment), not the plain
+  // getFilterChangeColumns() 4-column set (Order Number, Member Account#,
+  // Filter, Status) still used read-only elsewhere (Sale List, the
+  // customer portal scan view). Read-only here (no onStatusChange/
+  // onFieldChange) — this page has never supported inline-editing these
+  // rows. The Maximize2 dialog keeps the separate, wider
+  // getFilterChangeExpandedColumns() set unchanged.
+  const filterChangeColumns = React.useMemo(() => getFilterChangeDailyReportColumns(), [])
   const filterChangeExpandedColumns = React.useMemo(() => getFilterChangeExpandedColumns(), [])
   const collectionsColumns = React.useMemo(() => getCollectionsColumns(), [])
   const repairColumns = React.useMemo(() => getRepairColumns(), [])
