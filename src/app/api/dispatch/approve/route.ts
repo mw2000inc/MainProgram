@@ -162,9 +162,11 @@ async function getEntityAddress(
 // the same functional confirm/reschedule link right after it (the reply
 // path is best-effort — see /api/webhooks/sms-reply — the link is the
 // one fully-working confirmation path for every case). Email points at
-// the button instead of "reply". Note: the two 😊 emoji force this SMS
-// into UCS-2 encoding — see sendSms's own comment on what that does to
-// segment count/cost.
+// the button instead of "reply". No emoji here on purpose (kept in
+// buildEmailContent below) — they'd force this into UCS-2 encoding and
+// roughly double the billed SMS segment count for two characters; the
+// wording alone already carries the warm tone. Plain ASCII throughout
+// keeps this on GSM-7 (~153 chars/segment) instead.
 function buildSmsMessage({
   companyName,
   actionPhrase,
@@ -180,13 +182,13 @@ function buildSmsMessage({
 }): string {
   const location = address ? ` at ${address}` : ""
   return [
-    "Hello Sir/Ma'am, good day! 😊 We hope you're doing well!",
+    "Hello Sir/Ma'am, good day! We hope you're doing well!",
     "",
     `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}${location}.`,
     "",
     `We'd be happy to assist you with the service. Kindly reply to this message to confirm if the scheduled date works for you, or tap this link to confirm or request a reschedule: ${confirmUrl}`,
     "",
-    `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day! 😊`,
+    `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day!`,
   ].join("\n")
 }
 
@@ -260,16 +262,16 @@ function appBaseUrl(request: Request): string {
 // email channel) succeed even before SMS credentials are added.
 //
 // Character-set note (not a Semaphore-specific quirk — this is standard
-// GSM/SMPP behavior any SMS gateway follows): a plain-ASCII message is
-// sent as GSM-7, ~153 chars per segment when concatenated. The 😊 emoji
-// in buildSmsMessage's copy isn't in the GSM-7 alphabet, which forces the
-// *entire* message to UCS-2 encoding — dropping that to ~67 chars per
-// segment. The current friendly-tone template runs well past one segment
-// either way (it's a multi-paragraph message), so this isn't a "will it
-// fit" concern, but it does mean more billed segments per send than the
-// old one-liner version had. If per-message SMS cost matters, dropping
-// the emoji (or moving them to email only, where this has no effect at
-// all — see buildEmailContent) would meaningfully cut segment count.
+// GSM/SMPP behavior any SMS gateway follows): any character outside the
+// GSM-7 alphabet — emoji being the most common way this bites a template
+// — forces the *entire* message to UCS-2 encoding, dropping the
+// per-segment limit from ~153 chars to ~67. buildSmsMessage's copy is
+// deliberately plain ASCII (no emoji — see its own comment) specifically
+// to stay on GSM-7, since the multi-paragraph friendly-tone wording
+// already runs multiple segments and emoji would have roughly doubled
+// that again for no functional benefit. Worth re-checking this comment if
+// the SMS copy ever changes to include emoji, curly quotes, or other
+// non-GSM-7 punctuation again.
 async function sendSms(phone: string, message: string): Promise<ChannelResult> {
   const apiKey = process.env.SEMAPHORE_API_KEY
   if (!apiKey) return { status: "skipped_no_provider", detail: "SEMAPHORE_API_KEY is not set" }
