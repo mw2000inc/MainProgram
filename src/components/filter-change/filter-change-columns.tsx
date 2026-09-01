@@ -158,6 +158,11 @@ export function getFilterChangeFullColumns({
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+    },
   ]
 
   if (canDelete) {

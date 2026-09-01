@@ -144,7 +144,6 @@ function FilterChangePageContent() {
                   data={scopedPlans}
                   searchPlaceholder="Search by order number, account, address..."
                   emptyMessage="No filter change plans found."
-                  getRowClassName={(p) => (p.status.toLowerCase() !== "pending" ? "line-through text-muted-foreground" : undefined)}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                 />
