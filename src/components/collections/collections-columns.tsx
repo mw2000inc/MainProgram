@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
+import { InlineDateCell, InlineNumberCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 
@@ -92,6 +93,96 @@ export function getCollectionsColumns({
       accessorKey: "note",
       header: "Note",
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+    },
+    {
+      accessorKey: "filterChangeRequired",
+      header: "Filter Change",
+      cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
+    },
+  ]
+}
+
+// Widened, inline-editable column set for the Daily Report's own compact
+// panel (see daily-report-section.tsx) — same idea as
+// getFilterChangeDailyReportColumns: leaves the plain getCollectionsColumns()
+// above untouched for its other read-only call sites (Sale List, Member
+// detail, the customer portal scan view), and instead gives the Daily
+// Report panel itself an explicit min-width per column so the horizontal
+// scrollbar engages reliably rather than every column just shrinking to
+// fit. onFieldChange undefined (non-admin) falls every editable cell back
+// to plain read-only text/currency, same on/off convention as
+// onStatusChange.
+export function getCollectionsDailyReportColumns({
+  onStatusChange,
+  onFieldChange,
+}: {
+  onStatusChange?: (entry: CollectionPlan, status: string) => void
+  onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note">>) => void
+} = {}): ColumnDef<CollectionPlan, unknown>[] {
+  return [
+    {
+      accessorKey: "orderNo",
+      header: "Order Number",
+      cell: ({ row }) => <span className="inline-block min-w-[110px] font-medium">{row.original.orderNo}</span>,
+    },
+    {
+      accessorKey: "accountName",
+      header: "Member Account#",
+      cell: ({ row }) => <span className="inline-block min-w-[150px]">{row.original.accountName}</span>,
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-[90px]">{formatCurrency(entry.amount)}</span>
+        return <InlineNumberCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
+      },
+    },
+    { accessorKey: "ct", header: "C/T" },
+    {
+      accessorKey: "collectionDate",
+      header: "Plan D",
+      cell: ({ row }) => <span className="inline-block min-w-[100px]">{formatDate(row.original.collectionDate)}</span>,
+    },
+    {
+      accessorKey: "preD",
+      header: "Pre D",
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange)
+          return <span className="inline-block min-w-[100px]">{entry.preD ? formatDate(entry.preD) : "—"}</span>
+        return <InlineDateCell value={entry.preD} onCommit={(next) => onFieldChange(entry, { preD: next })} />
+      },
+    },
+    {
+      accessorKey: "accD",
+      header: "Acc D",
+      cell: ({ row }) => (
+        <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "note",
+      header: "Note",
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange)
+          return <span className="inline-block min-w-[180px] text-muted-foreground">{entry.note || "—"}</span>
+        return (
+          <InlineTextCell
+            value={entry.note}
+            placeholder="Note"
+            className="min-w-[180px]"
+            onCommit={(next) => onFieldChange(entry, { note: next })}
+          />
+        )
+      },
     },
     {
       accessorKey: "filterChangeRequired",

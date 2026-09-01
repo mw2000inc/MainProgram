@@ -42,6 +42,13 @@ interface DataTableProps<TData> {
   onRowClick?: (row: TData) => void
   // Extra className per row (e.g. strikethrough for completed/inactive entries).
   getRowClassName?: (row: TData) => string | undefined
+  // Extra classes merged onto the scrolling table wrapper itself — e.g. the
+  // Daily Report's Filter Change/Collection panels opt into
+  // scrollbar-always-visible (see globals.css) so their wide, inline-
+  // editable column set's horizontal scroll is obvious without a hover/
+  // scroll gesture first. Every other call site leaves this unset and gets
+  // the exact wrapper classes as before.
+  tableContainerClassName?: string
 }
 
 export function DataTable<TData>({
@@ -54,6 +61,7 @@ export function DataTable<TData>({
   pageSize = 10,
   onRowClick,
   getRowClassName,
+  tableContainerClassName,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -116,7 +124,7 @@ export function DataTable<TData>({
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
       </div>
 
-      <div className="min-h-0 flex-1 rounded-lg border overflow-auto">
+      <div className={cn("min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto", tableContainerClassName)}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

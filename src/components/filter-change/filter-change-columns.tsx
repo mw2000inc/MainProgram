@@ -5,6 +5,8 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
+import { InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { TECHNICIANS } from "@/lib/constants"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
 
@@ -58,6 +60,114 @@ export function getFilterChangeColumns({
     {
       accessorKey: "filterType",
       header: "Filter",
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
+    },
+  ]
+}
+
+// Widened, inline-editable column set for the Daily Report's own compact
+// panel (see daily-report-section.tsx) — unlike the plain 4-column
+// getFilterChangeColumns() above (reused read-only in several other
+// places: Sale List, Member detail, the customer portal scan view), this
+// surfaces the fields an admin most often needs to check or adjust for
+// today's dispatch (Address, Contact, Plan D, Pre D, Acc D, Serviceman)
+// directly in the panel — scrollable horizontally, no need to switch to
+// the Maximize2 full-screen view for them. onFieldChange is left undefined
+// for a non-admin (see daily-report-section.tsx), which falls every one of
+// these back to plain read-only text — same on/off convention onStatusChange
+// already uses on this file's other column sets. Every cell that can carry
+// real content gets an explicit min-width wrapper so the column can't be
+// squeezed narrower than that regardless of how little a given row's value
+// fills it, which is what actually makes the panel's horizontal scrollbar
+// engage reliably instead of every column just shrinking to fit.
+export function getFilterChangeDailyReportColumns({
+  onStatusChange,
+  onFieldChange,
+}: {
+  onStatusChange?: (plan: FilterChangePlan, status: string) => void
+  onFieldChange?: (
+    plan: FilterChangePlan,
+    patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman" | "note">>
+  ) => void
+} = {}): ColumnDef<FilterChangePlan, unknown>[] {
+  return [
+    {
+      accessorKey: "orderNumber",
+      header: "Order Number",
+      cell: ({ row }) => <span className="inline-block min-w-[110px] font-medium">{row.original.orderNumber}</span>,
+    },
+    {
+      accessorKey: "memberAccount",
+      header: "Member Account#",
+      cell: ({ row }) => <span className="inline-block min-w-[140px]">{row.original.memberAccount}</span>,
+    },
+    { accessorKey: "filterType", header: "Filter" },
+    {
+      accessorKey: "contactNumber",
+      header: "Contact #",
+      cell: ({ row }) => <span className="inline-block min-w-[130px]">{row.original.contactNumber || "—"}</span>,
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => <span className="inline-block min-w-[220px]">{row.original.address || "—"}</span>,
+    },
+    {
+      accessorKey: "planDate",
+      header: "Plan D",
+      cell: ({ row }) => <span className="inline-block min-w-[100px]">{formatDate(row.original.planDate)}</span>,
+    },
+    {
+      accessorKey: "preD",
+      header: "Pre D",
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-[100px]">{plan.preD ? formatDate(plan.preD) : "—"}</span>
+        return <InlineDateCell value={plan.preD} onCommit={(next) => onFieldChange(plan, { preD: next })} />
+      },
+    },
+    {
+      accessorKey: "accD",
+      header: "Acc D",
+      cell: ({ row }) => (
+        <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "serviceman",
+      header: "Serviceman",
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-[150px]">{plan.serviceman || "—"}</span>
+        return (
+          <InlineSelectCell
+            value={plan.serviceman}
+            options={TECHNICIANS}
+            onCommit={(next) => onFieldChange(plan, { serviceman: next })}
+          />
+        )
+      },
+    },
+    {
+      accessorKey: "note",
+      header: "Note",
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange)
+          return <span className="inline-block min-w-[180px] text-muted-foreground">{plan.note || "—"}</span>
+        return (
+          <InlineTextCell
+            value={plan.note}
+            placeholder="Note"
+            className="min-w-[180px]"
+            onCommit={(next) => onFieldChange(plan, { note: next })}
+          />
+        )
+      },
     },
     {
       accessorKey: "status",

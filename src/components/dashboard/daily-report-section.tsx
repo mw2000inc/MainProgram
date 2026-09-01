@@ -26,7 +26,7 @@ import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
-  getFilterChangeColumns,
+  getFilterChangeDailyReportColumns,
   getFilterChangeExpandedColumns,
   FILTER_CHANGE_EXPORT_COLUMNS,
 } from "@/components/filter-change/filter-change-columns"
@@ -35,7 +35,10 @@ import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
-import { getCollectionsColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
+import {
+  getCollectionsDailyReportColumns,
+  COLLECTIONS_EXPORT_COLUMNS,
+} from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-queue"
 import {
@@ -361,8 +364,13 @@ export function DailyReportSection() {
   const filterChangeColumns = React.useMemo(
     () =>
       filterColumnsByVisibility(
-        getFilterChangeColumns({
+        getFilterChangeDailyReportColumns({
           onStatusChange: isAdmin ? (plan, status) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
+          // Pre D/Serviceman/Note edited straight from the panel cell (see
+          // getFilterChangeDailyReportColumns) — same mutate-and-invalidate
+          // hook the status column above already uses, so the panel's own
+          // day-filtered rows update immediately without a manual refetch.
+          onFieldChange: isAdmin ? (plan, patch) => updateFilterChangePlan.mutate({ id: plan.id, input: patch }) : undefined,
         }),
         visibleFieldsFor("filter_change")
       ),
@@ -395,8 +403,12 @@ export function DailyReportSection() {
   const collectionsColumns = React.useMemo(
     () =>
       filterColumnsByVisibility(
-        getCollectionsColumns({
+        getCollectionsDailyReportColumns({
           onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
+          // Pre D/Amount/Note edited straight from the panel cell (see
+          // getCollectionsDailyReportColumns) — same mutate-and-invalidate
+          // hook the status column above already uses.
+          onFieldChange: isAdmin ? (entry, patch) => updateCollection.mutate({ id: entry.id, input: patch }) : undefined,
         }),
         visibleFieldsFor("collection")
       ),
@@ -475,6 +487,7 @@ export function DailyReportSection() {
         exportFileName="filter-change-plan"
         onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
         panelHeight={sizes["filter-change"]?.height}
+        tableContainerClassName="scrollbar-always-visible"
       />
     ),
     installation: (
@@ -532,6 +545,7 @@ export function DailyReportSection() {
         exportFileName="collection-plan"
         onRowClick={isAdmin ? (row) => router.push(`/collection-plan?id=${row.id}`) : undefined}
         panelHeight={sizes.collection?.height}
+        tableContainerClassName="scrollbar-always-visible"
       />
     ),
     // Read-only — no canAdd/onAdd/canDelete/onDeleteSelected, deliberately:

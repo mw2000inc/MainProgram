@@ -48,6 +48,10 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // panel is reused outside the Daily Report's resizable grid, which just
   // falls back to the fixed 5-row default.
   panelHeight?: number
+  // Forwarded straight to DataTable's tableContainerClassName — see its own
+  // comment. Only the Filter Change/Collection Daily Report panels pass
+  // this today (scrollbar-always-visible, see globals.css).
+  tableContainerClassName?: string
 }
 
 // Everything in the compact table's chrome above/below the actual rows —
@@ -91,6 +95,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   exportFileName,
   onRowClick,
   panelHeight,
+  tableContainerClassName,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
@@ -246,6 +251,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         emptyMessage={emptyMessage}
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
+        tableContainerClassName={tableContainerClassName}
       />
     </div>
   )
