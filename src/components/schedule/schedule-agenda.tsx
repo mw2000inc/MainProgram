@@ -184,7 +184,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { data: jobs = [], isPending } = useScheduleJobs()
   const updateJob = useUpdateScheduleJob()
   const [formOpen, setFormOpen] = React.useState(false)
+  const [editingJob, setEditingJob] = React.useState<ScheduleJob | undefined>(undefined)
   const [markingDone, setMarkingDone] = React.useState<ScheduleJob | undefined>(undefined)
+
+  function openCreate() {
+    setEditingJob(undefined)
+    setFormOpen(true)
+  }
+
+  function openEdit(job: ScheduleJob) {
+    if (!isAdmin) return
+    setEditingJob(job)
+    setFormOpen(true)
+  }
 
   const todaysJobs = React.useMemo(
     () => jobs.filter((j) => j.scheduledDate === date),
@@ -237,7 +249,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </CardTitle>
         <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap">
           {isAdmin && (
-            <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={() => setFormOpen(true)}>
+            <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
               <Plus className="h-3.5 w-3.5" /> Schedule Job
             </Button>
           )}
@@ -289,30 +301,44 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   }
                   className="mt-0.5"
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-                    <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
-                    {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
+                <div
+                  className={cn("flex-1 min-w-0 flex items-start gap-3", isAdmin && "cursor-pointer")}
+                  onClick={isAdmin ? () => openEdit(job) : undefined}
+                  title={isAdmin ? "Click to edit this job" : undefined}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                      <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
+                      {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
+                    </div>
+                    {/* One scheduledDate on the shared job — shown explicitly (even
+                        though every row here is already scoped to this same day)
+                        so a two-technician job visibly reads as one date, not two. */}
+                    <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {formatTechnicians(job.technician, job.technician2)}
+                    </p>
+                    {job.remarks && (
+                      <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>
+                    )}
                   </div>
-                  {/* One scheduledDate on the shared job — shown explicitly (even
-                      though every row here is already scoped to this same day)
-                      so a two-technician job visibly reads as one date, not two. */}
-                  <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {formatTechnicians(job.technician, job.technician2)}
-                  </p>
-                  {job.remarks && (
-                    <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>
-                  )}
+                  <PlanStatusBadge status={job.status} />
                 </div>
-                <PlanStatusBadge status={job.status} />
               </div>
             ))}
           </div>
         )}
       </CardContent>
 
-      <ScheduleFormDialog open={formOpen} onOpenChange={setFormOpen} defaultDate={date} />
+      <ScheduleFormDialog
+        open={formOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o)
+          if (!o) setEditingJob(undefined)
+        }}
+        defaultDate={date}
+        job={editingJob}
+      />
       <MarkJobDoneDialog key={markingDone?.id ?? "none"} job={markingDone} onOpenChange={(o) => !o && setMarkingDone(undefined)} />
     </Card>
   )
