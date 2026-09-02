@@ -71,16 +71,23 @@ export async function getDispatchConfirmationDetails(token: string): Promise<Dis
   }
 }
 
-// Public, unauthenticated action — 'confirm' or 'reschedule'. See
-// respond_to_dispatch_confirmation(): only ever succeeds against a row
-// that's actually 'Pending Customer Confirmation' with a non-expired
-// token, so this can't be replayed to flip an already-resolved row.
+// Public, unauthenticated action — 'confirm' or 'reschedule'. Hits the
+// server route (not the DB directly) so a successful response can also
+// email the admin (see src/app/api/dispatch/respond/route.ts) — the
+// actual authorization is unchanged: respond_to_dispatch_confirmation()
+// only ever succeeds against a row that's actually 'Pending Customer
+// Confirmation' with a non-expired token, so this can't be replayed to
+// flip an already-resolved row.
 export async function respondToDispatchConfirmation(
   token: string,
   action: "confirm" | "reschedule"
 ): Promise<{ ok: boolean; status: DispatchStatus | null }> {
-  const { data, error } = await supabase.rpc("respond_to_dispatch_confirmation", { p_token: token, p_action: action })
-  if (error) throw error
-  const row = (data as { out_ok: boolean; out_status: DispatchStatus | null }[])?.[0]
-  return { ok: row?.out_ok ?? false, status: row?.out_status ?? null }
+  const response = await fetch("/api/dispatch/respond", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, action }),
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error ?? "Failed to respond to this confirmation")
+  return { ok: data?.ok ?? false, status: data?.status ?? null }
 }

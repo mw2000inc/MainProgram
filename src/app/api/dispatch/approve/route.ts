@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server"
-import { Resend } from "resend"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import {
+  type DispatchEntityType,
+  type ChannelResult,
+  MODULE_LABELS,
+  escapeHtml,
+  appBaseUrl,
+  sendEmail,
+} from "@/lib/dispatch-notifications-server"
 
 export const dynamic = "force-dynamic"
-
-type DispatchEntityType = "filter_change_plans" | "install_plans" | "collections" | "repair_plans"
-
-const MODULE_LABELS: Record<DispatchEntityType, string> = {
-  filter_change_plans: "Filter Change",
-  install_plans: "Installation",
-  collections: "Collection",
-  repair_plans: "Repair",
-}
 
 // The friendly-tone message templates below (buildSmsMessage/
 // buildEmailContent) were written specifically around a Filter Change
@@ -125,11 +123,6 @@ export async function POST(request: Request) {
   return NextResponse.json({ token, confirmUrl, ...result })
 }
 
-interface ChannelResult {
-  status: "sent" | "failed" | "skipped_no_provider"
-  detail?: string
-}
-
 // Best-effort service address for the message body — only two of the four
 // tables carry one directly (Filter Change, Installation); Collections
 // only has one indirectly, via an optional customer link that not every
@@ -240,19 +233,6 @@ function buildEmailContent({
   return { subject, html, text }
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-}
-
-// Prefers the request's own origin (matches whatever host actually served
-// this request — correct on any Vercel preview deploy too, not just
-// production) and only falls back to the known production URL if that
-// header is ever missing.
-function appBaseUrl(request: Request): string {
-  const origin = request.headers.get("origin") ?? new URL(request.url).origin
-  return origin || "https://mainprogram-neon.vercel.app"
-}
-
 // Semaphore SMS Gateway (https://semaphore.co) — PH-focused, REST API,
 // form-encoded POST. SEMAPHORE_API_KEY is required; SEMAPHORE_SENDER_NAME
 // is optional (Semaphore defaults to its own shared sender name if the
@@ -288,22 +268,6 @@ async function sendSms(phone: string, message: string): Promise<ChannelResult> {
     if (!first?.message_id) {
       return { status: "failed", detail: "Semaphore response had no message_id" }
     }
-    return { status: "sent" }
-  } catch (err) {
-    return { status: "failed", detail: err instanceof Error ? err.message : "Unknown error" }
-  }
-}
-
-// Resend (https://resend.com) — RESEND_API_KEY + RESEND_FROM_EMAIL
-// required. Same "not configured yet" treatment as sendSms above.
-async function sendEmail(to: string, subject: string, html: string, text: string): Promise<ChannelResult> {
-  const apiKey = process.env.RESEND_API_KEY
-  const from = process.env.RESEND_FROM_EMAIL
-  if (!apiKey || !from) return { status: "skipped_no_provider", detail: "RESEND_API_KEY/RESEND_FROM_EMAIL not set" }
-  try {
-    const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({ from, to, subject, html, text })
-    if (error) return { status: "failed", detail: error.message }
     return { status: "sent" }
   } catch (err) {
     return { status: "failed", detail: err instanceof Error ? err.message : "Unknown error" }
