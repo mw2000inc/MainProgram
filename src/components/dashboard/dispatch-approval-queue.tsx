@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Send, TriangleAlert } from "lucide-react"
+import { Send, CheckCheck, TriangleAlert } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
@@ -109,6 +110,12 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     notifyPhone: string
     notifyEmail: string
     conflicts: DispatchRow[]
+  } | null>(null)
+  const [bulkApproving, setBulkApproving] = React.useState(false)
+  const [bulkSummary, setBulkSummary] = React.useState<{
+    approved: DispatchRow[]
+    skippedNoContact: DispatchRow[]
+    skippedConflict: { item: DispatchRow; conflicts: DispatchRow[] }[]
   } | null>(null)
 
   const allRows: DispatchRow[] = React.useMemo(() => {
@@ -231,6 +238,50 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     doApprove(item, notifyPhone, notifyEmail)
   }
 
+  // A conflict blocks only the one item it's found on, never the whole
+  // batch — an admin approving 5 clean items shouldn't have all 5 held up
+  // because one of them happens to share a customer with something
+  // already scheduled. Whatever gets skipped is listed afterward (see
+  // bulkSummary below) for the admin to review and approve individually —
+  // that path still shows the normal interactive conflict dialog, this
+  // one never does (asking "send anyway?" once per conflict would defeat
+  // the point of a bulk action).
+  async function handleApproveAll() {
+    setBulkApproving(true)
+    setBulkSummary(null)
+    const approved: DispatchRow[] = []
+    const skippedNoContact: DispatchRow[] = []
+    const skippedConflict: { item: DispatchRow; conflicts: DispatchRow[] }[] = []
+    // Snapshot now — `items` itself shrinks as each approval succeeds
+    // (a Draft leaving the list once it's Pending Customer Confirmation),
+    // so iterating the live memo would skip whatever's left after the
+    // first successful approval re-renders this component.
+    for (const item of [...items]) {
+      const notifyPhone = phoneFor(item).trim()
+      const notifyEmail = emailFor(item).trim()
+      if (!notifyPhone && !notifyEmail) {
+        skippedNoContact.push(item)
+        continue
+      }
+      const candidate = { customerId: item.customerId, orderNumber: item.orderNumber, phone: notifyPhone, email: notifyEmail }
+      // allRows (and therefore findConflicts) won't reflect an approval
+      // that just happened earlier in *this* loop — the query cache only
+      // updates once its invalidated queries actually refetch, which
+      // doesn't happen synchronously inside this loop — so a same-batch
+      // duplicate is checked separately against what's already been
+      // approved so far this run.
+      const conflicts = [...findConflicts(item, notifyPhone, notifyEmail), ...approved.filter((a) => isSameCustomer(a, candidate))]
+      if (conflicts.length > 0) {
+        skippedConflict.push({ item, conflicts })
+        continue
+      }
+      await doApprove(item, notifyPhone, notifyEmail)
+      approved.push(item)
+    }
+    setBulkSummary({ approved, skippedNoContact, skippedConflict })
+    setBulkApproving(false)
+  }
+
   function channelBadge(result: DispatchChannelResult | undefined, label: string) {
     if (!result) return null
     const tone = result.status === "sent" ? "success" : result.status === "failed" ? "danger" : "neutral"
@@ -243,7 +294,20 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pending Dispatch Approval</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+              <span>Pending Dispatch Approval</span>
+              {items.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 font-normal"
+                  disabled={bulkApproving || approve.isPending}
+                  onClick={handleApproveAll}
+                >
+                  <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? "Approving..." : `Approve All (${items.length})`}
+                </Button>
+              )}
+            </DialogTitle>
             <DialogDescription>
               Newly-scheduled Filter Change, Installation, Collection, and Repair items wait here for admin approval.
               Approving sends a real SMS and/or email to whichever contact fields are filled in below.
@@ -262,6 +326,39 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
             </div>
           )}
 
+          {bulkSummary && (
+            <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
+              <p className="font-medium">
+                Approve All finished — {bulkSummary.approved.length} sent
+                {bulkSummary.skippedConflict.length > 0 && `, ${bulkSummary.skippedConflict.length} skipped (possible duplicate)`}
+                {bulkSummary.skippedNoContact.length > 0 && `, ${bulkSummary.skippedNoContact.length} skipped (no contact entered)`}
+              </p>
+              {bulkSummary.skippedConflict.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">
+                    Skipped for a possible duplicate/conflict — review and use that row&apos;s own Approve button if it&apos;s
+                    actually fine:
+                  </p>
+                  {bulkSummary.skippedConflict.map(({ item, conflicts }) => (
+                    <p key={`${item.entityType}-${item.entityId}`}>
+                      {item.moduleLabel} — {item.recordLabel} (matches {conflicts.length} other item{conflicts.length === 1 ? "" : "s"})
+                    </p>
+                  ))}
+                </div>
+              )}
+              {bulkSummary.skippedNoContact.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Skipped — no phone or email entered:</p>
+                  {bulkSummary.skippedNoContact.map((item) => (
+                    <p key={`${item.entityType}-${item.entityId}`}>
+                      {item.moduleLabel} — {item.recordLabel}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {items.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">Nothing is waiting on approval right now.</p>
           ) : (
@@ -277,23 +374,29 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                       <p className="text-xs text-muted-foreground">Scheduled {formatDate(item.scheduledDate)}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      className="h-8 flex-1 min-w-[160px]"
-                      placeholder="Phone number (SMS)"
-                      value={phoneFor(item)}
-                      onChange={(e) => setPhoneDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
-                    />
-                    <Input
-                      className="h-8 flex-1 min-w-[200px]"
-                      placeholder="Email address"
-                      value={emailFor(item)}
-                      onChange={(e) => setEmailDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
-                    />
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[160px] space-y-1">
+                      <Label className="text-xs text-muted-foreground">Phone</Label>
+                      <Input
+                        className="h-8"
+                        placeholder="Phone number (SMS)"
+                        value={phoneFor(item)}
+                        onChange={(e) => setPhoneDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[200px] space-y-1">
+                      <Label className="text-xs text-muted-foreground">Email</Label>
+                      <Input
+                        className="h-8"
+                        placeholder="Email address"
+                        value={emailFor(item)}
+                        onChange={(e) => setEmailDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
+                      />
+                    </div>
                     <Button
                       size="sm"
                       className="h-8 gap-1.5"
-                      disabled={(!phoneFor(item).trim() && !emailFor(item).trim()) || approve.isPending}
+                      disabled={(!phoneFor(item).trim() && !emailFor(item).trim()) || approve.isPending || bulkApproving}
                       onClick={() => handleApproveClick(item)}
                     >
                       <Send className="h-3.5 w-3.5" /> Approve
