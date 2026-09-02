@@ -481,6 +481,10 @@ export interface InstallPlan extends DispatchFields {
   modelDp?: string
   inOut: string
   createdAt: string
+  // Set once a customer confirms this dispatch (see the
+  // auto_create_schedule_job_on_confirm migration) -- links to the
+  // Schedule panel entry (schedule_jobs) auto-created/reused for it.
+  scheduleJobId?: string
 }
 
 export interface RepairPlan extends DispatchFields {
@@ -498,6 +502,10 @@ export interface RepairPlan extends DispatchFields {
   amt: number
   unitInOut: string
   createdAt: string
+  // Set once a customer confirms this dispatch (see the
+  // auto_create_schedule_job_on_confirm migration) -- links to the
+  // Schedule panel entry (schedule_jobs) auto-created/reused for it.
+  scheduleJobId?: string
 }
 
 export interface CollectionPlan extends DispatchFields {

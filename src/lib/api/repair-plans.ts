@@ -22,6 +22,7 @@ type Row = {
   notify_email: string | null
   requested_date: string | null
   requested_time: string | null
+  schedule_job_id: string | null
   customer_notified_at: string | null
   customer_responded_at: string | null
 }
@@ -48,6 +49,7 @@ function fromRow(row: Row): RepairPlan {
     notifyEmail: row.notify_email ?? undefined,
     requestedDate: row.requested_date ?? undefined,
     requestedTime: row.requested_time ?? undefined,
+    scheduleJobId: row.schedule_job_id ?? undefined,
     customerNotifiedAt: row.customer_notified_at ?? undefined,
     customerRespondedAt: row.customer_responded_at ?? undefined,
   }
