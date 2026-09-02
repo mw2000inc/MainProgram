@@ -56,7 +56,42 @@ export function useDispatchConfirmationDetails(token: string | undefined) {
 
 export function useRespondToDispatchConfirmation() {
   return useMutation({
-    mutationFn: ({ token, action }: { token: string; action: "confirm" | "reschedule" }) =>
-      api.respondToDispatchConfirmation(token, action),
+    mutationFn: ({
+      token,
+      action,
+      requestedDate,
+      requestedTime,
+    }: {
+      token: string
+      action: "confirm" | "reschedule"
+      requestedDate?: string
+      requestedTime?: string
+    }) => api.respondToDispatchConfirmation(token, action, requestedDate, requestedTime),
+  })
+}
+
+// Same cache-invalidation shape as useApproveDispatchItem — the Reschedule
+// Requests section (which reads all four plan queries) needs the just-
+// accepted item to disappear from that list immediately.
+export function useAcceptRequestedReschedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.acceptRequestedReschedule,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: installPlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      if (!result) {
+        toast.error("That item is no longer a pending reschedule request.")
+        return
+      }
+      const summaries = [summarizeChannel("SMS", result.sms), summarizeChannel("Email", result.email)].filter(Boolean)
+      const anyFailed = result.sms?.status === "failed" || result.email?.status === "failed"
+      const message = summaries.length > 0 ? summaries.join(" · ") : "Confirmed"
+      if (anyFailed) toast.error(message)
+      else toast.success(message)
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to accept this requested reschedule"),
   })
 }

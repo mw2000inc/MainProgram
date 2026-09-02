@@ -77,17 +77,45 @@ export async function getDispatchConfirmationDetails(token: string): Promise<Dis
 // actual authorization is unchanged: respond_to_dispatch_confirmation()
 // only ever succeeds against a row that's actually 'Pending Customer
 // Confirmation' with a non-expired token, so this can't be replayed to
-// flip an already-resolved row.
+// flip an already-resolved row. requestedDate/requestedTime are only
+// meaningful for 'reschedule' — the customer's own proposed replacement,
+// which an admin reviews and accepts separately (see
+// acceptRequestedReschedule below); time is a courtesy display detail
+// only, never applied to the real schedule.
 export async function respondToDispatchConfirmation(
   token: string,
-  action: "confirm" | "reschedule"
+  action: "confirm" | "reschedule",
+  requestedDate?: string,
+  requestedTime?: string
 ): Promise<{ ok: boolean; status: DispatchStatus | null }> {
   const response = await fetch("/api/dispatch/respond", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, action }),
+    body: JSON.stringify({ token, action, requestedDate, requestedTime }),
   })
   const data = await response.json()
   if (!response.ok) throw new Error(data?.error ?? "Failed to respond to this confirmation")
   return { ok: data?.ok ?? false, status: data?.status ?? null }
+}
+
+// Admin action from the Pending Dispatch Approval queue's Reschedule
+// Requests section — accepts the customer's own proposed date, applying
+// it straight to the real schedule field and jumping directly to
+// 'Confirmed' (see accept_requested_reschedule() — no second customer
+// click needed, they already told us this date works). Sends a "you're
+// confirmed" notification using the phone/email already on the row from
+// the original approval, same shared send mechanism as approveDispatchItem.
+export async function acceptRequestedReschedule(input: {
+  entityType: DispatchEntityType
+  entityId: string
+}): Promise<{ sms?: DispatchChannelResult; email?: DispatchChannelResult } | null> {
+  const response = await fetch("/api/dispatch/accept-reschedule", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entityType: input.entityType, entityId: input.entityId }),
+  })
+  if (response.status === 409) return null
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error ?? "Failed to accept this requested reschedule")
+  return data
 }

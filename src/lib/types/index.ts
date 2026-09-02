@@ -418,6 +418,13 @@ export interface DispatchFields {
   notifyEmail?: string
   customerNotifiedAt?: string
   customerRespondedAt?: string
+  // Only meaningful when dispatchStatus is 'Reschedule Requested' — the
+  // customer's own proposed replacement date/time (see the
+  // reschedule_request_with_date migration). requestedTime is a courtesy
+  // display detail only, never applied to pre_d or any other real
+  // schedule field.
+  requestedDate?: string
+  requestedTime?: string
 }
 
 export interface FilterChangePlan extends DispatchFields {

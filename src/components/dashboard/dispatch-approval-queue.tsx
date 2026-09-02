@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Send, CheckCheck, TriangleAlert } from "lucide-react"
+import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
-import { useApproveDispatchItem } from "@/lib/hooks/use-dispatch-confirmation"
+import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus } from "@/lib/types"
@@ -43,6 +43,12 @@ interface DispatchRow {
   orderNumber?: string
   phone?: string
   email?: string
+  // Only meaningful when dispatchStatus is 'Reschedule Requested' — the
+  // customer's own proposed replacement date/time, collected on the
+  // confirm page (see dispatch-confirmation-view.tsx). requestedTime is a
+  // courtesy display detail only, never applied to the real schedule.
+  requestedDate?: string
+  requestedTime?: string
 }
 
 // Best-effort customer lookup for prefilling a phone/email default — tries
@@ -73,7 +79,11 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
   return false
 }
 
-const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft"]
+// Reschedule Requested is included too — a customer already mid-
+// negotiation on one item (declined a date, possibly proposed another) is
+// exactly the kind of "existing schedule" this check exists to surface
+// before a second notification goes out for something else.
+const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
 // Admin approval queue for newly-scheduled Filter Change/Installation/
 // Collection/Repair dispatches (see the dispatch_confirmation_workflow and
@@ -101,6 +111,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: customers = [] } = useCustomers()
   const approve = useApproveDispatchItem()
+  const acceptReschedule = useAcceptRequestedReschedule()
 
   const [phoneDrafts, setPhoneDrafts] = React.useState<Record<string, string>>({})
   const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
@@ -133,6 +144,8 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         orderNumber: p.orderNumber,
         phone: p.contactNumber || undefined,
         email: customer?.email,
+        requestedDate: p.requestedDate,
+        requestedTime: p.requestedTime,
       })
     }
     for (const p of installPlans) {
@@ -147,6 +160,8 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         orderNumber: p.orderNo,
         phone: p.contactNumber || undefined,
         email: customer?.email,
+        requestedDate: p.requestedDate,
+        requestedTime: p.requestedTime,
       })
     }
     for (const c of collections) {
@@ -162,6 +177,8 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         orderNumber: c.orderNo,
         phone: customer?.contactNumber,
         email: customer?.email,
+        requestedDate: c.requestedDate,
+        requestedTime: c.requestedTime,
       })
     }
     for (const r of repairPlans) {
@@ -176,6 +193,8 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         // No phone/email/customer link exists on repair_plans at all
         // today — order number is the only signal available to match it
         // against another module's row for the same customer.
+        requestedDate: r.requestedDate,
+        requestedTime: r.requestedTime,
       })
     }
     return list
@@ -183,6 +202,15 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
 
   const items = React.useMemo(
     () => allRows.filter((r) => r.dispatchStatus === "Draft").sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
+    [allRows]
+  )
+  // A decline with no alternate date has nothing for Accept to do — the
+  // admin's only path there is editing Pre D directly (see the
+  // reset_dispatch_on_pre_d_edit trigger's own extension to cover this
+  // status). Still shown here for visibility, just without an Accept
+  // button.
+  const rescheduleRequests = React.useMemo(
+    () => allRows.filter((r) => r.dispatchStatus === "Reschedule Requested").sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
     [allRows]
   )
 
@@ -282,6 +310,17 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     setBulkApproving(false)
   }
 
+  // Jumps straight to Confirmed and sends a "you're confirmed" notification
+  // — no interactive conflict dialog here even though Reschedule Requested
+  // is now in CONFLICT_STATUSES above, since accepting isn't creating a
+  // new notification the admin is choosing to send; it's finalizing one
+  // the customer already asked for. A genuine duplicate against this exact
+  // customer would already have been caught back when the *original* item
+  // was approved.
+  async function handleAcceptReschedule(item: DispatchRow) {
+    await acceptReschedule.mutateAsync({ entityType: item.entityType, entityId: item.entityId })
+  }
+
   function channelBadge(result: DispatchChannelResult | undefined, label: string) {
     if (!result) return null
     const tone = result.status === "sent" ? "success" : result.status === "failed" ? "danger" : "neutral"
@@ -359,9 +398,9 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
             </div>
           )}
 
-          {items.length === 0 ? (
+          {items.length === 0 && rescheduleRequests.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">Nothing is waiting on approval right now.</p>
-          ) : (
+          ) : items.length === 0 ? null : (
             <div className="space-y-3">
               {items.map((item) => (
                 <div key={`${item.entityType}-${item.entityId}`} className="rounded-md border p-3 space-y-2">
@@ -402,6 +441,51 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                       <Send className="h-3.5 w-3.5" /> Approve
                     </Button>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {rescheduleRequests.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2 border-t pt-4">
+                <CalendarClock className="h-4 w-4 text-warning" />
+                <h3 className="text-sm font-medium">Reschedule Requests ({rescheduleRequests.length})</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These customers declined their originally proposed date. Accepting a proposed date applies it directly and
+                confirms it — no further customer action needed. To offer a different date instead, edit Pre D on that
+                record directly; it re-enters the Draft queue above automatically.
+              </p>
+              {rescheduleRequests.map((item) => (
+                <div key={`${item.entityType}-${item.entityId}`} className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge tone="secondary" label={item.moduleLabel} />
+                        <span className="font-medium truncate">{item.recordLabel}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Originally scheduled {formatDate(item.scheduledDate)}</p>
+                    </div>
+                    {item.requestedDate ? (
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5 shrink-0"
+                        disabled={acceptReschedule.isPending}
+                        onClick={() => handleAcceptReschedule(item)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                      </Button>
+                    ) : null}
+                  </div>
+                  {item.requestedDate ? (
+                    <div className="rounded-md border bg-warning/5 p-2 text-xs">
+                      Customer requested: <span className="font-medium">{formatDate(item.requestedDate)}</span>
+                      {item.requestedTime && <span className="font-medium"> at {item.requestedTime}</span>}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No alternate date was given — edit Pre D directly to propose one.</p>
+                  )}
                 </div>
               ))}
             </div>

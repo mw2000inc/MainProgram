@@ -4,11 +4,13 @@ import * as React from "react"
 import { CalendarDays, CheckCircle2, Clock, RotateCcw, XCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
 import { useDispatchConfirmationDetails, useRespondToDispatchConfirmation } from "@/lib/hooks/use-dispatch-confirmation"
-import { formatDate } from "@/lib/utils"
+import { formatDate, todayIso } from "@/lib/utils"
 import type { DispatchStatus } from "@/lib/types"
 
 const MODULE_LABELS: Record<string, string> = {
@@ -35,14 +37,37 @@ export function DispatchConfirmationView({ token }: { token: string }) {
   const { data: details, isPending, refetch } = useDispatchConfirmationDetails(token)
   const respond = useRespondToDispatchConfirmation()
   const [respondedTo, setRespondedTo] = React.useState<DispatchStatus | null>(null)
+  // Clicking "Request a different date" reveals this picker instead of
+  // firing the reschedule action immediately — the customer's own
+  // proposed date/time gets sent along with it now, for an admin to
+  // review and accept (see the Pending Dispatch Approval queue's
+  // Reschedule Requests section), rather than a pure decline signal.
+  const [showReschedulePicker, setShowReschedulePicker] = React.useState(false)
+  const [requestedDate, setRequestedDate] = React.useState("")
+  const [requestedTime, setRequestedTime] = React.useState("")
+  // Kept locally rather than round-tripped through the server response —
+  // the customer just typed these in, no need to ask the RPC to echo them
+  // back for the "got it" screen below to show.
+  const [submittedRequest, setSubmittedRequest] = React.useState<{ date: string; time: string } | null>(null)
 
-  async function handleRespond(action: "confirm" | "reschedule") {
-    const result = await respond.mutateAsync({ token, action })
+  async function handleConfirm() {
+    const result = await respond.mutateAsync({ token, action: "confirm" })
     if (result.ok && result.status) {
       setRespondedTo(result.status)
     } else {
       // Token expired/already used between page load and click — re-fetch
       // so the "already resolved / invalid" state below reflects reality.
+      refetch()
+    }
+  }
+
+  async function handleSubmitReschedule() {
+    if (!requestedDate) return
+    const result = await respond.mutateAsync({ token, action: "reschedule", requestedDate, requestedTime: requestedTime || undefined })
+    if (result.ok && result.status) {
+      setSubmittedRequest({ date: requestedDate, time: requestedTime })
+      setRespondedTo(result.status)
+    } else {
       refetch()
     }
   }
@@ -91,7 +116,9 @@ export function DispatchConfirmationView({ token }: { token: string }) {
             <p className="text-sm text-muted-foreground max-w-sm">
               {isConfirmed
                 ? `Your ${moduleLabel.toLowerCase()} visit on ${formatDate(details.scheduledDate)} is locked in.`
-                : "We've let our team know this date no longer works. They'll reach out with a new one shortly."}
+                : submittedRequest
+                  ? `We've let our team know — you'd prefer ${formatDate(submittedRequest.date)}${submittedRequest.time ? ` at ${submittedRequest.time}` : ""}. They'll review it and confirm shortly.`
+                  : "We've let our team know this date no longer works. They'll reach out with a new one shortly."}
             </p>
           </CardContent>
         </Card>
@@ -116,19 +143,43 @@ export function DispatchConfirmationView({ token }: { token: string }) {
           <p className="text-sm text-muted-foreground">
             Please let us know if this date still works for you.
           </p>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button className="flex-1 gap-1.5" disabled={respond.isPending} onClick={() => handleRespond("confirm")}>
-              <CheckCircle2 className="h-4 w-4" /> Confirm this date
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 gap-1.5"
-              disabled={respond.isPending}
-              onClick={() => handleRespond("reschedule")}
-            >
-              <Clock className="h-4 w-4" /> Request a different date
-            </Button>
-          </div>
+          {!showReschedulePicker ? (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button className="flex-1 gap-1.5" disabled={respond.isPending} onClick={handleConfirm}>
+                <CheckCircle2 className="h-4 w-4" /> Confirm this date
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 gap-1.5"
+                disabled={respond.isPending}
+                onClick={() => setShowReschedulePicker(true)}
+              >
+                <Clock className="h-4 w-4" /> Request a different date
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-md border p-4">
+              <p className="text-sm font-medium">What date and time would work better for you?</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Date</Label>
+                  <Input type="date" min={todayIso()} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Time (optional)</Label>
+                  <Input type="time" value={requestedTime} onChange={(e) => setRequestedTime(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button className="flex-1 gap-1.5" disabled={!requestedDate || respond.isPending} onClick={handleSubmitReschedule}>
+                  <Clock className="h-4 w-4" /> Submit Request
+                </Button>
+                <Button variant="outline" className="flex-1" disabled={respond.isPending} onClick={() => setShowReschedulePicker(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     )

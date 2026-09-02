@@ -5,25 +5,14 @@ import {
   type DispatchEntityType,
   type ChannelResult,
   MODULE_LABELS,
+  MODULE_ACTION_PHRASES,
   escapeHtml,
   appBaseUrl,
   sendEmail,
+  sendSms,
 } from "@/lib/dispatch-notifications-server"
 
 export const dynamic = "force-dynamic"
-
-// The friendly-tone message templates below (buildSmsMessage/
-// buildEmailContent) were written specifically around a Filter Change
-// visit's exact scope — "water dispenser filter replacement, general
-// cleaning, and Care Plan renewal" — so that phrase is used as-is only
-// for that module; the other three get an equivalent plain description of
-// what's actually happening, in the same warm wrapper.
-const MODULE_ACTION_PHRASES: Record<DispatchEntityType, string> = {
-  filter_change_plans: "your water dispenser filter replacement, general cleaning, and Care Plan renewal",
-  install_plans: "your water dispenser installation",
-  collections: "your scheduled collection",
-  repair_plans: "your repair service",
-}
 
 // Real SMS (Semaphore) + Email (Resend) dispatch-approval delivery — see
 // the dispatch_dual_channel_notifications migration's own comment for why
@@ -231,45 +220,4 @@ function buildEmailContent({
   )
   const text = textLines.join("\n")
   return { subject, html, text }
-}
-
-// Semaphore SMS Gateway (https://semaphore.co) — PH-focused, REST API,
-// form-encoded POST. SEMAPHORE_API_KEY is required; SEMAPHORE_SENDER_NAME
-// is optional (Semaphore defaults to its own shared sender name if the
-// account has no approved custom one). Missing SEMAPHORE_API_KEY is
-// treated as "not configured yet" (status 'skipped_no_provider'), not an
-// error — lets the rest of the approval flow (the DB transition, and the
-// email channel) succeed even before SMS credentials are added.
-//
-// Character-set note (not a Semaphore-specific quirk — this is standard
-// GSM/SMPP behavior any SMS gateway follows): any character outside the
-// GSM-7 alphabet — emoji being the most common way this bites a template
-// — forces the *entire* message to UCS-2 encoding, dropping the
-// per-segment limit from ~153 chars to ~67. buildSmsMessage's copy is
-// deliberately plain ASCII (no emoji — see its own comment) specifically
-// to stay on GSM-7, since the multi-paragraph friendly-tone wording
-// already runs multiple segments and emoji would have roughly doubled
-// that again for no functional benefit. Worth re-checking this comment if
-// the SMS copy ever changes to include emoji, curly quotes, or other
-// non-GSM-7 punctuation again.
-async function sendSms(phone: string, message: string): Promise<ChannelResult> {
-  const apiKey = process.env.SEMAPHORE_API_KEY
-  if (!apiKey) return { status: "skipped_no_provider", detail: "SEMAPHORE_API_KEY is not set" }
-  try {
-    const params = new URLSearchParams({ apikey: apiKey, number: phone, message })
-    const senderName = process.env.SEMAPHORE_SENDER_NAME
-    if (senderName) params.set("sendername", senderName)
-    const response = await fetch("https://api.semaphore.co/api/v4/messages", { method: "POST", body: params })
-    const data = await response.json().catch(() => null)
-    if (!response.ok) {
-      return { status: "failed", detail: typeof data === "object" ? JSON.stringify(data) : `HTTP ${response.status}` }
-    }
-    const first = Array.isArray(data) ? data[0] : data
-    if (!first?.message_id) {
-      return { status: "failed", detail: "Semaphore response had no message_id" }
-    }
-    return { status: "sent" }
-  } catch (err) {
-    return { status: "failed", detail: err instanceof Error ? err.message : "Unknown error" }
-  }
 }
