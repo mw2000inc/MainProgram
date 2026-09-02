@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { AdminGuard } from "@/components/shared/admin-guard"
 import { DailyReportSectionsPanel } from "@/components/settings/daily-report-sections-panel"
-import { LegacyProductCatalogPanel } from "@/components/settings/legacy-product-catalog-panel"
+import { ProductCatalogPanel } from "@/components/settings/product-catalog-panel"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
 import type { ContactEntry } from "@/lib/types"
 
@@ -236,8 +236,9 @@ export default function SettingsPage() {
             unlike the cards above, it isn't part of the "Save Settings" batch below. */}
         <DailyReportSectionsPanel />
 
-        {/* Purely read-only reference data, no save/mutation at all. */}
-        <LegacyProductCatalogPanel />
+        {/* Live Inventory products (addable right here) plus a frozen legacy
+            reference — neither is part of the "Save Settings" batch below. */}
+        <ProductCatalogPanel />
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={updateSettings.isPending}>
