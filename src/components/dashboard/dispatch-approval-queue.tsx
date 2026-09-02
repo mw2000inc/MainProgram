@@ -17,7 +17,7 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { useCustomers } from "@/lib/hooks/use-customers"
+import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
@@ -112,6 +112,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const { data: customers = [] } = useCustomers()
   const approve = useApproveDispatchItem()
   const acceptReschedule = useAcceptRequestedReschedule()
+  const updateCustomer = useUpdateCustomer()
 
   const [phoneDrafts, setPhoneDrafts] = React.useState<Record<string, string>>({})
   const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
@@ -157,6 +158,12 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         recordLabel: p.name || p.orderNo,
         scheduledDate: p.preInstalledDate || p.inputDate,
         dispatchStatus: p.dispatchStatus,
+        // install_plans has no real customer_id column (see the
+        // auto_create_schedule_job_on_confirm migration's own note) — this
+        // is purely the in-memory result of the orderNumber match above,
+        // used here only as the write-back target for a corrected
+        // phone/email (see doApprove), never persisted onto the plan row.
+        customerId: customer?.id,
         orderNumber: p.orderNo,
         phone: p.contactNumber || undefined,
         email: customer?.email,
@@ -182,6 +189,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       })
     }
     for (const r of repairPlans) {
+      // repair_plans has no phone/email/customer_id column of its own — the
+      // orderNumber match below (same fallback Installation already uses)
+      // is the only way to resolve a real customer for it at all, both for
+      // prefilling phone/email here and as the write-back target below.
+      const customer = findCustomer(customers, { orderNumber: r.orderNo })
       list.push({
         entityType: "repair_plans",
         entityId: r.id,
@@ -189,10 +201,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         recordLabel: r.accountName || r.orderNo,
         scheduledDate: r.preD || r.issuedDate,
         dispatchStatus: r.dispatchStatus,
+        customerId: customer?.id,
         orderNumber: r.orderNo,
-        // No phone/email/customer link exists on repair_plans at all
-        // today — order number is the only signal available to match it
-        // against another module's row for the same customer.
+        phone: customer?.contactNumber,
+        email: customer?.email,
         requestedDate: r.requestedDate,
         requestedTime: r.requestedTime,
       })
@@ -237,6 +249,26 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     )
   }
 
+  // A phone/email typed here otherwise only ever lands on this one dispatch
+  // row's notify_phone/notify_email — the next dispatch for the same
+  // customer would start blank again. Whenever this item resolved to a real
+  // customer (customerId — see allRows above, filled in for every module
+  // now), and the typed value differs from what's on that customer's
+  // permanent record, save it back too. Deliberately one-directional and
+  // additive-only: an empty typed value never clears/overwrites anything on
+  // the customer record, it just means that channel isn't sent this time.
+  function saveContactToCustomer(item: DispatchRow, notifyPhone: string, notifyEmail: string) {
+    if (!item.customerId) return
+    const customer = customers.find((c) => c.id === item.customerId)
+    if (!customer) return
+    const patch: { email?: string; contactNumber?: string } = {}
+    if (notifyEmail && notifyEmail !== (customer.email ?? "")) patch.email = notifyEmail
+    if (notifyPhone && notifyPhone !== (customer.contactNumber ?? "")) patch.contactNumber = notifyPhone
+    if (Object.keys(patch).length > 0) {
+      updateCustomer.mutate({ id: customer.id, input: patch })
+    }
+  }
+
   async function doApprove(item: DispatchRow, notifyPhone: string, notifyEmail: string) {
     const result = await approve.mutateAsync({
       entityType: item.entityType,
@@ -244,7 +276,9 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       notifyPhone: notifyPhone || undefined,
       notifyEmail: notifyEmail || undefined,
     })
-    if (result) setLastResult(result)
+    if (!result) return
+    setLastResult(result)
+    saveContactToCustomer(item, notifyPhone, notifyEmail)
   }
 
   function handleApproveClick(item: DispatchRow) {
@@ -441,6 +475,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                       <Send className="h-3.5 w-3.5" /> Approve
                     </Button>
                   </div>
+                  {item.customerId && (
+                    <p className="text-xs text-muted-foreground">
+                      A changed phone or email here also saves to this customer&apos;s permanent record on Approve.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
