@@ -23,10 +23,13 @@ const signInSchema = z.object({
   password: z.string().min(4, "Password must be at least 4 characters"),
 })
 
-// No role field — public self-signup always creates an Admin account.
-// Technician accounts are created exclusively by an admin via the Users
-// page, which has its own role picker and requires an authenticated admin
-// caller server-side (see /api/admin/users).
+// No role field — public self-signup always creates a Technician account
+// (the least-privileged role), never Admin. Only an existing admin can
+// create/promote an Admin account, via the Users page (which has its own
+// role picker and requires an authenticated admin caller server-side, see
+// /api/admin/users) or a manual role update in the database — see the
+// close_role_escalation migration for why raw_user_meta_data is no longer
+// trusted for role at all here.
 const signUpSchema = z
   .object({
     name: z.string().min(2, "Full name is required"),
@@ -122,12 +125,12 @@ export default function LoginPage() {
 
   async function handleGoogleSignIn() {
     // Redirects the browser to Google's own account chooser/consent screen.
-    // Google sends the admin back to /auth/callback (not straight to /login)
-    // — that route exchanges the one-time code for a session server-side,
-    // then redirects to "/", where the app's own auth guard takes over. A
-    // first-time Google sign-in creates a new account same as email signup
-    // — Google's own identity data never includes a "role" key, so this
-    // also falls through to handle_new_user()'s 'admin' default.
+    // The signed-in user is sent back to /auth/callback (not straight to
+    // /login) — that route exchanges the one-time code for a session
+    // server-side, then redirects to "/", where the app's own auth guard
+    // takes over. A first-time Google sign-in creates a new account same as
+    // email signup — Google's own identity data never includes a "role" key,
+    // so this also falls through to handle_new_user()'s 'technician' default.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
@@ -155,12 +158,13 @@ export default function LoginPage() {
 
   async function onSignUp(values: z.infer<typeof signUpSchema>) {
     // No role here (deliberately) — options.data only ever reaches
-    // raw_user_meta_data, which handle_new_user() no longer trusts for
-    // role at all (a public signUp() call has no way to set app_metadata,
-    // which is what the trigger actually reads role from now — see the
-    // technician_role migration). Every self-signup, this or Google's,
-    // falls through to that trigger's 'admin' default; only an admin
-    // creating a user via the Users page can produce a technician account.
+    // raw_user_meta_data, which handle_new_user() no longer trusts for role
+    // at all (a public signUp() call has no way to set app_metadata, which
+    // is what the trigger actually reads role from now — see the
+    // close_role_escalation migration). Every self-signup, this or Google's,
+    // falls through to that trigger's 'technician' default; only an admin
+    // creating a user via the Users page (or a manual database update) can
+    // produce an admin account.
     const { error } = await supabase.auth.signUp({
       email: values.email.trim(),
       password: values.password,
@@ -205,7 +209,7 @@ export default function LoginPage() {
             <CardDescription>
               {mode === "signin"
                 ? "Enter your work email to continue."
-                : "Create your Admin account — Technician accounts are set up by an admin from the Users page."}
+                : "New accounts start as Technician — an admin can upgrade your role from the Users page."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
