@@ -24,6 +24,7 @@ import { AnnouncementPanel } from "@/components/announcements/announcement-panel
 import { DateControl } from "@/components/dashboard/date-control"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
+import { StatusBadge } from "@/components/shared/status-badge"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
   getFilterChangeDailyReportColumns,
@@ -57,7 +58,7 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { todayIso } from "@/lib/utils"
-import type { DailyReportSectionKey, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
+import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
 // Every panel this section can render. "date" and "inventory" aren't among
 // the six admin-configurable sections (see daily_report_sections) — the
@@ -133,23 +134,61 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
   return HALF_WIDTH_PANELS.has(id) ? "w-full md:w-[calc(50%-12px)]" : "w-full"
 }
 
-// Gates every Daily Report day-filter below (see the
-// dispatch_confirmation_workflow migration): a still-Draft item hasn't
-// been admin-approved yet, one that's Pending Customer Confirmation is
-// waiting on the customer's own response, and one the customer pushed
-// back on (Reschedule Requested) needs the admin to re-approve with a new
-// date — none of those three belong on the active daily dispatch list.
-// Only 'Confirmed' does. undefined also passes as a rollout safety net: if
-// this ships before the migration backfilling the column has actually run,
-// every row's dispatchStatus reads as undefined, and gating strictly on
-// === 'Confirmed' would blank out the whole Daily Report until someone
-// noticed. Once the migration has run, every pre-existing row (and
-// everything the recurring-schedule/C/T-completion generators still
-// create) defaults straight to 'Confirmed' at the database layer, so this
-// never actually excludes anything except a genuinely new, not-yet-
-// resolved record.
+// Gates every Daily Report day-filter below. Reversed from the original
+// "Confirmed-only" spec: an admin now wants same-day visibility into
+// Draft/Pending Customer Confirmation items too (so nothing scheduled for
+// today is invisible just because approval/confirmation hasn't happened
+// yet), so only 'Reschedule Requested' stays excluded — that one still
+// needs the admin to actively re-approve with a corrected date before it
+// belongs back on an active day's list, unlike Draft/Pending which are
+// just waiting on a step already in motion. undefined also passes as a
+// rollout safety net: if this ships before the migration backfilling the
+// column has actually run, every row's dispatchStatus reads as undefined.
+// See rawDispatchStatusBadge below for how Draft/Pending are visually
+// called out once they're on the list, so the day view can't be
+// mistaken for "everything here is locked in."
 function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
-  return status === undefined || status === "Confirmed"
+  return status !== "Reschedule Requested"
+}
+
+// Renders nothing for a 'Confirmed' (or legacy-undefined) row — those are
+// the ones actually locked in for the day and don't need calling out. A
+// Draft/Pending Customer Confirmation row gets an explicit badge so it
+// can't be mistaken for confirmed just because it's sitting on the same
+// day's list now (see isDailyReportEligible's own comment for why they're
+// on this list at all).
+function DispatchStatusCell({ status }: { status: DispatchStatus | undefined }) {
+  if (!status || status === "Confirmed") return null
+  const tone = status === "Draft" ? "neutral" : "warning"
+  return <StatusBadge tone={tone} label={status} />
+}
+
+// Prepends a purely-visual, accessorKey-less "Dispatch" indicator column
+// ahead of whatever field columns a module's own column-def function
+// returns — added here, at the Daily Report call site, rather than inside
+// getFilterChangeDailyReportColumns/getInstallColumns/getCollectionsDailyReportColumns/
+// getRepairColumns themselves, since those are shared with other pages
+// (Sale List, Member detail, the customer portal scan view, the standalone
+// module pages) that have no reason to show a dispatch-approval badge at
+// all. Same "utility column bolted on at the panel, not the shared
+// definition" shape as DashboardPlanPanel's own select-mode checkbox
+// column.
+function withDispatchStatusColumn<T extends DispatchFields>(columns: ColumnDef<T, unknown>[]): ColumnDef<T, unknown>[] {
+  const statusColumn: ColumnDef<T, unknown> = {
+    id: "__dispatchStatus",
+    header: "",
+    cell: ({ row }) => <DispatchStatusCell status={row.original.dispatchStatus} />,
+  }
+  return [statusColumn, ...columns]
+}
+
+// Row-level tint, applied on top of the badge column above — the two
+// together are what make a not-yet-locked-in row genuinely hard to miss
+// rather than relying on a single small badge easy to skim past.
+function dispatchRowClassName(status: DispatchStatus | undefined): string | undefined {
+  if (status === "Draft") return "bg-muted/40"
+  if (status === "Pending Customer Confirmation") return "bg-warning/5"
+  return undefined
 }
 
 function resolveOrder(saved: string[] | undefined, basePanelOrder: PanelId[]): PanelId[] {
@@ -387,44 +426,50 @@ export function DailyReportSection() {
     [isAdmin, updateFilterChangePlan]
   )
   const filterChangeColumns = React.useMemo(
-    () => getFilterChangeDailyReportColumns(filterChangeColumnParams),
+    () => withDispatchStatusColumn(getFilterChangeDailyReportColumns(filterChangeColumnParams)),
     [filterChangeColumnParams]
   )
   const filterChangeExpandedColumns = React.useMemo(
-    () => getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams),
+    () => withDispatchStatusColumn(getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams)),
     [filterChangeColumnParams]
   )
   const installColumns = React.useMemo(
     () =>
-      filterColumnsByVisibility(
-        getInstallColumns({
-          onStatusChange: isAdmin ? (plan, status) => updateInstallPlan.mutate({ id: plan.id, input: { status } }) : undefined,
-        }),
-        visibleFieldsFor("installation")
+      withDispatchStatusColumn(
+        filterColumnsByVisibility(
+          getInstallColumns({
+            onStatusChange: isAdmin ? (plan, status) => updateInstallPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+          }),
+          visibleFieldsFor("installation")
+        )
       ),
     [visibleFieldsFor, isAdmin, updateInstallPlan]
   )
   const repairColumns = React.useMemo(
     () =>
-      filterColumnsByVisibility(
-        getRepairColumns({
-          onStatusChange: isAdmin ? (plan, status) => updateRepairPlan.mutate({ id: plan.id, input: { status } }) : undefined,
-        }),
-        visibleFieldsFor("repair")
+      withDispatchStatusColumn(
+        filterColumnsByVisibility(
+          getRepairColumns({
+            onStatusChange: isAdmin ? (plan, status) => updateRepairPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+          }),
+          visibleFieldsFor("repair")
+        )
       ),
     [visibleFieldsFor, isAdmin, updateRepairPlan]
   )
   const collectionsColumns = React.useMemo(
     () =>
-      filterColumnsByVisibility(
-        getCollectionsDailyReportColumns({
-          onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
-          // Pre D/Amount/Note edited straight from the panel cell (see
-          // getCollectionsDailyReportColumns) — same mutate-and-invalidate
-          // hook the status column above already uses.
-          onFieldChange: isAdmin ? (entry, patch) => updateCollection.mutate({ id: entry.id, input: patch }) : undefined,
-        }),
-        visibleFieldsFor("collection")
+      withDispatchStatusColumn(
+        filterColumnsByVisibility(
+          getCollectionsDailyReportColumns({
+            onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
+            // Pre D/Amount/Note edited straight from the panel cell (see
+            // getCollectionsDailyReportColumns) — same mutate-and-invalidate
+            // hook the status column above already uses.
+            onFieldChange: isAdmin ? (entry, patch) => updateCollection.mutate({ id: entry.id, input: patch }) : undefined,
+          }),
+          visibleFieldsFor("collection")
+        )
       ),
     [visibleFieldsFor, isAdmin, updateCollection]
   )
@@ -515,6 +560,7 @@ export function DailyReportSection() {
         // min-width, so this pins it explicitly rather than depending on
         // that sum alone.
         expandedTableClassName="min-w-[1000px] w-full"
+        getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
     installation: (
@@ -534,6 +580,7 @@ export function DailyReportSection() {
         exportFileName="install-plan"
         onRowClick={isAdmin ? (row) => router.push(`/install?id=${row.id}`) : undefined}
         panelHeight={sizes.installation?.height}
+        getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
     repair: (
@@ -553,6 +600,7 @@ export function DailyReportSection() {
         exportFileName="repair-plan"
         onRowClick={isAdmin ? (row) => router.push(`/repair-plan?id=${row.id}`) : undefined}
         panelHeight={sizes.repair?.height}
+        getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
     collection: (
@@ -573,6 +621,7 @@ export function DailyReportSection() {
         onRowClick={isAdmin ? (row) => router.push(`/collection-plan?id=${row.id}`) : undefined}
         panelHeight={sizes.collection?.height}
         tableContainerClassName="scrollbar-always-visible"
+        getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
     // Read-only — no canAdd/onAdd/canDelete/onDeleteSelected, deliberately:

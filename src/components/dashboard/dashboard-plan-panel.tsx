@@ -74,6 +74,10 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // it — set this to skip the container query and always render the
   // title/buttons on one row.
   headerAlwaysRow?: boolean
+  // Forwarded straight to DataTable's getRowClassName — e.g. the Daily
+  // Report tinting a Draft/Pending Customer Confirmation row so it's not
+  // mistaken for one that's actually locked in for the day.
+  getRowClassName?: (row: TData) => string | undefined
 }
 
 // Everything in the compact table's chrome above/below the actual rows —
@@ -121,6 +125,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   tableClassName,
   expandedTableClassName,
   headerAlwaysRow,
+  getRowClassName,
 }: DashboardPlanPanelProps<TData>) {
   const dragHandle = useDragHandle()
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
@@ -285,6 +290,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         onRowClick={selectMode ? undefined : onRowClick}
         tableContainerClassName={tableContainerClassName}
         tableClassName={isExpanded ? (expandedTableClassName ?? tableClassName) : tableClassName}
+        getRowClassName={getRowClassName}
       />
     </div>
   )
