@@ -34,13 +34,19 @@ import {
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useProducts } from "@/lib/hooks/use-inventory"
 import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { ctIntervalMonths } from "@/lib/ct-interval"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
 
-const PRODUCT_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
+// The legacy AppSheet catalog stays alongside live Inventory products rather
+// than being replaced — productNo is (and remains) free text with no FK, so
+// dropping this would only make old entries that already used one of these
+// codes stop showing as a recognized suggestion, for no real benefit (see
+// the PRODUCT_CATALOG merge below).
+const LEGACY_PRODUCT_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
   g.items.map((item) => ({ value: formatProductOption(item.code, item.name), group: g.group }))
 )
 
@@ -126,6 +132,19 @@ export function SaleListFormDialog({
   const createEntry = useCreateSaleListEntry()
   const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
+  const { data: products = [] } = useProducts()
+
+  // Live Inventory products merged in alongside the legacy catalog — grouped
+  // by category (Purifiers/Filters/Accessories) the same way legacy entries
+  // are grouped by brand, so any product added to Inventory shows up here
+  // automatically with no separate manual entry into a second list.
+  const productOptions: ComboboxOption[] = React.useMemo(
+    () => [
+      ...LEGACY_PRODUCT_OPTIONS,
+      ...products.map((p) => ({ value: formatProductOption(p.sku, p.name), group: p.category })),
+    ],
+    [products]
+  )
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -249,7 +268,7 @@ export function SaleListFormDialog({
                       <Combobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
-                        options={PRODUCT_OPTIONS}
+                        options={productOptions}
                         placeholder="e.g. 101 / MW) F7"
                       />
                     </FormControl>
