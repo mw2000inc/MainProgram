@@ -1,5 +1,9 @@
 export type Role = "admin" | "technician"
 
+// The interface language -- a per-user, synced preference (profiles.locale),
+// not a company_settings-wide default; see the profile_locale migration.
+export type Locale = "en" | "ko"
+
 export interface User {
   id: string
   name: string
@@ -8,6 +12,7 @@ export interface User {
   avatarUrl?: string
   phone?: string
   createdAt: string
+  locale: Locale
 }
 
 export type ContractStatus = "active" | "expiring" | "expired"

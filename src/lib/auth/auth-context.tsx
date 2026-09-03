@@ -49,7 +49,7 @@ async function loadProfile(session: Session | null, retries = 2): Promise<User |
   for (let attempt = 0; attempt <= retries; attempt++) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, name, email, role, avatar_url, phone, created_at")
+      .select("id, name, email, role, avatar_url, phone, created_at, locale")
       .eq("id", session.user.id)
       .single()
     if (!error && data) {
@@ -61,6 +61,10 @@ async function loadProfile(session: Session | null, retries = 2): Promise<User |
         avatarUrl: data.avatar_url ?? undefined,
         phone: data.phone ?? undefined,
         createdAt: data.created_at,
+        // Defensive fallback only -- the column is `not null default 'en'`
+        // with a check constraint, so this null-coalescing should never
+        // actually be reached against a real row.
+        locale: data.locale === "ko" ? "ko" : "en",
       }
     }
     if (attempt < retries) await sleep(500 * (attempt + 1))

@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth/auth-context"
+import { I18nProvider } from "@/lib/i18n/i18n-context"
 import { SidebarCollapseProvider } from "@/lib/sidebar-collapse-context"
 import { RegisterServiceWorker } from "@/components/pwa/register-service-worker"
 import { InstallPromptProvider } from "@/components/pwa/install-prompt-context"
@@ -40,16 +41,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TooltipProvider delayDuration={200}>
-            <SidebarCollapseProvider>
-              <InstallPromptProvider>
-                <RouteChangeCleanup />
-                <RegisterServiceWorker />
-                {children}
-                <Toaster richColors position="top-right" closeButton />
-              </InstallPromptProvider>
-            </SidebarCollapseProvider>
-          </TooltipProvider>
+          <I18nProvider>
+            <TooltipProvider delayDuration={200}>
+              <SidebarCollapseProvider>
+                <InstallPromptProvider>
+                  <RouteChangeCleanup />
+                  <RegisterServiceWorker />
+                  {children}
+                  <Toaster richColors position="top-right" closeButton />
+                </InstallPromptProvider>
+              </SidebarCollapseProvider>
+            </TooltipProvider>
+          </I18nProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

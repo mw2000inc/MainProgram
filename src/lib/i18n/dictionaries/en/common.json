@@ -1,0 +1,10 @@
+{
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "loading": "Loading...",
+  "language": "Language",
+  "languageDescription": "Choose the language the interface displays in. This is your own preference and follows your account across devices.",
+  "english": "English",
+  "korean": "Korean"
+}

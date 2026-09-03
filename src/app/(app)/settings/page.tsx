@@ -10,10 +10,11 @@ import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AdminGuard } from "@/components/shared/admin-guard"
 import { DailyReportSectionsPanel } from "@/components/settings/daily-report-sections-panel"
 import { ProductCatalogPanel } from "@/components/settings/product-catalog-panel"
+import { LanguagePanel } from "@/components/settings/language-panel"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
+import { useAuth } from "@/lib/auth/auth-context"
 import type { ContactEntry } from "@/lib/types"
 
 function ContactEntryList({
@@ -72,6 +73,8 @@ function ContactEntryList({
 }
 
 export default function SettingsPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
   const { data: settings, isPending } = useSettings()
   const updateSettings = useUpdateSettings()
 
@@ -134,15 +137,24 @@ export default function SettingsPage() {
   }
 
   return (
-    <AdminGuard>
-      <div className="space-y-6 max-w-3xl">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <SettingsIcon className="h-6 w-6 text-primary" /> Settings
-          </h1>
-          <p className="text-sm text-muted-foreground">Manage company information, preferences, and data.</p>
-        </div>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+          <SettingsIcon className="h-6 w-6 text-primary" /> Settings
+        </h1>
+        <p className="text-sm text-muted-foreground">Manage company information, preferences, and data.</p>
+      </div>
 
+      {/* Visible to every signed-in user, not just admins — a language
+          preference is personal, not a company-wide setting (see
+          LanguagePanel's own comment). Everything else below stays
+          admin-only, same restriction the page-wide AdminGuard used to
+          enforce, just scoped inline now so this one card isn't caught in
+          the same all-or-nothing redirect for a technician. */}
+      <LanguagePanel />
+
+      {isAdmin && (
+        <>
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Company Information</CardTitle>
@@ -245,7 +257,8 @@ export default function SettingsPage() {
             {updateSettings.isPending ? "Saving..." : "Save Settings"}
           </Button>
         </div>
-      </div>
-    </AdminGuard>
+        </>
+      )}
+    </div>
   )
 }

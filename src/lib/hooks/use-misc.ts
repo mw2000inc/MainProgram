@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/misc"
-import type { CompanySettings, User } from "@/lib/types"
+import type { CompanySettings, Locale, User } from "@/lib/types"
+import { useAuth } from "@/lib/auth/auth-context"
 import { toast } from "sonner"
 
 export const usersKey = ["users"] as const
@@ -41,6 +42,21 @@ export function useUpdateUser() {
       toast.success("User updated successfully")
     },
     onError: () => toast.error("Failed to update user"),
+  })
+}
+
+// A user's own interface-language preference — see api/misc.ts's own
+// comment on why this is separate from useUpdateUser (the admin-facing Users
+// page). Reads the current user's id and refreshes the AuthContext's own
+// User object on success (rather than a query-cache invalidation — `user`
+// isn't React Query state) so `user.locale` reflects the new value
+// everywhere immediately, including the picker itself.
+export function useUpdateMyLocale() {
+  const { user, refreshUser } = useAuth()
+  return useMutation({
+    mutationFn: (locale: Locale) => api.updateMyLocale(user!.id, locale),
+    onSuccess: () => refreshUser(),
+    onError: () => toast.error("Failed to update language"),
   })
 }
 

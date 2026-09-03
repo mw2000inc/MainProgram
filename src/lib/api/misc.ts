@@ -9,6 +9,7 @@ type ProfileRow = {
   avatar_url: string | null
   phone: string | null
   created_at: string
+  locale: string
 }
 
 function userFromRow(row: ProfileRow): User {
@@ -20,7 +21,17 @@ function userFromRow(row: ProfileRow): User {
     avatarUrl: row.avatar_url ?? undefined,
     phone: row.phone ?? undefined,
     createdAt: row.created_at,
+    locale: row.locale === "ko" ? "ko" : "en",
   }
+}
+
+// A user's own interface-language preference — deliberately separate from
+// updateUser() below (the admin-facing Users page), since this is something
+// each person sets for themselves, not a field an admin edits on someone
+// else's behalf. RLS already allows this (id = auth.uid()).
+export async function updateMyLocale(id: string, locale: User["locale"]): Promise<void> {
+  const { error } = await supabase.from("profiles").update({ locale }).eq("id", id)
+  if (error) throw error
 }
 
 export async function listUsers(): Promise<User[]> {

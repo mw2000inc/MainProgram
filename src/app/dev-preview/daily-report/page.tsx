@@ -44,6 +44,7 @@ const MOCK_USER: User = {
   email: "mock-admin@example.com",
   role: "admin",
   createdAt: now,
+  locale: "en",
 }
 
 const MOCK_ANNOUNCEMENTS: Announcement[] = [
