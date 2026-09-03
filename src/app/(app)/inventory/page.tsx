@@ -25,12 +25,18 @@ import { getInventoryColumns, type ProductRow } from "@/components/inventory/inv
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { getStockStatus, todayIso } from "@/lib/utils"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import type { Product, StockStatus } from "@/lib/types"
 
 function InventoryContent() {
   const { user, can } = useAuth()
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
   const { data: products = [], isPending: p1 } = useProducts()
   const { data: suppliers = [], isPending: p2 } = useSuppliers()
   const { data: movements = [], isPending: p3 } = useStockMovements()
@@ -216,14 +222,14 @@ function InventoryContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Package className="h-6 w-6 text-primary" /> Inventory
+            <Package className="h-6 w-6 text-primary" /> {tNav("inventory")}
           </h1>
-          <p className="text-sm text-muted-foreground">Track stock levels, pricing and suppliers.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/inventory/in-and-out">
             <Button variant="outline" className="gap-1.5">
-              <ArrowLeftRight className="h-4 w-4" /> In &amp; Out Summary
+              <ArrowLeftRight className="h-4 w-4" /> {t("inAndOutSummary")}
             </Button>
           </Link>
           <PanelExportMenu columns={exportColumns} rows={filteredRows} fileName="inventory" />
@@ -235,7 +241,7 @@ function InventoryContent() {
               }}
               className="gap-1.5"
             >
-              <Plus className="h-4 w-4" /> Add Product
+              <Plus className="h-4 w-4" /> {t("addProduct")}
             </Button>
           )}
         </div>
@@ -249,9 +255,9 @@ function InventoryContent() {
             <DataTable
               columns={columns}
               data={scopedRows}
-              searchPlaceholder="Search by name, SKU, barcode..."
+              searchPlaceholder={t("searchByNameSkuBarcode")}
               onFilteredRowsChange={setFilteredRows}
-              emptyMessage="No products found."
+              emptyMessage={t("noProductsFound")}
               onRowClick={
                 canEdit
                   ? (p) => {
@@ -264,10 +270,10 @@ function InventoryContent() {
                 <>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="h-9 w-[150px]">
-                      <SelectValue placeholder="Category" />
+                      <SelectValue placeholder={tFields("category")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem value="all">{t("allCategories")}</SelectItem>
                       {PRODUCT_CATEGORIES.map((c) => (
                         <SelectItem key={c} value={c}>
                           {c}
@@ -277,13 +283,13 @@ function InventoryContent() {
                   </Select>
                   <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
                     <SelectTrigger className="h-9 w-[150px]">
-                      <SelectValue placeholder="Stock Status" />
+                      <SelectValue placeholder={t("stockStatusFilter")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="in-stock">In Stock</SelectItem>
-                      <SelectItem value="low-stock">Low Stock</SelectItem>
-                      <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                      <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
+                      <SelectItem value="in-stock">{tStatus("inStock")}</SelectItem>
+                      <SelectItem value="low-stock">{tStatus("lowStock")}</SelectItem>
+                      <SelectItem value="out-of-stock">{tStatus("outOfStock")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
@@ -299,8 +305,8 @@ function InventoryContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete product?"
-        description={`This will permanently remove ${deleting?.name ?? "this product"} from inventory.`}
+        title={t("deleteProductTitle")}
+        description={t("deleteProductDescription", { name: deleting?.name ?? t("thisProduct") })}
         loading={deleteProduct.isPending}
         onConfirm={async () => {
           if (!deleting) return

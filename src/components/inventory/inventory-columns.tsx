@@ -3,6 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { ChevronRight, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ColumnHeader } from "@/components/shared/column-header"
 import type { Product, StockStatus } from "@/lib/types"
 
 export type ProductRow = Product & {
@@ -33,27 +34,27 @@ export function getInventoryColumns({
   const columns: ColumnDef<ProductRow, unknown>[] = [
     {
       accessorKey: "sku",
-      header: "SKU",
+      header: () => <ColumnHeader tKey="sku" ns="fields" />,
       cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.sku}</span>,
     },
     {
       accessorKey: "name",
-      header: "Description",
+      header: () => <ColumnHeader tKey="description" ns="inventory" />,
       cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
     },
-    { accessorKey: "category", header: "Category" },
-    { accessorKey: "pBalance", header: "P_Balance" },
-    { accessorKey: "inStockOnDate", header: "In Stock" },
-    { accessorKey: "outStockOnDate", header: "Out Stock" },
+    { accessorKey: "category", header: () => <ColumnHeader tKey="category" ns="fields" /> },
+    { accessorKey: "pBalance", header: () => <ColumnHeader tKey="pBalance" ns="inventory" /> },
+    { accessorKey: "inStockOnDate", header: () => <ColumnHeader tKey="inStock" ns="inventory" /> },
+    { accessorKey: "outStockOnDate", header: () => <ColumnHeader tKey="outStock" ns="inventory" /> },
     {
       accessorKey: "balance",
-      header: "Balance",
+      header: () => <ColumnHeader tKey="balance" ns="inventory" />,
       cell: ({ row }) => <span className="font-medium">{row.original.balance}</span>,
     },
-    { accessorKey: "brandNewQuantity", header: "Brand New" },
-    { accessorKey: "secondHandReadyQuantity", header: "2nd hand (ready)" },
-    { accessorKey: "secondHandRepairQuantity", header: "2nd hand (need repair)" },
-    { accessorKey: "demoQuantity", header: "Demo" },
+    { accessorKey: "brandNewQuantity", header: () => <ColumnHeader tKey="brandNew" ns="inventory" /> },
+    { accessorKey: "secondHandReadyQuantity", header: () => <ColumnHeader tKey="secondHandReadyShort" ns="inventory" /> },
+    { accessorKey: "secondHandRepairQuantity", header: () => <ColumnHeader tKey="secondHandRepairShort" ns="inventory" /> },
+    { accessorKey: "demoQuantity", header: () => <ColumnHeader tKey="demo" ns="inventory" /> },
   ]
 
   if (canDelete) {

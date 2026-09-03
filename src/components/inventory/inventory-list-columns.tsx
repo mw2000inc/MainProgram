@@ -2,6 +2,8 @@
 
 import type { ColumnDef } from "@tanstack/react-table"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDateTime } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
@@ -15,7 +17,12 @@ import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 // ApprovalStatusBadge on the In & Out page) — matches that badge's tones
 // exactly so a movement reads the same way in both places.
 function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }) {
-  return status === "pending" ? <StatusBadge tone="warning" label="Pending" /> : <StatusBadge tone="success" label="Approved" />
+  const { t } = useTranslation("status")
+  return status === "pending" ? (
+    <StatusBadge tone="warning" label={t("pending")} />
+  ) : (
+    <StatusBadge tone="success" label={t("approved")} />
+  )
 }
 
 // A row's quantity is (almost) always entirely on one side — quantityAdded
@@ -23,34 +30,37 @@ function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }
 // the sale-item trigger, the filter-change deduction). Falls back to
 // showing both if a row genuinely has both set, rather than silently
 // dropping one.
-function movementTypeAndQty(row: StockMovementRow): { type: string; qty: number } {
+function movementTypeAndQty(row: StockMovementRow): { type: "add" | "deduct" | "addDeduct"; qty: number } {
   if (row.quantityAdded > 0 && row.quantityRemoved > 0) {
-    return { type: "Add/Deduct", qty: row.quantityAdded - row.quantityRemoved }
+    return { type: "addDeduct", qty: row.quantityAdded - row.quantityRemoved }
   }
-  if (row.quantityRemoved > 0) return { type: "Deduct", qty: row.quantityRemoved }
-  return { type: "Add", qty: row.quantityAdded }
+  if (row.quantityRemoved > 0) return { type: "deduct", qty: row.quantityRemoved }
+  return { type: "add", qty: row.quantityAdded }
 }
 
+const TYPE_KEYS = { add: "typeAdd", deduct: "typeDeduct", addDeduct: "typeAddDeduct" } as const
+
 function TypeCell({ row }: { row: StockMovementRow }) {
+  const { t } = useTranslation("inventory")
   const { type } = movementTypeAndQty(row)
-  return <span className={type === "Deduct" ? "text-danger" : "text-success"}>{type}</span>
+  return <span className={type === "deduct" ? "text-danger" : "text-success"}>{t(TYPE_KEYS[type])}</span>
 }
 
 function QtyCell({ row }: { row: StockMovementRow }) {
   const { type, qty } = movementTypeAndQty(row)
-  return <span className="font-medium">{type === "Deduct" ? `-${qty}` : `+${qty}`}</span>
+  return <span className="font-medium">{type === "deduct" ? `-${qty}` : `+${qty}`}</span>
 }
 
 // Compact set for the Daily Report panel itself.
 export function getInventoryListColumns(): ColumnDef<StockMovementRow, unknown>[] {
   return [
-    { accessorKey: "productName", header: "Item" },
-    { id: "type", header: "Type", cell: ({ row }) => <TypeCell row={row.original} /> },
-    { id: "qty", header: "Quantity", cell: ({ row }) => <QtyCell row={row.original} /> },
-    { accessorKey: "reason", header: "Reason" },
+    { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
+    { id: "type", header: () => <ColumnHeader tKey="type" ns="inventory" />, cell: ({ row }) => <TypeCell row={row.original} /> },
+    { id: "qty", header: () => <ColumnHeader tKey="quantity" ns="fields" />, cell: ({ row }) => <QtyCell row={row.original} /> },
+    { accessorKey: "reason", header: () => <ColumnHeader tKey="reason" ns="inventory" /> },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <InventoryStatusBadge status={row.original.status} />,
     },
   ]
@@ -61,39 +71,42 @@ export function getInventoryListColumns(): ColumnDef<StockMovementRow, unknown>[
 // compact columns above.
 export function getInventoryListExpandedColumns(): ColumnDef<StockMovementRow, unknown>[] {
   return [
-    { accessorKey: "productName", header: "Item" },
-    { id: "type", header: "Type", cell: ({ row }) => <TypeCell row={row.original} /> },
-    { id: "qty", header: "Quantity", cell: ({ row }) => <QtyCell row={row.original} /> },
-    { accessorKey: "reason", header: "Reason" },
+    { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
+    { id: "type", header: () => <ColumnHeader tKey="type" ns="inventory" />, cell: ({ row }) => <TypeCell row={row.original} /> },
+    { id: "qty", header: () => <ColumnHeader tKey="quantity" ns="fields" />, cell: ({ row }) => <QtyCell row={row.original} /> },
+    { accessorKey: "reason", header: () => <ColumnHeader tKey="reason" ns="inventory" /> },
     {
       accessorKey: "relatedCustomerName",
-      header: "Related Customer",
+      header: () => <ColumnHeader tKey="relatedCustomer" ns="inventory" />,
       cell: ({ row }) => row.original.relatedCustomerName || "—",
     },
     {
       accessorKey: "relatedJobOrderNo",
-      header: "Related Job",
+      header: () => <ColumnHeader tKey="relatedJob" ns="inventory" />,
       cell: ({ row }) => row.original.relatedJobOrderNo || "—",
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <InventoryStatusBadge status={row.original.status} />,
     },
-    { accessorKey: "userName", header: "Created By" },
+    { accessorKey: "userName", header: () => <ColumnHeader tKey="createdBy" ns="inventory" /> },
     {
       accessorKey: "approvedByName",
-      header: "Approved By",
+      header: () => <ColumnHeader tKey="approvedBy" ns="inventory" />,
       cell: ({ row }) => row.original.approvedByName || "—",
     },
     {
       accessorKey: "createdAt",
-      header: "Time",
+      header: () => <ColumnHeader tKey="time" ns="inventory" />,
       cell: ({ row }) => formatDateTime(row.original.createdAt),
     },
   ]
 }
 
+// Print/export column headers stay in English regardless of interface
+// language — deferred to the long-tail phase alongside the other modules'
+// export column arrays (see the phased i18n plan).
 export const INVENTORY_LIST_EXPORT_COLUMNS = [
   { header: "Item", key: "productName" },
   { header: "Reason", key: "reason" },

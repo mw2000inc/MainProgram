@@ -26,6 +26,7 @@ import { getStockMovementsColumns, type StockMovementRow } from "@/components/in
 import { useApproveStockMovement, useDeleteStockMovement, useStockMovementRows } from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 
 type Direction = "in" | "out"
@@ -72,6 +73,8 @@ function DateCountPanel({
   onSelect: (selection: Selection) => void
   onAdd: () => void
 }) {
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
   const [showReasonFilter, setShowReasonFilter] = React.useState(false)
   const [reasonFilter, setReasonFilter] = React.useState<string>("all")
   const [expanded, setExpanded] = React.useState(false)
@@ -99,13 +102,13 @@ function DateCountPanel({
       </div>
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-7 gap-1 px-2" onClick={onAdd}>
-          <Plus className="h-3.5 w-3.5" /> Add
+          <Plus className="h-3.5 w-3.5" /> {tCommon("add")}
         </Button>
         <Button
           variant={showReasonFilter ? "secondary" : "ghost"}
           size="icon"
           className="h-7 w-7"
-          title="Filter by reason"
+          title={t("filterByReason")}
           onClick={() => setShowReasonFilter((v) => !v)}
         >
           <Filter className="h-3.5 w-3.5" />
@@ -114,7 +117,7 @@ function DateCountPanel({
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          title="Expand"
+          title={tCommon("expand")}
           onClick={() => setExpanded(true)}
         >
           <Maximize2 className="h-3.5 w-3.5" />
@@ -126,10 +129,10 @@ function DateCountPanel({
   const filterRow = showReasonFilter && (
     <Select value={reasonFilter} onValueChange={setReasonFilter}>
       <SelectTrigger className="h-8 w-40">
-        <SelectValue placeholder="Reason" />
+        <SelectValue placeholder={t("reason")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All Reasons</SelectItem>
+        <SelectItem value="all">{t("allReasons")}</SelectItem>
         {reasonOptions.map((r) => (
           <SelectItem key={r} value={r}>
             {r}
@@ -145,11 +148,11 @@ function DateCountPanel({
         onClick={() => onSelect({ direction, date: "all" })}
         className="flex w-full items-center justify-between px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
       >
-        <span className="font-medium">All</span>
+        <span className="font-medium">{tCommon("all")}</span>
         <span className="text-muted-foreground">{total}</span>
       </button>
       {entries.length === 0 && (
-        <p className="px-4 py-6 text-center text-sm text-muted-foreground">No movements recorded.</p>
+        <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t("noMovementsRecorded")}</p>
       )}
       {entries.map((e) => (
         <button
@@ -193,6 +196,7 @@ function DateCountPanel({
 
 function InAndOutSummaryContent() {
   const { user, can } = useAuth()
+  const { t } = useTranslation("inventory")
   const { data: rows, isPending } = useStockMovementRows()
   const deleteMovement = useDeleteStockMovement()
   const approveMovement = useApproveStockMovement()
@@ -271,17 +275,14 @@ function InAndOutSummaryContent() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <ArrowLeftRight className="h-6 w-6 text-primary" /> In &amp; Out Summary
+          <ArrowLeftRight className="h-6 w-6 text-primary" /> {t("inAndOutSummary")}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Stock added and removed by date, drawn automatically from the stock movement ledger. Select a date to see
-          the individual entries.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("inAndOutDescription")}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DateCountPanel
-          title="In Stock"
+          title={t("inStock")}
           icon={ArrowDownCircle}
           tone="success"
           direction="in"
@@ -290,7 +291,7 @@ function InAndOutSummaryContent() {
           onAdd={() => handleAdd("in")}
         />
         <DateCountPanel
-          title="Out Stock"
+          title={t("outStock")}
           icon={ArrowUpCircle}
           tone="danger"
           direction="out"
@@ -304,15 +305,15 @@ function InAndOutSummaryContent() {
         <DialogContent className="w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col gap-0 p-0">
           <DialogHeader className="border-b p-4 pb-3">
             <DialogTitle>
-              {selection?.direction === "in" ? "In Stock" : "Out Stock"} —{" "}
-              {selection?.date === "all" ? "All Dates" : selection ? formatDate(selection.date) : ""}
+              {selection?.direction === "in" ? t("inStock") : t("outStock")} —{" "}
+              {selection?.date === "all" ? t("allDates") : selection ? formatDate(selection.date) : ""}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             <DataTable
               columns={columns}
               data={drilldownRows}
-              emptyMessage="No movements found."
+              emptyMessage={t("noMovementsFound")}
               pageSize={Math.max(drilldownRows.length, 1)}
             />
           </div>
@@ -329,13 +330,13 @@ function InAndOutSummaryContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete stock movement?"
+        title={t("deleteStockMovementTitle")}
         description={
           deleting?.reason === "Sale"
-            ? `This movement was auto-generated from a sale. Deleting it will adjust ${deleting?.productName ?? "the product"}'s stock but won't change the original invoice.`
+            ? t("deleteMovementSaleDescription", { product: deleting?.productName ?? t("theProduct") })
             : deleting?.reason === "Filter Change"
-              ? `This movement was auto-generated from a completed filter-change schedule job. Deleting it will adjust ${deleting?.productName ?? "the product"}'s stock but won't change the original schedule entry.`
-              : `This will permanently remove this movement and adjust ${deleting?.productName ?? "the product"}'s stock accordingly.`
+              ? t("deleteMovementFilterChangeDescription", { product: deleting?.productName ?? t("theProduct") })
+              : t("deleteMovementGenericDescription", { product: deleting?.productName ?? t("theProduct") })
         }
         loading={deleteMovement.isPending}
         onConfirm={async () => {

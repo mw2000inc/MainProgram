@@ -23,16 +23,23 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateSupplier } from "@/lib/hooks/use-inventory"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Supplier } from "@/lib/types"
 
-const schema = z.object({
-  name: z.string().min(2, "Supplier name is required"),
-  contact: z.string().min(7, "Enter a valid contact number"),
-  email: z.string().email("Enter a valid email address"),
-  address: z.string().min(5, "Address is required"),
-})
+function createSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  ti: (key: string) => string,
+  tf: (key: string) => string
+) {
+  return z.object({
+    name: z.string().min(2, t("requiredField", { field: ti("supplierName") })),
+    contact: z.string().min(7, t("enterValidField", { field: ti("contactNumber") })),
+    email: z.string().email(t("enterValidField", { field: tf("email") })),
+    address: z.string().min(5, t("requiredField", { field: tf("address") })),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 export function SupplierFormDialog({
   open,
@@ -44,6 +51,10 @@ export function SupplierFormDialog({
   onCreated?: (supplier: Supplier) => void
 }) {
   const createSupplier = useCreateSupplier()
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, t, tFields), [tCommon, t, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -64,8 +75,8 @@ export function SupplierFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Add Supplier</DialogTitle>
-          <DialogDescription>Register a new supplier to source products from.</DialogDescription>
+          <DialogTitle>{t("addSupplierTitle")}</DialogTitle>
+          <DialogDescription>{t("addSupplierDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -74,7 +85,7 @@ export function SupplierFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Supplier Name</FormLabel>
+                  <FormLabel>{t("supplierName")}</FormLabel>
                   <FormControl>
                     <Input placeholder="PureFlow Industries" {...field} />
                   </FormControl>
@@ -87,7 +98,7 @@ export function SupplierFormDialog({
               name="contact"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contact Number</FormLabel>
+                  <FormLabel>{t("contactNumber")}</FormLabel>
                   <FormControl>
                     <Input placeholder="0917 555 0101" {...field} />
                   </FormControl>
@@ -100,7 +111,7 @@ export function SupplierFormDialog({
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>{tFields("email")}</FormLabel>
                   <FormControl>
                     <Input placeholder="sales@supplier.ph" {...field} />
                   </FormControl>
@@ -113,7 +124,7 @@ export function SupplierFormDialog({
               name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address</FormLabel>
+                  <FormLabel>{tFields("address")}</FormLabel>
                   <FormControl>
                     <Input placeholder="12 Del Pilar St, Makati City" {...field} />
                   </FormControl>
@@ -123,10 +134,10 @@ export function SupplierFormDialog({
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={createSupplier.isPending}>
-                {createSupplier.isPending ? "Saving..." : "Add Supplier"}
+                {createSupplier.isPending ? tCommon("saving") : t("addSupplierTitle")}
               </Button>
             </DialogFooter>
           </form>

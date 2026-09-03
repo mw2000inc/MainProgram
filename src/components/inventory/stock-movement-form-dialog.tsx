@@ -33,29 +33,35 @@ import {
 import { STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useAddStockMovement, useProducts, useUpdateStockMovement } from "@/lib/hooks/use-inventory"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { generateId, todayIso } from "@/lib/utils"
 import type { StockMovement } from "@/lib/types"
 
-const addSchema = z
-  .object({
-    productId: z.string().min(1, "Select a product"),
-    direction: z.enum(["in", "out"]),
-    reason: z.enum(STOCK_MOVEMENT_REASONS),
-    quantity: z.number().int().min(0),
-    secondHandReadyQuantity: z.number().int().min(0),
-    secondHandRepairQuantity: z.number().int().min(0),
-    demoQuantity: z.number().int().min(0),
-  })
-  .refine(
-    (data) =>
-      data.quantity > 0 || data.secondHandReadyQuantity > 0 || data.secondHandRepairQuantity > 0 || data.demoQuantity > 0,
-    {
-      message: "Enter a quantity for at least one field",
-      path: ["quantity"],
-    }
-  )
+function createAddSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  ti: (key: string) => string
+) {
+  return z
+    .object({
+      productId: z.string().min(1, t("selectField", { field: ti("product") })),
+      direction: z.enum(["in", "out"]),
+      reason: z.enum(STOCK_MOVEMENT_REASONS),
+      quantity: z.number().int().min(0),
+      secondHandReadyQuantity: z.number().int().min(0),
+      secondHandRepairQuantity: z.number().int().min(0),
+      demoQuantity: z.number().int().min(0),
+    })
+    .refine(
+      (data) =>
+        data.quantity > 0 || data.secondHandReadyQuantity > 0 || data.secondHandRepairQuantity > 0 || data.demoQuantity > 0,
+      {
+        message: ti("quantityAtLeastOneField"),
+        path: ["quantity"],
+      }
+    )
+}
 
-type AddFormValues = z.infer<typeof addSchema>
+type AddFormValues = z.infer<ReturnType<typeof createAddSchema>>
 
 // Edit mode exposes Qty Added / Qty Removed / condition buckets directly (rather
 // than the Add flow's single Quantity + Direction) so a wrong entry — e.g. an
@@ -102,14 +108,15 @@ export function StockMovementFormDialog({
   defaultDirection?: "in" | "out"
 }) {
   const isEdit = !!movement
+  const { t } = useTranslation("inventory")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Stock Movement" : "Add Stock Movement"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("editStockMovementTitle") : t("addStockMovementTitle")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update this stock movement." : "Record a manual stock adjustment."}
+            {isEdit ? t("editStockMovementDescription") : t("addStockMovementDescription")}
           </DialogDescription>
         </DialogHeader>
         {isEdit ? (
@@ -134,6 +141,10 @@ function AddMovementForm({
   const { user } = useAuth()
   const { data: products = [] } = useProducts()
   const addMovement = useAddStockMovement()
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const addSchema = React.useMemo(() => createAddSchema(tCommon, t), [tCommon, t])
 
   const defaultsFor = (direction: "in" | "out"): AddFormValues => ({
     productId: "",
@@ -188,11 +199,11 @@ function AddMovementForm({
           name="productId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Product</FormLabel>
+              <FormLabel>{t("product")}</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select product" />
+                    <SelectValue placeholder={tCommon("selectField", { field: t("product") })} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -208,9 +219,7 @@ function AddMovementForm({
           )}
         />
         {selectedProduct && (
-          <p className="text-sm text-muted-foreground">
-            Current stock: <span className="font-medium text-foreground">{selectedProduct.stockQuantity}</span> units
-          </p>
+          <p className="text-sm text-muted-foreground">{t("currentStockUnits", { stock: String(selectedProduct.stockQuantity) })}</p>
         )}
         <div className="grid grid-cols-2 gap-4">
           <FormField
@@ -218,7 +227,7 @@ function AddMovementForm({
             name="direction"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Direction</FormLabel>
+                <FormLabel>{t("direction")}</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -226,8 +235,8 @@ function AddMovementForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="in">Stock In (+)</SelectItem>
-                    <SelectItem value="out">Stock Out (-)</SelectItem>
+                    <SelectItem value="in">{t("stockIn")}</SelectItem>
+                    <SelectItem value="out">{t("stockOut")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -239,7 +248,7 @@ function AddMovementForm({
             name="reason"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Reason</FormLabel>
+                <FormLabel>{t("reason")}</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -264,7 +273,7 @@ function AddMovementForm({
           name="quantity"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Quantity</FormLabel>
+              <FormLabel>{tFields("quantity")}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -281,9 +290,9 @@ function AddMovementForm({
         <div className="grid grid-cols-3 gap-4">
           {(
             [
-              ["secondHandReadyQuantity", "2nd Hand (Ready)"],
-              ["secondHandRepairQuantity", "2nd Hand (Repair)"],
-              ["demoQuantity", "Demo"],
+              ["secondHandReadyQuantity", t("secondHandReady")],
+              ["secondHandRepairQuantity", t("secondHandRepair")],
+              ["demoQuantity", t("demo")],
             ] as const
           ).map(([name, label]) => (
             <FormField
@@ -317,10 +326,10 @@ function AddMovementForm({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon("cancel")}
           </Button>
           <Button type="submit" disabled={addMovement.isPending}>
-            {addMovement.isPending ? "Saving..." : "Add Movement"}
+            {addMovement.isPending ? tCommon("saving") : t("addMovement")}
           </Button>
         </DialogFooter>
       </form>
@@ -342,6 +351,8 @@ function EditMovementForm({
   const selectedProduct = products.find((p) => p.id === movement.productId)
   const isSaleOrigin = movement.reason === "Sale"
   const isFilterChangeOrigin = movement.reason === "Filter Change"
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
 
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
@@ -372,23 +383,21 @@ function EditMovementForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid gap-2">
-          <Label>Product</Label>
-          <Input value={selectedProduct?.name ?? "Unknown product"} disabled />
-          <p className="text-xs text-muted-foreground">The product on a movement can&apos;t be changed.</p>
+          <Label>{t("product")}</Label>
+          <Input value={selectedProduct?.name ?? t("unknownProduct")} disabled />
+          <p className="text-xs text-muted-foreground">{t("productCannotBeChanged")}</p>
         </div>
         {selectedProduct && (
-          <p className="text-sm text-muted-foreground">
-            Current stock: <span className="font-medium text-foreground">{selectedProduct.stockQuantity}</span> units
-          </p>
+          <p className="text-sm text-muted-foreground">{t("currentStockUnits", { stock: String(selectedProduct.stockQuantity) })}</p>
         )}
         {isSaleOrigin && (
           <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-md px-3 py-2">
-            This movement was auto-generated from a sale. Correcting it here won&apos;t update the original invoice.
+            {t("saleOriginWarning")}
           </p>
         )}
         {isFilterChangeOrigin && (
           <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-md px-3 py-2">
-            This movement was auto-generated from a completed filter-change schedule job. Correcting it here won&apos;t update the original schedule entry.
+            {t("filterChangeOriginWarning")}
           </p>
         )}
         <FormField
@@ -396,7 +405,7 @@ function EditMovementForm({
           name="reason"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Reason</FormLabel>
+              <FormLabel>{t("reason")}</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="w-full">
@@ -417,7 +426,7 @@ function EditMovementForm({
         />
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
-            <Label>Qty Added</Label>
+            <Label>{t("qtyAdded")}</Label>
             <Input
               type="number"
               min={0}
@@ -430,7 +439,7 @@ function EditMovementForm({
             )}
           </div>
           <div className="grid gap-2">
-            <Label>Qty Removed</Label>
+            <Label>{t("qtyRemoved")}</Label>
             <Input
               type="number"
               min={0}
@@ -438,7 +447,7 @@ function EditMovementForm({
               onFocus={(e) => e.target.select()}
               {...form.register("quantityRemoved", { valueAsNumber: true })}
             />
-            <p className="text-xs text-muted-foreground">Set to 0 to clear an incorrect removal.</p>
+            <p className="text-xs text-muted-foreground">{t("clearIncorrectRemoval")}</p>
             {form.formState.errors.quantityRemoved && (
               <p className="text-destructive text-sm">{form.formState.errors.quantityRemoved.message}</p>
             )}
@@ -446,7 +455,7 @@ function EditMovementForm({
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="grid gap-2">
-            <Label>2nd Hand (Ready)</Label>
+            <Label>{t("secondHandReady")}</Label>
             <Input
               type="number"
               aria-invalid={!!form.formState.errors.secondHandReadyQuantity}
@@ -458,7 +467,7 @@ function EditMovementForm({
             )}
           </div>
           <div className="grid gap-2">
-            <Label>2nd Hand (Repair)</Label>
+            <Label>{t("secondHandRepair")}</Label>
             <Input
               type="number"
               aria-invalid={!!form.formState.errors.secondHandRepairQuantity}
@@ -470,7 +479,7 @@ function EditMovementForm({
             )}
           </div>
           <div className="grid gap-2">
-            <Label>Demo</Label>
+            <Label>{t("demo")}</Label>
             <Input
               type="number"
               aria-invalid={!!form.formState.errors.demoQuantity}
@@ -482,13 +491,13 @@ function EditMovementForm({
             )}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">Positive adds to that bucket, negative subtracts.</p>
+        <p className="text-xs text-muted-foreground">{t("positiveAddsNegativeSubtracts")}</p>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon("cancel")}
           </Button>
           <Button type="submit" disabled={updateMovement.isPending}>
-            {updateMovement.isPending ? "Saving..." : "Save Changes"}
+            {updateMovement.isPending ? tCommon("saving") : tCommon("saveChanges")}
           </Button>
         </DialogFooter>
       </form>

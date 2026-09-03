@@ -29,23 +29,30 @@ import {
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
 import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Product } from "@/lib/types"
 
 const ADD_NEW_SUPPLIER = "__add_new_supplier__"
 
-const schema = z.object({
-  name: z.string().min(2, "Product name is required"),
-  category: z.enum(PRODUCT_CATEGORIES),
-  supplierId: z.string().min(1, "Select a supplier"),
-  sku: z.string().min(2, "SKU is required"),
-  barcode: z.string().optional(),
-  stockQuantity: z.number().int().min(0),
-  minStockLevel: z.number().int().min(0),
-  purchasePrice: z.number().min(0),
-  sellingPrice: z.number().min(0),
-})
+function createSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  ti: (key: string) => string,
+  tf: (key: string) => string
+) {
+  return z.object({
+    name: z.string().min(2, t("requiredField", { field: ti("productName") })),
+    category: z.enum(PRODUCT_CATEGORIES),
+    supplierId: z.string().min(1, t("selectField", { field: tf("supplier") })),
+    sku: z.string().min(2, t("requiredField", { field: tf("sku") })),
+    barcode: z.string().optional(),
+    stockQuantity: z.number().int().min(0),
+    minStockLevel: z.number().int().min(0),
+    purchasePrice: z.number().min(0),
+    sellingPrice: z.number().min(0),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(product?: Product): FormValues {
   return {
@@ -76,6 +83,10 @@ export function ProductFormDialog({
   const updateProduct = useUpdateProduct()
   const isEdit = !!product
   const [newSupplierOpen, setNewSupplierOpen] = React.useState(false)
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, t, tFields), [tCommon, t, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -126,15 +137,13 @@ export function ProductFormDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Product" : "Add Product"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this inventory item." : "Register a new inventory item."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2 sm:col-span-2">
-                <Label>Product Name</Label>
+                <Label>{t("productName")}</Label>
                 <Input placeholder="5-Stage RO Filter System" aria-invalid={!!errors.name} {...form.register("name")} />
                 {errors.name && <p className="text-destructive text-sm">{errors.name.message}</p>}
               </div>
@@ -143,10 +152,10 @@ export function ProductFormDialog({
                 name="category"
                 render={({ field }) => (
                   <FormItem>
-                    <Label>Category</Label>
+                    <Label>{tFields("category")}</Label>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select category" />
+                        <SelectValue placeholder={tCommon("selectField", { field: tFields("category") })} />
                       </SelectTrigger>
                       <SelectContent>
                         {PRODUCT_CATEGORIES.map((c) => (
@@ -164,7 +173,7 @@ export function ProductFormDialog({
                 name="supplierId"
                 render={({ field }) => (
                   <FormItem>
-                    <Label>Supplier</Label>
+                    <Label>{tFields("supplier")}</Label>
                     <Select
                       value={field.value}
                       onValueChange={(v) => {
@@ -176,13 +185,13 @@ export function ProductFormDialog({
                       }}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select supplier">
+                        <SelectValue placeholder={tCommon("selectField", { field: tFields("supplier") })}>
                           {suppliers.find((s) => s.id === field.value)?.name}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={ADD_NEW_SUPPLIER} className="text-primary font-medium">
-                          <Truck className="h-4 w-4" /> Add New Supplier
+                          <Truck className="h-4 w-4" /> {t("addNewSupplier")}
                         </SelectItem>
                         <SelectSeparator />
                         {suppliers.map((s) => (
@@ -197,25 +206,25 @@ export function ProductFormDialog({
                 )}
               />
               <div className="grid gap-2">
-                <Label>SKU</Label>
+                <Label>{tFields("sku")}</Label>
                 <Input placeholder="SK01" aria-invalid={!!errors.sku} {...form.register("sku")} />
                 {errors.sku && <p className="text-destructive text-sm">{errors.sku.message}</p>}
               </div>
               <div className="grid gap-2">
-                <Label>Barcode (Optional)</Label>
+                <Label>{t("barcodeOptional")}</Label>
                 <Input placeholder="4801234567893" {...form.register("barcode")} />
               </div>
-              {numberField("stockQuantity", "Stock Quantity")}
-              {numberField("minStockLevel", "Minimum Stock Level")}
-              {numberField("purchasePrice", "Purchase Price", "0.01")}
-              {numberField("sellingPrice", "Selling Price", "0.01")}
+              {numberField("stockQuantity", tFields("stockQuantity"))}
+              {numberField("minStockLevel", tFields("minStockLevel"))}
+              {numberField("purchasePrice", tFields("purchasePrice"), "0.01")}
+              {numberField("sellingPrice", tFields("sellingPrice"), "0.01")}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add Product"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("addProduct")}
               </Button>
             </DialogFooter>
           </form>
