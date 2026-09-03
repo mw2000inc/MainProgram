@@ -17,19 +17,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCreateCpSystem, useUpdateCpSystem } from "@/lib/hooks/use-cp-systems"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CpSystem } from "@/lib/types"
 
-const componentSchema = z.object({
-  name: z.string().min(1, "Required"),
-  intervalMonths: z.number().int().min(1, "Must be at least 1"),
-})
+function createSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  tc: (key: string) => string,
+  tf: (key: string) => string
+) {
+  const componentSchema = z.object({
+    name: z.string().min(1, tf("required")),
+    intervalMonths: z.number().int().min(1, tc("mustBeAtLeastOne")),
+  })
 
-const schema = z.object({
-  systemCode: z.string().min(1, "System code is required"),
-  components: z.array(componentSchema).min(1, "Add at least one filter component"),
-})
+  return z.object({
+    systemCode: z.string().min(1, t("requiredField", { field: tf("systemCode") })),
+    components: z.array(componentSchema).min(1, tc("addAtLeastOneComponent")),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(system?: CpSystem): FormValues {
   return {
@@ -51,6 +58,10 @@ export function CpSystemFormDialog({
   const isEdit = !!system
   const createSystem = useCreateCpSystem()
   const updateSystem = useUpdateCpSystem()
+  const { t } = useTranslation("cpSystem")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, t, tFields), [tCommon, t, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -80,23 +91,19 @@ export function CpSystemFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit CP System" : "Add CP System"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Update this system's code and filter components."
-              : "Define a system code and the filter components it's built from."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-2">
-            <Label>System Code</Label>
+            <Label>{tFields("systemCode")}</Label>
             <Input placeholder="e.g. UF71" className="font-mono" {...form.register("systemCode")} />
             {errors.systemCode && <p className="text-destructive text-sm">{errors.systemCode.message}</p>}
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Filter Components</Label>
+              <Label>{t("filterComponents")}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -104,7 +111,7 @@ export function CpSystemFormDialog({
                 className="gap-1.5"
                 onClick={() => append({ name: "", intervalMonths: 6 })}
               >
-                <Plus className="h-3.5 w-3.5" /> Add Component
+                <Plus className="h-3.5 w-3.5" /> {t("addComponent")}
               </Button>
             </div>
             <div className="space-y-2">
@@ -135,7 +142,7 @@ export function CpSystemFormDialog({
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 text-danger hover:text-danger shrink-0"
-                    title="Remove component"
+                    title={t("removeComponent")}
                     onClick={() => remove(index)}
                     disabled={fields.length === 1}
                   >
@@ -148,10 +155,10 @@ export function CpSystemFormDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+              {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
             </Button>
           </DialogFooter>
         </form>

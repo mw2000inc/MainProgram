@@ -30,16 +30,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCreateUser, useUpdateUser } from "@/lib/hooks/use-misc"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { User } from "@/lib/types"
 
-const schema = z.object({
-  name: z.string().min(2, "Full name is required"),
-  email: z.string().email("Enter a valid email address"),
-  role: z.enum(["admin", "technician"]),
-  password: z.string(),
-})
+function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+  return z.object({
+    name: z.string().min(2, t("requiredField", { field: tf("fullName") })),
+    email: z.string().email(t("enterValidField", { field: tf("email") })),
+    role: z.enum(["admin", "technician"]),
+    password: z.string(),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(user?: User): FormValues {
   return {
@@ -62,6 +65,10 @@ export function UserFormDialog({
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
   const isEdit = !!user
+  const { t } = useTranslation("users")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -79,7 +86,7 @@ export function UserFormDialog({
       await updateUser.mutateAsync({ id: user.id, input: rest })
     } else {
       if (password.length < 6) {
-        form.setError("password", { message: "Password must be at least 6 characters" })
+        form.setError("password", { message: t("passwordMinLength") })
         return
       }
       await createUser.mutateAsync({ ...rest, password })
@@ -93,10 +100,8 @@ export function UserFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit User" : "Add User"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this user's details and role." : "Create a new Admin or Technician account."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -105,7 +110,7 @@ export function UserFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Full Name</FormLabel>
+                  <FormLabel>{tFields("fullName")}</FormLabel>
                   <FormControl>
                     <Input placeholder="Juan Dela Cruz" {...field} />
                   </FormControl>
@@ -118,7 +123,7 @@ export function UserFormDialog({
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address</FormLabel>
+                  <FormLabel>{t("emailAddress")}</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="juan@aquatrack.ph" {...field} />
                   </FormControl>
@@ -132,7 +137,7 @@ export function UserFormDialog({
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t("password")}</FormLabel>
                     <FormControl>
                       <Input type="password" placeholder="••••••••" autoComplete="new-password" {...field} />
                     </FormControl>
@@ -146,16 +151,16 @@ export function UserFormDialog({
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role</FormLabel>
+                  <FormLabel>{tFields("role")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder={t("selectRole")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="technician">Technician</SelectItem>
+                      <SelectItem value="admin">{tCommon("admin")}</SelectItem>
+                      <SelectItem value="technician">{tCommon("technician")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -164,10 +169,10 @@ export function UserFormDialog({
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add User"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("addUser")}
               </Button>
             </DialogFooter>
           </form>

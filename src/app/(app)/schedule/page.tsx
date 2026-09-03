@@ -19,10 +19,11 @@ import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
-import { getScheduleColumns, JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, todayIso } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
 import type { ScheduleJob } from "@/lib/types"
@@ -30,6 +31,10 @@ import type { ScheduleJob } from "@/lib/types"
 function ScheduleContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("schedule")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
   const { data: jobs = [], isPending } = useScheduleJobs()
   const deleteJob = useDeleteScheduleJob()
 
@@ -83,9 +88,9 @@ function ScheduleContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <CalendarClock className="h-6 w-6 text-primary" /> Schedule
+            <CalendarClock className="h-6 w-6 text-primary" /> {tNav("schedule")}
           </h1>
-          <p className="text-sm text-muted-foreground">Technician job agenda across all dates.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border p-0.5">
@@ -96,7 +101,7 @@ function ScheduleContent() {
               className="gap-1.5"
               onClick={() => setView("list")}
             >
-              <List className="h-3.5 w-3.5" /> List
+              <List className="h-3.5 w-3.5" /> {t("list")}
             </Button>
             <Button
               type="button"
@@ -105,7 +110,7 @@ function ScheduleContent() {
               className="gap-1.5"
               onClick={() => setView("table")}
             >
-              <Table2 className="h-3.5 w-3.5" /> Table View
+              <Table2 className="h-3.5 w-3.5" /> {t("tableView")}
             </Button>
           </div>
           {isAdmin && (
@@ -116,7 +121,7 @@ function ScheduleContent() {
                 setFormOpen(true)
               }}
             >
-              <Plus className="h-4 w-4" /> Schedule Job
+              <Plus className="h-4 w-4" /> {t("scheduleJob")}
             </Button>
           )}
         </div>
@@ -134,20 +139,20 @@ function ScheduleContent() {
                 <DataTable
                   columns={columns}
                   data={scopedJobs}
-                  searchPlaceholder="Search by technician, order no, notes..."
-                  emptyMessage="No scheduled jobs found."
+                  searchPlaceholder={t("searchByTechnicianOrderNotes")}
+                  emptyMessage={t("noScheduledJobsFound")}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                   toolbar={
                     <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
                       <SelectTrigger className="h-9 w-[220px]">
-                        <SelectValue placeholder="All Technicians" />
+                        <SelectValue placeholder={t("allTechnicians")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Technicians</SelectItem>
-                        {TECHNICIANS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
+                        <SelectItem value="all">{t("allTechnicians")}</SelectItem>
+                        {TECHNICIANS.map((tech) => (
+                          <SelectItem key={tech} value={tech}>
+                            {tech}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -160,9 +165,9 @@ function ScheduleContent() {
           detail={
             selected && (
               <DetailPanel
-                title={JOB_TYPE_LABELS[selected.jobType]}
+                title={t(selected.jobType)}
                 icon={CalendarClock}
-                subtitle={selected.orderNo || formatTechnicians(selected.technician, selected.technician2)}
+                subtitle={selected.orderNo || formatTechnicians(selected.technician, selected.technician2, t("and"))}
                 onEdit={
                   isAdmin
                     ? () => {
@@ -180,15 +185,18 @@ function ScheduleContent() {
                 onToggleExpand={() => selection.setExpanded((v) => !v)}
                 onClose={selection.close}
               >
-                <DetailField label="Date" value={formatDate(selected.scheduledDate)} />
-                <DetailField label="Time" value={selected.scheduledTime} />
-                <DetailField label="Job Type" value={JOB_TYPE_LABELS[selected.jobType]} />
-                <DetailField label="Technician" value={formatTechnicians(selected.technician, selected.technician2)} />
-                <DetailField label="Order No" value={selected.orderNo} />
-                <DetailField label="Status" value={selected.status} />
-                <DetailField label="Notes" value={selected.notes} className="sm:col-span-2" />
-                <DetailField label="Secondary Address" value={selected.secondaryAddress} className="sm:col-span-2" />
-                <DetailField label="Remarks" value={selected.remarks} className="sm:col-span-2" />
+                <DetailField label={t("date")} value={formatDate(selected.scheduledDate)} />
+                <DetailField label={t("time")} value={selected.scheduledTime} />
+                <DetailField label={t("jobType")} value={t(selected.jobType)} />
+                <DetailField
+                  label={t("technician")}
+                  value={formatTechnicians(selected.technician, selected.technician2, t("and"))}
+                />
+                <DetailField label={tFields("orderNo")} value={selected.orderNo} />
+                <DetailField label={tFields("status")} value={tStatus(selected.status)} />
+                <DetailField label={tFields("note")} value={selected.notes} className="sm:col-span-2" />
+                <DetailField label={t("secondaryAddress")} value={selected.secondaryAddress} className="sm:col-span-2" />
+                <DetailField label={t("remarks")} value={selected.remarks} className="sm:col-span-2" />
                 <LastEditedIndicator entityType="schedule_jobs" entityId={selected.id} className="text-xs text-muted-foreground sm:col-span-2" />
               </DetailPanel>
             )
@@ -209,8 +217,8 @@ function ScheduleContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this job?"
-        description="This will permanently remove this scheduled job."
+        title={t("deleteJobTitle")}
+        description={t("deleteJobDescription")}
         loading={deleteJob.isPending}
         onConfirm={async () => {
           if (!deleting) return

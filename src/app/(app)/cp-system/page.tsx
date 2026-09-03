@@ -27,6 +27,7 @@ import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
 
 // Replaces the old AppSheet "MW CP > CP System" reference screen — a catalog
@@ -39,6 +40,10 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 function CpSystemContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("cpSystem")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: systems = [], isPending: p1 } = useCpSystems()
 
   // Deep link from the Activity Log (?id=<systemId>).
@@ -134,17 +139,17 @@ function CpSystemContent() {
       <BreadcrumbTrail
         items={
           selected
-            ? [{ label: "MW CP" }, { label: "CP System", onClick: selection.close }, { label: selected.systemCode }]
-            : [{ label: "MW CP" }, { label: "CP System" }]
+            ? [{ label: t("mwCp") }, { label: tNav("cpSystem"), onClick: selection.close }, { label: selected.systemCode }]
+            : [{ label: t("mwCp") }, { label: tNav("cpSystem") }]
         }
       />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Layers className="h-6 w-6 text-primary" /> CP System
+            <Layers className="h-6 w-6 text-primary" /> {tNav("cpSystem")}
           </h1>
-          <p className="text-sm text-muted-foreground">System codes and the filter components each one is built from.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         {isAdmin && (
           <Button
@@ -154,7 +159,7 @@ function CpSystemContent() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         )}
       </div>
@@ -170,8 +175,8 @@ function CpSystemContent() {
                 <DataTable
                   columns={narrowColumns}
                   data={systems}
-                  searchPlaceholder="Search by system code..."
-                  emptyMessage="No CP Systems defined yet."
+                  searchPlaceholder={t("searchBySystemCode")}
+                  emptyMessage={t("noSystemsDefined")}
                   onRowClick={(row) => selection.open(row)}
                 />
               </CardContent>
@@ -181,7 +186,7 @@ function CpSystemContent() {
             <DetailPanel
               title={selected.systemCode}
               icon={Layers}
-              subtitle="CP System"
+              subtitle={tNav("cpSystem")}
               onEdit={
                 isAdmin
                   ? () => {
@@ -201,11 +206,11 @@ function CpSystemContent() {
               extra={
                 <>
                   <OrderRelatedSection
-                    title="CP_SystemDetails"
+                    title={t("cpSystemDetails")}
                     icon={Layers}
                     data={componentRows}
                     columns={detailColumns}
-                    emptyMessage="No filter components defined yet."
+                    emptyMessage={t("noComponentsDefined")}
                     canAdd={isAdmin}
                     onAdd={() => {
                       setEditingComponent(undefined)
@@ -213,23 +218,23 @@ function CpSystemContent() {
                     }}
                   />
                   <OrderRelatedSection
-                    title="Related Sales_Lists"
+                    title={t("relatedSalesLists")}
                     icon={ClipboardCheck}
                     data={relatedSaleListRows}
                     columns={saleListSummaryColumns}
-                    emptyMessage="No sale-list orders linked to this system yet."
+                    emptyMessage={t("noSaleListOrdersLinked")}
                   />
                   <OrderRelatedSection
-                    title="Related Repairs"
+                    title={t("relatedRepairs")}
                     icon={Wrench}
                     data={relatedRepairs}
                     columns={repairColumns}
-                    emptyMessage="No repairs linked to this system yet."
+                    emptyMessage={t("noRepairsLinked")}
                   />
                 </>
               }
             >
-              <DetailField label="System Code" value={selected.systemCode} className="sm:col-span-2" />
+              <DetailField label={tFields("systemCode")} value={selected.systemCode} className="sm:col-span-2" />
             </DetailPanel>
           }
         />
@@ -239,8 +244,8 @@ function CpSystemContent() {
             <DataTable
               columns={columns}
               data={systems}
-              searchPlaceholder="Search by system code..."
-              emptyMessage="No CP Systems defined yet."
+              searchPlaceholder={t("searchBySystemCode")}
+              emptyMessage={t("noSystemsDefined")}
               onRowClick={(row) => selection.open(row)}
             />
           </CardContent>
@@ -272,8 +277,8 @@ function CpSystemContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this CP System?"
-        description="This will permanently remove this system code and its component list. Any sale-list orders linked to it will keep their existing data but lose the link."
+        title={t("deleteSystemTitle")}
+        description={t("deleteSystemDescription")}
         loading={deleteSystem.isPending}
         onConfirm={async () => {
           if (!deleting) return
@@ -287,8 +292,8 @@ function CpSystemContent() {
       <ConfirmDialog
         open={deletingComponentIndex !== undefined}
         onOpenChange={(o) => !o && setDeletingComponentIndex(undefined)}
-        title="Remove this filter component?"
-        description="This will permanently remove it from this system's component list."
+        title={t("deleteComponentTitle")}
+        description={t("deleteComponentDescription")}
         loading={updateSystem.isPending}
         onConfirm={async () => {
           if (!selected || deletingComponentIndex === undefined) return

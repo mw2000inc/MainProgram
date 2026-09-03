@@ -14,10 +14,13 @@ import { getUsersColumns } from "@/components/users/users-columns"
 import { useDeleteUser, useUsers } from "@/lib/hooks/use-misc"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { User } from "@/lib/types"
 
 function UsersContent() {
   const { user: actor } = useAuth()
+  const { t } = useTranslation("users")
+  const { t: tNav } = useTranslation("nav")
   const { data: users = [], isPending } = useUsers()
   const deleteUser = useDeleteUser()
 
@@ -71,9 +74,9 @@ function UsersContent() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-              <UserCog className="h-6 w-6 text-primary" /> Users
+              <UserCog className="h-6 w-6 text-primary" /> {tNav("users")}
             </h1>
-            <p className="text-sm text-muted-foreground">Manage Admin and Technician accounts and permissions.</p>
+            <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
           </div>
           <Button
             onClick={() => {
@@ -82,7 +85,7 @@ function UsersContent() {
             }}
             className="gap-1.5"
           >
-            <Plus className="h-4 w-4" /> Add User
+            <Plus className="h-4 w-4" /> {t("addUser")}
           </Button>
         </div>
 
@@ -91,8 +94,8 @@ function UsersContent() {
             <DataTable
               columns={columns}
               data={users}
-              searchPlaceholder="Search by name or email..."
-              emptyMessage="No users found."
+              searchPlaceholder={t("searchByNameOrEmail")}
+              emptyMessage={t("noUsersFound")}
             />
           </CardContent>
         </Card>
@@ -102,8 +105,8 @@ function UsersContent() {
         <ConfirmDialog
           open={!!deleting}
           onOpenChange={(o) => !o && setDeleting(undefined)}
-          title="Delete user?"
-          description={`This will permanently remove ${deleting?.name ?? "this user"}'s account.`}
+          title={t("deleteUserTitle")}
+          description={t("deleteUserDescription", { name: deleting?.name ?? t("thisUser") })}
           loading={deleteUser.isPending}
           onConfirm={async () => {
             if (!deleting) return

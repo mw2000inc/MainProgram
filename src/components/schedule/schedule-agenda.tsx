@@ -317,7 +317,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                         so a two-technician job visibly reads as one date, not two. */}
                     <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {formatTechnicians(job.technician, job.technician2)}
+                      {formatTechnicians(job.technician, job.technician2, t("and"))}
                     </p>
                     {job.remarks && (
                       <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>

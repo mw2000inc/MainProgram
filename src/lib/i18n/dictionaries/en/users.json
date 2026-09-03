@@ -1,0 +1,19 @@
+{
+  "pageDescription": "Manage Admin and Technician accounts and permissions.",
+  "addUser": "Add User",
+  "searchByNameOrEmail": "Search by name or email...",
+  "noUsersFound": "No users found.",
+  "you": "You",
+  "created": "Created",
+  "deleteUserTitle": "Delete user?",
+  "deleteUserDescription": "This will permanently remove {name}'s account.",
+  "thisUser": "this user",
+  "editTitle": "Edit User",
+  "addTitle": "Add User",
+  "editDescription": "Update this user's details and role.",
+  "addDescription": "Create a new Admin or Technician account.",
+  "emailAddress": "Email Address",
+  "password": "Password",
+  "passwordMinLength": "Password must be at least 6 characters",
+  "selectRole": "Select role"
+}

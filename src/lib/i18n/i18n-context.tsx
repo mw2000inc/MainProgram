@@ -35,6 +35,10 @@ import enMember from "@/lib/i18n/dictionaries/en/member.json"
 import koMember from "@/lib/i18n/dictionaries/ko/member.json"
 import enInventory from "@/lib/i18n/dictionaries/en/inventory.json"
 import koInventory from "@/lib/i18n/dictionaries/ko/inventory.json"
+import enUsers from "@/lib/i18n/dictionaries/en/users.json"
+import koUsers from "@/lib/i18n/dictionaries/ko/users.json"
+import enCpSystem from "@/lib/i18n/dictionaries/en/cpSystem.json"
+import koCpSystem from "@/lib/i18n/dictionaries/ko/cpSystem.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
 // 1,500+ eventual keys organized instead of one giant dictionary.
@@ -55,6 +59,8 @@ export type Namespace =
   | "saleList"
   | "member"
   | "inventory"
+  | "users"
+  | "cpSystem"
 
 type Dictionary = Record<string, string>
 
@@ -76,6 +82,8 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     saleList: enSaleList,
     member: enMember,
     inventory: enInventory,
+    users: enUsers,
+    cpSystem: enCpSystem,
   },
   ko: {
     common: koCommon,
@@ -94,6 +102,8 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     saleList: koSaleList,
     member: koMember,
     inventory: koInventory,
+    users: koUsers,
+    cpSystem: koCpSystem,
   },
 }
 

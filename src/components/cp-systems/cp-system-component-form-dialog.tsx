@@ -17,14 +17,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useUpdateCpSystem } from "@/lib/hooks/use-cp-systems"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
 
-const schema = z.object({
-  name: z.string().min(1, "Filter is required"),
-  intervalMonths: z.number().int().min(1, "Must be at least 1"),
-})
+function createSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  tc: (key: string) => string,
+  tf: (key: string) => string
+) {
+  return z.object({
+    name: z.string().min(1, t("requiredField", { field: tf("filter") })),
+    intervalMonths: z.number().int().min(1, tc("mustBeAtLeastOne")),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(component?: CpSystemComponent): FormValues {
   return {
@@ -53,6 +60,10 @@ export function CpSystemComponentFormDialog({
 }) {
   const isEdit = !!editing && index !== undefined
   const updateSystem = useUpdateCpSystem()
+  const { t } = useTranslation("cpSystem")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, t, tFields), [tCommon, t, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -79,10 +90,8 @@ export function CpSystemComponentFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Filter Component" : "Add Filter Component"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this filter's name and replacement interval." : "Add a filter and its replacement interval."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editComponentTitle") : t("addComponentTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editComponentDescription") : t("addComponentDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -91,7 +100,7 @@ export function CpSystemComponentFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Filter</FormLabel>
+                  <FormLabel>{tFields("filter")}</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. MW) Sediment" {...field} />
                   </FormControl>
@@ -100,7 +109,7 @@ export function CpSystemComponentFormDialog({
               )}
             />
             <div className="grid gap-2">
-              <Label>Filter Term (months)</Label>
+              <Label>{t("filterTermMonths")}</Label>
               <Input
                 type="number"
                 min={1}
@@ -113,10 +122,10 @@ export function CpSystemComponentFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={updateSystem.isPending}>
-                {updateSystem.isPending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+                {updateSystem.isPending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

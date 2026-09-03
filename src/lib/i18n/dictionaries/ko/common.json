@@ -52,5 +52,6 @@
   "allStatuses": "모든 상태",
   "selectedCount": "{count}개 선택됨",
   "deleteItemsConfirm": "{count}개 항목을 삭제하시겠습니까?",
-  "deleteSelectedRowsDescription": "선택한 행이 영구적으로 삭제됩니다."
+  "deleteSelectedRowsDescription": "선택한 행이 영구적으로 삭제됩니다.",
+  "none": "없음"
 }

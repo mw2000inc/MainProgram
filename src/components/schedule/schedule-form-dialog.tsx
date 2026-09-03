@@ -35,15 +35,11 @@ import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-sche
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
 const STATUSES: ScheduleJobStatus[] = ["pending", "completed", "cancelled"]
-const STATUS_LABELS: Record<ScheduleJobStatus, string> = {
-  pending: "Pending",
-  completed: "Completed",
-  cancelled: "Cancelled",
-}
 
 // Radix Select forbids an empty-string item value, so "none selected" needs
 // its own sentinel — mapped back to "" (unset) on submit. Shared by every
@@ -51,37 +47,39 @@ const STATUS_LABELS: Record<ScheduleJobStatus, string> = {
 // account).
 const NONE_SENTINEL = "__none__"
 
-const schema = z.object({
-  jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, "Select a job type"),
-  technician: z.string().min(1, "Select a technician"),
-  // Optional second technician — most jobs only need the one above; this is
-  // only for jobs that genuinely need two people (e.g. pull-out + install).
-  technician2: z.string().optional(),
-  orderNo: z.string().optional(),
-  scheduledDate: z.string().min(1, "Date is required"),
-  // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
-  scheduledTime: z.string().optional(),
-  status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, "Select a status"),
-  notes: z.string().optional(),
-  // A second location for this same job (e.g. pull-out vs install address).
-  secondaryAddress: z.string().optional(),
-  // Links this job to a real technician account, purely for that
-  // technician's "my schedule" RLS scoping — separate from the technician/
-  // technician2 name fields above, which stay the source of truth for
-  // display/print/export.
-  technicianUserId: z.string().optional(),
-  // Same purpose as technicianUserId, for the technician2 name field — lets
-  // the second technician's own account see this shared job too.
-  technician2UserId: z.string().optional(),
-  // Filter-change inventory deduction — which item + how many units to
-  // deduct once this job is marked completed. Only meaningful when jobType
-  // is "filter_change", but kept as plain optional fields on the shared form
-  // rather than a separate dialog.
-  productId: z.string().optional(),
-  quantity: z.string().optional(),
-})
+function createSchema(t: (key: string) => string, tCommon: (key: string, params?: Record<string, string>) => string) {
+  return z.object({
+    jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, t("selectJobType")),
+    technician: z.string().min(1, t("selectTechnician")),
+    // Optional second technician — most jobs only need the one above; this is
+    // only for jobs that genuinely need two people (e.g. pull-out + install).
+    technician2: z.string().optional(),
+    orderNo: z.string().optional(),
+    scheduledDate: z.string().min(1, tCommon("requiredField", { field: t("date") })),
+    // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
+    scheduledTime: z.string().optional(),
+    status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, t("selectStatus")),
+    notes: z.string().optional(),
+    // A second location for this same job (e.g. pull-out vs install address).
+    secondaryAddress: z.string().optional(),
+    // Links this job to a real technician account, purely for that
+    // technician's "my schedule" RLS scoping — separate from the technician/
+    // technician2 name fields above, which stay the source of truth for
+    // display/print/export.
+    technicianUserId: z.string().optional(),
+    // Same purpose as technicianUserId, for the technician2 name field — lets
+    // the second technician's own account see this shared job too.
+    technician2UserId: z.string().optional(),
+    // Filter-change inventory deduction — which item + how many units to
+    // deduct once this job is marked completed. Only meaningful when jobType
+    // is "filter_change", but kept as plain optional fields on the shared form
+    // rather than a separate dialog.
+    productId: z.string().optional(),
+    quantity: z.string().optional(),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
   if (job) {
@@ -136,6 +134,11 @@ export function ScheduleFormDialog({
   const { data: products = [] } = useProducts()
   const { data: users = [] } = useUsers()
   const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
+  const { t } = useTranslation("schedule")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
+  const schema = React.useMemo(() => createSchema(t, tCommon), [t, tCommon])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, job),
@@ -182,10 +185,8 @@ export function ScheduleFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Job" : "Schedule a Job"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this scheduled job." : "Add a technician job to the daily agenda."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editJobTitle") : t("scheduleAJobTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editJobDescription") : t("addJobDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -194,17 +195,17 @@ export function ScheduleFormDialog({
               name="jobType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Job Type</FormLabel>
+                  <FormLabel>{t("jobType")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select job type" />
+                        <SelectValue placeholder={t("selectJobType")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {JOB_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {JOB_TYPE_LABELS[t]}
+                      {JOB_TYPES.map((jt) => (
+                        <SelectItem key={jt} value={jt}>
+                          {t(jt)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -218,17 +219,17 @@ export function ScheduleFormDialog({
               name="technician"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Technician</FormLabel>
+                  <FormLabel>{t("technician")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select technician" />
+                        <SelectValue placeholder={t("selectTechnician")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {TECHNICIANS.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      {TECHNICIANS.map((tech) => (
+                        <SelectItem key={tech} value={tech}>
+                          {tech}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -242,18 +243,18 @@ export function ScheduleFormDialog({
               name="technician2"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Second Technician (Optional)</FormLabel>
+                  <FormLabel>{t("secondTechnicianOptional")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Add a second technician if this job needs two" />
+                        <SelectValue placeholder={t("addSecondTechnicianPlaceholder")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NONE_SENTINEL}>None</SelectItem>
-                      {TECHNICIANS.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
+                      {TECHNICIANS.map((tech) => (
+                        <SelectItem key={tech} value={tech}>
+                          {tech}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -262,9 +263,7 @@ export function ScheduleFormDialog({
                       technician — the Date field below applies to this one
                       shared job, so both technicians are always on it together. */}
                   {field.value && field.value !== NONE_SENTINEL && (
-                    <p className="text-xs text-muted-foreground">
-                      Shares the same date, order, and status as the primary technician below — this is one job, not two.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("sharesSameDateNote")}</p>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -275,15 +274,15 @@ export function ScheduleFormDialog({
               name="technicianUserId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Technician Account (Optional)</FormLabel>
+                  <FormLabel>{t("technicianAccountOptional")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Link to a technician's login" />
+                        <SelectValue placeholder={t("linkToTechnicianLogin")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NONE_SENTINEL}>None</SelectItem>
+                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
                       {technicianAccounts.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {u.name}
@@ -296,9 +295,7 @@ export function ScheduleFormDialog({
                       linked account's own Schedule view can find this job.
                       Leave unset if this technician doesn't have a login
                       yet. */}
-                  <p className="text-xs text-muted-foreground">
-                    Lets this technician see the job on their own Schedule. Unrelated to the Technician field above.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t("linksTechnicianScheduleNote")}</p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -309,15 +306,15 @@ export function ScheduleFormDialog({
                 name="technician2UserId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Technician 2 Account (Optional)</FormLabel>
+                    <FormLabel>{t("technician2AccountOptional")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Link to the second technician's login" />
+                          <SelectValue placeholder={t("linkToSecondTechnicianLogin")} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value={NONE_SENTINEL}>None</SelectItem>
+                        <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
                         {technicianAccounts.map((u) => (
                           <SelectItem key={u.id} value={u.id}>
                             {u.name}
@@ -325,9 +322,7 @@ export function ScheduleFormDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Lets the second technician also see this shared job on their own Schedule.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("linksSecondTechnicianScheduleNote")}</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -338,7 +333,7 @@ export function ScheduleFormDialog({
               name="orderNo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Order No (Optional)</FormLabel>
+                  <FormLabel>{t("orderNoOptional")}</FormLabel>
                   <FormControl>
                     <Input placeholder="SK001-0001" {...field} />
                   </FormControl>
@@ -351,14 +346,16 @@ export function ScheduleFormDialog({
               name="scheduledDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel>{t("date")}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
                   {hasSecondTechnician && (
                     <p className="text-xs text-muted-foreground">
-                      Both {technicianValue || "the first technician"} and {technician2Value} are scheduled for this
-                      date — there&apos;s a single Date field for the whole job, so changing it moves both.
+                      {t("bothScheduledNote", {
+                        technician: technicianValue || t("theFirstTechnician"),
+                        technician2: technician2Value ?? "",
+                      })}
                     </p>
                   )}
                   <FormMessage />
@@ -370,9 +367,9 @@ export function ScheduleFormDialog({
               name="scheduledTime"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Time (Optional)</FormLabel>
+                  <FormLabel>{t("timeOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. ANYTIME, MORNING, 2:00 PM" {...field} />
+                    <Input placeholder={t("timePlaceholder")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -383,9 +380,9 @@ export function ScheduleFormDialog({
               name="secondaryAddress"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Secondary Address (Optional)</FormLabel>
+                  <FormLabel>{t("secondaryAddressOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. pull-out address, if different from the install address" {...field} />
+                    <Input placeholder={t("secondaryAddressPlaceholder")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -396,17 +393,17 @@ export function ScheduleFormDialog({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel>{tFields("status")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder={t("selectStatus")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {STATUSES.map((s) => (
                         <SelectItem key={s} value={s}>
-                          {STATUS_LABELS[s]}
+                          {tStatus(s)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -422,11 +419,11 @@ export function ScheduleFormDialog({
                   name="productId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Filter to Deduct (Optional)</FormLabel>
+                      <FormLabel>{t("filterToDeductOptional")}</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select inventory item" />
+                            <SelectValue placeholder={t("selectInventoryItem")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -446,7 +443,7 @@ export function ScheduleFormDialog({
                   name="quantity"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Quantity to Deduct</FormLabel>
+                      <FormLabel>{t("quantityToDeduct")}</FormLabel>
                       <FormControl>
                         <Input type="number" min="1" step="1" placeholder="1" {...field} />
                       </FormControl>
@@ -461,9 +458,9 @@ export function ScheduleFormDialog({
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormLabel>{t("notesOptional")}</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="Optional notes..." {...field} />
+                    <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -471,10 +468,10 @@ export function ScheduleFormDialog({
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Schedule"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("scheduleButton")}
               </Button>
             </DialogFooter>
           </form>

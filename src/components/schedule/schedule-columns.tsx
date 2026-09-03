@@ -4,9 +4,16 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
+import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
 
+// Print/export and formatTechnicians' own default stay in English regardless
+// of interface language — deferred to the long-tail phase alongside the
+// other modules' export column arrays (see the phased i18n plan). The
+// visible table itself renders each type via JobTypeCell below instead,
+// using schedule.json (whose keys match these same enum values).
 export const JOB_TYPE_LABELS: Record<ScheduleJobType, string> = {
   installation: "Installation",
   filter_change: "Filter Change",
@@ -28,9 +35,37 @@ export const SCHEDULE_EXPORT_COLUMNS = [
 
 // Combines the primary + optional second technician into one display string
 // ("Eubert and Jerson") — used everywhere a job's technician is shown, so a
-// two-technician job always reads the same way.
-export function formatTechnicians(technician: string, technician2?: string): string {
-  return technician2 ? `${technician} and ${technician2}` : technician
+// two-technician job always reads the same way. `andWord` defaults to the
+// English word so print/export call sites (which can't call hooks) keep
+// working unchanged — a live-rendered call site passes the translated word
+// instead (see JobTypeCell's sibling usage in schedule-agenda.tsx etc.).
+export function formatTechnicians(technician: string, technician2?: string, andWord = "and"): string {
+  return technician2 ? `${technician} ${andWord} ${technician2}` : technician
+}
+
+function JobTypeCell({ jobType }: { jobType: ScheduleJobType }) {
+  const { t } = useTranslation("schedule")
+  return <>{t(jobType)}</>
+}
+
+function TechnicianCell({ technician, technician2 }: { technician: string; technician2?: string }) {
+  const { t } = useTranslation("schedule")
+  return <>{formatTechnicians(technician, technician2, t("and"))}</>
+}
+
+function DeleteCell({ job, onDelete }: { job: ScheduleJob; onDelete: (job: ScheduleJob) => void }) {
+  const { t } = useTranslation("common")
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7 text-danger hover:text-danger"
+      title={t("delete")}
+      onClick={() => onDelete(job)}
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+    </Button>
+  )
 }
 
 export function getScheduleColumns({
@@ -43,39 +78,39 @@ export function getScheduleColumns({
   return [
     {
       accessorKey: "scheduledDate",
-      header: "Date",
+      header: () => <ColumnHeader tKey="date" ns="schedule" />,
       cell: ({ row }) => formatDate(row.original.scheduledDate),
     },
     {
       accessorKey: "jobType",
-      header: "Job Type",
-      cell: ({ row }) => JOB_TYPE_LABELS[row.original.jobType],
+      header: () => <ColumnHeader tKey="jobType" ns="schedule" />,
+      cell: ({ row }) => <JobTypeCell jobType={row.original.jobType} />,
     },
     {
       accessorKey: "technician",
-      header: "Technician",
-      cell: ({ row }) => formatTechnicians(row.original.technician, row.original.technician2),
+      header: () => <ColumnHeader tKey="technician" ns="schedule" />,
+      cell: ({ row }) => <TechnicianCell technician={row.original.technician} technician2={row.original.technician2} />,
     },
     {
       accessorKey: "orderNo",
-      header: "Order No",
+      header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
       cell: ({ row }) => row.original.orderNo || "—",
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
     },
     {
       accessorKey: "notes",
-      header: "Notes",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => (
         <span className="text-muted-foreground">{row.original.notes || "—"}</span>
       ),
     },
     {
       accessorKey: "remarks",
-      header: "Remarks",
+      header: () => <ColumnHeader tKey="remarks" ns="schedule" />,
       cell: ({ row }) => (
         <span className="text-muted-foreground">{row.original.remarks || "—"}</span>
       ),
@@ -86,14 +121,7 @@ export function getScheduleColumns({
             id: "actions",
             header: "",
             cell: ({ row }: { row: { original: ScheduleJob } }) => (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-danger hover:text-danger"
-                onClick={() => onDelete(row.original)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <DeleteCell job={row.original} onDelete={onDelete} />
             ),
           } satisfies ColumnDef<ScheduleJob, unknown>,
         ]

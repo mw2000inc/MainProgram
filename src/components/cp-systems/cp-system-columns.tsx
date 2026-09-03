@@ -3,6 +3,8 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
 
 // Synthesized per-render from CpSystem.components (a plain jsonb array, no
@@ -10,6 +12,52 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 // position an Edit/Delete click applies to. Never persisted or compared
 // across renders.
 export type CpSystemComponentRow = CpSystemComponent & { id: string; status?: string }
+
+function RowActionsCell({
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: {
+  canEdit: boolean
+  canDelete: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const { t } = useTranslation("common")
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {canEdit && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={t("edit")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-danger hover:text-danger"
+          title={t("delete")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  )
+}
 
 export function getCpSystemColumns({
   canEdit,
@@ -25,12 +73,12 @@ export function getCpSystemColumns({
   const columns: ColumnDef<CpSystem, unknown>[] = [
     {
       accessorKey: "systemCode",
-      header: "System Code",
+      header: () => <ColumnHeader tKey="systemCode" ns="fields" />,
       cell: ({ row }) => <span className="font-mono font-medium">{row.original.systemCode}</span>,
     },
     {
       id: "components",
-      header: "CP_details_all",
+      header: () => <ColumnHeader tKey="cpDetailsAll" ns="cpSystem" />,
       // Same "name - Xm" comma-joined shape as the old AppSheet free-text
       // column, just derived from the structured data instead of being the
       // source of truth itself.
@@ -47,36 +95,12 @@ export function getCpSystemColumns({
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          {canEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(row.original)
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-danger hover:text-danger"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(row.original)
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <RowActionsCell
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => onEdit(row.original)}
+          onDelete={() => onDelete(row.original)}
+        />
       ),
     })
   }
@@ -90,7 +114,7 @@ export function getCpSystemNarrowColumn(): ColumnDef<CpSystem, unknown>[] {
   return [
     {
       accessorKey: "systemCode",
-      header: "System Code",
+      header: () => <ColumnHeader tKey="systemCode" ns="fields" />,
       cell: ({ row }) => <span className="font-mono font-medium">{row.original.systemCode}</span>,
     },
   ]
@@ -112,10 +136,10 @@ export function getCpSystemDetailColumns({
   onDelete: (row: CpSystemComponentRow) => void
 }): ColumnDef<CpSystemComponentRow, unknown>[] {
   const columns: ColumnDef<CpSystemComponentRow, unknown>[] = [
-    { accessorKey: "name", header: "Filter" },
+    { accessorKey: "name", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     {
       accessorKey: "intervalMonths",
-      header: "Filter Term",
+      header: () => <ColumnHeader tKey="filterTerm" ns="cpSystem" />,
       cell: ({ row }) => `${row.original.intervalMonths}M`,
     },
   ]
@@ -125,36 +149,12 @@ export function getCpSystemDetailColumns({
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          {canEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(row.original)
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-danger hover:text-danger"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(row.original)
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <RowActionsCell
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => onEdit(row.original)}
+          onDelete={() => onDelete(row.original)}
+        />
       ),
     })
   }

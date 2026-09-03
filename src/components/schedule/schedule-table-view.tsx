@@ -14,6 +14,7 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { printScheduleTable, type ScheduleTableRow } from "@/lib/export/print"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { ScheduleJob, Customer, FilterChangePlan, CollectionPlan, SaleListEntry } from "@/lib/types"
 
@@ -87,6 +88,8 @@ function resolveRows(
 // was scoped from). A job's secondaryAddress (pull-out vs install address)
 // renders as an extra row right below it, spanning every other column.
 export function ScheduleTableView({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
+  const { t } = useTranslation("schedule")
+  const { t: tCommon } = useTranslation("common")
   const { data: jobs = [], isPending: p1 } = useScheduleJobs()
   const { data: customers = [], isPending: p2 } = useCustomers()
   const { data: filterChangePlans = [], isPending: p3 } = useFilterChangePlans()
@@ -112,7 +115,7 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="table-view-date" className="text-xs text-muted-foreground">
-              Date
+              {t("date")}
             </Label>
             <Input
               id="table-view-date"
@@ -123,7 +126,7 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
             />
           </div>
           <Button variant="outline" className="gap-1.5" onClick={handlePrint}>
-            <Printer className="h-4 w-4" /> Print
+            <Printer className="h-4 w-4" /> {tCommon("print")}
           </Button>
         </div>
 
@@ -132,11 +135,16 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
         {isPending ? (
           <Skeleton className="h-64 w-full" />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-10 text-center">No jobs scheduled for this date.</p>
+          <p className="text-sm text-muted-foreground py-10 text-center">{t("noJobsScheduled")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
+                {/* This table replicates a printable AppSheet reference sheet
+                    (see printScheduleTable) — its column headers stay in
+                    English regardless of interface language, same as every
+                    other module's print/export column arrays (deferred to
+                    the long-tail i18n phase). */}
                 <tr className="bg-muted/50">
                   {[
                     "Time",
