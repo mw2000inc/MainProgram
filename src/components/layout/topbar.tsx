@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Menu, LogOut, User as UserIcon } from "lucide-react"
+import { Menu, LogOut, User as UserIcon, PanelLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -10,7 +10,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarNav } from "@/components/layout/sidebar"
@@ -19,12 +24,14 @@ import { NotificationsMenu } from "@/components/layout/notifications-menu"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { InstallAppMenuItem } from "@/components/pwa/install-app-menu-item"
 import { useAuth, roleLabel } from "@/lib/auth/auth-context"
+import { useSidebarCollapse, type SidebarMode } from "@/lib/sidebar-collapse-context"
 import { initials } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
 export function Topbar() {
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const { user, logout } = useAuth()
+  const { mode, setMode } = useSidebarCollapse()
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 backdrop-blur px-4 sm:px-6 print:hidden">
@@ -66,6 +73,23 @@ export function Topbar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <InstallAppMenuItem />
+            {/* Per-person, device-local display preference (localStorage,
+                keyed by user id — see sidebar-collapse-context.tsx), same
+                spirit as the theme toggle: not something Settings governs
+                for everyone. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <PanelLeft className="h-4 w-4" />
+                Sidebar
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup value={mode} onValueChange={(v) => setMode(v as SidebarMode)}>
+                  <DropdownMenuRadioItem value="automatic">Automatic</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="icon-only">Icon-only</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="with-names">With names</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuItem variant="destructive" onClick={logout}>
               <LogOut className="h-4 w-4" />
               Log out
