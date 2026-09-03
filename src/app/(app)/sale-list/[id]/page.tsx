@@ -31,11 +31,19 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { formatDate, initials, todayIso as today } from "@/lib/utils"
 
 export default function SaleListOrderDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+
+  // Same as the main Sale List page — collapses the nav rail for as long as
+  // this page is mounted, re-expanding on navigating away. This page is
+  // reached directly (a Member's "Related Sales" link, a QR scan) without
+  // ever passing through the list page's own registration, so it needs its
+  // own call rather than relying on that one.
+  useReportDetailPanelOpen(true)
 
   const { data: entries = [], isPending: pEntries } = useSaleListEntries()
   const { data: customers = [], isPending: pCustomers } = useCustomers()
