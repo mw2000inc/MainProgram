@@ -1,0 +1,22 @@
+{
+  "headerTitle": "MW2000",
+  "headerSubtitle": "Schedule Confirmation",
+  "linkInvalidTitle": "This link is no longer valid",
+  "linkInvalidDescription": "It may have expired, already been used, or the schedule item may have changed since it was sent. Please contact us if you still need to confirm or reschedule a visit.",
+  "confirmedTitle": "Thanks — your visit is confirmed!",
+  "rescheduleTitle": "Got it — we'll be in touch to reschedule",
+  "confirmedDescription": "Your {module} visit on {date} is locked in.",
+  "rescheduleSubmittedDescription": "We've let our team know — you'd prefer {date}{time}. They'll review it and confirm shortly.",
+  "rescheduleAtTime": " at {time}",
+  "rescheduleGenericDescription": "We've let our team know this date no longer works. They'll reach out with a new one shortly.",
+  "visitTitle": "{module} Visit",
+  "scheduled": "Scheduled {date}",
+  "pleaseLetUsKnow": "Please let us know if this date still works for you.",
+  "confirmThisDate": "Confirm this date",
+  "requestDifferentDate": "Request a different date",
+  "whatDateWouldWork": "What date and time would work better for you?",
+  "date": "Date",
+  "timeOptional": "Time (optional)",
+  "submitRequest": "Submit Request",
+  "cancel": "Cancel"
+}

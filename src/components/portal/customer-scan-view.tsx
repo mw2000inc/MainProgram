@@ -31,6 +31,7 @@ import { getFilterChangeColumns } from "@/components/filter-change/filter-change
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
+import { useTranslation, usePreAuthLocale } from "@/lib/i18n/i18n-context"
 import {
   formatDate,
   getMonitoringEndDate,
@@ -44,6 +45,10 @@ import { getServiceHistory } from "@/lib/service-history"
 // both /scan/[customerId] (the canonical public route) and /portal/[id] (kept
 // working for any QR codes printed before the rename). No auth, no edit controls.
 export function CustomerScanView({ customerId }: { customerId: string }) {
+  const { t } = useTranslation("portal")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tMember } = useTranslation("member")
+  const { locale, setLocale } = usePreAuthLocale()
   const { data: profile, isPending } = usePortalProfile(customerId)
   const customer = profile?.customer
   const settings = profile?.settings
@@ -92,8 +97,8 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     if (!customer) {
       return (
         <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-          <p className="text-lg font-medium">We couldn&apos;t find this profile</p>
-          <p className="text-sm text-muted-foreground">The QR code may be invalid or the record no longer exists.</p>
+          <p className="text-lg font-medium">{t("profileNotFoundTitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("profileNotFoundDescription")}</p>
         </div>
       )
     }
@@ -122,7 +127,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
               </div>
               {customer.companyName && <p className="text-sm text-muted-foreground">{customer.fullName}</p>}
               <p className="text-xs text-muted-foreground mt-1">
-                Member Account#: <span className="font-mono">{customer.memberAccountNumber}</span>
+                {tFields("memberAccount")}: <span className="font-mono">{customer.memberAccountNumber}</span>
               </p>
             </div>
           </CardContent>
@@ -131,58 +136,55 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
         <Card className="bg-muted/40 border-dashed">
           <CardContent className="flex items-start gap-3 py-4">
             <ShieldCheck className="h-4 w-4 text-success shrink-0 mt-0.5" />
-            <p className="text-xs text-muted-foreground">
-              This is a read-only view of your account. Only MW2000 staff can make changes — contact us below if
-              anything needs updating.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("readOnlyNotice")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <IdCard className="h-4 w-4" /> Member Information
+              <IdCard className="h-4 w-4" /> {t("memberInformation")}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <InfoRow label="Member Account#" value={customer.memberAccountNumber || "N/A"} />
-            <InfoRow label="Account Name" value={customer.companyName || "N/A"} />
-            <InfoRow label="Account Contact Person" value={customer.fullName || "N/A"} />
-            <InfoRow label="Contact Number 1 (Main)" value={customer.contactNumber || "N/A"} />
-            <InfoRow label="Contact Number 2 (Sub)" value={customer.contactNumber2 || "N/A"} />
-            <InfoRow label="Address" value={customer.address || "N/A"} className="sm:col-span-2" />
+            <InfoRow label={tFields("memberAccount")} value={customer.memberAccountNumber || t("na")} />
+            <InfoRow label={tFields("accountName")} value={customer.companyName || t("na")} />
+            <InfoRow label={t("accountContactPerson")} value={customer.fullName || t("na")} />
+            <InfoRow label={tMember("contactNumber1MainHeader")} value={customer.contactNumber || t("na")} />
+            <InfoRow label={tMember("contactNumber2SubHeader")} value={customer.contactNumber2 || t("na")} />
+            <InfoRow label={tFields("address")} value={customer.address || t("na")} className="sm:col-span-2" />
           </CardContent>
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
-            <TabsTrigger value="personal">Member Information</TabsTrigger>
-            <TabsTrigger value="service">Service History</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="personal">{t("memberInformation")}</TabsTrigger>
+            <TabsTrigger value="service">{t("serviceHistory")}</TabsTrigger>
+            <TabsTrigger value="orders">{t("orders")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="personal">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Personal Information</CardTitle>
+                <CardTitle className="text-base">{t("personalInformation")}</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <InfoRow icon={Hash} label="Order Number" value={customer.orderNumber} />
+                <InfoRow icon={Hash} label={tFields("orderNumber")} value={customer.orderNumber} />
                 <InfoRow
                   icon={CalendarDays}
-                  label="Installed Date"
-                  value={customer.installedDate ? formatDate(customer.installedDate) : "N/A"}
+                  label={tFields("installedDate")}
+                  value={customer.installedDate ? formatDate(customer.installedDate) : t("na")}
                 />
-                <InfoRow icon={Mail} label="Email Address" value={customer.email} />
-                <InfoRow icon={Phone} label="Contact Number" value={customer.contactNumber} />
-                <InfoRow icon={MapPin} label="Address" value={customer.address} className="sm:col-span-2" />
-                <InfoRow icon={Droplet} label="Water Purification Type" value={customer.dispenserType} />
+                <InfoRow icon={Mail} label={tMember("emailAddress")} value={customer.email} />
+                <InfoRow icon={Phone} label={t("contactNumber")} value={customer.contactNumber} />
+                <InfoRow icon={MapPin} label={tFields("address")} value={customer.address} className="sm:col-span-2" />
+                <InfoRow icon={Droplet} label={t("waterPurificationType")} value={customer.dispenserType} />
                 <InfoRow
                   icon={Droplet}
-                  label="Water Filter Installed"
-                  value={customer.filterInstalled ? "Yes" : "No"}
+                  label={t("waterFilterInstalled")}
+                  value={customer.filterInstalled ? t("yes") : t("no")}
                 />
-                <InfoRow icon={Wrench} label="Assigned Technician" value={customer.assignedTechnician || "N/A"} />
+                <InfoRow icon={Wrench} label={t("assignedTechnician")} value={customer.assignedTechnician || t("na")} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -190,11 +192,11 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
           <TabsContent value="service">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Service History</CardTitle>
+                <CardTitle className="text-base">{t("serviceHistory")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {serviceHistory.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No service visits recorded yet.</p>
+                  <p className="text-sm text-muted-foreground">{t("noServiceVisits")}</p>
                 )}
                 {serviceHistory.map((visit, i) => (
                   <div key={i} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
@@ -219,15 +221,15 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Receipt className="h-4 w-4" /> Related Sales
+                    <Receipt className="h-4 w-4" /> {t("relatedSales")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <DataTable
                     columns={saleListColumns}
                     data={saleListRows}
-                    searchPlaceholder="Search orders..."
-                    emptyMessage="No related sales for this account."
+                    searchPlaceholder={t("searchOrders")}
+                    emptyMessage={t("noRelatedSales")}
                     onRowClick={(row) => setSelectedOrder(row)}
                   />
                 </CardContent>
@@ -239,47 +241,47 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                   onClick={() => setSelectedOrder(null)}
                   className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders
+                  <ArrowLeft className="h-3.5 w-3.5" /> {t("backToOrders")}
                 </button>
 
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <ClipboardCheck className="h-4 w-4" /> Order {selectedOrder.orderNumber}
+                      <ClipboardCheck className="h-4 w-4" /> {t("orderNumberTitle", { number: selectedOrder.orderNumber })}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <InfoRow label="Order Number" value={selectedOrder.orderNumber} />
+                    <InfoRow label={tFields("orderNumber")} value={selectedOrder.orderNumber} />
                     <InfoRow
-                      label="Installed Date"
-                      value={selectedOrder.installedDate ? formatDate(selectedOrder.installedDate) : "N/A"}
+                      label={tFields("installedDate")}
+                      value={selectedOrder.installedDate ? formatDate(selectedOrder.installedDate) : t("na")}
                     />
-                    <InfoRow label="Account#" value={selectedOrder.accountLabel} />
-                    <InfoRow label="Product#" value={selectedOrder.productNo || "N/A"} />
-                    <InfoRow label="S/C" value={selectedOrder.sc || "N/A"} />
-                    <InfoRow label="C/F" value={selectedOrder.cf || "N/A"} />
-                    <InfoRow label="C/T" value={selectedOrder.ct || "N/A"} />
-                    <InfoRow label="CP y1/y2" value={selectedOrder.cpY1Y2 || "N/A"} />
+                    <InfoRow label={tFields("account")} value={selectedOrder.accountLabel} />
+                    <InfoRow label={tFields("productNo")} value={selectedOrder.productNo || t("na")} />
+                    <InfoRow label={tFields("sc")} value={selectedOrder.sc || t("na")} />
+                    <InfoRow label={tFields("cf")} value={selectedOrder.cf || t("na")} />
+                    <InfoRow label={tFields("ct")} value={selectedOrder.ct || t("na")} />
+                    <InfoRow label={tFields("cpY1Y2")} value={selectedOrder.cpY1Y2 || t("na")} />
                     <InfoRow
-                      label="CP start"
-                      value={selectedOrder.cpStart ? formatDate(selectedOrder.cpStart) : "N/A"}
+                      label={tFields("cpStart")}
+                      value={selectedOrder.cpStart ? formatDate(selectedOrder.cpStart) : t("na")}
                     />
-                    <InfoRow label="CP end" value={selectedOrder.cpEnd ? formatDate(selectedOrder.cpEnd) : "N/A"} />
+                    <InfoRow label={tFields("cpEnd")} value={selectedOrder.cpEnd ? formatDate(selectedOrder.cpEnd) : t("na")} />
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Droplets className="h-4 w-4" /> Filter Changes
+                      <Droplets className="h-4 w-4" /> {t("filterChanges")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <DataTable
                       columns={filterChangeColumns}
                       data={filterChanges.filter((f) => f.orderNumber === selectedOrder.orderNumber)}
-                      searchPlaceholder="Search filter changes..."
-                      emptyMessage="No filter change history for this order."
+                      searchPlaceholder={t("searchFilterChanges")}
+                      emptyMessage={t("noFilterChangeHistory")}
                     />
                   </CardContent>
                 </Card>
@@ -287,15 +289,15 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Banknote className="h-4 w-4" /> Collections
+                      <Banknote className="h-4 w-4" /> {t("collections")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <DataTable
                       columns={collectionsColumns}
                       data={collections.filter((c) => c.orderNo === selectedOrder.orderNumber)}
-                      searchPlaceholder="Search collections..."
-                      emptyMessage="No collection history for this order."
+                      searchPlaceholder={t("searchCollections")}
+                      emptyMessage={t("noCollectionHistory")}
                     />
                   </CardContent>
                 </Card>
@@ -303,15 +305,15 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Wrench className="h-4 w-4" /> Repairs
+                      <Wrench className="h-4 w-4" /> {t("repairs")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <DataTable
                       columns={repairColumns}
                       data={repairs.filter((r) => r.orderNo === selectedOrder.orderNumber)}
-                      searchPlaceholder="Search repairs..."
-                      emptyMessage="No repair history for this order."
+                      searchPlaceholder={t("searchRepairs")}
+                      emptyMessage={t("noRepairHistory")}
                     />
                   </CardContent>
                 </Card>
@@ -323,11 +325,11 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Building2 className="h-4 w-4" /> Need help? Contact us
+              <Building2 className="h-4 w-4" /> {t("needHelpContactUs")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <InfoRow icon={MapPin} label="Location" value={settings?.address || "N/A"} />
+            <InfoRow icon={MapPin} label={t("location")} value={settings?.address || t("na")} />
             {(settings?.contactNumbers ?? []).map((entry, i) => (
               <InfoRow key={`num-${i}`} icon={Phone} label={entry.label} value={entry.value} />
             ))}
@@ -343,11 +345,30 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
-        <div className="max-w-2xl mx-auto flex items-center gap-2 px-4 py-4">
-          <Logo className="h-9 w-9 shrink-0" />
-          <div className="leading-tight">
-            <p className="font-semibold text-sm">{settings?.companyName ?? "MW2000"}</p>
-            <p className="text-xs text-muted-foreground">Customer Profile</p>
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 px-4 py-4">
+          <div className="flex items-center gap-2">
+            <Logo className="h-9 w-9 shrink-0" />
+            <div className="leading-tight">
+              <p className="font-semibold text-sm">{settings?.companyName ?? "MW2000"}</p>
+              <p className="text-xs text-muted-foreground">{t("customerProfile")}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              className={locale === "en" ? "font-semibold underline" : "text-muted-foreground"}
+              onClick={() => setLocale("en")}
+            >
+              English
+            </button>
+            <span className="text-muted-foreground">/</span>
+            <button
+              type="button"
+              className={locale === "ko" ? "font-semibold underline" : "text-muted-foreground"}
+              onClick={() => setLocale("ko")}
+            >
+              한국어
+            </button>
           </div>
         </div>
       </header>

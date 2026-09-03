@@ -1,0 +1,22 @@
+{
+  "headerTitle": "MW2000",
+  "headerSubtitle": "일정 확인",
+  "linkInvalidTitle": "이 링크는 더 이상 유효하지 않습니다",
+  "linkInvalidDescription": "링크가 만료되었거나 이미 사용되었거나, 발송 이후 일정이 변경되었을 수 있습니다. 방문 확정이나 일정 변경이 여전히 필요하시면 저희에게 연락해 주세요.",
+  "confirmedTitle": "감사합니다 — 방문이 확정되었습니다!",
+  "rescheduleTitle": "확인했습니다 — 일정 변경을 위해 곧 연락드리겠습니다",
+  "confirmedDescription": "{date}의 {module} 방문이 확정되었습니다.",
+  "rescheduleSubmittedDescription": "저희 팀에 전달했습니다 — {date}{time}을(를) 선호하신다고 하셨습니다. 검토 후 곧 확정해 드리겠습니다.",
+  "rescheduleAtTime": " {time}",
+  "rescheduleGenericDescription": "이 날짜가 더 이상 맞지 않는다고 저희 팀에 전달했습니다. 곧 새로운 일정으로 연락드리겠습니다.",
+  "visitTitle": "{module} 방문",
+  "scheduled": "{date} 예정",
+  "pleaseLetUsKnow": "이 날짜가 괜찮으신지 알려주세요.",
+  "confirmThisDate": "이 날짜 확정",
+  "requestDifferentDate": "다른 날짜 요청",
+  "whatDateWouldWork": "어떤 날짜와 시간이 더 편하신가요?",
+  "date": "날짜",
+  "timeOptional": "시간 (선택 사항)",
+  "submitRequest": "요청 보내기",
+  "cancel": "취소"
+}
