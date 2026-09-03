@@ -15,13 +15,21 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation, usePreAuthLocale } from "@/lib/i18n/i18n-context"
 import { supabase } from "@/lib/supabase/client"
 import { authErrorMessage } from "@/lib/supabase/errors"
 
-const signInSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(4, "Password must be at least 4 characters"),
-})
+// Schemas are built from a translation function rather than defined once at
+// module scope — validation messages need to change with the locale, and
+// `t()` only exists once useTranslation() has run inside the component (see
+// LoginPage's own useMemo below, which rebuilds these whenever `t` changes,
+// i.e. whenever the locale does).
+function createSignInSchema(t: (key: string) => string) {
+  return z.object({
+    email: z.string().email(t("emailInvalid")),
+    password: z.string().min(4, t("passwordMinLength4")),
+  })
+}
 
 // No role field — public self-signup always creates a Technician account
 // (the least-privileged role), never Admin. Only an existing admin can
@@ -30,17 +38,19 @@ const signInSchema = z.object({
 // /api/admin/users) or a manual role update in the database — see the
 // close_role_escalation migration for why raw_user_meta_data is no longer
 // trusted for role at all here.
-const signUpSchema = z
-  .object({
-    name: z.string().min(2, "Full name is required"),
-    email: z.string().email("Enter a valid email address"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
+function createSignUpSchema(t: (key: string) => string) {
+  return z
+    .object({
+      name: z.string().min(2, t("fullNameRequired")),
+      email: z.string().email(t("emailInvalid")),
+      password: z.string().min(6, t("passwordMinLength6")),
+      confirmPassword: z.string(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t("passwordsDoNotMatch"),
+      path: ["confirmPassword"],
+    })
+}
 
 type Mode = "signin" | "signup"
 
@@ -49,8 +59,13 @@ const REMEMBERED_EMAIL_KEY = "mw2000-remembered-email"
 export default function LoginPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const { t } = useTranslation("auth")
+  const { locale, setLocale } = usePreAuthLocale()
   const [mode, setMode] = React.useState<Mode>("signin")
   const [resetPending, setResetPending] = React.useState(false)
+
+  const signInSchema = React.useMemo(() => createSignInSchema(t), [t])
+  const signUpSchema = React.useMemo(() => createSignUpSchema(t), [t])
 
   React.useEffect(() => {
     if (!loading && user) router.replace("/")
@@ -62,9 +77,10 @@ export default function LoginPage() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get("oauth_error")) {
-      toast.error("Google sign-in didn't complete — please try again.")
+      toast.error(t("googleSignInFailed"))
       window.history.replaceState(null, "", window.location.pathname)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const signInForm = useForm<z.infer<typeof signInSchema>>({
@@ -106,11 +122,9 @@ export default function LoginPage() {
       // confirmed yet — surface that accurately instead of telling someone
       // with a correct password that it's wrong.
       if (error.code === "email_not_confirmed") {
-        signInForm.setError("email", {
-          message: "Please confirm your email first — check your inbox for the confirmation link from signup.",
-        })
+        signInForm.setError("email", { message: t("confirmEmailFirst") })
       } else {
-        signInForm.setError("password", { message: "Incorrect email or password." })
+        signInForm.setError("password", { message: t("incorrectCredentials") })
       }
       return
     }
@@ -141,7 +155,7 @@ export default function LoginPage() {
   async function handleForgotPassword() {
     const email = signInForm.getValues("email").trim()
     if (!email) {
-      signInForm.setError("email", { message: "Enter your email first, then click \"Forgot password?\"" })
+      signInForm.setError("email", { message: t("enterEmailFirst") })
       return
     }
     setResetPending(true)
@@ -153,7 +167,7 @@ export default function LoginPage() {
       toast.error(authErrorMessage(error))
       return
     }
-    toast.success("Password reset link sent — check your email.")
+    toast.success(t("resetLinkSent"))
   }
 
   async function onSignUp(values: z.infer<typeof signUpSchema>) {
@@ -172,7 +186,7 @@ export default function LoginPage() {
     })
     if (error) {
       if (error.message.toLowerCase().includes("already")) {
-        signUpForm.setError("email", { message: "An account with this email already exists." })
+        signUpForm.setError("email", { message: t("accountAlreadyExists") })
       } else {
         toast.error(authErrorMessage(error))
       }
@@ -181,7 +195,7 @@ export default function LoginPage() {
     // The account can't actually sign in yet until email confirmation is
     // completed (Auth has "Confirm email" enabled on this project) — say so
     // rather than implying they can use the app immediately.
-    toast.success("Account created! Check your email to confirm your address before signing in.")
+    toast.success(t("accountCreatedCheckEmail"))
   }
 
   const signInEmailError = signInForm.formState.errors.email?.message
@@ -195,22 +209,37 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
+        {/* Pre-auth locale toggle — the only way to pick a language before
+            signing in, since there's no profile yet to read one from (see
+            usePreAuthLocale's own comment). */}
+        <div className="mb-4 flex justify-end gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setLocale("en")}
+            className={locale === "en" ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}
+          >
+            English
+          </button>
+          <span className="text-muted-foreground">/</span>
+          <button
+            type="button"
+            onClick={() => setLocale("ko")}
+            className={locale === "ko" ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}
+          >
+            한국어
+          </button>
+        </div>
+
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <Logo className="h-12 w-12" />
           <h1 className="text-xl font-semibold">MW2000</h1>
-          <p className="text-sm text-muted-foreground">
-            Customer, Sales &amp; Inventory Management for Water Purification
-          </p>
+          <p className="text-sm text-muted-foreground">{t("tagline")}</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{mode === "signin" ? "Sign in" : "Create an account"}</CardTitle>
-            <CardDescription>
-              {mode === "signin"
-                ? "Enter your work email to continue."
-                : "New accounts start as Technician — an admin can upgrade your role from the Users page."}
-            </CardDescription>
+            <CardTitle className="text-base">{mode === "signin" ? t("signIn") : t("createAccount")}</CardTitle>
+            <CardDescription>{mode === "signin" ? t("signInDescription") : t("signUpDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {mode === "signin" ? (
@@ -220,7 +249,7 @@ export default function LoginPage() {
                   silently reverting typed text. Letting the DOM own the value sidesteps that entirely. */}
               <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
                 <div className="grid gap-2">
-                  <Label>Email</Label>
+                  <Label>{t("email")}</Label>
                   <Input
                     placeholder="you@yourcompany.com"
                     autoComplete="email"
@@ -230,7 +259,7 @@ export default function LoginPage() {
                   {signInEmailError && <p className="text-destructive text-sm">{signInEmailError}</p>}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Password</Label>
+                  <Label>{t("password")}</Label>
                   <PasswordInput
                     placeholder="••••••••"
                     autoComplete="current-password"
@@ -242,7 +271,7 @@ export default function LoginPage() {
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox checked={rememberMe} onCheckedChange={(v) => setRememberMe(v === true)} />
-                    Remember me
+                    {t("rememberMe")}
                   </label>
                   <button
                     type="button"
@@ -250,11 +279,11 @@ export default function LoginPage() {
                     disabled={resetPending}
                     onClick={handleForgotPassword}
                   >
-                    {resetPending ? "Sending..." : "Forgot password?"}
+                    {resetPending ? t("sending") : t("forgotPassword")}
                   </button>
                 </div>
                 <Button type="submit" className="w-full" disabled={signInForm.formState.isSubmitting}>
-                  Sign in
+                  {t("signIn")}
                 </Button>
               </form>
               <div className="relative py-1">
@@ -262,18 +291,18 @@ export default function LoginPage() {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                  <span className="bg-card px-2 text-muted-foreground">{t("or")}</span>
                 </div>
               </div>
               <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleSignIn}>
                 <GoogleIcon className="h-4 w-4" />
-                Sign in with Google
+                {t("signInWithGoogle")}
               </Button>
               </>
             ) : (
               <form onSubmit={signUpForm.handleSubmit(onSignUp)} className="space-y-4">
                 <div className="grid gap-2">
-                  <Label>Full Name</Label>
+                  <Label>{t("fullName")}</Label>
                   <Input
                     placeholder="Juan Dela Cruz"
                     autoComplete="name"
@@ -283,7 +312,7 @@ export default function LoginPage() {
                   {signUpNameError && <p className="text-destructive text-sm">{signUpNameError}</p>}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Work Email</Label>
+                  <Label>{t("workEmail")}</Label>
                   <Input
                     placeholder="you@yourcompany.com"
                     autoComplete="email"
@@ -293,7 +322,7 @@ export default function LoginPage() {
                   {signUpEmailError && <p className="text-destructive text-sm">{signUpEmailError}</p>}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Password</Label>
+                  <Label>{t("password")}</Label>
                   <PasswordInput
                     placeholder="••••••••"
                     autoComplete="new-password"
@@ -303,7 +332,7 @@ export default function LoginPage() {
                   {signUpPasswordError && <p className="text-destructive text-sm">{signUpPasswordError}</p>}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Confirm Password</Label>
+                  <Label>{t("confirmPassword")}</Label>
                   <PasswordInput
                     placeholder="••••••••"
                     autoComplete="new-password"
@@ -315,7 +344,7 @@ export default function LoginPage() {
                   )}
                 </div>
                 <Button type="submit" className="w-full" disabled={signUpForm.formState.isSubmitting}>
-                  {signUpForm.formState.isSubmitting ? "Creating account..." : "Sign up"}
+                  {signUpForm.formState.isSubmitting ? t("creatingAccount") : t("signUp")}
                 </Button>
               </form>
             )}
@@ -327,7 +356,7 @@ export default function LoginPage() {
                   className="text-primary hover:underline"
                   onClick={() => setMode("signup")}
                 >
-                  Don&apos;t have an account? Sign up
+                  {t("noAccountSignUp")}
                 </button>
               ) : (
                 <button
@@ -335,7 +364,7 @@ export default function LoginPage() {
                   className="text-primary hover:underline"
                   onClick={() => setMode("signin")}
                 >
-                  Already have an account? Sign in
+                  {t("haveAccountSignIn")}
                 </button>
               )}
             </div>

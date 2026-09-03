@@ -1,0 +1,22 @@
+{
+  "dailyReport": "Daily Report",
+  "schedule": "Schedule",
+  "install": "Install",
+  "filterChange": "Filter Change",
+  "repairPlan": "Repair Plan",
+  "collectionPlan": "Collection Plan",
+  "inventory": "Inventory",
+  "member": "Member",
+  "saleList": "Sale List",
+  "cpSystem": "CP System",
+  "users": "Users",
+  "adminActivity": "Admin Activity",
+  "technicianActivity": "Technician Activity",
+  "settings": "Settings",
+  "searchEverything": "Search everything...",
+  "searchPagesMembersProducts": "Search pages, members, products...",
+  "globalSearch": "Global Search",
+  "noResultsFound": "No results found.",
+  "pages": "Pages",
+  "products": "Products"
+}

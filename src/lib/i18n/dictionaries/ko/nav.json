@@ -1,0 +1,22 @@
+{
+  "dailyReport": "일일 보고서",
+  "schedule": "일정",
+  "install": "설치",
+  "filterChange": "필터 교체",
+  "repairPlan": "수리 계획",
+  "collectionPlan": "수거 계획",
+  "inventory": "재고",
+  "member": "회원",
+  "saleList": "판매 목록",
+  "cpSystem": "CP 시스템",
+  "users": "사용자",
+  "adminActivity": "관리자 활동",
+  "technicianActivity": "기술자 활동",
+  "settings": "설정",
+  "searchEverything": "전체 검색...",
+  "searchPagesMembersProducts": "페이지, 회원, 제품 검색...",
+  "globalSearch": "전체 검색",
+  "noResultsFound": "결과가 없습니다.",
+  "pages": "페이지",
+  "products": "제품"
+}

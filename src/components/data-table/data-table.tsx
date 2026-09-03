@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[]
@@ -61,16 +62,17 @@ interface DataTableProps<TData> {
 export function DataTable<TData>({
   columns,
   data,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   toolbar,
   onFilteredRowsChange,
-  emptyMessage = "No records found.",
+  emptyMessage,
   pageSize = 10,
   onRowClick,
   getRowClassName,
   tableContainerClassName,
   tableClassName,
 }: DataTableProps<TData>) {
+  const { t } = useTranslation("dataTable")
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize })
@@ -125,7 +127,7 @@ export function DataTable<TData>({
           <Input
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={searchPlaceholder}
+            placeholder={searchPlaceholder ?? t("searchPlaceholder")}
             className="pl-8"
           />
         </div>
@@ -169,7 +171,7 @@ export function DataTable<TData>({
             {table.getRowModel().rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-28 text-center text-muted-foreground">
-                  {emptyMessage}
+                  {emptyMessage ?? t("noRecordsFound")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -191,11 +193,11 @@ export function DataTable<TData>({
 
       <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
         <div>
-          {totalRows > 0 ? `Showing ${startRow}-${endRow} of ${totalRows}` : "No results"}
+          {totalRows > 0 ? t("showingRange", { start: startRow, end: endRow, total: totalRows }) : t("noResults")}
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span>Rows per page</span>
+            <span>{t("rowsPerPage")}</span>
             <Select
               value={String(currentPageSize)}
               onValueChange={(v) => table.setPageSize(Number(v))}
@@ -225,7 +227,7 @@ export function DataTable<TData>({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="px-2 text-xs">
-              Page {pageIndex + 1} of {Math.max(1, table.getPageCount())}
+              {t("pageOfTotal", { page: pageIndex + 1, totalPages: Math.max(1, table.getPageCount()) })}
             </span>
             <Button
               variant="outline"

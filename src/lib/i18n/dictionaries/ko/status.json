@@ -1,0 +1,16 @@
+{
+  "active": "활성",
+  "expiringSoon": "곧 만료",
+  "expired": "만료됨",
+  "forReplacement": "교체 필요",
+  "inStock": "재고 있음",
+  "lowStock": "재고 부족",
+  "outOfStock": "품절",
+  "paid": "결제 완료",
+  "pending": "대기 중",
+  "overdue": "연체",
+  "partial": "부분 결제",
+  "completed": "완료",
+  "cancelled": "취소됨",
+  "collected": "수거 완료"
+}

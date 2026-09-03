@@ -19,7 +19,13 @@ import type { Permission } from "@/lib/auth/auth-context"
 
 export interface NavItem {
   href: string
+  // English fallback / CommandPalette search text — the actual displayed
+  // label always comes from t(item.key, "nav") instead (see sidebar.tsx and
+  // command-palette.tsx), so `label` only matters for search matching and
+  // as the last-resort fallback the translation lookup itself already
+  // provides.
   label: string
+  key: string
   icon: LucideIcon
   adminOnly?: boolean
   requires?: Permission
@@ -44,22 +50,22 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Daily Report", icon: ClipboardList, group: 1, technicianVisible: true },
-  { href: "/schedule", label: "Schedule", icon: CalendarClock, group: 1 },
-  { href: "/install", label: "Install", icon: HardHat, group: 1 },
-  { href: "/filter-change", label: "Filter Change", icon: Droplets, group: 1 },
-  { href: "/repair-plan", label: "Repair Plan", icon: Wrench, group: 1 },
+  { href: "/", label: "Daily Report", key: "dailyReport", icon: ClipboardList, group: 1, technicianVisible: true },
+  { href: "/schedule", label: "Schedule", key: "schedule", icon: CalendarClock, group: 1 },
+  { href: "/install", label: "Install", key: "install", icon: HardHat, group: 1 },
+  { href: "/filter-change", label: "Filter Change", key: "filterChange", icon: Droplets, group: 1 },
+  { href: "/repair-plan", label: "Repair Plan", key: "repairPlan", icon: Wrench, group: 1 },
 
-  { href: "/collection-plan", label: "Collection Plan", icon: Banknote, group: 2 },
-  { href: "/inventory", label: "Inventory", icon: Package, group: 2 },
-  { href: "/customers", label: "Member", icon: Users, group: 2 },
-  { href: "/sale-list", label: "Sale List", icon: ClipboardCheck, group: 2 },
-  { href: "/cp-system", label: "CP System", icon: Layers, group: 2 },
+  { href: "/collection-plan", label: "Collection Plan", key: "collectionPlan", icon: Banknote, group: 2 },
+  { href: "/inventory", label: "Inventory", key: "inventory", icon: Package, group: 2 },
+  { href: "/customers", label: "Member", key: "member", icon: Users, group: 2 },
+  { href: "/sale-list", label: "Sale List", key: "saleList", icon: ClipboardCheck, group: 2 },
+  { href: "/cp-system", label: "CP System", key: "cpSystem", icon: Layers, group: 2 },
 
-  { href: "/users", label: "Users", icon: UserCog, adminOnly: true, group: 3 },
-  { href: "/activity", label: "Admin Activity", icon: History, adminOnly: true, group: 3 },
-  { href: "/technician-activity", label: "Technician Activity", icon: Hammer, adminOnly: true, group: 3 },
-  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true, group: 3 },
+  { href: "/users", label: "Users", key: "users", icon: UserCog, adminOnly: true, group: 3 },
+  { href: "/activity", label: "Admin Activity", key: "adminActivity", icon: History, adminOnly: true, group: 3 },
+  { href: "/technician-activity", label: "Technician Activity", key: "technicianActivity", icon: Hammer, adminOnly: true, group: 3 },
+  { href: "/settings", label: "Settings", key: "settings", icon: Settings, adminOnly: true, group: 3 },
 ]
 
 export function isTechnicianAllowedPath(pathname: string): boolean {

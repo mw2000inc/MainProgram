@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/sale-list"
 import type { SaleListEntry } from "@/lib/types"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 
 export const saleListKey = ["saleListEntries"] as const
@@ -36,12 +37,13 @@ export function useUpdateSaleListEntry() {
 
 export function useDeleteSaleListEntries() {
   const qc = useQueryClient()
+  const { t } = useTranslation("common")
   return useMutation({
     mutationFn: (ids: string[]) => (ids.length === 1 ? api.deleteSaleListEntry(ids[0]) : api.deleteSaleListEntries(ids)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: saleListKey })
-      toast.success("Removed")
+      toast.success(t("removed"))
     },
-    onError: () => toast.error("Failed to remove"),
+    onError: () => toast.error(t("failedToRemove")),
   })
 }

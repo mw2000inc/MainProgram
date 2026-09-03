@@ -3,6 +3,7 @@
 import { Download, CheckCircle2 } from "lucide-react"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { useInstallPrompt } from "@/components/pwa/install-prompt-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 // Lives in the existing account dropdown (see topbar.tsx) — no new nav
 // surface. Renders nothing at all on browsers that never fire
@@ -10,12 +11,13 @@ import { useInstallPrompt } from "@/components/pwa/install-prompt-context"
 // which is the correct graceful fallback rather than a dead button.
 export function InstallAppMenuItem() {
   const { canInstall, installed, promptInstall } = useInstallPrompt()
+  const { t } = useTranslation("common")
 
   if (installed) {
     return (
       <DropdownMenuItem disabled>
         <CheckCircle2 className="h-4 w-4" />
-        MW2000 is already installed
+        {t("appAlreadyInstalled")}
       </DropdownMenuItem>
     )
   }
@@ -25,7 +27,7 @@ export function InstallAppMenuItem() {
   return (
     <DropdownMenuItem onClick={promptInstall}>
       <Download className="h-4 w-4" />
-      Install MW2000 App
+      {t("installApp")}
     </DropdownMenuItem>
   )
 }

@@ -4,6 +4,7 @@ import * as React from "react"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 export interface ComboboxOption {
   value: string
@@ -36,6 +37,7 @@ export function Combobox({
   placeholder?: string
   className?: string
 } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "placeholder" | "className">) {
+  const { t } = useTranslation("common")
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -99,7 +101,7 @@ export function Combobox({
               scrollTop, not relying on the prevented default — sidesteps
               that entirely, so every option stays reachable. */}
           <CommandList onWheel={(e) => (e.currentTarget.scrollTop += e.deltaY)}>
-            <CommandEmpty>No matches — your typed value will be used as-is.</CommandEmpty>
+            <CommandEmpty>{t("noMatchesTypedValueUsed")}</CommandEmpty>
             {groups.map(([group, items]) => (
               <CommandGroup key={group || "_ungrouped"} heading={group || undefined}>
                 {items.map((opt) => (

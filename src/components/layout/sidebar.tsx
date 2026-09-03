@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { Logo } from "@/components/shared/logo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 export function SidebarNav({
   onNavigate,
@@ -20,6 +21,7 @@ export function SidebarNav({
 }) {
   const pathname = usePathname()
   const { user } = useAuth()
+  const { t } = useTranslation("nav")
 
   const items = NAV_ITEMS.filter((item) => {
     if (item.adminOnly && user?.role !== "admin") return false
@@ -55,7 +57,7 @@ export function SidebarNav({
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && item.label}
+              {!collapsed && t(item.key)}
             </Link>
           )
           // Between groups, not before the first item — computed off this
@@ -69,7 +71,7 @@ export function SidebarNav({
               {collapsed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
+                  <TooltipContent side="right">{t(item.key)}</TooltipContent>
                 </Tooltip>
               ) : (
                 link

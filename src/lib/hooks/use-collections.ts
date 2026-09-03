@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/collections"
 import type { CollectionPlan } from "@/lib/types"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 
 export const collectionsKey = ["collections"] as const
@@ -36,12 +37,13 @@ export function useUpdateCollection() {
 
 export function useDeleteCollections() {
   const qc = useQueryClient()
+  const { t } = useTranslation("common")
   return useMutation({
     mutationFn: (ids: string[]) => (ids.length === 1 ? api.deleteCollection(ids[0]) : api.deleteCollections(ids)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: collectionsKey })
-      toast.success("Removed")
+      toast.success(t("removed"))
     },
-    onError: () => toast.error("Failed to remove"),
+    onError: () => toast.error(t("failedToRemove")),
   })
 }

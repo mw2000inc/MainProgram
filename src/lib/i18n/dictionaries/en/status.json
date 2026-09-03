@@ -1,0 +1,16 @@
+{
+  "active": "Active",
+  "expiringSoon": "Expiring Soon",
+  "expired": "Expired",
+  "forReplacement": "For Replacement",
+  "inStock": "In Stock",
+  "lowStock": "Low Stock",
+  "outOfStock": "Out of Stock",
+  "paid": "Paid",
+  "pending": "Pending",
+  "overdue": "Overdue",
+  "partial": "Partial",
+  "completed": "Completed",
+  "cancelled": "Cancelled",
+  "collected": "Collected"
+}

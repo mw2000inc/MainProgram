@@ -5,49 +5,115 @@ import { useAuth } from "@/lib/auth/auth-context"
 import type { Locale } from "@/lib/types"
 import enCommon from "@/lib/i18n/dictionaries/en/common.json"
 import koCommon from "@/lib/i18n/dictionaries/ko/common.json"
+import enNav from "@/lib/i18n/dictionaries/en/nav.json"
+import koNav from "@/lib/i18n/dictionaries/ko/nav.json"
+import enDataTable from "@/lib/i18n/dictionaries/en/dataTable.json"
+import koDataTable from "@/lib/i18n/dictionaries/ko/dataTable.json"
+import enStatus from "@/lib/i18n/dictionaries/en/status.json"
+import koStatus from "@/lib/i18n/dictionaries/ko/status.json"
+import enAuth from "@/lib/i18n/dictionaries/en/auth.json"
+import koAuth from "@/lib/i18n/dictionaries/ko/auth.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
-// 1,500+ eventual keys organized instead of one giant dictionary. "common"
-// is the only one Phase 0 seeds; later phases add "filterChange",
-// "saleList", "dispatch", etc. the same way.
-export type Namespace = "common"
+// 1,500+ eventual keys organized instead of one giant dictionary.
+export type Namespace = "common" | "nav" | "dataTable" | "status" | "auth"
 
 type Dictionary = Record<string, string>
 
 const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
-  en: { common: enCommon },
-  ko: { common: koCommon },
+  en: { common: enCommon, nav: enNav, dataTable: enDataTable, status: enStatus, auth: enAuth },
+  ko: { common: koCommon, nav: koNav, dataTable: koDataTable, status: koStatus, auth: koAuth },
+}
+
+const PRE_AUTH_LOCALE_KEY = "mw2000-locale"
+
+function readPreAuthLocale(): Locale {
+  try {
+    const raw = window.localStorage.getItem(PRE_AUTH_LOCALE_KEY)
+    if (raw === "en" || raw === "ko") return raw
+  } catch {
+    // localStorage can throw in some contexts (private browsing, blocked
+    // storage) — fall through to the default rather than ever breaking the
+    // page over a display preference.
+  }
+  return "en"
 }
 
 interface I18nContextValue {
   locale: Locale
+  setPreAuthLocale: (locale: Locale) => void
 }
 
-const I18nContext = React.createContext<I18nContextValue>({ locale: "en" })
+const I18nContext = React.createContext<I18nContextValue>({ locale: "en", setPreAuthLocale: () => {} })
 
-// Locale comes from the signed-in user's own profile (profiles.locale) --
-// there's no unauthenticated default beyond the context's own "en" fallback
-// above, which only matters before a session loads (see AuthProvider's own
-// loading state) or on pages rendered outside it entirely (e.g. /login,
-// /confirm/[token]) — see the phased plan's Phase 4 for when those get their
-// own translation coverage.
+// Locale comes from the signed-in user's own profile (profiles.locale) once
+// one exists. Before that — the login page, or any instant before the
+// session loads — there's no profile to read, so a separate, localStorage-
+// backed "pre-auth" locale takes over instead (its own toggle lives on the
+// login page itself; see LoginPage). The two are deliberately independent:
+// picking a language before signing in does not yet carry over to a new
+// account's synced preference after signup (that would mean teaching
+// handle_new_user() about it too, a DB change out of this phase's scope) —
+// flagged as a known gap, not silently solved here.
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const locale = user?.locale ?? "en"
-  const value = React.useMemo(() => ({ locale }), [locale])
+  // Starts at the default on every render (server and client alike) to
+  // avoid a hydration mismatch — localStorage doesn't exist on the server —
+  // then synced from the real stored value below, after mount, same pattern
+  // as the login page's own pre-existing "remembered email" read.
+  const [preAuthLocale, setPreAuthLocaleState] = React.useState<Locale>("en")
+
+  React.useEffect(() => {
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPreAuthLocaleState(readPreAuthLocale())
+    }
+  }, [user])
+
+  const setPreAuthLocale = React.useCallback((next: Locale) => {
+    setPreAuthLocaleState(next)
+    try {
+      window.localStorage.setItem(PRE_AUTH_LOCALE_KEY, next)
+    } catch {
+      // Same as readPreAuthLocale — never let a storage failure break the
+      // UI, it just won't persist across a reload.
+    }
+  }, [])
+
+  const locale = user?.locale ?? preAuthLocale
+  const value = React.useMemo(() => ({ locale, setPreAuthLocale }), [locale, setPreAuthLocale])
+
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }
 
-// t(key) looks up `key` in `namespace` for the current locale, falling back
-// to English when a Korean key hasn't been translated yet (expected for
-// most of the app throughout the phased rollout — see the plan), and
-// finally to the raw key itself if it's missing from both dictionaries, so
-// a typo'd key reads oddly rather than crashing the page.
+// t(key, params) looks up `key` in `namespace` for the current locale,
+// falling back to English when a Korean key hasn't been translated yet
+// (expected for most of the app throughout the phased rollout — see the
+// plan), and finally to the raw key itself if it's missing from both
+// dictionaries, so a typo'd key reads oddly rather than crashing the page.
+// params does simple {placeholder} substitution for dynamic strings (e.g.
+// "Showing {start}-{end} of {total}") — deliberately not full ICU
+// pluralization/formatting, which this app doesn't need yet.
 export function useTranslation(namespace: Namespace) {
   const { locale } = React.useContext(I18nContext)
   const t = React.useCallback(
-    (key: string) => DICTIONARIES[locale]?.[namespace]?.[key] ?? DICTIONARIES.en[namespace]?.[key] ?? key,
+    (key: string, params?: Record<string, string | number>) => {
+      const template = DICTIONARIES[locale]?.[namespace]?.[key] ?? DICTIONARIES.en[namespace]?.[key] ?? key
+      if (!params) return template
+      return Object.entries(params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), template)
+    },
     [locale, namespace]
   )
   return { t, locale }
+}
+
+// The login page's own language toggle — the only place a pre-auth locale
+// can be set at all, since it's the only unauthenticated page covered by
+// this phase (see the plan's Phase 4 for /confirm and /portal). A no-op,
+// by design, once signed in — setPreAuthLocale still updates localStorage,
+// it just no longer affects `locale` above, which prefers user.locale from
+// that point on.
+export function usePreAuthLocale() {
+  const { locale, setPreAuthLocale } = React.useContext(I18nContext)
+  return { locale, setLocale: setPreAuthLocale }
 }

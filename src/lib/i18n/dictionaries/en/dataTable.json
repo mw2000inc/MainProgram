@@ -1,0 +1,8 @@
+{
+  "searchPlaceholder": "Search...",
+  "noResults": "No results",
+  "noRecordsFound": "No records found.",
+  "showingRange": "Showing {start}-{end} of {total}",
+  "rowsPerPage": "Rows per page",
+  "pageOfTotal": "Page {page} of {totalPages}"
+}

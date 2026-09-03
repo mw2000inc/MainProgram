@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 interface ConfirmDialogProps {
   open: boolean
@@ -26,22 +27,23 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   open,
   onOpenChange,
-  title = "Are you sure?",
-  description = "This action cannot be undone.",
-  confirmLabel = "Delete",
+  title,
+  description,
+  confirmLabel,
   destructive = true,
   onConfirm,
   loading,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation("common")
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          <AlertDialogTitle>{title ?? t("areYouSure")}</AlertDialogTitle>
+          <AlertDialogDescription>{description ?? t("actionCannotBeUndone")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={loading}>{t("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             disabled={loading}
             onClick={(e) => {
@@ -50,7 +52,7 @@ export function ConfirmDialog({
             }}
             className={destructive ? "bg-danger text-white hover:bg-danger/90" : undefined}
           >
-            {loading ? "Please wait..." : confirmLabel}
+            {loading ? t("pleaseWait") : (confirmLabel ?? t("delete"))}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

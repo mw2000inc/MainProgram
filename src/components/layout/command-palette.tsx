@@ -16,11 +16,13 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { NAV_ITEMS } from "@/components/layout/nav-items"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
   const { user } = useAuth()
+  const { t } = useTranslation("nav")
 
   const { data: customers = [] } = useCustomers()
   const { data: products = [] } = useProducts()
@@ -55,25 +57,25 @@ export function CommandPalette() {
         onClick={() => setOpen(true)}
       >
         <Search className="h-4 w-4" />
-        <span className="text-sm">Search everything...</span>
+        <span className="text-sm">{t("searchEverything")}</span>
         <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded border">Ctrl K</kbd>
       </Button>
       <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setOpen(true)} aria-label="Search">
         <Search className="h-4 w-4" />
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen} title="Global Search" description="Search pages, members, products">
-        <CommandInput placeholder="Search pages, members, products..." />
+      <CommandDialog open={open} onOpenChange={setOpen} title={t("globalSearch")} description={t("searchPagesMembersProducts")}>
+        <CommandInput placeholder={t("searchPagesMembersProducts")} />
         <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Pages">
+          <CommandEmpty>{t("noResultsFound")}</CommandEmpty>
+          <CommandGroup heading={t("pages")}>
             {pages.map((item) => (
               <CommandItem key={item.href} value={`page ${item.label}`} onSelect={() => go(item.href)}>
                 <item.icon className="text-primary" />
-                <span>{item.label}</span>
+                <span>{t(item.key)}</span>
               </CommandItem>
             ))}
           </CommandGroup>
-          <CommandGroup heading="Member">
+          <CommandGroup heading={t("member")}>
             {customers.slice(0, 30).map((c) => (
               <CommandItem key={c.id} value={`member ${c.fullName} ${c.contractNumber} ${c.companyName ?? ""}`} onSelect={() => go(`/customers/${c.id}`)}>
                 <Users className="text-secondary" />
@@ -82,7 +84,7 @@ export function CommandPalette() {
               </CommandItem>
             ))}
           </CommandGroup>
-          <CommandGroup heading="Products">
+          <CommandGroup heading={t("products")}>
             {products.slice(0, 30).map((p) => (
               <CommandItem key={p.id} value={`product ${p.name} ${p.sku}`} onSelect={() => go(`/inventory`)}>
                 <Package className="text-success" />

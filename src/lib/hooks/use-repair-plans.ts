@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/repair-plans"
 import type { RepairPlan } from "@/lib/types"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 
 export const repairPlansKey = ["repairPlans"] as const
@@ -36,12 +37,13 @@ export function useUpdateRepairPlan() {
 
 export function useDeleteRepairPlans() {
   const qc = useQueryClient()
+  const { t } = useTranslation("common")
   return useMutation({
     mutationFn: (ids: string[]) => (ids.length === 1 ? api.deleteRepairPlan(ids[0]) : api.deleteRepairPlans(ids)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: repairPlansKey })
-      toast.success("Removed")
+      toast.success(t("removed"))
     },
-    onError: () => toast.error("Failed to remove"),
+    onError: () => toast.error(t("failedToRemove")),
   })
 }
