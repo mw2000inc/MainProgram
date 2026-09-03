@@ -1,0 +1,8 @@
+{
+  "editTitle": "Edit Install Plan",
+  "addTitle": "Add Install Plan",
+  "editDescription": "Update this installation.",
+  "addDescription": "Schedule a new installation.",
+  "customerOrBusinessName": "Customer or business name",
+  "installationAddress": "Installation address"
+}

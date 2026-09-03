@@ -1,0 +1,11 @@
+{
+  "editTitle": "Edit Sale List Entry",
+  "addTitle": "Add Sale List Entry",
+  "editDescription": "Update this member's install / care-plan coverage.",
+  "addDescription": "Track a member's install / care-plan coverage.",
+  "selectMember": "Select member",
+  "selectMemberRequired": "Select a member",
+  "productPlaceholder": "e.g. 101 / MW) F7",
+  "ctPlaceholder": "e.g. Yearly",
+  "cpY1Y2Placeholder": "e.g. 1"
+}

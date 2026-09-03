@@ -1,0 +1,10 @@
+{
+  "editTitle": "Edit Filter Change Plan",
+  "addTitle": "Add Filter Change Plan",
+  "editDescription": "Update this filter change plan.",
+  "addDescription": "Schedule a filter change for a customer's order.",
+  "date": "Date",
+  "accountOrCompanyName": "Account or company name",
+  "technicianName": "Technician name",
+  "serviceAddress": "Service address"
+}

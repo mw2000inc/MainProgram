@@ -32,30 +32,30 @@ import {
 } from "@/components/ui/select"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { InstallPlan } from "@/lib/types"
 
-const money = z
-  .string()
-  .refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), "Must be zero or more")
+function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+  const money = z.string().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), t("mustBeZeroOrMore"))
+  return z.object({
+    inputDate: z.string().min(1, t("requiredField", { field: tf("inputDate") })),
+    name: z.string().min(1, t("requiredField", { field: tf("name") })),
+    address: z.string().optional(),
+    contactNumber: z.string().optional(),
+    model: z.string().min(1, t("selectField", { field: tf("model") })),
+    unitPrice: money,
+    cpPrice: money,
+    deliveryInstallationFee: money,
+    preInstalledDate: z.string().optional(),
+    installedDate: z.string().optional(),
+    note: z.string().optional(),
+    modelDp: z.string().optional(),
+    orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
+    inOut: z.string().min(1),
+  })
+}
 
-const schema = z.object({
-  inputDate: z.string().min(1, "Date is required"),
-  name: z.string().min(1, "Name is required"),
-  address: z.string().optional(),
-  contactNumber: z.string().optional(),
-  model: z.string().min(1, "Select a model"),
-  unitPrice: money,
-  cpPrice: money,
-  deliveryInstallationFee: money,
-  preInstalledDate: z.string().optional(),
-  installedDate: z.string().optional(),
-  note: z.string().optional(),
-  modelDp: z.string().optional(),
-  orderNo: z.string().min(1, "Order number is required"),
-  inOut: z.string().min(1),
-})
-
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
   if (plan) {
@@ -109,6 +109,10 @@ export function InstallFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateInstallPlan()
   const updatePlan = useUpdateInstallPlan()
+  const { t } = useTranslation("install")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, plan),
@@ -144,8 +148,8 @@ export function InstallFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Install Plan" : "Add Install Plan"}</DialogTitle>
-          <DialogDescription>{isEdit ? "Update this installation." : "Schedule a new installation."}</DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -155,7 +159,7 @@ export function InstallFormDialog({
                 name="inputDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Input Date</FormLabel>
+                    <FormLabel>{tFields("inputDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -168,9 +172,9 @@ export function InstallFormDialog({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{tFields("name")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Customer or business name" {...field} />
+                      <Input placeholder={t("customerOrBusinessName")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -181,9 +185,9 @@ export function InstallFormDialog({
                 name="address"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{tFields("address")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Installation address" {...field} />
+                      <Input placeholder={t("installationAddress")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -194,7 +198,7 @@ export function InstallFormDialog({
                 name="contactNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact #</FormLabel>
+                    <FormLabel>{tFields("contactNumber")}</FormLabel>
                     <FormControl>
                       <Input placeholder="09171234567" {...field} />
                     </FormControl>
@@ -207,17 +211,17 @@ export function InstallFormDialog({
                 name="model"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Model</FormLabel>
+                    <FormLabel>{tFields("model")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select model" />
+                          <SelectValue placeholder={t("selectField", { field: tFields("model") })} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {DISPENSER_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
+                        {DISPENSER_TYPES.map((dt) => (
+                          <SelectItem key={dt} value={dt}>
+                            {dt}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -231,7 +235,7 @@ export function InstallFormDialog({
                 name="unitPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Unit Price</FormLabel>
+                    <FormLabel>{tFields("unitPrice")}</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
@@ -244,7 +248,7 @@ export function InstallFormDialog({
                 name="cpPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>C/P Price</FormLabel>
+                    <FormLabel>{tFields("cpPrice")}</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
@@ -257,7 +261,7 @@ export function InstallFormDialog({
                 name="deliveryInstallationFee"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Delivery &amp; Installation Fee</FormLabel>
+                    <FormLabel>{tFields("deliveryInstallationFee")}</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
@@ -270,7 +274,7 @@ export function InstallFormDialog({
                 name="preInstalledDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Pre Installed Date</FormLabel>
+                    <FormLabel>{tFields("preInstalledDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -283,7 +287,7 @@ export function InstallFormDialog({
                 name="installedDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Installed Date</FormLabel>
+                    <FormLabel>{tFields("installedDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -296,9 +300,9 @@ export function InstallFormDialog({
                 name="note"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Note</FormLabel>
+                    <FormLabel>{tFields("note")}</FormLabel>
                     <FormControl>
-                      <Textarea rows={2} placeholder="Optional notes..." {...field} />
+                      <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -309,7 +313,7 @@ export function InstallFormDialog({
                 name="modelDp"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Model(dp)</FormLabel>
+                    <FormLabel>{tFields("modelDp")}</FormLabel>
                     <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -318,9 +322,9 @@ export function InstallFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">—</SelectItem>
-                        {DISPENSER_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
+                        {DISPENSER_TYPES.map((dt) => (
+                          <SelectItem key={dt} value={dt}>
+                            {dt}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -334,7 +338,7 @@ export function InstallFormDialog({
                 name="orderNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Order No</FormLabel>
+                    <FormLabel>{tFields("orderNo")}</FormLabel>
                     <FormControl>
                       <Input placeholder="SK001-0001" {...field} />
                     </FormControl>
@@ -347,7 +351,7 @@ export function InstallFormDialog({
                 name="inOut"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>In or Out</FormLabel>
+                    <FormLabel>{tFields("inOrOut")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -366,10 +370,10 @@ export function InstallFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

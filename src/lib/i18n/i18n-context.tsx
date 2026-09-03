@@ -21,10 +21,37 @@ import enAnnouncements from "@/lib/i18n/dictionaries/en/announcements.json"
 import koAnnouncements from "@/lib/i18n/dictionaries/ko/announcements.json"
 import enDispatch from "@/lib/i18n/dictionaries/en/dispatch.json"
 import koDispatch from "@/lib/i18n/dictionaries/ko/dispatch.json"
+import enFilterChange from "@/lib/i18n/dictionaries/en/filterChange.json"
+import koFilterChange from "@/lib/i18n/dictionaries/ko/filterChange.json"
+import enInstall from "@/lib/i18n/dictionaries/en/install.json"
+import koInstall from "@/lib/i18n/dictionaries/ko/install.json"
+import enRepair from "@/lib/i18n/dictionaries/en/repair.json"
+import koRepair from "@/lib/i18n/dictionaries/ko/repair.json"
+import enCollection from "@/lib/i18n/dictionaries/en/collection.json"
+import koCollection from "@/lib/i18n/dictionaries/ko/collection.json"
+import enSaleList from "@/lib/i18n/dictionaries/en/saleList.json"
+import koSaleList from "@/lib/i18n/dictionaries/ko/saleList.json"
+import enMember from "@/lib/i18n/dictionaries/en/member.json"
+import koMember from "@/lib/i18n/dictionaries/ko/member.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
 // 1,500+ eventual keys organized instead of one giant dictionary.
-export type Namespace = "common" | "nav" | "dataTable" | "status" | "auth" | "fields" | "schedule" | "announcements" | "dispatch"
+export type Namespace =
+  | "common"
+  | "nav"
+  | "dataTable"
+  | "status"
+  | "auth"
+  | "fields"
+  | "schedule"
+  | "announcements"
+  | "dispatch"
+  | "filterChange"
+  | "install"
+  | "repair"
+  | "collection"
+  | "saleList"
+  | "member"
 
 type Dictionary = Record<string, string>
 
@@ -39,6 +66,12 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     schedule: enSchedule,
     announcements: enAnnouncements,
     dispatch: enDispatch,
+    filterChange: enFilterChange,
+    install: enInstall,
+    repair: enRepair,
+    collection: enCollection,
+    saleList: enSaleList,
+    member: enMember,
   },
   ko: {
     common: koCommon,
@@ -50,6 +83,12 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     schedule: koSchedule,
     announcements: koAnnouncements,
     dispatch: koDispatch,
+    filterChange: koFilterChange,
+    install: koInstall,
+    repair: koRepair,
+    collection: koCollection,
+    saleList: koSaleList,
+    member: koMember,
   },
 }
 

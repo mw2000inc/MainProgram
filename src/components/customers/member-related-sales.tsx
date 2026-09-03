@@ -8,6 +8,7 @@ import { CustomerQrDialog } from "@/components/customers/customer-qr-dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
 
@@ -28,6 +29,8 @@ export function MemberRelatedSalesTable({
   can: (permission: Permission) => boolean
   onSelectOrder: (row: SaleListRow) => void
 }) {
+  const { t } = useTranslation("member")
+  const { t: tCommon } = useTranslation("common")
   const [formOpen, setFormOpen] = React.useState(false)
   // Set by the row's own Edit icon — opens the same SaleListFormDialog as
   // "Add", but in edit mode.
@@ -48,13 +51,13 @@ export function MemberRelatedSalesTable({
   return (
     <>
       <DashboardPlanPanel
-        title="Related Sales_Lists"
+        title={t("relatedSalesLists")}
         icon={ClipboardCheck}
         columns={columns}
         data={rows}
-        emptyMessage="No related sales for this member."
+        emptyMessage={t("noRelatedSales")}
         canAdd={can("sales:add")}
-        addLabel="Add"
+        addLabel={tCommon("add")}
         onAdd={() => setFormOpen(true)}
         onRowClick={onSelectOrder}
       />
@@ -84,8 +87,8 @@ export function MemberRelatedSalesTable({
       <ConfirmDialog
         open={!!deletingRow}
         onOpenChange={(o) => !o && setDeletingRow(undefined)}
-        title="Delete this sale list entry?"
-        description="This will permanently remove this record."
+        title={t("deleteSaleListEntryTitle")}
+        description={t("deleteSaleListEntryDescription")}
         loading={deleteEntries.isPending}
         onConfirm={async () => {
           if (!deletingRow) return

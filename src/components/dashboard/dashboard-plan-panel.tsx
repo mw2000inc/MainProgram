@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import type { ExportColumn } from "@/components/shared/export-buttons"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn } from "@/lib/utils"
 
 interface DashboardPlanPanelProps<TData extends { id: string; status?: string }> {
@@ -120,9 +121,9 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   expandedColumns,
   data,
   loading,
-  emptyMessage = "No items",
+  emptyMessage,
   canAdd,
-  addLabel = "Add",
+  addLabel,
   onAdd,
   canDelete,
   onDeleteSelected,
@@ -136,7 +137,12 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   headerAlwaysRow,
   getRowClassName,
 }: DashboardPlanPanelProps<TData>) {
+  const { t } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const statusPlaceholder = tFields("status")
   const dragHandle = useDragHandle()
+  const resolvedEmptyMessage = emptyMessage ?? t("noItems")
+  const resolvedAddLabel = addLabel ?? t("add")
   const [showStatusFilter, setShowStatusFilter] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [selectMode, setSelectMode] = React.useState(false)
@@ -174,13 +180,13 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           <Checkbox
             checked={selected.has(row.original.id)}
             onCheckedChange={() => toggleSelected(row.original.id)}
-            aria-label="Select row"
+            aria-label={t("selectRow")}
           />
         ),
       }
       return [selectColumn, ...base]
     },
-    [selectMode, selected]
+    [selectMode, selected, t]
   )
 
   const compactColumns = React.useMemo(() => withSelectColumn(columns), [withSelectColumn, columns])
@@ -209,7 +215,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
       <div className="flex flex-wrap items-center gap-1">
         {canAdd && (
           <Button size="sm" className="h-7 gap-1 px-2" onClick={onAdd}>
-            <Plus className="h-3.5 w-3.5" /> {addLabel}
+            <Plus className="h-3.5 w-3.5" /> {resolvedAddLabel}
           </Button>
         )}
         {exportColumns && (
@@ -223,7 +229,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           variant={showStatusFilter ? "secondary" : "ghost"}
           size="icon"
           className="h-7 w-7"
-          title="Filter by status"
+          title={t("filterByStatus")}
           onClick={() => setShowStatusFilter((v) => !v)}
         >
           <Filter className="h-3.5 w-3.5" />
@@ -232,7 +238,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           variant={selectMode ? "secondary" : "ghost"}
           size="icon"
           className="h-7 w-7"
-          title="Select rows"
+          title={t("selectRows")}
           onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
         >
           <CheckSquare className="h-3.5 w-3.5" />
@@ -241,7 +247,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          title="Expand"
+          title={t("expand")}
           onClick={() => setExpanded(true)}
         >
           <Maximize2 className="h-3.5 w-3.5" />
@@ -253,10 +259,10 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   const statusRow = showStatusFilter && (
     <Select value={statusFilter} onValueChange={setStatusFilter}>
       <SelectTrigger className="h-8 w-40">
-        <SelectValue placeholder="Status" />
+        <SelectValue placeholder={statusPlaceholder} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All Statuses</SelectItem>
+        <SelectItem value="all">{t("allStatuses")}</SelectItem>
         {statusOptions.map((s) => (
           <SelectItem key={s} value={s}>
             {s}
@@ -268,7 +274,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
 
   const selectionBar = selectMode && selected.size > 0 && (
     <div className={cn("flex items-center justify-between rounded-md border bg-muted/50 px-3 py-1.5 text-xs")}>
-      <span>{selected.size} selected</span>
+      <span>{t("selectedCount", { count: selected.size })}</span>
       {canDelete && (
         <Button
           variant="ghost"
@@ -276,7 +282,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           className="h-6 gap-1 px-2 text-danger hover:text-danger"
           onClick={() => setConfirmingDelete(true)}
         >
-          <Trash2 className="h-3.5 w-3.5" /> Delete
+          <Trash2 className="h-3.5 w-3.5" /> {t("delete")}
         </Button>
       )}
     </div>
@@ -310,7 +316,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
       <DataTable
         columns={cols}
         data={filteredData}
-        emptyMessage={emptyMessage}
+        emptyMessage={resolvedEmptyMessage}
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
         tableContainerClassName={tableContainerClassName}
@@ -339,7 +345,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         <CardContent className="flex-1 min-h-0 flex flex-col space-y-2">
           {selectionBar}
           {loading ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading...</div>
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">{t("loading")}</div>
           ) : (
             table(compactColumns, computePageSize(panelHeight, filteredData.length), false)
           )}
@@ -364,8 +370,8 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
       <ConfirmDialog
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
-        title={`Delete ${selected.size} item(s)?`}
-        description="This will permanently remove the selected rows."
+        title={t("deleteItemsConfirm", { count: selected.size })}
+        description={t("deleteSelectedRowsDescription")}
         loading={deleting}
         onConfirm={async () => {
           if (!onDeleteSelected) return

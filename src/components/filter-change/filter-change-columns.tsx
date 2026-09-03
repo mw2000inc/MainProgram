@@ -7,6 +7,7 @@ import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { TECHNICIANS } from "@/lib/constants"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
@@ -20,9 +21,10 @@ export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"
 // (see the filter_change_recurring_schedule migration) — 'manual' (the
 // default) is anything typed in directly on this page, same as always.
 function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
-  if (source === "ct_completion") return <StatusBadge tone="secondary" label="Auto (C/T)" />
-  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label="Recurring Schedule" />
-  return <span className="text-muted-foreground">Manual</span>
+  const { t } = useTranslation("fields")
+  if (source === "ct_completion") return <StatusBadge tone="secondary" label={t("autoCT")} />
+  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label={t("recurringSchedule")} />
+  return <span className="text-muted-foreground">{t("manual")}</span>
 }
 
 // A single interactive Status column when onStatusChange is provided
@@ -51,20 +53,20 @@ export function getFilterChangeColumns({
   return [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
     {
       accessorKey: "memberAccount",
-      header: "Member Account#",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
     },
     {
       accessorKey: "filterType",
-      header: "Filter",
+      header: () => <ColumnHeader tKey="filter" ns="fields" />,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
@@ -189,34 +191,34 @@ export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, un
   return [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
-    { accessorKey: "memberAccount", header: "Member Account#" },
-    { accessorKey: "filterType", header: "Filter" },
-    { accessorKey: "contactNumber", header: "Contact #" },
-    { accessorKey: "address", header: "Address" },
-    { accessorKey: "sc", header: "S/C" },
-    { accessorKey: "productNo", header: "Product #" },
+    { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
+    { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
+    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
+    { accessorKey: "sc", header: () => <ColumnHeader tKey="sc" ns="fields" /> },
+    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
-    { accessorKey: "serviceman", header: "Serviceman" },
+    { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
     {
       accessorKey: "source",
-      header: "Source",
+      header: () => <ColumnHeader tKey="source" ns="fields" />,
       cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
   ]
@@ -236,43 +238,43 @@ export function getFilterChangeFullColumns({
   const columns: ColumnDef<FilterChangePlan, unknown>[] = [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
-    { accessorKey: "memberAccount", header: "Member Account#" },
-    { accessorKey: "filterType", header: "Filter" },
-    { accessorKey: "contactNumber", header: "Contact #" },
-    { accessorKey: "address", header: "Address" },
+    { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
+    { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
+    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
     {
       accessorKey: "planDate",
-      header: "Plan D",
+      header: () => <ColumnHeader tKey="planD" ns="fields" />,
       cell: ({ row }) => formatDate(row.original.planDate),
     },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
-    { accessorKey: "productNo", header: "Product #" },
-    { accessorKey: "serviceman", header: "Serviceman" },
+    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
+    { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
     {
       accessorKey: "source",
-      header: "Source",
+      header: () => <ColumnHeader tKey="source" ns="fields" />,
       cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]

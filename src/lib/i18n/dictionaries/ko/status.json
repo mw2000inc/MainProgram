@@ -12,5 +12,8 @@
   "partial": "부분 결제",
   "completed": "완료",
   "cancelled": "취소됨",
-  "collected": "수거 완료"
+  "collected": "수거 완료",
+  "inactive": "비활성",
+  "rent": "렌트",
+  "diy": "DIY"
 }

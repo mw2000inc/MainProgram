@@ -1,0 +1,11 @@
+{
+  "editTitle": "Edit Repair Plan",
+  "addTitle": "Add Repair Plan",
+  "editDescription": "Update this repair record.",
+  "addDescription": "Log a repair request for a customer's order.",
+  "orderNoDot": "Order No.",
+  "selectOrderNumber": "Select order number",
+  "describeIssue": "Describe the issue",
+  "optional": "Optional",
+  "selectTechnician": "Select technician"
+}

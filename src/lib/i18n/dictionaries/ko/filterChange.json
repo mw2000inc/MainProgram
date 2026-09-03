@@ -1,0 +1,10 @@
+{
+  "editTitle": "필터 교체 계획 수정",
+  "addTitle": "필터 교체 계획 추가",
+  "editDescription": "이 필터 교체 계획을 업데이트합니다.",
+  "addDescription": "고객 주문에 대한 필터 교체 일정을 예약합니다.",
+  "date": "날짜",
+  "accountOrCompanyName": "계정 또는 회사명",
+  "technicianName": "기술자 이름",
+  "serviceAddress": "서비스 주소"
+}

@@ -32,22 +32,25 @@ import {
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { RepairPlan } from "@/lib/types"
 
-const schema = z.object({
-  issuedDate: z.string().min(1, "Date is required"),
-  orderNo: z.string().min(1, "Select an order number"),
-  problem: z.string().min(1, "Problem is required"),
-  solutionStatus: z.string().optional(),
-  preD: z.string().optional(),
-  accD: z.string().optional(),
-  th: z.string().min(1, "Select a technician"),
-  partNo: z.string().optional(),
-  amt: z.string().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), "Must be zero or more"),
-  unitInOut: z.string().min(1),
-})
+function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+  return z.object({
+    issuedDate: z.string().min(1, t("requiredField", { field: tf("issuedDate") })),
+    orderNo: z.string().min(1, t("selectField", { field: tf("orderNo") })),
+    problem: z.string().min(1, t("requiredField", { field: tf("problem") })),
+    solutionStatus: z.string().optional(),
+    preD: z.string().optional(),
+    accD: z.string().optional(),
+    th: z.string().min(1, t("selectField", { field: tf("serviceman") })),
+    partNo: z.string().optional(),
+    amt: z.string().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), t("mustBeZeroOrMore")),
+    unitInOut: z.string().min(1),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: RepairPlan): FormValues {
   if (plan) {
@@ -99,6 +102,10 @@ export function RepairFormDialog({
   const createPlan = useCreateRepairPlan()
   const updatePlan = useUpdateRepairPlan()
   const { data: customers = [] } = useCustomers()
+  const { t } = useTranslation("repair")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNo, plan),
@@ -132,10 +139,8 @@ export function RepairFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Repair Plan" : "Add Repair Plan"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this repair record." : "Log a repair request for a customer's order."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -144,7 +149,7 @@ export function RepairFormDialog({
               name="issuedDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Issued Date</FormLabel>
+                  <FormLabel>{tFields("issuedDate")}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -157,11 +162,11 @@ export function RepairFormDialog({
               name="orderNo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Order No.</FormLabel>
+                  <FormLabel>{t("orderNoDot")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select order number" />
+                        <SelectValue placeholder={t("selectOrderNumber")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -181,9 +186,9 @@ export function RepairFormDialog({
               name="problem"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Problem</FormLabel>
+                  <FormLabel>{tFields("problem")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Describe the issue" {...field} />
+                    <Input placeholder={t("describeIssue")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -194,9 +199,9 @@ export function RepairFormDialog({
               name="solutionStatus"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Solution / Status</FormLabel>
+                  <FormLabel>{tFields("solutionStatus")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Optional" {...field} />
+                    <Input placeholder={t("optional")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -207,7 +212,7 @@ export function RepairFormDialog({
               name="preD"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Pre D</FormLabel>
+                  <FormLabel>{tFields("preD")}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -220,7 +225,7 @@ export function RepairFormDialog({
               name="accD"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Acc D</FormLabel>
+                  <FormLabel>{tFields("accD")}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -233,17 +238,17 @@ export function RepairFormDialog({
               name="th"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>TH</FormLabel>
+                  <FormLabel>{tFields("th")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select technician" />
+                        <SelectValue placeholder={t("selectTechnician")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {TECHNICIANS.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      {TECHNICIANS.map((tech) => (
+                        <SelectItem key={tech} value={tech}>
+                          {tech}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -257,9 +262,9 @@ export function RepairFormDialog({
               name="partNo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Part No</FormLabel>
+                  <FormLabel>{tFields("partNo")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Optional" {...field} />
+                    <Input placeholder={t("optional")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -270,7 +275,7 @@ export function RepairFormDialog({
               name="amt"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>AMT</FormLabel>
+                  <FormLabel>{tFields("amt")}</FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" min="0" {...field} />
                   </FormControl>
@@ -283,7 +288,7 @@ export function RepairFormDialog({
               name="unitInOut"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Unit IN/OUT</FormLabel>
+                  <FormLabel>{tFields("unitInOut")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -301,10 +306,10 @@ export function RepairFormDialog({
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Save"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("save")}
               </Button>
             </DialogFooter>
           </form>

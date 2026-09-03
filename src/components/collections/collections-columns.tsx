@@ -25,8 +25,9 @@ export const COLLECTIONS_STATUS_OPTIONS = ["Pending", "Collected", "Cancelled"] 
 // list lives on schedule_job_filter_items, not duplicated here; this just
 // flags that one exists.
 function FilterChangeRequiredCell({ required }: { required: boolean | undefined }) {
+  const { t } = useTranslation("fields")
   if (!required) return <span className="text-muted-foreground">—</span>
-  return <StatusBadge tone="warning" label="Required" />
+  return <StatusBadge tone="warning" label={t("required")} />
 }
 
 // Named component (not an inline arrow function in the cell def below) —
@@ -57,9 +58,10 @@ function NoteCell({
 // 'ct_completion' ones from a completed job's filter items; 'manual' (the
 // default) is anything typed in directly on this page.
 function SourceCell({ source }: { source: CollectionPlan["source"] }) {
-  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label="Recurring" />
-  if (source === "ct_completion") return <StatusBadge tone="secondary" label="Auto (C/T)" />
-  return <span className="text-muted-foreground">Manual</span>
+  const { t } = useTranslation("fields")
+  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label={t("recurring")} />
+  if (source === "ct_completion") return <StatusBadge tone="secondary" label={t("autoCT")} />
+  return <span className="text-muted-foreground">{t("manual")}</span>
 }
 
 // A single interactive Status column when onStatusChange is provided
@@ -89,44 +91,44 @@ export function getCollectionsColumns({
   return [
     {
       accessorKey: "orderNo",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
     },
-    { accessorKey: "accountName", header: "Member Account#" },
+    { accessorKey: "accountName", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
     {
       accessorKey: "amount",
-      header: "Amount",
+      header: () => <ColumnHeader tKey="amount" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.amount),
     },
-    { accessorKey: "ct", header: "C/T" },
+    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
     {
       accessorKey: "collectionDate",
-      header: "Plan D",
+      header: () => <ColumnHeader tKey="planD" ns="fields" />,
       cell: ({ row }) => formatDate(row.original.collectionDate),
     },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
     {
       accessorKey: "filterChangeRequired",
-      header: "Filter Change",
+      header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
     },
   ]
@@ -234,19 +236,19 @@ export function getCollectionsFullColumns({
   const columns: ColumnDef<CollectionPlan, unknown>[] = [
     {
       accessorKey: "orderNo",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
     },
-    { accessorKey: "accountName", header: "Member Account#" },
+    { accessorKey: "accountName", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
     {
       accessorKey: "amount",
-      header: "Amount",
+      header: () => <ColumnHeader tKey="amount" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.amount),
     },
-    { accessorKey: "ct", header: "C/T" },
+    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
     {
       accessorKey: "collectionDate",
-      header: "Plan D",
+      header: () => <ColumnHeader tKey="planD" ns="fields" />,
       cell: ({ row }) =>
         canEditDate ? (
           <button
@@ -265,32 +267,32 @@ export function getCollectionsFullColumns({
     },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
     {
       accessorKey: "filterChangeRequired",
-      header: "Filter Change",
+      header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
     {
       accessorKey: "source",
-      header: "Source",
+      header: () => <ColumnHeader tKey="source" ns="fields" />,
       cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
     },
   ]

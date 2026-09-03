@@ -12,5 +12,8 @@
   "partial": "Partial",
   "completed": "Completed",
   "cancelled": "Cancelled",
-  "collected": "Collected"
+  "collected": "Collected",
+  "inactive": "Inactive",
+  "rent": "Rent",
+  "diy": "DIY"
 }

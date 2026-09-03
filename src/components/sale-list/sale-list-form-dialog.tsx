@@ -37,9 +37,11 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { ctIntervalMonths } from "@/lib/ct-interval"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT", "DIY"]
+const STATUS_KEYS: Record<SaleListStatus, string> = { ACTIVE: "active", INACTIVE: "inactive", RENT: "rent", DIY: "diy" }
 
 // The legacy AppSheet catalog stays alongside live Inventory products rather
 // than being replaced — productNo is (and remains) free text with no FK, so
@@ -55,23 +57,29 @@ const LEGACY_PRODUCT_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
 // offered below it.
 const CT_OPTIONS: ComboboxOption[] = ["Yearly", "Half Year", "Quarterly", "Monthly"].map((value) => ({ value }))
 
-const schema = z.object({
-  orderNumber: z.string().min(1, "Order number is required"),
-  installedDate: z.string().optional(),
-  // "Account#" links to an existing Member rather than free text.
-  customerId: z.string().min(1, "Select a member"),
-  productNo: z.string().optional(),
-  sc: z.string().optional(),
-  cf: z.string().optional(),
-  ct: z.string().optional(),
-  cpY1Y2: z.string().optional(),
-  cpStart: z.string().optional(),
-  cpEnd: z.string().optional(),
-  note: z.string().optional(),
-  status: z.enum(["ACTIVE", "INACTIVE", "RENT", "DIY"]),
-})
+function createSchema(
+  t: (key: string) => string,
+  tCommon: (key: string, params?: Record<string, string>) => string,
+  tf: (key: string) => string
+) {
+  return z.object({
+    orderNumber: z.string().min(1, tCommon("requiredField", { field: tf("orderNumber") })),
+    installedDate: z.string().optional(),
+    // "Account#" links to an existing Member rather than free text.
+    customerId: z.string().min(1, t("selectMemberRequired")),
+    productNo: z.string().optional(),
+    sc: z.string().optional(),
+    cf: z.string().optional(),
+    ct: z.string().optional(),
+    cpY1Y2: z.string().optional(),
+    cpStart: z.string().optional(),
+    cpEnd: z.string().optional(),
+    note: z.string().optional(),
+    status: z.enum(["ACTIVE", "INACTIVE", "RENT", "DIY"]),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormValues {
   if (entry) {
@@ -133,6 +141,11 @@ export function SaleListFormDialog({
   const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
   const { data: products = [] } = useProducts()
+  const { t } = useTranslation("saleList")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
+  const schema = React.useMemo(() => createSchema(t, tCommon, tFields), [t, tCommon, tFields])
 
   // Live Inventory products merged in alongside the legacy catalog — grouped
   // by category (Purifiers/Filters/Accessories) the same way legacy entries
@@ -195,10 +208,8 @@ export function SaleListFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Sale List Entry" : "Add Sale List Entry"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this member's install / care-plan coverage." : "Track a member's install / care-plan coverage."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -208,7 +219,7 @@ export function SaleListFormDialog({
                 name="orderNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Order Number</FormLabel>
+                    <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
                       <Input placeholder="001-0001" {...field} />
                     </FormControl>
@@ -221,11 +232,11 @@ export function SaleListFormDialog({
                 name="customerId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account# (Member)</FormLabel>
+                    <FormLabel>{tFields("accountMember")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select member" />
+                          <SelectValue placeholder={t("selectMember")} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -246,7 +257,7 @@ export function SaleListFormDialog({
                 name="installedDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Installed Date</FormLabel>
+                    <FormLabel>{tFields("installedDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -259,7 +270,7 @@ export function SaleListFormDialog({
                 name="productNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Product#</FormLabel>
+                    <FormLabel>{tFields("productNo")}</FormLabel>
                     <FormControl>
                       {/* Same combobox pattern as C/T below — a real text input
                           (so a value outside the catalog, e.g. legacy data, is
@@ -269,7 +280,7 @@ export function SaleListFormDialog({
                         value={field.value ?? ""}
                         onChange={field.onChange}
                         options={productOptions}
-                        placeholder="e.g. 101 / MW) F7"
+                        placeholder={t("productPlaceholder")}
                       />
                     </FormControl>
                     <FormMessage />
@@ -281,9 +292,9 @@ export function SaleListFormDialog({
                 name="sc"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>S/C</FormLabel>
+                    <FormLabel>{tFields("sc")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -294,9 +305,9 @@ export function SaleListFormDialog({
                 name="cf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>C/F</FormLabel>
+                    <FormLabel>{tFields("cf")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -307,13 +318,13 @@ export function SaleListFormDialog({
                 name="ct"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>C/T (Optional)</FormLabel>
+                    <FormLabel>{tFields("ct")} ({tCommon("optional")})</FormLabel>
                     <FormControl>
                       <Combobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
                         options={CT_OPTIONS}
-                        placeholder="e.g. Yearly"
+                        placeholder={t("ctPlaceholder")}
                       />
                     </FormControl>
                     <FormMessage />
@@ -325,9 +336,9 @@ export function SaleListFormDialog({
                 name="cpY1Y2"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CP y1/y2</FormLabel>
+                    <FormLabel>{tFields("cpY1Y2")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 1" {...field} />
+                      <Input placeholder={t("cpY1Y2Placeholder")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -338,7 +349,7 @@ export function SaleListFormDialog({
                 name="cpStart"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CP start</FormLabel>
+                    <FormLabel>{tFields("cpStart")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -351,7 +362,7 @@ export function SaleListFormDialog({
                 name="cpEnd"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CP end</FormLabel>
+                    <FormLabel>{tFields("cpEnd")}</FormLabel>
                     <FormControl>
                       {/* Auto-filled to one year after CP start (see the effect
                           above) until the admin edits this field directly —
@@ -374,7 +385,7 @@ export function SaleListFormDialog({
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
+                    <FormLabel>{tFields("status")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -384,7 +395,7 @@ export function SaleListFormDialog({
                       <SelectContent>
                         {STATUSES.map((s) => (
                           <SelectItem key={s} value={s}>
-                            {s}
+                            {tStatus(STATUS_KEYS[s])}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -398,9 +409,9 @@ export function SaleListFormDialog({
                 name="note"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Note</FormLabel>
+                    <FormLabel>{tFields("note")}</FormLabel>
                     <FormControl>
-                      <Textarea rows={2} placeholder="Optional notes..." {...field} />
+                      <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -409,10 +420,10 @@ export function SaleListFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

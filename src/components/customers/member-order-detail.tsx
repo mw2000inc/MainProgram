@@ -25,6 +25,7 @@ import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, todayIso as today } from "@/lib/utils"
 import type { Permission } from "@/lib/auth/auth-context"
 import type { Customer } from "@/lib/types"
@@ -68,6 +69,8 @@ export function MemberOrderDetail({
   onSelectOrder: (row: SaleListRow) => void
 }) {
   const router = useRouter()
+  const { t } = useTranslation("member")
+  const { t: tFields } = useTranslation("fields")
   const deleteEntries = useDeleteSaleListEntries()
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: collections = [] } = useCollections()
@@ -114,7 +117,7 @@ export function MemberOrderDetail({
     <>
       <BreadcrumbTrail
         items={[
-          { label: "Member", onClick: onNavigateToList },
+          { label: t("breadcrumbMember"), onClick: onNavigateToList },
           { label: accountLabel, onClick: onClose },
           { label: entry.orderNumber },
         ]}
@@ -130,8 +133,8 @@ export function MemberOrderDetail({
               <DataTable
                 columns={narrowColumns}
                 data={rows}
-                searchPlaceholder="Search by order number..."
-                emptyMessage="No related sales for this member."
+                searchPlaceholder={t("searchByOrderNumber")}
+                emptyMessage={t("noRelatedSales")}
                 onRowClick={onSelectOrder}
               />
             </CardContent>
@@ -159,7 +162,7 @@ export function MemberOrderDetail({
                     below — matches the AppSheet order view's layout. */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   <OrderRelatedSection
-                    title="Filter Changes"
+                    title={t("filterChangesSection")}
                     icon={Droplets}
                     data={orderFilterChanges}
                     dateKey="planDate"
@@ -167,21 +170,21 @@ export function MemberOrderDetail({
                     expandedColumns={filterChangeExpandedColumns}
                     exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
                     exportFileName={`filter-changes-${entry.orderNumber}`}
-                    emptyMessage="No filter change history for this order."
+                    emptyMessage={t("noFilterChangeHistory")}
                     canAdd
                     onAdd={() => setFilterFormOpen(true)}
                     tableContainerClassName="overflow-x-auto scrollbar-always-visible"
                     tableClassName="min-w-[1000px] w-full"
                   />
                   <OrderRelatedSection
-                    title="Collections"
+                    title={t("collectionsSection")}
                     icon={Banknote}
                     data={orderCollections}
                     dateKey="collectionDate"
                     columns={collectionsColumns}
                     exportColumns={COLLECTIONS_EXPORT_COLUMNS}
                     exportFileName={`collections-${entry.orderNumber}`}
-                    emptyMessage="No collection history for this order."
+                    emptyMessage={t("noCollectionHistory")}
                     canAdd
                     onAdd={() => setCollectionFormOpen(true)}
                     tableContainerClassName="overflow-x-auto scrollbar-always-visible"
@@ -198,13 +201,13 @@ export function MemberOrderDetail({
                     ends up. */}
                 <div className="mt-6 clear-both">
                   <OrderRelatedSection
-                    title="Repairs"
+                    title={t("repairsSection")}
                     icon={Wrench}
                     data={orderRepairs}
                     columns={repairColumns}
                     exportColumns={REPAIR_EXPORT_COLUMNS}
                     exportFileName={`repairs-${entry.orderNumber}`}
-                    emptyMessage="No repair history for this order."
+                    emptyMessage={t("noRepairHistory")}
                     canAdd
                     onAdd={() => setRepairFormOpen(true)}
                     headerAlwaysRow
@@ -215,25 +218,25 @@ export function MemberOrderDetail({
           >
             {/* Single-column, one field per row — matches the AppSheet order
                 detail view's layout instead of the app-wide 2-column grid. */}
-            <DetailField label="Order Number" value={entry.orderNumber} className="sm:col-span-2" />
+            <DetailField label={tFields("orderNumber")} value={entry.orderNumber} className="sm:col-span-2" />
             <DetailField
-              label="Installed Date"
+              label={tFields("installedDate")}
               value={entry.installedDate ? formatDate(entry.installedDate) : undefined}
               className="sm:col-span-2"
             />
-            <DetailField label="Account#" value={entry.accountLabel} className="sm:col-span-2" />
-            <DetailField label="Product#" value={entry.productNo} className="sm:col-span-2" />
-            <DetailField label="S/C" value={entry.sc} className="sm:col-span-2" />
-            <DetailField label="C/F" value={entry.cf} className="sm:col-span-2" />
-            <DetailField label="C/T" value={entry.ct} className="sm:col-span-2" />
-            <DetailField label="CP y1/y2" value={entry.cpY1Y2} className="sm:col-span-2" />
+            <DetailField label={tFields("account")} value={entry.accountLabel} className="sm:col-span-2" />
+            <DetailField label={tFields("productNo")} value={entry.productNo} className="sm:col-span-2" />
+            <DetailField label={tFields("sc")} value={entry.sc} className="sm:col-span-2" />
+            <DetailField label={tFields("cf")} value={entry.cf} className="sm:col-span-2" />
+            <DetailField label={tFields("ct")} value={entry.ct} className="sm:col-span-2" />
+            <DetailField label={tFields("cpY1Y2")} value={entry.cpY1Y2} className="sm:col-span-2" />
             <DetailField
-              label="CP start"
+              label={tFields("cpStart")}
               value={entry.cpStart ? formatDate(entry.cpStart) : undefined}
               className="sm:col-span-2"
             />
             <DetailField
-              label="CP end"
+              label={tFields("cpEnd")}
               value={entry.cpEnd ? formatDate(entry.cpEnd) : undefined}
               className="sm:col-span-2"
             />
@@ -246,8 +249,8 @@ export function MemberOrderDetail({
       <ConfirmDialog
         open={deleting}
         onOpenChange={setDeleting}
-        title="Delete this sale list entry?"
-        description="This will permanently remove this record."
+        title={t("deleteSaleListEntryTitle")}
+        description={t("deleteSaleListEntryDescription")}
         loading={deleteEntries.isPending}
         onConfirm={async () => {
           await deleteEntries.mutateAsync([entry.id])

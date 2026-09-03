@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Customer } from "@/lib/types"
 
 // Physical card spec from the printable-card design: a single 4.5cm x 3cm
@@ -49,7 +50,13 @@ export function CustomerQrDialog({
   customer: Customer
   orderNumber?: string
 }) {
+  const { t } = useTranslation("member")
+  const { t: tCommon } = useTranslation("common")
   const isOrderCard = orderNumber !== undefined
+  // These two labels get baked directly into the printed/exported card (PNG,
+  // PDF, browser print) — kept in English regardless of interface language,
+  // same as the other modules' print/export column headers, so a physical
+  // card is never split mid-batch between two languages.
   const displayLabel = isOrderCard ? "Order #" : "Member Account #"
   const displayValue = isOrderCard ? orderNumber : customer.memberAccountNumber
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
@@ -74,7 +81,7 @@ export function CustomerQrDialog({
 
   function handleCopyLink() {
     navigator.clipboard.writeText(scanUrl)
-    toast.success("Scan link copied")
+    toast.success(t("scanLinkCopied"))
   }
 
   // --- PNG: compose the single card onto one canvas at ~300 DPI ---
@@ -171,10 +178,9 @@ export function CustomerQrDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Printable QR Card</DialogTitle>
+          <DialogTitle>{t("printableQrCard")}</DialogTitle>
           <DialogDescription>
-            One 4.5 × 3 cm card for {isOrderCard ? `order #${displayValue}` : `member account #${displayValue}`}.
-            Scanning opens a read-only profile — no login required.
+            {t(isOrderCard ? "qrDescriptionOrder" : "qrDescriptionMember", { value: displayValue ?? "" })}
           </DialogDescription>
         </DialogHeader>
 
@@ -188,7 +194,7 @@ export function CustomerQrDialog({
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopyLink}>
-            <Copy className="h-3.5 w-3.5" /> Copy
+            <Copy className="h-3.5 w-3.5" /> {tCommon("copy")}
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownloadPng}>
             <Download className="h-3.5 w-3.5" /> PNG
@@ -197,7 +203,7 @@ export function CustomerQrDialog({
             <FileText className="h-3.5 w-3.5" /> PDF
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
-            <Printer className="h-3.5 w-3.5" /> Print
+            <Printer className="h-3.5 w-3.5" /> {tCommon("print")}
           </Button>
         </DialogFooter>
       </DialogContent>

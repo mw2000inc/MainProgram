@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { updateCustomerCoordinates } from "@/lib/api/customers"
 import { geocodeAddress, sleep } from "@/lib/geo-client"
 import { makePinIcon } from "@/lib/leaflet-icons"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Customer } from "@/lib/types"
 
 const MANILA_CENTER: [number, number] = [14.6091, 121.0223]
@@ -24,7 +25,11 @@ const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyrigh
 // string) so a member's name/address can never break out of the popup as
 // markup — then wires the "Get Directions" button to the callback with a
 // plain event listener, since Leaflet popups live outside the React tree.
-function buildPopupContent(customer: Customer, onOpenDirections?: (customer: Customer) => void) {
+function buildPopupContent(
+  customer: Customer,
+  getDirectionsLabel: string,
+  onOpenDirections?: (customer: Customer) => void
+) {
   const root = document.createElement("div")
   root.className = "space-y-1.5 text-sm"
 
@@ -43,7 +48,7 @@ function buildPopupContent(customer: Customer, onOpenDirections?: (customer: Cus
   if (onOpenDirections) {
     const button = document.createElement("button")
     button.type = "button"
-    button.textContent = "Get Directions"
+    button.textContent = getDirectionsLabel
     button.className =
       "mt-1 inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted"
     button.addEventListener("click", () => onOpenDirections(customer))
@@ -76,6 +81,7 @@ export function MemberMapPanel({
   const [ready, setReady] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [searching, setSearching] = React.useState(false)
+  const { t } = useTranslation("member")
 
   // Initialize the map once.
   React.useEffect(() => {
@@ -134,7 +140,7 @@ export function MemberMapPanel({
         const marker = leaflet!
           .marker([lat, lon], { icon: makePinIcon(leaflet!, "#2563eb") })
           .addTo(map!)
-          .bindPopup(buildPopupContent(customer, onOpenDirections))
+          .bindPopup(buildPopupContent(customer, t("getDirections"), onOpenDirections))
         markersRef.current.push(marker)
         bounds.extend([lat, lon])
         plotted++
@@ -161,7 +167,7 @@ export function MemberMapPanel({
     try {
       const result = await geocodeAddress(query)
       if (!result) {
-        toast.error("Couldn't find that address.")
+        toast.error(t("addressNotFound"))
         return
       }
       searchMarkerRef.current?.remove()
@@ -180,13 +186,13 @@ export function MemberMapPanel({
     <Card className="flex h-[600px] flex-col">
       <CardHeader className="gap-2 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <MapPin className="h-4 w-4 text-primary" /> Map
+          <MapPin className="h-4 w-4 text-primary" /> {t("map")}
         </CardTitle>
         <form onSubmit={handleSearch} className="flex gap-1.5">
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search any address..."
+            placeholder={t("searchAnyAddress")}
             className="h-8 text-sm"
           />
           <Button type="submit" size="icon" variant="outline" className="h-8 w-8 shrink-0" disabled={searching}>

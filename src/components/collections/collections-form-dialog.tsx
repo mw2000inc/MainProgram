@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CollectionPlan } from "@/lib/types"
 
 // This form had no way to actually mark a collection Collected before —
@@ -41,19 +42,24 @@ import type { CollectionPlan } from "@/lib/types"
 // PlanStatusBadge already recognizes it as the same success tone).
 const STATUS_OPTIONS = ["Pending", "Collected", "Cancelled"] as const
 
-const schema = z.object({
-  orderNo: z.string().min(1, "Order number is required"),
-  accountName: z.string().min(1, "Member account is required"),
-  amount: z.string().min(1, "Amount is required").refine((v) => !Number.isNaN(Number(v)) && Number(v) >= 0, "Amount must be zero or more"),
-  ct: z.string().optional(),
-  collectionDate: z.string().min(1, "Date is required"),
-  status: z.string().min(1),
-  preD: z.string().optional(),
-  accD: z.string().optional(),
-  note: z.string().optional(),
-})
+function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+  return z.object({
+    orderNo: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
+    accountName: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
+    amount: z
+      .string()
+      .min(1, t("requiredField", { field: tf("amount") }))
+      .refine((v) => !Number.isNaN(Number(v)) && Number(v) >= 0, t("mustBeZeroOrMore")),
+    ct: z.string().optional(),
+    collectionDate: z.string().min(1, t("requiredField", { field: tf("planD") })),
+    status: z.string().min(1),
+    preD: z.string().optional(),
+    accD: z.string().optional(),
+    note: z.string().optional(),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: CollectionPlan): FormValues {
   if (entry) {
@@ -100,6 +106,11 @@ export function CollectionsFormDialog({
   const isEdit = !!entry
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
+  const { t } = useTranslation("collection")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
+  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNo, entry),
@@ -129,14 +140,14 @@ export function CollectionsFormDialog({
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? (entry.source === "recurring_schedule" ? "Edit Collection Schedule" : "Edit Collection Plan") : "Add Collection Plan"}
+            {isEdit ? (entry.source === "recurring_schedule" ? t("editScheduleTitle") : t("editTitle")) : t("addTitle")}
           </DialogTitle>
           <DialogDescription>
             {isEdit
               ? entry.source === "recurring_schedule"
-                ? "This occurrence is part of an auto-generated recurring schedule. Changing its date reschedules every later still-Pending occurrence to follow from it, at the same C/T interval — an already-Collected occurrence is never affected."
-                : "Update this collection record."
-              : "Schedule a payment collection."}
+                ? t("recurringScheduleDescription")
+                : t("editDescription")
+              : t("addDescription")}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -147,7 +158,7 @@ export function CollectionsFormDialog({
                 name="orderNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Order Number</FormLabel>
+                    <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
                       <Input placeholder="SK001-0001" {...field} />
                     </FormControl>
@@ -160,9 +171,9 @@ export function CollectionsFormDialog({
                 name="accountName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Member Account#</FormLabel>
+                    <FormLabel>{tFields("memberAccount")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Customer or business name" {...field} />
+                      <Input placeholder={t("customerOrBusinessName")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -173,7 +184,7 @@ export function CollectionsFormDialog({
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount</FormLabel>
+                    <FormLabel>{tFields("amount")}</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
@@ -186,9 +197,9 @@ export function CollectionsFormDialog({
                 name="ct"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>C/T</FormLabel>
+                    <FormLabel>{tFields("ct")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -199,7 +210,7 @@ export function CollectionsFormDialog({
                 name="collectionDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Plan D</FormLabel>
+                    <FormLabel>{tFields("planD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -212,7 +223,7 @@ export function CollectionsFormDialog({
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
+                    <FormLabel>{tFields("status")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -222,7 +233,7 @@ export function CollectionsFormDialog({
                       <SelectContent>
                         {STATUS_OPTIONS.map((s) => (
                           <SelectItem key={s} value={s}>
-                            {s}
+                            {tStatus(s.toLowerCase())}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -236,7 +247,7 @@ export function CollectionsFormDialog({
                 name="preD"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Pre D</FormLabel>
+                    <FormLabel>{tFields("preD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -249,7 +260,7 @@ export function CollectionsFormDialog({
                 name="accD"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Acc D</FormLabel>
+                    <FormLabel>{tFields("accD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -262,9 +273,9 @@ export function CollectionsFormDialog({
                 name="note"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Note</FormLabel>
+                    <FormLabel>{tFields("note")}</FormLabel>
                     <FormControl>
-                      <Textarea rows={2} placeholder="Optional notes..." {...field} />
+                      <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -273,10 +284,10 @@ export function CollectionsFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

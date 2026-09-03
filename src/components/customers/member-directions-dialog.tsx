@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { fetchDirections } from "@/lib/geo-client"
 import { makePinIcon } from "@/lib/leaflet-icons"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 type Status = "loading" | "ready" | "no-route" | "error"
 
@@ -55,6 +56,7 @@ export function MemberDirectionsDialog({
   onDestinationGeocoded?: (lat: number, lon: number) => void
   destinationLabel: string
 }) {
+  const { t } = useTranslation("member")
   const mapDivRef = React.useRef<HTMLDivElement>(null)
   const mapRef = React.useRef<L.Map | null>(null)
   const [status, setStatus] = React.useState<Status>("loading")
@@ -84,9 +86,7 @@ export function MemberDirectionsDialog({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus("error")
       setRetryable(false)
-      setErrorMessage(
-        !originAddress.trim() ? "The office address isn't set in Settings yet." : "This member has no address on file."
-      )
+      setErrorMessage(!originAddress.trim() ? t("officeAddressNotSet") : t("memberHasNoAddress"))
       return
     }
     setStatus("loading")
@@ -143,7 +143,7 @@ export function MemberDirectionsDialog({
       if (cancelled) return
       setStatus("error")
       setRetryable(true)
-      setErrorMessage("Failed to load directions.")
+      setErrorMessage(t("failedToLoadDirections"))
     })
 
     return () => {
@@ -151,36 +151,36 @@ export function MemberDirectionsDialog({
       mapRef.current?.remove()
       mapRef.current = null
     }
-  }, [open, originAddress, destinationAddress, destinationLabel, retryToken])
+  }, [open, originAddress, destinationAddress, destinationLabel, retryToken, t])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Navigation className="h-4 w-4" /> Directions to {destinationLabel}
+            <Navigation className="h-4 w-4" /> {t("directionsTo", { name: destinationLabel })}
           </DialogTitle>
           <DialogDescription>
-            Driving route from the MW2000 office to {destinationAddress || "this member's address"}.
+            {t("drivingRouteDescription", { address: destinationAddress || t("thisMembersAddress") })}
           </DialogDescription>
         </DialogHeader>
 
         {status === "error" && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
-            <p>Directions unavailable.</p>
+            <p>{t("directionsUnavailable")}</p>
             <p className="text-xs">{errorMessage}</p>
             {retryable && (
-              <Button variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => setRetryToken((t) => t + 1)}>
-                <RotateCw className="h-3.5 w-3.5" /> Try again
+              <Button variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => setRetryToken((n) => n + 1)}>
+                <RotateCw className="h-3.5 w-3.5" /> {t("tryAgain")}
               </Button>
             )}
           </div>
         )}
         {status === "no-route" && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
-            <p>No driving route found between these two addresses.</p>
-            <Button variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => setRetryToken((t) => t + 1)}>
-              <RotateCw className="h-3.5 w-3.5" /> Try again
+            <p>{t("noRouteFound")}</p>
+            <Button variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => setRetryToken((n) => n + 1)}>
+              <RotateCw className="h-3.5 w-3.5" /> {t("tryAgain")}
             </Button>
           </div>
         )}
@@ -188,7 +188,7 @@ export function MemberDirectionsDialog({
           <>
             {summary && (
               <p className="text-sm text-muted-foreground">
-                {summary.distanceKm} km &middot; about {summary.durationMin} min by car
+                {t("distanceSummary", { km: summary.distanceKm, min: summary.durationMin })}
               </p>
             )}
             <div className="relative h-[420px] w-full">
@@ -198,7 +198,7 @@ export function MemberDirectionsDialog({
                   blank box that easily read as broken rather than working. */}
               {status === "loading" && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-md border bg-muted/40 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading directions...
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("loadingDirections")}
                 </div>
               )}
               <div ref={mapDivRef} className="h-full w-full rounded-md border" />

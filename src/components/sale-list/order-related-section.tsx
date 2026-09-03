@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import type { ExportColumn } from "@/components/shared/export-buttons"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn } from "@/lib/utils"
 
 function yearMonth(value: string) {
@@ -51,6 +52,7 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
   tableClassName?: string
   headerAlwaysRow?: boolean
 }) {
+  const { t } = useTranslation("common")
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
 
   const monthGroups = React.useMemo(() => {
@@ -85,7 +87,7 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
               selectedMonth === "all" && "bg-accent font-medium"
             )}
           >
-            All
+            {t("all")}
             <Badge variant="secondary">{data.length}</Badge>
           </button>
           {monthGroups.map((g) => (
@@ -112,7 +114,7 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
         data={scopedData}
         emptyMessage={emptyMessage}
         canAdd={canAdd}
-        addLabel="Add"
+        addLabel={t("add")}
         onAdd={onAdd}
         exportColumns={exportColumns}
         exportFileName={exportFileName}

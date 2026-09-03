@@ -24,24 +24,30 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { FilterChangePlan } from "@/lib/types"
 
-const schema = z.object({
-  orderNumber: z.string().min(1, "Order number is required"),
-  memberAccount: z.string().min(1, "Member account is required"),
-  filterType: z.string().min(1, "Filter type is required"),
-  planDate: z.string().min(1, "Date is required"),
-  contactNumber: z.string().optional(),
-  address: z.string().optional(),
-  sc: z.string().optional(),
-  productNo: z.string().optional(),
-  preD: z.string().optional(),
-  accD: z.string().optional(),
-  serviceman: z.string().optional(),
-  note: z.string().optional(),
-})
+// A factory, not a module-scope constant — validation messages need t(),
+// which only exists once useTranslation() has run inside the component (see
+// the login page's own schema factories for the original precedent).
+function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+  return z.object({
+    orderNumber: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
+    memberAccount: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
+    filterType: z.string().min(1, t("requiredField", { field: tf("filter") })),
+    planDate: z.string().min(1, t("requiredField", { field: tf("planD") })),
+    contactNumber: z.string().optional(),
+    address: z.string().optional(),
+    sc: z.string().optional(),
+    productNo: z.string().optional(),
+    preD: z.string().optional(),
+    accD: z.string().optional(),
+    serviceman: z.string().optional(),
+    note: z.string().optional(),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: FilterChangePlan): FormValues {
   if (plan) {
@@ -95,6 +101,10 @@ export function FilterChangeFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
   const updatePlan = useUpdateFilterChangePlan()
+  const { t } = useTranslation("filterChange")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNumber, plan),
@@ -132,10 +142,8 @@ export function FilterChangeFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Filter Change Plan" : "Add Filter Change Plan"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update this filter change plan." : "Schedule a filter change for a customer's order."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -145,7 +153,7 @@ export function FilterChangeFormDialog({
                 name="orderNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Order Number</FormLabel>
+                    <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
                       <Input placeholder="SK001-0001" {...field} />
                     </FormControl>
@@ -158,9 +166,9 @@ export function FilterChangeFormDialog({
                 name="memberAccount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Member Account#</FormLabel>
+                    <FormLabel>{tFields("memberAccount")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Account or company name" {...field} />
+                      <Input placeholder={t("accountOrCompanyName")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -171,7 +179,7 @@ export function FilterChangeFormDialog({
                 name="filterType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Filter</FormLabel>
+                    <FormLabel>{tFields("filter")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. 012, 013" {...field} />
                     </FormControl>
@@ -184,7 +192,7 @@ export function FilterChangeFormDialog({
                 name="contactNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact #</FormLabel>
+                    <FormLabel>{tFields("contactNumber")}</FormLabel>
                     <FormControl>
                       <Input placeholder="09171234567" {...field} />
                     </FormControl>
@@ -197,9 +205,9 @@ export function FilterChangeFormDialog({
                 name="address"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{tFields("address")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Service address" {...field} />
+                      <Input placeholder={t("serviceAddress")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -210,7 +218,7 @@ export function FilterChangeFormDialog({
                 name="sc"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>S/C</FormLabel>
+                    <FormLabel>{tFields("sc")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. UF44 / UF4" {...field} />
                     </FormControl>
@@ -223,7 +231,7 @@ export function FilterChangeFormDialog({
                 name="productNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Product #</FormLabel>
+                    <FormLabel>{tFields("productNo")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. 103 / MW) Hercules" {...field} />
                     </FormControl>
@@ -236,7 +244,7 @@ export function FilterChangeFormDialog({
                 name="preD"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Pre D</FormLabel>
+                    <FormLabel>{tFields("preD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -249,7 +257,7 @@ export function FilterChangeFormDialog({
                 name="accD"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Acc D</FormLabel>
+                    <FormLabel>{tFields("accD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -262,9 +270,9 @@ export function FilterChangeFormDialog({
                 name="serviceman"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Serviceman</FormLabel>
+                    <FormLabel>{tFields("serviceman")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Technician name" {...field} />
+                      <Input placeholder={t("technicianName")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -275,7 +283,7 @@ export function FilterChangeFormDialog({
                 name="planDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date</FormLabel>
+                    <FormLabel>{t("date")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -288,9 +296,9 @@ export function FilterChangeFormDialog({
                 name="note"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Note</FormLabel>
+                    <FormLabel>{tFields("note")}</FormLabel>
                     <FormControl>
-                      <Textarea rows={2} placeholder="Optional notes..." {...field} />
+                      <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -299,10 +307,10 @@ export function FilterChangeFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

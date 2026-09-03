@@ -1,0 +1,9 @@
+{
+  "editScheduleTitle": "수거 일정 수정",
+  "editTitle": "수거 계획 수정",
+  "addTitle": "수거 계획 추가",
+  "recurringScheduleDescription": "이 항목은 자동 생성된 정기 일정의 일부입니다. 날짜를 변경하면 이후의 대기 중인(Pending) 모든 항목이 동일한 C/T 간격으로 재조정됩니다 — 이미 수거 완료된 항목은 영향을 받지 않습니다.",
+  "editDescription": "이 수거 기록을 업데이트합니다.",
+  "addDescription": "수금 일정을 예약합니다.",
+  "customerOrBusinessName": "고객 또는 업체명"
+}

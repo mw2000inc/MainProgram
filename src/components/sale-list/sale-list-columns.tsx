@@ -4,37 +4,148 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Pencil, QrCode, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { SaleListEntry } from "@/lib/types"
 
 export type SaleListRow = SaleListEntry & { accountLabel: string }
 
 export function StatusCell({ status }: { status: SaleListEntry["status"] }) {
+  const { t } = useTranslation("status")
   if (status === "RENT") {
     return (
       <Badge variant="outline" className="border-warning/20 bg-warning/10 text-warning font-medium">
-        RENT
+        {t("rent")}
       </Badge>
     )
   }
   if (status === "DIY") {
     return (
       <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary font-medium">
-        DIY
+        {t("diy")}
       </Badge>
     )
   }
   if (status === "INACTIVE") {
     return (
       <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
-        INACTIVE
+        {t("inactive")}
       </Badge>
     )
   }
   return (
     <Badge variant="outline" className="border-success/20 bg-success/10 text-success font-medium">
-      ACTIVE
+      {t("active")}
     </Badge>
+  )
+}
+
+function ActionsCell({
+  entry,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: {
+  entry: SaleListRow
+  canEdit: boolean
+  canDelete: boolean
+  onEdit: (entry: SaleListRow) => void
+  onDelete: (entry: SaleListRow) => void
+}) {
+  const { t } = useTranslation("common")
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {canEdit && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={t("edit")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(entry)
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-danger hover:text-danger"
+          title={t("delete")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(entry)
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function SummaryActionsCell({
+  entry,
+  onQrClick,
+  onEditClick,
+  onDeleteClick,
+}: {
+  entry: SaleListRow
+  onQrClick?: (entry: SaleListRow) => void
+  onEditClick?: (entry: SaleListRow) => void
+  onDeleteClick?: (entry: SaleListRow) => void
+}) {
+  const { t } = useTranslation("common")
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {onEditClick && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={t("edit")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEditClick(entry)
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {onQrClick && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={t("qrCode")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onQrClick(entry)
+          }}
+        >
+          <QrCode className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {onDeleteClick && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-danger hover:text-danger"
+          title={t("delete")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDeleteClick(entry)
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -55,42 +166,42 @@ export function getSaleListColumns({
   const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
     {
       accessorKey: "installedDate",
-      header: "Installed Date",
+      header: () => <ColumnHeader tKey="installedDate" ns="fields" />,
       cell: ({ row }) => (row.original.installedDate ? formatDate(row.original.installedDate) : "—"),
     },
     {
       accessorKey: "accountLabel",
-      header: "Account#",
+      header: () => <ColumnHeader tKey="account" ns="fields" />,
       cell: ({ row }) => row.original.accountLabel || "—",
     },
-    { accessorKey: "productNo", header: "Product#" },
-    { accessorKey: "sc", header: "S/C" },
-    { accessorKey: "cf", header: "C/F" },
-    { accessorKey: "ct", header: "C/T" },
-    { accessorKey: "cpY1Y2", header: "CP y1/y2" },
+    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
+    { accessorKey: "sc", header: () => <ColumnHeader tKey="sc" ns="fields" /> },
+    { accessorKey: "cf", header: () => <ColumnHeader tKey="cf" ns="fields" /> },
+    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
+    { accessorKey: "cpY1Y2", header: () => <ColumnHeader tKey="cpY1Y2" ns="fields" /> },
     {
       accessorKey: "cpStart",
-      header: "CP start",
+      header: () => <ColumnHeader tKey="cpStart" ns="fields" />,
       cell: ({ row }) => (row.original.cpStart ? formatDate(row.original.cpStart) : "—"),
     },
     {
       accessorKey: "cpEnd",
-      header: "CP end",
+      header: () => <ColumnHeader tKey="cpEnd" ns="fields" />,
       cell: ({ row }) => (row.original.cpEnd ? formatDate(row.original.cpEnd) : "—"),
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell status={row.original.status} />,
     },
   ]
@@ -100,36 +211,7 @@ export function getSaleListColumns({
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          {canEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(row.original)
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-danger hover:text-danger"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(row.original)
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <ActionsCell entry={row.original} canEdit={canEdit} canDelete={canDelete} onEdit={onEdit} onDelete={onDelete} />
       ),
     })
   }
@@ -144,7 +226,7 @@ export function getSaleListOrderNumberColumn(): ColumnDef<SaleListRow, unknown>[
   return [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
   ]
@@ -168,21 +250,21 @@ export function getSaleListSummaryColumns({
   const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
     {
       accessorKey: "installedDate",
-      header: "Installed Date",
+      header: () => <ColumnHeader tKey="installedDate" ns="fields" />,
       cell: ({ row }) => (row.original.installedDate ? formatDate(row.original.installedDate) : "—"),
     },
     {
       accessorKey: "accountLabel",
-      header: "Account#",
+      header: () => <ColumnHeader tKey="account" ns="fields" />,
       cell: ({ row }) => row.original.accountLabel || "—",
     },
-    { accessorKey: "productNo", header: "Product#" },
-    { accessorKey: "sc", header: "S/C" },
+    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
+    { accessorKey: "sc", header: () => <ColumnHeader tKey="sc" ns="fields" /> },
   ]
 
   if (onEditClick || onQrClick || onDeleteClick) {
@@ -190,50 +272,7 @@ export function getSaleListSummaryColumns({
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          {onEditClick && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEditClick(row.original)
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {onQrClick && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="QR Code"
-              onClick={(e) => {
-                e.stopPropagation()
-                onQrClick(row.original)
-              }}
-            >
-              <QrCode className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {onDeleteClick && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-danger hover:text-danger"
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDeleteClick(row.original)
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <SummaryActionsCell entry={row.original} onQrClick={onQrClick} onEditClick={onEditClick} onDeleteClick={onDeleteClick} />
       ),
     })
   }
@@ -247,6 +286,9 @@ export function getSaleListRowClassName(entry: SaleListRow) {
   return cn(entry.status === "INACTIVE" && "line-through text-muted-foreground")
 }
 
+// Print/export column headers stay in English regardless of interface
+// language — deferred to the long-tail phase alongside the other modules'
+// export column arrays (see the phased i18n plan).
 export const SALE_LIST_EXPORT_COLUMNS = [
   { header: "Order Number", key: "orderNumber" },
   { header: "Installed Date", key: "installedDate" },

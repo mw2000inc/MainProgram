@@ -1,0 +1,9 @@
+{
+  "editScheduleTitle": "Edit Collection Schedule",
+  "editTitle": "Edit Collection Plan",
+  "addTitle": "Add Collection Plan",
+  "recurringScheduleDescription": "This occurrence is part of an auto-generated recurring schedule. Changing its date reschedules every later still-Pending occurrence to follow from it, at the same C/T interval — an already-Collected occurrence is never affected.",
+  "editDescription": "Update this collection record.",
+  "addDescription": "Schedule a payment collection.",
+  "customerOrBusinessName": "Customer or business name"
+}

@@ -24,24 +24,31 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { todayIso } from "@/lib/utils"
 import { format } from "date-fns"
 import type { Customer } from "@/lib/types"
 
-const schema = z.object({
-  memberAccountNumber: z.string().min(1, "Member Account#0 is required"),
-  companyName: z.string().min(1, "Account Name is required"),
-  // Account Contact Person (= fullName) has no minimum length — optional.
-  fullName: z.string(),
-  contactNumber: z.string().min(7, "Enter a valid contact number"),
-  contactNumber2: z.string().optional(),
-  address: z.string().min(5, "Address is required"),
-  email: z.string().email("Enter a valid email address").or(z.literal("")),
-  tin: z.string().optional(),
-  notes: z.string().optional(),
-})
+function createSchema(
+  t: (key: string) => string,
+  tCommon: (key: string, params?: Record<string, string>) => string,
+  tf: (key: string) => string
+) {
+  return z.object({
+    memberAccountNumber: z.string().min(1, tCommon("requiredField", { field: t("memberAccountNumber0") })),
+    companyName: z.string().min(1, tCommon("requiredField", { field: tf("accountName") })),
+    // Account Contact Person (= fullName) has no minimum length — optional.
+    fullName: z.string(),
+    contactNumber: z.string().min(7, tCommon("enterValidField", { field: tf("contactNumber") })),
+    contactNumber2: z.string().optional(),
+    address: z.string().min(5, tCommon("requiredField", { field: tf("address") })),
+    email: z.string().email(t("enterValidEmail")).or(z.literal("")),
+    tin: z.string().optional(),
+    notes: z.string().optional(),
+  })
+}
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof createSchema>>
 
 function defaultValues(customer?: Customer): FormValues {
   return {
@@ -88,6 +95,10 @@ export function CustomerFormDialog({
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
   const isEdit = !!customer
+  const { t } = useTranslation("member")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const schema = React.useMemo(() => createSchema(t, tCommon, tFields), [t, tCommon, tFields])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -118,10 +129,8 @@ export function CustomerFormDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Member" : "Add Member"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Update member details." : "Register a new member."}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -131,7 +140,7 @@ export function CustomerFormDialog({
                 name="memberAccountNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Member Account#0</FormLabel>
+                    <FormLabel>{t("memberAccountNumber0")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. 0007-000-0000-0006" {...field} />
                     </FormControl>
@@ -144,7 +153,7 @@ export function CustomerFormDialog({
                 name="companyName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account Name</FormLabel>
+                    <FormLabel>{tFields("accountName")}</FormLabel>
                     <FormControl>
                       <Input placeholder="Golden Harvest Corp." {...field} />
                     </FormControl>
@@ -157,7 +166,7 @@ export function CustomerFormDialog({
                 name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account Contact Person (Optional)</FormLabel>
+                    <FormLabel>{t("accountContactPersonOptional")}</FormLabel>
                     <FormControl>
                       <Input placeholder="Juan Dela Cruz" {...field} />
                     </FormControl>
@@ -170,7 +179,7 @@ export function CustomerFormDialog({
                 name="contactNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Number1 (Main)</FormLabel>
+                    <FormLabel>{t("contactNumber1Main")}</FormLabel>
                     <FormControl>
                       <Input placeholder="09171234567" {...field} />
                     </FormControl>
@@ -183,9 +192,9 @@ export function CustomerFormDialog({
                 name="contactNumber2"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Number2 (Sub, Optional)</FormLabel>
+                    <FormLabel>{t("contactNumber2SubOptional")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -196,7 +205,7 @@ export function CustomerFormDialog({
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{tFields("address")}</FormLabel>
                     <FormControl>
                       <Input placeholder="123 Main St., Quezon City" {...field} />
                     </FormControl>
@@ -209,7 +218,7 @@ export function CustomerFormDialog({
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email Address</FormLabel>
+                    <FormLabel>{t("emailAddress")}</FormLabel>
                     <FormControl>
                       <Input type="email" placeholder="juan@mail.com" {...field} />
                     </FormControl>
@@ -222,9 +231,9 @@ export function CustomerFormDialog({
                 name="tin"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>TIN # (Optional)</FormLabel>
+                    <FormLabel>{t("tinOptional")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional" {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -235,9 +244,9 @@ export function CustomerFormDialog({
                 name="notes"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes</FormLabel>
+                    <FormLabel>{tFields("note")}</FormLabel>
                     <FormControl>
-                      <Textarea rows={3} placeholder="Optional notes about this member..." {...field} />
+                      <Textarea rows={3} placeholder={t("notesPlaceholder")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -246,10 +255,10 @@ export function CustomerFormDialog({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : isEdit ? "Save Changes" : "Add Member"}
+                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("addMember")}
               </Button>
             </DialogFooter>
           </form>

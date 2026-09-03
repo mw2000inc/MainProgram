@@ -1,0 +1,11 @@
+{
+  "editTitle": "수리 계획 수정",
+  "addTitle": "수리 계획 추가",
+  "editDescription": "이 수리 기록을 업데이트합니다.",
+  "addDescription": "고객 주문에 대한 수리 요청을 기록합니다.",
+  "orderNoDot": "주문 번호",
+  "selectOrderNumber": "주문 번호 선택",
+  "describeIssue": "문제를 설명하세요",
+  "optional": "선택 사항",
+  "selectTechnician": "기술자 선택"
+}
