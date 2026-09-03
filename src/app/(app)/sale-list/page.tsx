@@ -32,12 +32,21 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { formatDate, todayIso as today } from "@/lib/utils"
 
 export default function SaleListPage() {
   const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+
+  // Same collapse mechanism SplitViewLayout already uses for its own detail
+  // panel (and the Daily Report page uses for itself) — the nav rail goes
+  // icon-only for as long as this page is mounted, not only once a row's
+  // detail panel is open, and re-expands on navigating away via the effect's
+  // cleanup. Reference-counted, so it coexists cleanly with that detail-panel
+  // registration below (both can be "open" at once without double-counting).
+  useReportDetailPanelOpen(true)
   const { data: entries = [], isPending: p1 } = useSaleListEntries()
   const { data: customers = [], isPending: p2 } = useCustomers()
   const { data: filterChangePlans = [] } = useFilterChangePlans()
