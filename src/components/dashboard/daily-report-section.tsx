@@ -99,14 +99,16 @@ const SECTION_KEY_TO_PANEL_ID: Record<DailyReportSectionKey, PanelId> = {
 // starting full-width and needing a manual resize first.
 const HALF_WIDTH_PANELS = new Set<PanelId>(["installation", "filter-change", "collection", "repair", "inventory"])
 
-// Same idea, for Grid mode's own default — its starting arrangement is a
-// fixed 3-across layout (Announcements alone full-width, then Repair/
-// Schedule, then Installation/Filter Change/Collection), so every panel
-// except Announcements starts at ~33% width. "inventory" isn't part of the
-// fixed 3-across arrangement (it's new, admin-only, and appended at the end
-// — see DEFAULT_GRID_ORDER) but still gets the same half-width default
-// outside Grid's own fixed rows, via HALF_WIDTH_PANELS above.
-const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["repair", "schedule", "installation", "filter-change", "collection"])
+// Same idea, for Grid mode's own default — its starting arrangement matches
+// the old AppSheet Daily Report screenshot: Filter Change (wider — it
+// absorbs the space Date used to occupy before Date became a toolbar button,
+// see DailyReportDateButton) + Installation across the top, then
+// Announcements/Repair/Collection across the middle, each at ~33% width.
+// "schedule" and "inventory" aren't part of that fixed arrangement — they're
+// just appended after it (see DEFAULT_GRID_ORDER) and keep their own
+// pre-existing width treatment (schedule still 33% via this same set;
+// inventory full-width, since it was never in this set to begin with).
+const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["announcements", "repair", "schedule", "installation", "collection"])
 
 // Grid mode's fixed starting order — distinct from Stacked's (which follows
 // the admin's configured section order from Settings > Daily Report
@@ -116,17 +118,20 @@ const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["repair", "schedule", "instal
 // Stacked — see the order/sizes computation below) takes over from here,
 // same as Stacked already works.
 const DEFAULT_GRID_ORDER: PanelId[] = [
+  "filter-change",
+  "installation",
   "announcements",
   "repair",
-  "schedule",
-  "installation",
-  "filter-change",
   "collection",
+  "schedule",
   "inventory",
 ]
 
 function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
   if (isGrid) {
+    // Wider than its GRID_THREE_ACROSS_PANELS siblings — see that set's own
+    // comment for why (it's filling the space Date used to take up here).
+    if (id === "filter-change") return "w-full md:w-[calc(66.666%-16px)]"
     return GRID_THREE_ACROSS_PANELS.has(id) ? "w-full md:w-[calc(33.333%-16px)]" : "w-full"
   }
   return HALF_WIDTH_PANELS.has(id) ? "w-full md:w-[calc(50%-12px)]" : "w-full"
