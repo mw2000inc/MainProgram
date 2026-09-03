@@ -17,6 +17,13 @@ export function StatusCell({ status }: { status: SaleListEntry["status"] }) {
       </Badge>
     )
   }
+  if (status === "DIY") {
+    return (
+      <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary font-medium">
+        DIY
+      </Badge>
+    )
+  }
   if (status === "INACTIVE") {
     return (
       <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">

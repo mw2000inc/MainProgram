@@ -93,7 +93,7 @@ export interface Sale {
 
 // "Sale List" — a per-Member install/care-plan record (order/product/coverage
 // tracking), distinct from the invoicing Sale above.
-export type SaleListStatus = "ACTIVE" | "INACTIVE" | "RENT"
+export type SaleListStatus = "ACTIVE" | "INACTIVE" | "RENT" | "DIY"
 
 export interface SaleListEntry {
   id: string

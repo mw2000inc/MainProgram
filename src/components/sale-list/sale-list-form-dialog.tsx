@@ -39,7 +39,7 @@ import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { ctIntervalMonths } from "@/lib/ct-interval"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
-const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT"]
+const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT", "DIY"]
 
 // The legacy AppSheet catalog stays alongside live Inventory products rather
 // than being replaced — productNo is (and remains) free text with no FK, so
@@ -68,7 +68,7 @@ const schema = z.object({
   cpStart: z.string().optional(),
   cpEnd: z.string().optional(),
   note: z.string().optional(),
-  status: z.enum(["ACTIVE", "INACTIVE", "RENT"]),
+  status: z.enum(["ACTIVE", "INACTIVE", "RENT", "DIY"]),
 })
 
 type FormValues = z.infer<typeof schema>
