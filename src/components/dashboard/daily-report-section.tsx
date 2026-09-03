@@ -21,7 +21,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, ClipboardCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
-import { DateControl } from "@/components/dashboard/date-control"
+import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -60,18 +60,20 @@ import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
-// Every panel this section can render. "date" and "inventory" aren't among
-// the six admin-configurable sections (see daily_report_sections) — the
-// other six map 1:1 to a section_key (see SECTION_KEY_TO_PANEL_ID) and can
-// be enabled/disabled/renamed/reordered from Settings > Daily Report
-// Sections, which every role (including a technician) reads to decide what
-// to render. "inventory" (a read-only history view over stock_movements —
-// see getInventoryListColumns) is additionally admin-only outright, not
-// just unconfigurable — a technician can't read stock_movements at all
-// (see the technician_role migration), so it's excluded entirely in the
-// `order` computation below rather than rendering an always-empty panel.
+// Every panel this section can render. "date" used to be one of these (a
+// full draggable/resizable card) — it's now a compact button in the toolbar
+// instead (see DailyReportDateButton), not a panel at all, freeing that
+// dashboard space. "inventory" isn't among the six admin-configurable
+// sections (see daily_report_sections) — the other six map 1:1 to a
+// section_key (see SECTION_KEY_TO_PANEL_ID) and can be enabled/disabled/
+// renamed/reordered from Settings > Daily Report Sections, which every role
+// (including a technician) reads to decide what to render. "inventory" (a
+// read-only history view over stock_movements — see
+// getInventoryListColumns) is additionally admin-only outright, not just
+// unconfigurable — a technician can't read stock_movements at all (see the
+// technician_role migration), so it's excluded entirely in the `order`
+// computation below rather than rendering an always-empty panel.
 type PanelId =
-  | "date"
   | "schedule"
   | "announcements"
   | "installation"
@@ -98,13 +100,13 @@ const SECTION_KEY_TO_PANEL_ID: Record<DailyReportSectionKey, PanelId> = {
 const HALF_WIDTH_PANELS = new Set<PanelId>(["installation", "filter-change", "collection", "repair", "inventory"])
 
 // Same idea, for Grid mode's own default — its starting arrangement is a
-// fixed 3-across layout (Announcements alone full-width, then Date/Repair/
+// fixed 3-across layout (Announcements alone full-width, then Repair/
 // Schedule, then Installation/Filter Change/Collection), so every panel
 // except Announcements starts at ~33% width. "inventory" isn't part of the
 // fixed 3-across arrangement (it's new, admin-only, and appended at the end
 // — see DEFAULT_GRID_ORDER) but still gets the same half-width default
 // outside Grid's own fixed rows, via HALF_WIDTH_PANELS above.
-const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["date", "repair", "schedule", "installation", "filter-change", "collection"])
+const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["repair", "schedule", "installation", "filter-change", "collection"])
 
 // Grid mode's fixed starting order — distinct from Stacked's (which follows
 // the admin's configured section order from Settings > Daily Report
@@ -115,7 +117,6 @@ const GRID_THREE_ACROSS_PANELS = new Set<PanelId>(["date", "repair", "schedule",
 // same as Stacked already works.
 const DEFAULT_GRID_ORDER: PanelId[] = [
   "announcements",
-  "date",
   "repair",
   "schedule",
   "installation",
@@ -128,9 +129,6 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
   if (isGrid) {
     return GRID_THREE_ACROSS_PANELS.has(id) ? "w-full md:w-[calc(33.333%-16px)]" : "w-full"
   }
-  // Date only ever holds one small input — it doesn't need to stretch full
-  // width or pair 50/50 with anything, just enough room for its own content.
-  if (id === "date") return "w-full sm:w-80"
   return HALF_WIDTH_PANELS.has(id) ? "w-full md:w-[calc(50%-12px)]" : "w-full"
 }
 
@@ -257,17 +255,16 @@ export function DailyReportSection() {
       // excluded outright rather than rendering a panel that would only
       // ever show "no movements" for that role.
       if (id === "inventory") return isAdmin
-      return id === "date" || sectionByPanelId.get(id)?.enabled !== false
+      return sectionByPanelId.get(id)?.enabled !== false
     },
     [sectionByPanelId, isAdmin]
   )
   // The base order (before any admin's personal drag-reorder in Stacked
-  // mode, and always in Grid mode) — Date pinned first, then the configured
-  // sections in their admin-set displayOrder, then Inventory List last (new,
-  // admin-only, not part of the configurable-section system — see
-  // isPanelEnabled above).
+  // mode, and always in Grid mode) — the configured sections in their
+  // admin-set displayOrder, then Inventory List last (new, admin-only, not
+  // part of the configurable-section system — see isPanelEnabled above).
   const basePanelOrder = React.useMemo<PanelId[]>(
-    () => ["date", ...sections.map((s) => SECTION_KEY_TO_PANEL_ID[s.sectionKey]), "inventory"],
+    () => [...sections.map((s) => SECTION_KEY_TO_PANEL_ID[s.sectionKey]), "inventory"],
     [sections]
   )
   const labelFor = React.useCallback(
@@ -522,12 +519,10 @@ export function DailyReportSection() {
 
   // Raw panel content, unwrapped — always wrapped in SortablePanel +
   // ResizablePanel below (see resizable()). Titles come from the admin's
-  // configured label (labelFor), not a hardcoded string, for every section
-  // except Date, which isn't one.
+  // configured label (labelFor), not a hardcoded string.
   const rawContent: Record<PanelId, React.ReactNode> = {
     announcements: <AnnouncementPanel title={labelFor("announcements")} />,
     schedule: <ScheduleAgenda date={reportDate} title={labelFor("schedule")} />,
-    date: <DateControl value={reportDate} onChange={setReportDate} />,
     "filter-change": (
       <DashboardPlanPanel
         title={labelFor("filter_change")}
@@ -649,42 +644,55 @@ export function DailyReportSection() {
 
   return (
     <div className="space-y-6">
-      {isAdmin && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground">Layout:</span>
-          <div className="inline-flex rounded-lg border p-0.5">
+      {/* Always rendered now (previously admin-only) so a technician still has
+          a way to change the report date — the Layout toggle and Pending
+          Dispatch Approval stay admin-only inside it. Date sits immediately
+          before Approval; ml-auto on it (only when there's admin content to
+          its left to push away from) pulls both over to the right edge
+          together, matching the "next to Pending Dispatch Approval" request. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {isAdmin && (
+          <>
+            <span className="text-sm font-medium text-muted-foreground">Layout:</span>
+            <div className="inline-flex rounded-lg border p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={layoutMode === "stacked" ? "default" : "ghost"}
+                className="gap-1.5"
+                onClick={() => handleLayoutModeChange("stacked")}
+              >
+                <Rows3 className="h-3.5 w-3.5" /> Stacked
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={isGrid ? "default" : "ghost"}
+                className="gap-1.5"
+                onClick={() => handleLayoutModeChange("grid")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Grid
+              </Button>
+            </div>
+          </>
+        )}
+        <DailyReportDateButton value={reportDate} onChange={setReportDate} className={isAdmin ? "ml-auto" : undefined} />
+        {isAdmin && (
+          <>
             <Button
               type="button"
               size="sm"
-              variant={layoutMode === "stacked" ? "default" : "ghost"}
+              variant={draftDispatchCount > 0 ? "default" : "outline"}
               className="gap-1.5"
-              onClick={() => handleLayoutModeChange("stacked")}
+              onClick={() => setDispatchQueueOpen(true)}
             >
-              <Rows3 className="h-3.5 w-3.5" /> Stacked
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Pending Dispatch Approval{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={isGrid ? "default" : "ghost"}
-              className="gap-1.5"
-              onClick={() => handleLayoutModeChange("grid")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Grid
-            </Button>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant={draftDispatchCount > 0 ? "default" : "outline"}
-            className="gap-1.5 ml-auto"
-            onClick={() => setDispatchQueueOpen(true)}
-          >
-            <ClipboardCheck className="h-3.5 w-3.5" />
-            Pending Dispatch Approval{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
-          </Button>
-          <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
-        </div>
-      )}
+            <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
+          </>
+        )}
+      </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
