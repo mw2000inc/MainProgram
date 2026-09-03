@@ -7,10 +7,24 @@ import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { TECHNICIANS } from "@/lib/constants"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+
+function NoteCell({ plan }: { plan: FilterChangePlan }) {
+  if (!plan.note) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText
+      entityType="filter_change_plans"
+      entityId={plan.id}
+      fieldName="note"
+      text={plan.note}
+      className="text-muted-foreground"
+    />
+  )
+}
 
 export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
 
@@ -219,7 +233,7 @@ export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, un
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <NoteCell plan={row.original} />,
     },
   ]
 }
@@ -270,7 +284,7 @@ export function getFilterChangeFullColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <NoteCell plan={row.original} />,
     },
     {
       accessorKey: "status",

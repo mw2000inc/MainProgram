@@ -7,6 +7,7 @@ import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineNumberCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
@@ -42,7 +43,18 @@ function NoteCell({
   onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note">>) => void
 }) {
   const { t } = useTranslation("fields")
-  if (!onFieldChange) return <span className="inline-block min-w-[180px] text-muted-foreground">{entry.note || "—"}</span>
+  if (!onFieldChange) {
+    if (!entry.note) return <span className="inline-block min-w-[180px] text-muted-foreground">—</span>
+    return (
+      <TranslatableText
+        entityType="collections"
+        entityId={entry.id}
+        fieldName="note"
+        text={entry.note}
+        className="inline-block min-w-[180px] text-muted-foreground"
+      />
+    )
+  }
   return (
     <InlineTextCell
       value={entry.note}

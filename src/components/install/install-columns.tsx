@@ -6,10 +6,18 @@ import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
 
 export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
+
+function NoteCell({ plan }: { plan: InstallPlan }) {
+  if (!plan.note) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText entityType="install_plans" entityId={plan.id} fieldName="note" text={plan.note} className="text-muted-foreground" />
+  )
+}
 
 // A single interactive Status column when onStatusChange is provided
 // (Daily Report + the standalone /install page, admin-only) — same pattern
@@ -64,7 +72,7 @@ export function getInstallColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <NoteCell plan={row.original} />,
     },
     {
       accessorKey: "status",
@@ -124,7 +132,7 @@ export function getInstallFullColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <NoteCell plan={row.original} />,
     },
     {
       accessorKey: "status",

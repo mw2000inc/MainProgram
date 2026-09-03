@@ -5,9 +5,24 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
+
+function NotesCell({ job }: { job: ScheduleJob }) {
+  if (!job.notes) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText entityType="schedule_jobs" entityId={job.id} fieldName="notes" text={job.notes} className="text-muted-foreground" />
+  )
+}
+
+function RemarksCell({ job }: { job: ScheduleJob }) {
+  if (!job.remarks) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText entityType="schedule_jobs" entityId={job.id} fieldName="remarks" text={job.remarks} className="text-muted-foreground" />
+  )
+}
 
 // Print/export and formatTechnicians' own default stay in English regardless
 // of interface language — deferred to the long-tail phase alongside the
@@ -104,16 +119,12 @@ export function getScheduleColumns({
     {
       accessorKey: "notes",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.notes || "—"}</span>
-      ),
+      cell: ({ row }) => <NotesCell job={row.original} />,
     },
     {
       accessorKey: "remarks",
       header: () => <ColumnHeader tKey="remarks" ns="schedule" />,
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.remarks || "—"}</span>
-      ),
+      cell: ({ row }) => <RemarksCell job={row.original} />,
     },
     ...(canDelete
       ? [

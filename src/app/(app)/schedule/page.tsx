@@ -16,6 +16,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
@@ -194,9 +195,25 @@ function ScheduleContent() {
                 />
                 <DetailField label={tFields("orderNo")} value={selected.orderNo} />
                 <DetailField label={tFields("status")} value={tStatus(selected.status)} />
-                <DetailField label={tFields("note")} value={selected.notes} className="sm:col-span-2" />
+                <DetailField
+                  label={tFields("note")}
+                  value={
+                    selected.notes && (
+                      <TranslatableText entityType="schedule_jobs" entityId={selected.id} fieldName="notes" text={selected.notes} />
+                    )
+                  }
+                  className="sm:col-span-2"
+                />
                 <DetailField label={t("secondaryAddress")} value={selected.secondaryAddress} className="sm:col-span-2" />
-                <DetailField label={t("remarks")} value={selected.remarks} className="sm:col-span-2" />
+                <DetailField
+                  label={t("remarks")}
+                  value={
+                    selected.remarks && (
+                      <TranslatableText entityType="schedule_jobs" entityId={selected.id} fieldName="remarks" text={selected.remarks} />
+                    )
+                  }
+                  className="sm:col-span-2"
+                />
                 <LastEditedIndicator entityType="schedule_jobs" entityId={selected.id} className="text-xs text-muted-foreground sm:col-span-2" />
               </DetailPanel>
             )

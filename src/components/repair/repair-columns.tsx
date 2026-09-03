@@ -6,10 +6,31 @@ import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
 export const REPAIR_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
+
+function ProblemCell({ plan }: { plan: RepairPlan }) {
+  if (!plan.problem) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText entityType="repair_plans" entityId={plan.id} fieldName="problem" text={plan.problem} className="text-muted-foreground" />
+  )
+}
+
+function SolutionStatusCell({ plan }: { plan: RepairPlan }) {
+  if (!plan.solutionStatus) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText
+      entityType="repair_plans"
+      entityId={plan.id}
+      fieldName="solution_status"
+      text={plan.solutionStatus}
+      className="text-muted-foreground"
+    />
+  )
+}
 
 // A single interactive Status column when onStatusChange is provided
 // (Daily Report + the standalone /repair-plan page, admin-only) — same
@@ -40,12 +61,12 @@ export function getRepairColumns({
     {
       accessorKey: "problem",
       header: () => <ColumnHeader tKey="problem" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.problem || "—"}</span>,
+      cell: ({ row }) => <ProblemCell plan={row.original} />,
     },
     {
       accessorKey: "solutionStatus",
       header: () => <ColumnHeader tKey="solutionStatus" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.solutionStatus || "—"}</span>,
+      cell: ({ row }) => <SolutionStatusCell plan={row.original} />,
     },
     {
       accessorKey: "preD",
@@ -93,12 +114,12 @@ export function getRepairFullColumns({
     {
       accessorKey: "problem",
       header: () => <ColumnHeader tKey="problem" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.problem || "—"}</span>,
+      cell: ({ row }) => <ProblemCell plan={row.original} />,
     },
     {
       accessorKey: "solutionStatus",
       header: () => <ColumnHeader tKey="solutionStatus" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.solutionStatus || "—"}</span>,
+      cell: ({ row }) => <SolutionStatusCell plan={row.original} />,
     },
     {
       accessorKey: "preD",

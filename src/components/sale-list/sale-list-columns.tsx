@@ -5,11 +5,25 @@ import { Pencil, QrCode, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { SaleListEntry } from "@/lib/types"
 
 export type SaleListRow = SaleListEntry & { accountLabel: string }
+
+function NoteCell({ entry }: { entry: SaleListRow }) {
+  if (!entry.note) return <span className="text-muted-foreground">—</span>
+  return (
+    <TranslatableText
+      entityType="sale_list_entries"
+      entityId={entry.id}
+      fieldName="note"
+      text={entry.note}
+      className="text-muted-foreground"
+    />
+  )
+}
 
 export function StatusCell({ status }: { status: SaleListEntry["status"] }) {
   const { t } = useTranslation("status")
@@ -197,7 +211,7 @@ export function getSaleListColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <NoteCell entry={row.original} />,
     },
     {
       accessorKey: "status",

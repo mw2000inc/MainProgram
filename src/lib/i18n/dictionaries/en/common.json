@@ -53,5 +53,10 @@
   "selectedCount": "{count} selected",
   "deleteItemsConfirm": "Delete {count} item(s)?",
   "deleteSelectedRowsDescription": "This will permanently remove the selected rows.",
-  "none": "None"
+  "none": "None",
+  "viewTranslation": "View translation",
+  "hideTranslation": "Hide translation",
+  "translating": "Translating...",
+  "translationFailed": "Couldn't translate this — try again.",
+  "translationUnavailable": "Translation isn't set up yet."
 }

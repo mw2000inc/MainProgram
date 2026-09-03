@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { AnnouncementFormDialog } from "@/components/announcements/announcement-form-dialog"
 import { CommentThread } from "@/components/announcements/comment-thread"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { useAnnouncements, useDeleteAnnouncement } from "@/lib/hooks/use-announcements"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -75,7 +76,13 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{a.title}</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-0.5">{a.body}</p>
+                <TranslatableText
+                  entityType="announcements"
+                  entityId={a.id}
+                  fieldName="body"
+                  text={a.body}
+                  className="text-sm text-muted-foreground whitespace-pre-wrap mt-0.5"
+                />
                 <p className="text-[11px] text-muted-foreground mt-1">{formatDateTime(a.createdAt)}</p>
               </div>
               {isAdmin && (

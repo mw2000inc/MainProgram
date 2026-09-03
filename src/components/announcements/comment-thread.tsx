@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { TranslatableText } from "@/components/shared/translatable-text"
 import { useAddComment, useComments, useDeleteComment, useUpdateComment } from "@/lib/hooks/use-announcements"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -81,7 +82,13 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm leading-snug mt-0.5">{c.body}</p>
+                <TranslatableText
+                  entityType="announcement_comments"
+                  entityId={c.id}
+                  fieldName="body"
+                  text={c.body}
+                  className="text-sm leading-snug mt-0.5"
+                />
               )}
               {!isEditing && (canModify || canDelete) && (
                 <div className="flex items-center gap-2 mt-1">
