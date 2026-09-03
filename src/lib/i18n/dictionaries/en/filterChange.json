@@ -6,5 +6,11 @@
   "date": "Date",
   "accountOrCompanyName": "Account or company name",
   "technicianName": "Technician name",
-  "serviceAddress": "Service address"
+  "serviceAddress": "Service address",
+  "pageDescription": "Full list of filter change plans, grouped by month.",
+  "searchPlaceholder": "Search by order number, account, address...",
+  "noPlansFound": "No filter change plans found.",
+  "deleteTitle": "Delete this filter change plan?",
+  "deleteDescription": "This will permanently remove this filter change record.",
+  "noPlansForDate": "No filter change plans for this date."
 }

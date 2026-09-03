@@ -76,5 +76,7 @@
   "deleteMovementSaleDescription": "This movement was auto-generated from a sale. Deleting it will adjust {product}'s stock but won't change the original invoice.",
   "deleteMovementFilterChangeDescription": "This movement was auto-generated from a completed filter-change schedule job. Deleting it will adjust {product}'s stock but won't change the original schedule entry.",
   "deleteMovementGenericDescription": "This will permanently remove this movement and adjust {product}'s stock accordingly.",
-  "theProduct": "the product"
+  "theProduct": "the product",
+  "inventoryListTitle": "Inventory List",
+  "noMovementsForDate": "No inventory movements for this date."
 }

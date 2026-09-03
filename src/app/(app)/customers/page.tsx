@@ -30,6 +30,7 @@ import { useCustomers, useDeleteCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printFieldsAndTable } from "@/lib/export/print"
 import { formatDate, getContractStatus } from "@/lib/utils"
 import type { ContractStatus, Customer } from "@/lib/types"
@@ -38,6 +39,11 @@ import { parseISO } from "date-fns"
 export default function CustomersPage() {
   const router = useRouter()
   const { can } = useAuth()
+  const { t } = useTranslation("member")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
   const { data: customers = [], isPending } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const { data: settings } = useSettings()
@@ -175,10 +181,10 @@ export default function CustomersPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-                <Users className="h-6 w-6 text-primary" /> Member
+                <Users className="h-6 w-6 text-primary" /> {tNav("member")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Manage member accounts, contracts and installed products.
+                {t("pageDescription")}
               </p>
             </div>
             {can("customers:add") && (
@@ -189,7 +195,7 @@ export default function CustomersPage() {
                 }}
                 className="gap-1.5"
               >
-                <Plus className="h-4 w-4" /> Add Member
+                <Plus className="h-4 w-4" /> {t("addMember")}
               </Button>
             )}
           </div>
@@ -200,21 +206,21 @@ export default function CustomersPage() {
                 <DataTable
                   columns={columns}
                   data={scopedRows}
-                  searchPlaceholder="Search by name, account number, email..."
+                  searchPlaceholder={t("searchPlaceholder")}
                   onFilteredRowsChange={setFilteredRows}
-                  emptyMessage="No members found."
+                  emptyMessage={t("noMembersFound")}
                   onRowClick={(row) => selection.open(row)}
                   toolbar={
                     <>
                       <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
                         <SelectTrigger className="h-9 w-[150px]">
-                          <SelectValue placeholder="Contract Status" />
+                          <SelectValue placeholder={t("contractStatus")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="expiring">Expiring Soon</SelectItem>
-                          <SelectItem value="expired">Expired</SelectItem>
+                          <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
+                          <SelectItem value="active">{tStatus("active")}</SelectItem>
+                          <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
+                          <SelectItem value="expired">{tStatus("expired")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
@@ -251,7 +257,7 @@ export default function CustomersPage() {
         <>
           <BreadcrumbTrail
             items={[
-              { label: "Member", onClick: selection.close },
+              { label: tNav("member"), onClick: selection.close },
               { label: selection.selected.companyName || selection.selected.fullName },
             ]}
           />
@@ -270,7 +276,7 @@ export default function CustomersPage() {
             onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
             headerActions={
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
-                <Printer className="h-3.5 w-3.5" /> Print
+                <Printer className="h-3.5 w-3.5" /> {tCommon("print")}
               </Button>
             }
             onPrev={selection.prev}
@@ -296,33 +302,33 @@ export default function CustomersPage() {
                 dates, etc.) are unchanged and still editable via Edit; they
                 just aren't shown in this read-only view. */}
             <DetailField
-              label="Member Account#"
+              label={tFields("memberAccount")}
               value={selection.selected.memberAccountNumber}
               className="sm:col-span-2"
             />
-            <DetailField label="Account Name" value={selection.selected.companyName} className="sm:col-span-2" />
+            <DetailField label={tFields("accountName")} value={selection.selected.companyName} className="sm:col-span-2" />
             <DetailField
-              label="Account Contact Person"
+              label={t("accountContactPerson")}
               value={selection.selected.fullName}
               className="sm:col-span-2"
             />
             <DetailField
-              label="Contact Number 1 (Main)"
+              label={t("contactNumber1MainHeader")}
               value={selection.selected.contactNumber}
               className="sm:col-span-2"
             />
             <DetailField
-              label="Contact Number 2 (Sub)"
+              label={t("contactNumber2SubHeader")}
               value={selection.selected.contactNumber2}
               className="sm:col-span-2"
             />
             <div className="sm:col-span-2">
-              <p className="mb-1.5 text-sm text-muted-foreground">Address</p>
+              <p className="mb-1.5 text-sm text-muted-foreground">{tFields("address")}</p>
               {selection.selected.address ? (
                 <button
                   type="button"
                   onClick={() => setDirectionsTarget(selection.selected ?? undefined)}
-                  title="Get driving directions from the MW2000 office"
+                  title={t("getDirectionsTitle")}
                   className="inline-flex items-start gap-1.5 text-left text-base font-medium wrap-break-word text-primary hover:underline"
                 >
                   <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -349,8 +355,8 @@ export default function CustomersPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete member?"
-        description={`This will permanently remove ${deleting?.companyName || deleting?.fullName || "this member"} and their contract record.`}
+        title={t("deleteMemberTitle")}
+        description={t("deleteMemberDescription", { name: deleting?.companyName || deleting?.fullName || t("thisMember") })}
         loading={deleteCustomer.isPending}
         onConfirm={async () => {
           if (!deleting) return

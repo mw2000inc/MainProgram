@@ -7,5 +7,15 @@
   "selectMemberRequired": "Select a member",
   "productPlaceholder": "e.g. 101 / MW) F7",
   "ctPlaceholder": "e.g. Yearly",
-  "cpY1Y2Placeholder": "e.g. 1"
+  "cpY1Y2Placeholder": "e.g. 1",
+  "pageDescription": "Per-member install and care-plan coverage.",
+  "searchPlaceholder": "Search by order number...",
+  "fullSearchPlaceholder": "Search by order number, account, product...",
+  "noEntriesFound": "No sale list entries found.",
+  "backToSaleList": "Back to Sale List",
+  "orderNotFound": "Order not found",
+  "orderInfo": "Order Info",
+  "viewFullMemberProfile": "View Full Member Profile",
+  "noMemberLinked": "No member linked",
+  "noMemberLinkedDescription": "No member is linked to this order — link one by editing this entry from the Sale List page."
 }

@@ -15,12 +15,17 @@ import { getRepairFullColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair
 import { useDeleteRepairPlans, useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
 function RepairPlanPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("repair")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: plans = [], isPending } = useRepairPlans()
   const deletePlans = useDeleteRepairPlans()
   const updatePlan = useUpdateRepairPlan()
@@ -64,9 +69,9 @@ function RepairPlanPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Wrench className="h-6 w-6 text-primary" /> Repair Plan
+            <Wrench className="h-6 w-6 text-primary" /> {tNav("repairPlan")}
           </h1>
-          <p className="text-sm text-muted-foreground">Full list of repair requests and their status.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={REPAIR_EXPORT_COLUMNS} rows={plans} fileName="repair-plan" />
@@ -77,7 +82,7 @@ function RepairPlanPageContent() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         </div>
       </div>
@@ -91,8 +96,8 @@ function RepairPlanPageContent() {
               <DataTable
                 columns={columns}
                 data={plans}
-                searchPlaceholder="Search by account name, order no, problem..."
-                emptyMessage="No repair plans found."
+                searchPlaceholder={t("searchPlaceholder")}
+                emptyMessage={t("noPlansFound")}
                 onFilteredRowsChange={setFilteredRows}
                 onRowClick={(row) => selection.open(row)}
               />
@@ -122,18 +127,18 @@ function RepairPlanPageContent() {
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
             >
-              <DetailField label="Issued Date" value={formatDate(selected.issuedDate)} />
-              <DetailField label="Order No" value={selected.orderNo} />
-              <DetailField label="Account Name" value={selected.accountName} />
-              <DetailField label="Unit IN/OUT" value={selected.unitInOut} />
-              <DetailField label="Problem" value={selected.problem} className="sm:col-span-2" />
-              <DetailField label="Solution / Status" value={selected.solutionStatus} className="sm:col-span-2" />
-              <DetailField label="Pre D" value={selected.preD ? formatDate(selected.preD) : undefined} />
-              <DetailField label="Acc D" value={selected.accD ? formatDate(selected.accD) : undefined} />
-              <DetailField label="TH" value={selected.th} />
-              <DetailField label="Part No" value={selected.partNo} />
-              <DetailField label="AMT" value={formatCurrency(selected.amt)} />
-              <DetailField label="Status" value={selected.status} />
+              <DetailField label={tFields("issuedDate")} value={formatDate(selected.issuedDate)} />
+              <DetailField label={tFields("orderNo")} value={selected.orderNo} />
+              <DetailField label={tFields("accountName")} value={selected.accountName} />
+              <DetailField label={tFields("unitInOut")} value={selected.unitInOut} />
+              <DetailField label={tFields("problem")} value={selected.problem} className="sm:col-span-2" />
+              <DetailField label={tFields("solutionStatus")} value={selected.solutionStatus} className="sm:col-span-2" />
+              <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
+              <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
+              <DetailField label={tFields("th")} value={selected.th} />
+              <DetailField label={tFields("partNo")} value={selected.partNo} />
+              <DetailField label={tFields("amt")} value={formatCurrency(selected.amt)} />
+              <DetailField label={tFields("status")} value={selected.status} />
             </DetailPanel>
           )
         }
@@ -152,8 +157,8 @@ function RepairPlanPageContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this repair plan?"
-        description="This will permanently remove this repair record."
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
         loading={deletePlans.isPending}
         onConfirm={async () => {
           if (!deleting) return

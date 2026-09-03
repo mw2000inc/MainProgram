@@ -7,5 +7,11 @@
   "selectOrderNumber": "Select order number",
   "describeIssue": "Describe the issue",
   "optional": "Optional",
-  "selectTechnician": "Select technician"
+  "selectTechnician": "Select technician",
+  "pageDescription": "Full list of repair requests and their status.",
+  "searchPlaceholder": "Search by account name, order no, problem...",
+  "noPlansFound": "No repair plans found.",
+  "deleteTitle": "Delete this repair plan?",
+  "deleteDescription": "This will permanently remove this repair record.",
+  "noPlansForDate": "No repair plans for this date."
 }

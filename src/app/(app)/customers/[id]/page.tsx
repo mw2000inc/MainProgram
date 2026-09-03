@@ -46,6 +46,7 @@ import { useSaleListEntries, useDeleteSaleListEntries } from "@/lib/hooks/use-sa
 import { useSettings } from "@/lib/hooks/use-misc"
 import { updateSettingsCoordinates } from "@/lib/api/misc"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
 import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
@@ -56,6 +57,9 @@ export default function CustomerProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const { user, can } = useAuth()
+  const { t } = useTranslation("member")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: customer, isPending } = useCustomer(params.id)
   const { data: settings } = useSettings()
   const { data: saleListEntries = [] } = useSaleListEntries()
@@ -101,9 +105,9 @@ export default function CustomerProfilePage() {
   if (!customer) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-        <p className="text-lg font-medium">Member not found</p>
+        <p className="text-lg font-medium">{t("memberNotFound")}</p>
         <Button variant="outline" onClick={() => router.push("/customers")}>
-          Back to Member
+          {t("backToMember")}
         </Button>
       </div>
     )
@@ -135,7 +139,7 @@ export default function CustomerProfilePage() {
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" onClick={() => router.push("/customers")}>
-        <ArrowLeft className="h-4 w-4" /> Back to Member
+        <ArrowLeft className="h-4 w-4" /> {t("backToMember")}
       </Button>
 
       <Card>
@@ -152,7 +156,7 @@ export default function CustomerProfilePage() {
             </div>
             {customer.companyName && <p className="text-sm text-muted-foreground">{customer.companyName}</p>}
             <p className="text-xs text-muted-foreground mt-1">
-              Member ID: <span className="font-mono">{customer.id}</span> &middot; Registered{" "}
+              {t("memberIdLabel")} <span className="font-mono">{customer.id}</span> &middot; {t("registered")}{" "}
               {formatDate(customer.createdAt)}
             </p>
             <LastEditedIndicator entityType="customers" entityId={customer.id} className="text-xs text-muted-foreground mt-0.5" />
@@ -168,7 +172,7 @@ export default function CustomerProfilePage() {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                title="Download QR"
+                title={t("downloadQr")}
                 onClick={handleDownloadQr}
                 disabled={!scanUrl}
               >
@@ -177,10 +181,10 @@ export default function CustomerProfilePage() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="gap-1.5" onClick={() => setQrOpen(true)}>
-                <QrCode className="h-4 w-4" /> QR Code
+                <QrCode className="h-4 w-4" /> {tCommon("qrCode")}
               </Button>
               <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" /> Edit
+                <Pencil className="h-4 w-4" /> {tCommon("edit")}
               </Button>
             </div>
           </div>
@@ -189,9 +193,9 @@ export default function CustomerProfilePage() {
 
       <Tabs defaultValue="personal">
         <TabsList className="flex-wrap h-auto group-data-horizontal/tabs:h-auto">
-          <TabsTrigger value="personal">Personal Info</TabsTrigger>
-          <TabsTrigger value="service">Service History</TabsTrigger>
-          <TabsTrigger value="sales">Related Sales</TabsTrigger>
+          <TabsTrigger value="personal">{t("personalInfo")}</TabsTrigger>
+          <TabsTrigger value="service">{t("serviceHistory")}</TabsTrigger>
+          <TabsTrigger value="sales">{t("relatedSales")}</TabsTrigger>
         </TabsList>
 
         <div className="flex flex-wrap gap-2">
@@ -204,11 +208,11 @@ export default function CustomerProfilePage() {
           >
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
-                <Hash className="h-4 w-4" /> Order # {customer.orderNumber}
+                <Hash className="h-4 w-4" /> {t("orderHash", { value: customer.orderNumber })}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64" align="start">
-              <p className="text-sm font-semibold mb-3">Order Number</p>
+              <p className="text-sm font-semibold mb-3">{tFields("orderNumber")}</p>
               {isAdmin ? (
                 <div className="space-y-3">
                   <Input
@@ -236,24 +240,24 @@ export default function CustomerProfilePage() {
                       }
                     }}
                   >
-                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                    {updateCustomer.isPending ? tCommon("saving") : tCommon("save")}
                   </Button>
                 </div>
               ) : (
-                <InfoRow icon={Hash} label="Order Number" value={customer.orderNumber} />
+                <InfoRow icon={Hash} label={tFields("orderNumber")} value={customer.orderNumber} />
               )}
             </PopoverContent>
           </Popover>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
-                <Building2 className="h-4 w-4" /> Company Contact
+                <Building2 className="h-4 w-4" /> {t("companyContact")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80" align="start">
-              <p className="text-sm font-semibold mb-3">{settings?.companyName ?? "Company"} Contact Details</p>
+              <p className="text-sm font-semibold mb-3">{t("companyContactDetails", { company: settings?.companyName ?? t("company") })}</p>
               <div className="space-y-3">
-                <InfoRow icon={MapPin} label="Location" value={settings?.address || "N/A"} />
+                <InfoRow icon={MapPin} label={t("location")} value={settings?.address || tCommon("notAvailable")} />
                 {(settings?.contactNumbers ?? []).map((entry, i) => (
                   <InfoRow key={`num-${i}`} icon={Phone} label={entry.label} value={entry.value} />
                 ))}
@@ -272,11 +276,11 @@ export default function CustomerProfilePage() {
           >
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
-                <Wrench className="h-4 w-4" /> Technician
+                <Wrench className="h-4 w-4" /> {t("technician")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64" align="start">
-              <p className="text-sm font-semibold mb-3">Assigned Technician</p>
+              <p className="text-sm font-semibold mb-3">{t("assignedTechnician")}</p>
               {isAdmin ? (
                 <div className="space-y-3">
                   <Select value={technicianDraft} onValueChange={setTechnicianDraft}>
@@ -284,9 +288,9 @@ export default function CustomerProfilePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {TECHNICIANS.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      {TECHNICIANS.map((tech) => (
+                        <SelectItem key={tech} value={tech}>
+                          {tech}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -303,11 +307,11 @@ export default function CustomerProfilePage() {
                       setTechnicianOpen(false)
                     }}
                   >
-                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                    {updateCustomer.isPending ? tCommon("saving") : tCommon("save")}
                   </Button>
                 </div>
               ) : (
-                <InfoRow icon={Wrench} label="Name" value={customer.assignedTechnician || "N/A"} />
+                <InfoRow icon={Wrench} label={tFields("name")} value={customer.assignedTechnician || tCommon("notAvailable")} />
               )}
             </PopoverContent>
           </Popover>
@@ -320,11 +324,11 @@ export default function CustomerProfilePage() {
           >
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
-                <CalendarDays className="h-4 w-4" /> Installed Date
+                <CalendarDays className="h-4 w-4" /> {tFields("installedDate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64" align="start">
-              <p className="text-sm font-semibold mb-3">Installed Date</p>
+              <p className="text-sm font-semibold mb-3">{tFields("installedDate")}</p>
               {isAdmin ? (
                 <div className="space-y-3">
                   <Input
@@ -344,14 +348,14 @@ export default function CustomerProfilePage() {
                       setInstalledDateOpen(false)
                     }}
                   >
-                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                    {updateCustomer.isPending ? tCommon("saving") : tCommon("save")}
                   </Button>
                 </div>
               ) : (
                 <InfoRow
                   icon={CalendarDays}
-                  label="Date"
-                  value={customer.installedDate ? formatDate(customer.installedDate) : "N/A"}
+                  label={t("date")}
+                  value={customer.installedDate ? formatDate(customer.installedDate) : tCommon("notAvailable")}
                 />
               )}
             </PopoverContent>
@@ -365,21 +369,21 @@ export default function CustomerProfilePage() {
           >
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
-                <Droplet className="h-4 w-4" /> Water Purification Type
+                <Droplet className="h-4 w-4" /> {t("waterPurificationType")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64" align="start">
-              <p className="text-sm font-semibold mb-3">Water Purification Type</p>
+              <p className="text-sm font-semibold mb-3">{t("waterPurificationType")}</p>
               {isAdmin ? (
                 <div className="space-y-3">
                   <Select value={dispenserDraft} onValueChange={setDispenserDraft}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder={t("selectType")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {DISPENSER_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      {DISPENSER_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -400,11 +404,11 @@ export default function CustomerProfilePage() {
                       setDispenserOpen(false)
                     }}
                   >
-                    {updateCustomer.isPending ? "Saving..." : "Save"}
+                    {updateCustomer.isPending ? tCommon("saving") : tCommon("save")}
                   </Button>
                 </div>
               ) : (
-                <InfoRow icon={Droplet} label="Type" value={customer.dispenserType || "N/A"} />
+                <InfoRow icon={Droplet} label={t("waterPurificationType")} value={customer.dispenserType || tCommon("notAvailable")} />
               )}
             </PopoverContent>
           </Popover>
@@ -413,38 +417,38 @@ export default function CustomerProfilePage() {
         <TabsContent value="personal">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Personal Information</CardTitle>
+              <CardTitle className="text-base">{t("personalInformation")}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <InfoRow icon={Mail} label="Email Address" value={customer.email} />
-              <InfoRow icon={Phone} label="Contact Number" value={customer.contactNumber} />
+              <InfoRow icon={Mail} label={t("emailAddress")} value={customer.email} />
+              <InfoRow icon={Phone} label={tFields("contactNumber")} value={customer.contactNumber} />
               <InfoRow
                 icon={MapPin}
-                label="Address"
+                label={tFields("address")}
                 className="sm:col-span-2"
                 value={
                   customer.address ? (
                     <button
                       type="button"
                       onClick={() => setDirectionsOpen(true)}
-                      title="Get driving directions from the MW2000 office"
+                      title={t("getDirectionsTitle")}
                       className="text-left text-primary hover:underline"
                     >
                       {customer.address}
                     </button>
                   ) : (
-                    "N/A"
+                    tCommon("notAvailable")
                   )
                 }
               />
-              <InfoRow icon={Droplet} label="Water Purification Type" value={customer.dispenserType} />
+              <InfoRow icon={Droplet} label={t("waterPurificationType")} value={customer.dispenserType} />
               <InfoRow
                 icon={CalendarDays}
-                label="Installed Date"
-                value={customer.installedDate ? formatDate(customer.installedDate) : "N/A"}
+                label={tFields("installedDate")}
+                value={customer.installedDate ? formatDate(customer.installedDate) : tCommon("notAvailable")}
               />
-              <InfoRow icon={Droplet} label="Water Filter Installed" value={customer.filterInstalled ? "Yes" : "No"} />
-              <InfoRow icon={Wrench} label="Assigned Technician" value={customer.assignedTechnician || "N/A"} />
+              <InfoRow icon={Droplet} label={t("waterFilterInstalled")} value={customer.filterInstalled ? tCommon("yes") : tCommon("no")} />
+              <InfoRow icon={Wrench} label={t("assignedTechnician")} value={customer.assignedTechnician || tCommon("notAvailable")} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -452,11 +456,11 @@ export default function CustomerProfilePage() {
         <TabsContent value="service">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Service History</CardTitle>
+              <CardTitle className="text-base">{t("serviceHistory")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {serviceHistory.length === 0 && (
-                <p className="text-sm text-muted-foreground">No service visits recorded yet.</p>
+                <p className="text-sm text-muted-foreground">{t("noServiceVisits")}</p>
               )}
               {serviceHistory.map((visit, i) => (
                 <div key={i} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
@@ -479,14 +483,14 @@ export default function CustomerProfilePage() {
         <TabsContent value="sales">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Related Sales</CardTitle>
+              <CardTitle className="text-base">{t("relatedSales")}</CardTitle>
             </CardHeader>
             <CardContent>
               <DataTable
                 columns={saleListColumns}
                 data={relatedSales}
-                searchPlaceholder="Search by order number, product..."
-                emptyMessage="No sale list entries for this member."
+                searchPlaceholder={t("searchByOrderNumber")}
+                emptyMessage={t("noRelatedSales")}
                 getRowClassName={getSaleListRowClassName}
                 onRowClick={(row) => router.push(`/sale-list/${row.id}`)}
               />
@@ -525,8 +529,8 @@ export default function CustomerProfilePage() {
       <ConfirmDialog
         open={!!deletingRow}
         onOpenChange={(o) => !o && setDeletingRow(undefined)}
-        title="Delete this sale list entry?"
-        description="This will permanently remove this record."
+        title={t("deleteSaleListEntryTitle")}
+        description={t("deleteSaleListEntryDescription")}
         loading={deleteEntries.isPending}
         onConfirm={async () => {
           if (!deletingRow) return

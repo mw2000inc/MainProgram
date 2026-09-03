@@ -32,11 +32,17 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, initials, todayIso as today } from "@/lib/utils"
 
 export default function SaleListOrderDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+  const { t } = useTranslation("saleList")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tMember } = useTranslation("member")
 
   // Same as the main Sale List page — collapses the nav rail for as long as
   // this page is mounted, re-expanding on navigating away. This page is
@@ -92,9 +98,9 @@ export default function SaleListOrderDetailPage() {
   if (!entry) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-        <p className="text-lg font-medium">Order not found</p>
+        <p className="text-lg font-medium">{t("orderNotFound")}</p>
         <Button variant="outline" onClick={() => router.push("/sale-list")}>
-          Back to Sale List
+          {t("backToSaleList")}
         </Button>
       </div>
     )
@@ -103,7 +109,7 @@ export default function SaleListOrderDetailPage() {
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" onClick={() => router.push("/sale-list")}>
-        <ArrowLeft className="h-4 w-4" /> Back to Sale List
+        <ArrowLeft className="h-4 w-4" /> {t("backToSaleList")}
       </Button>
 
       <Card>
@@ -117,7 +123,7 @@ export default function SaleListOrderDetailPage() {
               <StatusCell status={entry.status} />
             </div>
             <p className="text-sm text-muted-foreground">
-              {customer?.companyName || customer?.fullName || "No member linked"}
+              {customer?.companyName || customer?.fullName || t("noMemberLinked")}
             </p>
           </div>
         </CardContent>
@@ -126,30 +132,30 @@ export default function SaleListOrderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Order Info</CardTitle>
+            <CardTitle className="text-base">{t("orderInfo")}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <InfoRow icon={Hash} label="Order Number" value={entry.orderNumber} />
+            <InfoRow icon={Hash} label={tFields("orderNumber")} value={entry.orderNumber} />
             <InfoRow
               icon={CalendarDays}
-              label="Installed Date"
-              value={entry.installedDate ? formatDate(entry.installedDate) : "N/A"}
+              label={tFields("installedDate")}
+              value={entry.installedDate ? formatDate(entry.installedDate) : tCommon("notAvailable")}
             />
-            <InfoRow icon={Users} label="Member Account#" value={customer?.memberAccountNumber || "N/A"} />
-            <InfoRow icon={Package} label="Product#" value={entry.productNo || "N/A"} />
-            <InfoRow icon={Hash} label="S/C" value={entry.sc || "N/A"} />
-            <InfoRow icon={Hash} label="C/F" value={entry.cf || "N/A"} />
-            <InfoRow icon={Hash} label="C/T" value={entry.ct || "N/A"} />
-            <InfoRow icon={Hash} label="CP y1/y2" value={entry.cpY1Y2 || "N/A"} />
-            <InfoRow icon={CalendarDays} label="CP Start" value={entry.cpStart ? formatDate(entry.cpStart) : "N/A"} />
-            <InfoRow icon={CalendarDays} label="CP End" value={entry.cpEnd ? formatDate(entry.cpEnd) : "N/A"} />
-            {entry.note && <InfoRow icon={Hash} label="Note" value={entry.note} className="sm:col-span-2" />}
+            <InfoRow icon={Users} label={tFields("memberAccount")} value={customer?.memberAccountNumber || tCommon("notAvailable")} />
+            <InfoRow icon={Package} label={tFields("productNo")} value={entry.productNo || tCommon("notAvailable")} />
+            <InfoRow icon={Hash} label={tFields("sc")} value={entry.sc || tCommon("notAvailable")} />
+            <InfoRow icon={Hash} label={tFields("cf")} value={entry.cf || tCommon("notAvailable")} />
+            <InfoRow icon={Hash} label={tFields("ct")} value={entry.ct || tCommon("notAvailable")} />
+            <InfoRow icon={Hash} label={tFields("cpY1Y2")} value={entry.cpY1Y2 || tCommon("notAvailable")} />
+            <InfoRow icon={CalendarDays} label={tFields("cpStart")} value={entry.cpStart ? formatDate(entry.cpStart) : tCommon("notAvailable")} />
+            <InfoRow icon={CalendarDays} label={tFields("cpEnd")} value={entry.cpEnd ? formatDate(entry.cpEnd) : tCommon("notAvailable")} />
+            {entry.note && <InfoRow icon={Hash} label={tFields("note")} value={entry.note} className="sm:col-span-2" />}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Member</CardTitle>
+            <CardTitle className="text-base">{tNav("member")}</CardTitle>
           </CardHeader>
           <CardContent>
             {customer ? (
@@ -166,19 +172,19 @@ export default function SaleListOrderDetailPage() {
                   </div>
                 </div>
                 <div className="space-y-2 text-sm">
-                  <InfoRow icon={Hash} label="Contact Number" value={customer.contactNumber || "N/A"} />
-                  <InfoRow icon={Hash} label="Email" value={customer.email || "N/A"} />
-                  <InfoRow icon={Hash} label="Address" value={customer.address || "N/A"} />
+                  <InfoRow icon={Hash} label={tFields("contactNumber")} value={customer.contactNumber || tCommon("notAvailable")} />
+                  <InfoRow icon={Hash} label={tFields("email")} value={customer.email || tCommon("notAvailable")} />
+                  <InfoRow icon={Hash} label={tFields("address")} value={customer.address || tCommon("notAvailable")} />
                 </div>
                 <Link href={`/customers/${customer.id}`}>
                   <Button variant="outline" size="sm" className="w-full gap-1.5">
-                    View Full Member Profile <ArrowRight className="h-3.5 w-3.5" />
+                    {t("viewFullMemberProfile")} <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No member is linked to this order — link one by editing this entry from the Sale List page.
+                {t("noMemberLinkedDescription")}
               </p>
             )}
           </CardContent>
@@ -186,7 +192,7 @@ export default function SaleListOrderDetailPage() {
       </div>
 
       <OrderRelatedSection
-        title="Filter Changes"
+        title={tMember("filterChangesSection")}
         icon={Droplets}
         data={orderFilterChanges}
         dateKey="planDate"
@@ -194,32 +200,32 @@ export default function SaleListOrderDetailPage() {
         expandedColumns={filterChangeExpandedColumns}
         exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
         exportFileName={`filter-changes-${entry.orderNumber}`}
-        emptyMessage="No filter change history for this order."
+        emptyMessage={tMember("noFilterChangeHistory")}
         canAdd
         onAdd={() => setFilterFormOpen(true)}
       />
 
       <OrderRelatedSection
-        title="Collections"
+        title={tMember("collectionsSection")}
         icon={Banknote}
         data={orderCollections}
         dateKey="collectionDate"
         columns={collectionsColumns}
         exportColumns={COLLECTIONS_EXPORT_COLUMNS}
         exportFileName={`collections-${entry.orderNumber}`}
-        emptyMessage="No collection history for this order."
+        emptyMessage={tMember("noCollectionHistory")}
         canAdd
         onAdd={() => setCollectionFormOpen(true)}
       />
 
       <OrderRelatedSection
-        title="Repairs"
+        title={tMember("repairsSection")}
         icon={Wrench}
         data={orderRepairs}
         columns={repairColumns}
         exportColumns={REPAIR_EXPORT_COLUMNS}
         exportFileName={`repairs-${entry.orderNumber}`}
-        emptyMessage="No repair history for this order."
+        emptyMessage={tMember("noRepairHistory")}
         canAdd
         onAdd={() => setRepairFormOpen(true)}
       />

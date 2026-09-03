@@ -76,5 +76,7 @@
   "deleteMovementSaleDescription": "이 이동은 판매로부터 자동 생성되었습니다. 삭제하면 {product}의 재고는 조정되지만 원본 송장은 변경되지 않습니다.",
   "deleteMovementFilterChangeDescription": "이 이동은 완료된 필터 교체 일정 작업으로부터 자동 생성되었습니다. 삭제하면 {product}의 재고는 조정되지만 원본 일정 항목은 변경되지 않습니다.",
   "deleteMovementGenericDescription": "이 이동 내역이 영구적으로 삭제되고 {product}의 재고가 그에 맞게 조정됩니다.",
-  "theProduct": "이 제품"
+  "theProduct": "이 제품",
+  "inventoryListTitle": "재고 목록",
+  "noMovementsForDate": "이 날짜에 해당하는 재고 이동 내역이 없습니다."
 }

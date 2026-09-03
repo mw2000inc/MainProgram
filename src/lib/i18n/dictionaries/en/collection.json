@@ -5,5 +5,12 @@
   "recurringScheduleDescription": "This occurrence is part of an auto-generated recurring schedule. Changing its date reschedules every later still-Pending occurrence to follow from it, at the same C/T interval — an already-Collected occurrence is never affected.",
   "editDescription": "Update this collection record.",
   "addDescription": "Schedule a payment collection.",
-  "customerOrBusinessName": "Customer or business name"
+  "customerOrBusinessName": "Customer or business name",
+  "pageDescription": "Full list of payment collections, grouped by month.",
+  "searchPlaceholder": "Search by order number, account...",
+  "noPlansFound": "No collections found.",
+  "deleteTitle": "Delete this collection?",
+  "deleteDescription": "This will permanently remove this collection record.",
+  "noPlansForDate": "No collections for this date.",
+  "autoCTCompletion": "Auto (C/T Completion)"
 }

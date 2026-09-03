@@ -58,5 +58,10 @@
   "hideTranslation": "Hide translation",
   "translating": "Translating...",
   "translationFailed": "Couldn't translate this — try again.",
-  "translationUnavailable": "Translation isn't set up yet."
+  "translationUnavailable": "Translation isn't set up yet.",
+  "notAvailable": "N/A",
+  "yes": "Yes",
+  "no": "No",
+  "backTo": "Back to {page}",
+  "notFound": "{item} not found"
 }

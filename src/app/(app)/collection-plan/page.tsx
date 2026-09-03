@@ -16,6 +16,7 @@ import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/compone
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 
@@ -26,6 +27,10 @@ function yearMonth(dateStr: string) {
 function CollectionPlanPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("collection")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: entries = [], isPending } = useCollections()
   const deleteEntries = useDeleteCollections()
   const updateEntry = useUpdateCollection()
@@ -89,9 +94,9 @@ function CollectionPlanPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Banknote className="h-6 w-6 text-primary" /> Collection Plan
+            <Banknote className="h-6 w-6 text-primary" /> {tNav("collectionPlan")}
           </h1>
-          <p className="text-sm text-muted-foreground">Full list of payment collections, grouped by month.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={COLLECTIONS_EXPORT_COLUMNS} rows={scopedEntries} fileName="collection-plan" />
@@ -102,7 +107,7 @@ function CollectionPlanPageContent() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         </div>
       </div>
@@ -123,7 +128,7 @@ function CollectionPlanPageContent() {
                       selectedMonth === "all" && "bg-accent font-medium"
                     )}
                   >
-                    All
+                    {tCommon("all")}
                   </button>
                   {monthGroups.map((g) => (
                     <button
@@ -149,8 +154,8 @@ function CollectionPlanPageContent() {
                 <DataTable
                   columns={columns}
                   data={scopedEntries}
-                  searchPlaceholder="Search by order number, account..."
-                  emptyMessage="No collections found."
+                  searchPlaceholder={t("searchPlaceholder")}
+                  emptyMessage={t("noPlansFound")}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                 />
@@ -181,12 +186,12 @@ function CollectionPlanPageContent() {
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
             >
-              <DetailField label="Order Number" value={selected.orderNo} />
-              <DetailField label="Member Account#" value={selected.accountName} />
-              <DetailField label="Amount" value={formatCurrency(selected.amount)} />
-              <DetailField label="C/T" value={selected.ct} />
+              <DetailField label={tFields("orderNumber")} value={selected.orderNo} />
+              <DetailField label={tFields("memberAccount")} value={selected.accountName} />
+              <DetailField label={tFields("amount")} value={formatCurrency(selected.amount)} />
+              <DetailField label={tFields("ct")} value={selected.ct} />
               <DetailField
-                label="Plan D"
+                label={tFields("planD")}
                 value={
                   isAdmin ? (
                     <button
@@ -204,24 +209,24 @@ function CollectionPlanPageContent() {
                   )
                 }
               />
-              <DetailField label="Pre D" value={selected.preD ? formatDate(selected.preD) : undefined} />
-              <DetailField label="Acc D" value={selected.accD ? formatDate(selected.accD) : undefined} />
-              <DetailField label="Status" value={selected.status} />
+              <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
+              <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
+              <DetailField label={tFields("status")} value={selected.status} />
               <DetailField
-                label="Filter Change"
-                value={selected.filterChangeRequired ? "Required" : undefined}
+                label={tFields("filterChange")}
+                value={selected.filterChangeRequired ? tFields("required") : undefined}
               />
               <DetailField
-                label="Source"
+                label={tFields("source")}
                 value={
                   selected.source === "recurring_schedule"
-                    ? "Recurring Schedule"
+                    ? tFields("recurringSchedule")
                     : selected.source === "ct_completion"
-                      ? "Auto (C/T Completion)"
-                      : "Manual"
+                      ? t("autoCTCompletion")
+                      : tFields("manual")
                 }
               />
-              <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
+              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           )
         }
@@ -240,8 +245,8 @@ function CollectionPlanPageContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this collection?"
-        description="This will permanently remove this collection record."
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
         loading={deleteEntries.isPending}
         onConfirm={async () => {
           if (!deleting) return

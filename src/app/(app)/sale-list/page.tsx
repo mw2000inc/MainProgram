@@ -32,6 +32,7 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { formatDate, todayIso as today } from "@/lib/utils"
 
@@ -39,6 +40,11 @@ export default function SaleListPage() {
   const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("saleList")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tMember } = useTranslation("member")
 
   // Same collapse mechanism SplitViewLayout already uses for its own detail
   // panel (and the Daily Report page uses for itself) — the nav rail goes
@@ -138,9 +144,9 @@ export default function SaleListPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <ClipboardCheck className="h-6 w-6 text-primary" /> Sale List
+            <ClipboardCheck className="h-6 w-6 text-primary" /> {tNav("saleList")}
           </h1>
-          <p className="text-sm text-muted-foreground">Per-member install and care-plan coverage.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={SALE_LIST_EXPORT_COLUMNS} rows={rows} fileName="sale-list" />
@@ -151,7 +157,7 @@ export default function SaleListPage() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         </div>
       </div>
@@ -167,8 +173,8 @@ export default function SaleListPage() {
                 <DataTable
                   columns={narrowColumns}
                   data={rows}
-                  searchPlaceholder="Search by order number..."
-                  emptyMessage="No sale list entries found."
+                  searchPlaceholder={t("searchPlaceholder")}
+                  emptyMessage={t("noEntriesFound")}
                   getRowClassName={getSaleListRowClassName}
                   onRowClick={(row) => selection.open(row)}
                 />
@@ -202,7 +208,7 @@ export default function SaleListPage() {
               extra={
                 <>
                   <OrderRelatedSection
-                    title="Filter Changes"
+                    title={tMember("filterChangesSection")}
                     icon={Droplets}
                     data={orderFilterChanges}
                     dateKey="planDate"
@@ -210,51 +216,51 @@ export default function SaleListPage() {
                     expandedColumns={filterChangeExpandedColumns}
                     exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
                     exportFileName={`filter-changes-${selected.orderNumber}`}
-                    emptyMessage="No filter change history for this order."
+                    emptyMessage={tMember("noFilterChangeHistory")}
                     canAdd
                     onAdd={() => setFilterFormOpen(true)}
                   />
                   <OrderRelatedSection
-                    title="Collections"
+                    title={tMember("collectionsSection")}
                     icon={Banknote}
                     data={orderCollections}
                     dateKey="collectionDate"
                     columns={collectionsColumns}
                     exportColumns={COLLECTIONS_EXPORT_COLUMNS}
                     exportFileName={`collections-${selected.orderNumber}`}
-                    emptyMessage="No collection history for this order."
+                    emptyMessage={tMember("noCollectionHistory")}
                     canAdd
                     onAdd={() => setCollectionFormOpen(true)}
                   />
                   <OrderRelatedSection
-                    title="Repairs"
+                    title={tMember("repairsSection")}
                     icon={Wrench}
                     data={orderRepairs}
                     columns={repairColumns}
                     exportColumns={REPAIR_EXPORT_COLUMNS}
                     exportFileName={`repairs-${selected.orderNumber}`}
-                    emptyMessage="No repair history for this order."
+                    emptyMessage={tMember("noRepairHistory")}
                     canAdd
                     onAdd={() => setRepairFormOpen(true)}
                   />
                 </>
               }
             >
-              <DetailField label="Order Number" value={selected.orderNumber} />
+              <DetailField label={tFields("orderNumber")} value={selected.orderNumber} />
               <DetailField
-                label="Installed Date"
+                label={tFields("installedDate")}
                 value={selected.installedDate ? formatDate(selected.installedDate) : undefined}
               />
-              <DetailField label="Account#" value={selected.accountLabel} />
-              <DetailField label="Product#" value={selected.productNo} />
-              <DetailField label="S/C" value={selected.sc} />
-              <DetailField label="C/F" value={selected.cf} />
-              <DetailField label="C/T" value={selected.ct} />
-              <DetailField label="CP y1/y2" value={selected.cpY1Y2} />
-              <DetailField label="CP start" value={selected.cpStart ? formatDate(selected.cpStart) : undefined} />
-              <DetailField label="CP end" value={selected.cpEnd ? formatDate(selected.cpEnd) : undefined} />
-              <DetailField label="Status" value={selected.status} />
-              <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
+              <DetailField label={tFields("account")} value={selected.accountLabel} />
+              <DetailField label={tFields("productNo")} value={selected.productNo} />
+              <DetailField label={tFields("sc")} value={selected.sc} />
+              <DetailField label={tFields("cf")} value={selected.cf} />
+              <DetailField label={tFields("ct")} value={selected.ct} />
+              <DetailField label={tFields("cpY1Y2")} value={selected.cpY1Y2} />
+              <DetailField label={tFields("cpStart")} value={selected.cpStart ? formatDate(selected.cpStart) : undefined} />
+              <DetailField label={tFields("cpEnd")} value={selected.cpEnd ? formatDate(selected.cpEnd) : undefined} />
+              <DetailField label={tFields("status")} value={selected.status} />
+              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           }
         />
@@ -264,8 +270,8 @@ export default function SaleListPage() {
             <DataTable
               columns={tableColumns}
               data={rows}
-              searchPlaceholder="Search by order number, account, product..."
-              emptyMessage="No sale list entries found."
+              searchPlaceholder={t("fullSearchPlaceholder")}
+              emptyMessage={t("noEntriesFound")}
               getRowClassName={getSaleListRowClassName}
               onRowClick={(row) => selection.open(row)}
             />
@@ -304,8 +310,8 @@ export default function SaleListPage() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this sale list entry?"
-        description="This will permanently remove this record."
+        title={tMember("deleteSaleListEntryTitle")}
+        description={tMember("deleteSaleListEntryDescription")}
         loading={deleteEntries.isPending}
         onConfirm={async () => {
           if (!deleting) return

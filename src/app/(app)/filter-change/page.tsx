@@ -16,6 +16,7 @@ import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS } from "@/comp
 import { useDeleteFilterChangePlans, useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
 
@@ -26,6 +27,10 @@ function yearMonth(dateStr: string) {
 function FilterChangePageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("filterChange")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: plans = [], isPending } = useFilterChangePlans()
   const deletePlans = useDeleteFilterChangePlans()
   const updatePlan = useUpdateFilterChangePlan()
@@ -84,9 +89,9 @@ function FilterChangePageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Droplets className="h-6 w-6 text-primary" /> Filter Change
+            <Droplets className="h-6 w-6 text-primary" /> {tNav("filterChange")}
           </h1>
-          <p className="text-sm text-muted-foreground">Full list of filter change plans, grouped by month.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={FILTER_CHANGE_EXPORT_COLUMNS} rows={scopedPlans} fileName="filter-change" />
@@ -97,7 +102,7 @@ function FilterChangePageContent() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         </div>
       </div>
@@ -118,7 +123,7 @@ function FilterChangePageContent() {
                       selectedMonth === "all" && "bg-accent font-medium"
                     )}
                   >
-                    All
+                    {tCommon("all")}
                   </button>
                   {monthGroups.map((g) => (
                     <button
@@ -144,8 +149,8 @@ function FilterChangePageContent() {
                 <DataTable
                   columns={columns}
                   data={scopedPlans}
-                  searchPlaceholder="Search by order number, account, address..."
-                  emptyMessage="No filter change plans found."
+                  searchPlaceholder={t("searchPlaceholder")}
+                  emptyMessage={t("noPlansFound")}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                 />
@@ -176,19 +181,19 @@ function FilterChangePageContent() {
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
             >
-              <DetailField label="Order Number" value={selected.orderNumber} />
-              <DetailField label="Member Account#" value={selected.memberAccount} />
-              <DetailField label="Filter" value={selected.filterType} />
-              <DetailField label="Contact #" value={selected.contactNumber} />
-              <DetailField label="Address" value={selected.address} className="sm:col-span-2" />
-              <DetailField label="S/C" value={selected.sc} />
-              <DetailField label="Product #" value={selected.productNo} />
-              <DetailField label="Plan D" value={formatDate(selected.planDate)} />
-              <DetailField label="Pre D" value={selected.preD ? formatDate(selected.preD) : undefined} />
-              <DetailField label="Acc D" value={selected.accD ? formatDate(selected.accD) : undefined} />
-              <DetailField label="Serviceman" value={selected.serviceman} />
-              <DetailField label="Status" value={selected.status} />
-              <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
+              <DetailField label={tFields("orderNumber")} value={selected.orderNumber} />
+              <DetailField label={tFields("memberAccount")} value={selected.memberAccount} />
+              <DetailField label={tFields("filter")} value={selected.filterType} />
+              <DetailField label={tFields("contactNumber")} value={selected.contactNumber} />
+              <DetailField label={tFields("address")} value={selected.address} className="sm:col-span-2" />
+              <DetailField label={tFields("sc")} value={selected.sc} />
+              <DetailField label={tFields("productNo")} value={selected.productNo} />
+              <DetailField label={tFields("planD")} value={formatDate(selected.planDate)} />
+              <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
+              <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
+              <DetailField label={tFields("serviceman")} value={selected.serviceman} />
+              <DetailField label={tFields("status")} value={selected.status} />
+              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           )
         }
@@ -207,8 +212,8 @@ function FilterChangePageContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this filter change plan?"
-        description="This will permanently remove this filter change record."
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
         loading={deletePlans.isPending}
         onConfirm={async () => {
           if (!deleting) return

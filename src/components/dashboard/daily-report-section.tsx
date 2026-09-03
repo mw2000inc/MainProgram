@@ -245,6 +245,11 @@ export function DailyReportSection() {
   const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t: tFilterChange } = useTranslation("filterChange")
+  const { t: tInstall } = useTranslation("install")
+  const { t: tRepair } = useTranslation("repair")
+  const { t: tCollection } = useTranslation("collection")
+  const { t: tInventory } = useTranslation("inventory")
 
   // Same collapse mechanism as a split-view detail panel — the nav rail goes
   // icon-only for as long as this section is mounted (i.e. the Daily Report
@@ -548,9 +553,8 @@ export function DailyReportSection() {
         expandedColumns={filterChangeExpandedColumns}
         data={dayFilterChangePlans}
         loading={pFilter}
-        emptyMessage="No filter change plans for this date."
+        emptyMessage={tFilterChange("noPlansForDate")}
         canAdd={isAdmin}
-        addLabel="Add"
         onAdd={() => setFilterChangeFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
@@ -582,9 +586,8 @@ export function DailyReportSection() {
         columns={installColumns}
         data={dayInstallPlans}
         loading={pInstall}
-        emptyMessage="No installs for this date."
+        emptyMessage={tInstall("noPlansForDate")}
         canAdd={isAdmin}
-        addLabel="Add"
         onAdd={() => setInstallFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
@@ -602,9 +605,8 @@ export function DailyReportSection() {
         columns={repairColumns}
         data={dayRepairPlans}
         loading={pRepair}
-        emptyMessage="No repair plans for this date."
+        emptyMessage={tRepair("noPlansForDate")}
         canAdd={isAdmin}
-        addLabel="Add"
         onAdd={() => setRepairFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
@@ -622,9 +624,8 @@ export function DailyReportSection() {
         columns={collectionsColumns}
         data={dayCollectionPlans}
         loading={pCollections}
-        emptyMessage="No collections for this date."
+        emptyMessage={tCollection("noPlansForDate")}
         canAdd={isAdmin}
-        addLabel="Add"
         onAdd={() => setCollectionsFormOpen(true)}
         canDelete={isAdmin}
         onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
@@ -644,13 +645,13 @@ export function DailyReportSection() {
     // around that page's own admin-only approve action.
     inventory: (
       <DashboardPlanPanel
-        title="Inventory List"
+        title={tInventory("inventoryListTitle")}
         icon={Package}
         columns={inventoryListColumns}
         expandedColumns={inventoryListExpandedColumns}
         data={dayStockMovements}
         loading={pInventory}
-        emptyMessage="No inventory movements for this date."
+        emptyMessage={tInventory("noMovementsForDate")}
         exportColumns={INVENTORY_LIST_EXPORT_COLUMNS}
         exportFileName="inventory-list"
         onRowClick={() => router.push("/inventory/in-and-out")}

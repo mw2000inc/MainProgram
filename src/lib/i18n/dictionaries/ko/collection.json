@@ -5,5 +5,12 @@
   "recurringScheduleDescription": "이 항목은 자동 생성된 정기 일정의 일부입니다. 날짜를 변경하면 이후의 대기 중인(Pending) 모든 항목이 동일한 C/T 간격으로 재조정됩니다 — 이미 수거 완료된 항목은 영향을 받지 않습니다.",
   "editDescription": "이 수거 기록을 업데이트합니다.",
   "addDescription": "수금 일정을 예약합니다.",
-  "customerOrBusinessName": "고객 또는 업체명"
+  "customerOrBusinessName": "고객 또는 업체명",
+  "pageDescription": "월별로 정리된 전체 수금 목록입니다.",
+  "searchPlaceholder": "주문 번호, 계정으로 검색...",
+  "noPlansFound": "수거 내역을 찾을 수 없습니다.",
+  "deleteTitle": "이 수거 항목을 삭제하시겠습니까?",
+  "deleteDescription": "이 수거 기록이 영구적으로 삭제됩니다.",
+  "noPlansForDate": "이 날짜에 해당하는 수거 내역이 없습니다.",
+  "autoCTCompletion": "자동 (C/T 완료)"
 }

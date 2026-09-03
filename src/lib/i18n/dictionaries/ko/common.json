@@ -58,5 +58,10 @@
   "hideTranslation": "번역 숨기기",
   "translating": "번역 중...",
   "translationFailed": "번역하지 못했습니다 — 다시 시도해 주세요.",
-  "translationUnavailable": "번역 기능이 아직 설정되지 않았습니다."
+  "translationUnavailable": "번역 기능이 아직 설정되지 않았습니다.",
+  "notAvailable": "해당 없음",
+  "yes": "예",
+  "no": "아니오",
+  "backTo": "{page}(으)로 돌아가기",
+  "notFound": "{item}을(를) 찾을 수 없습니다"
 }

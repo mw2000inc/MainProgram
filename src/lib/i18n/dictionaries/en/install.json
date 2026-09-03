@@ -4,5 +4,11 @@
   "editDescription": "Update this installation.",
   "addDescription": "Schedule a new installation.",
   "customerOrBusinessName": "Customer or business name",
-  "installationAddress": "Installation address"
+  "installationAddress": "Installation address",
+  "pageDescription": "Full list of scheduled and completed installations.",
+  "searchPlaceholder": "Search by name, order no, address...",
+  "noPlansFound": "No install plans found.",
+  "deleteTitle": "Delete this install plan?",
+  "deleteDescription": "This will permanently remove this install record.",
+  "noPlansForDate": "No installs for this date."
 }

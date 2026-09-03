@@ -15,12 +15,17 @@ import { getInstallFullColumns, INSTALL_EXPORT_COLUMNS } from "@/components/inst
 import { useDeleteInstallPlans, useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
 
 function InstallPageContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("install")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
   const { data: plans = [], isPending } = useInstallPlans()
   const deletePlans = useDeleteInstallPlans()
   const updatePlan = useUpdateInstallPlan()
@@ -64,9 +69,9 @@ function InstallPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <HardHat className="h-6 w-6 text-primary" /> Install
+            <HardHat className="h-6 w-6 text-primary" /> {tNav("install")}
           </h1>
-          <p className="text-sm text-muted-foreground">Full list of scheduled and completed installations.</p>
+          <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
         <div className="flex items-center gap-2">
           <PanelExportMenu columns={INSTALL_EXPORT_COLUMNS} rows={plans} fileName="install-plan" />
@@ -77,7 +82,7 @@ function InstallPageContent() {
               setFormOpen(true)
             }}
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" /> {tCommon("add")}
           </Button>
         </div>
       </div>
@@ -91,8 +96,8 @@ function InstallPageContent() {
               <DataTable
                 columns={columns}
                 data={plans}
-                searchPlaceholder="Search by name, order no, address..."
-                emptyMessage="No install plans found."
+                searchPlaceholder={t("searchPlaceholder")}
+                emptyMessage={t("noPlansFound")}
                 onFilteredRowsChange={setFilteredRows}
                 onRowClick={(row) => selection.open(row)}
               />
@@ -122,27 +127,27 @@ function InstallPageContent() {
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
             >
-              <DetailField label="Input Date" value={formatDate(selected.inputDate)} />
-              <DetailField label="Order No" value={selected.orderNo} />
-              <DetailField label="Name" value={selected.name} />
-              <DetailField label="Address" value={selected.address} className="sm:col-span-2" />
-              <DetailField label="Contact #" value={selected.contactNumber} />
-              <DetailField label="In or Out" value={selected.inOut} />
-              <DetailField label="Model" value={selected.model} />
-              <DetailField label="Model(dp)" value={selected.modelDp} />
-              <DetailField label="Unit Price" value={formatCurrency(selected.unitPrice)} />
-              <DetailField label="C/P Price" value={formatCurrency(selected.cpPrice)} />
-              <DetailField label="Delivery & Installation Fee" value={formatCurrency(selected.deliveryInstallationFee)} />
+              <DetailField label={tFields("inputDate")} value={formatDate(selected.inputDate)} />
+              <DetailField label={tFields("orderNo")} value={selected.orderNo} />
+              <DetailField label={tFields("name")} value={selected.name} />
+              <DetailField label={tFields("address")} value={selected.address} className="sm:col-span-2" />
+              <DetailField label={tFields("contactNumber")} value={selected.contactNumber} />
+              <DetailField label={tFields("inOrOut")} value={selected.inOut} />
+              <DetailField label={tFields("model")} value={selected.model} />
+              <DetailField label={tFields("modelDp")} value={selected.modelDp} />
+              <DetailField label={tFields("unitPrice")} value={formatCurrency(selected.unitPrice)} />
+              <DetailField label={tFields("cpPrice")} value={formatCurrency(selected.cpPrice)} />
+              <DetailField label={tFields("deliveryInstallationFee")} value={formatCurrency(selected.deliveryInstallationFee)} />
               <DetailField
-                label="Pre Installed Date"
+                label={tFields("preInstalledDate")}
                 value={selected.preInstalledDate ? formatDate(selected.preInstalledDate) : undefined}
               />
               <DetailField
-                label="Installed Date"
+                label={tFields("installedDate")}
                 value={selected.installedDate ? formatDate(selected.installedDate) : undefined}
               />
-              <DetailField label="Status" value={selected.status} />
-              <DetailField label="Note" value={selected.note} className="sm:col-span-2" />
+              <DetailField label={tFields("status")} value={selected.status} />
+              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           )
         }
@@ -161,8 +166,8 @@ function InstallPageContent() {
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete this install plan?"
-        description="This will permanently remove this install record."
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
         loading={deletePlans.isPending}
         onConfirm={async () => {
           if (!deleting) return
