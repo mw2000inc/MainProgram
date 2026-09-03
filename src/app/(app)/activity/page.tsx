@@ -3,16 +3,20 @@
 import { History } from "lucide-react"
 import { ActivityLogView } from "@/components/activity/activity-log-view"
 import { useActivityLogs } from "@/lib/hooks/use-activity-logs"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 export default function ActivityPage() {
+  const { t } = useTranslation("nav")
+  const { t: tActivity } = useTranslation("activity")
+  const { t: tCommon } = useTranslation("common")
   return (
     <ActivityLogView
-      title="Admin Activity"
-      description="Who changed what, and when — recorded automatically for every admin action."
+      title={t("adminActivity")}
+      description={tActivity("adminActivityDescription")}
       icon={History}
-      actorLabel="Admin"
-      searchPlaceholder="Search by admin or record..."
-      emptyMessage="No activity recorded yet."
+      actorLabel={tCommon("admin")}
+      searchPlaceholder={tActivity("adminSearchPlaceholder")}
+      emptyMessage={tActivity("adminEmptyMessage")}
       useLogs={useActivityLogs}
     />
   )

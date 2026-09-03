@@ -36,7 +36,12 @@ export const SECTION_ICONS: Record<DailyReportSectionKey, LucideIcon> = {
 // offered in the "Visible Fields" checklist — sourced from each section's
 // existing column definitions (see the matching *-columns.tsx). Omitted
 // entirely for "schedule"/"announcements": neither is a column-table panel,
-// so field visibility doesn't apply to them.
+// so field visibility doesn't apply to them. These labels stay in English
+// regardless of interface language for now — an admin-only settings
+// checklist, same deferred-to-long-tail treatment as the export column
+// header arrays (JOB_TYPE_LABELS, SALE_LIST_EXPORT_COLUMNS, etc.); the
+// `key` strings here don't map cleanly 1:1 onto fields.json's own key
+// names, so revisit as its own pass rather than guessing a mapping.
 export const SECTION_FIELDS: Partial<Record<DailyReportSectionKey, { key: string; label: string }[]>> = {
   installation: [
     { key: "name", label: "Name" },

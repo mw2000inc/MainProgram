@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog"
 import { useProducts } from "@/lib/hooks/use-inventory"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { PRODUCT_CATALOG } from "@/lib/constants"
 import type { Product } from "@/lib/types"
 
@@ -33,22 +34,21 @@ export function ProductCatalogPanel() {
   const { data: products = [], isPending } = useProducts()
   const [addOpen, setAddOpen] = React.useState(false)
   const productGroups = React.useMemo(() => groupByCategory(products), [products])
+  const { t } = useTranslation("settings")
+  const { t: tInventory } = useTranslation("inventory")
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Product Catalog</CardTitle>
-        <CardDescription>
-          Everything offered as a suggestion in the Sale List entry form&apos;s Product# field — real Inventory
-          products below, plus a frozen legacy reference further down.
-        </CardDescription>
+        <CardTitle className="text-base">{t("productCatalog")}</CardTitle>
+        <CardDescription>{t("productCatalogDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Inventory Products</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("inventoryProducts")}</p>
             <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> Add Product
+              <Plus className="h-3.5 w-3.5" /> {tInventory("addProduct")}
             </Button>
           </div>
           {isPending && (
@@ -59,7 +59,7 @@ export function ProductCatalogPanel() {
           )}
           {!isPending && products.length === 0 && (
             <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground text-center">
-              No products in Inventory yet — click Add Product to create one.
+              {t("noProductsYet")}
             </p>
           )}
           {!isPending && productGroups.length > 0 && (
@@ -87,9 +87,7 @@ export function ProductCatalogPanel() {
             New products belong in Inventory — this list stays a true
             historical snapshot of the old system's codes. */}
         <div className="space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Legacy Catalog (historical, no longer added to)
-          </p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("legacyCatalog")}</p>
           <div className="space-y-4">
             {PRODUCT_CATALOG.map((group) => (
               <div key={group.group} className="space-y-1.5">

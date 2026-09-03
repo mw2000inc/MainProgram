@@ -8,11 +8,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { actionLabel, entityTypeLabel, fieldLabel } from "@/lib/activity-log-config"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, formatDateTime } from "@/lib/utils"
 import type { ActivityLogEntry } from "@/lib/types"
 
 // Shared with deleted-record-dialog.tsx — both render raw column values
-// straight from Postgres and need the exact same formatting.
+// straight from Postgres and need the exact same formatting. Left in
+// English regardless of interface language (like every other raw-value
+// formatter in this app) — this renders literal stored data, not UI chrome.
 export function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—"
   if (typeof value === "boolean") return value ? "Yes" : "No"
@@ -38,6 +41,7 @@ export function ActivityDetailDialog({
   entry: ActivityLogEntry | undefined
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation("activity")
   const isUpdate = entry?.action === "update"
   const fieldKeys = entry ? Array.from(new Set([...Object.keys(entry.oldValues), ...Object.keys(entry.newValues)])) : []
 
@@ -47,7 +51,7 @@ export function ActivityDetailDialog({
         <DialogHeader>
           <DialogTitle>{entry?.userName}</DialogTitle>
           <DialogDescription>
-            {entry && `${actionLabel(entry.action)} ${entityTypeLabel(entry.entityType)}`} ·{" "}
+            {entry && `${actionLabel(entry.action, t)} ${entityTypeLabel(entry.entityType, t)}`} ·{" "}
             {entry && formatDateTime(entry.createdAt)}
           </DialogDescription>
         </DialogHeader>
@@ -55,23 +59,23 @@ export function ActivityDetailDialog({
           <div className="space-y-4 text-sm">
             {entry.description && (
               <div>
-                <p className="text-xs text-muted-foreground">Record</p>
+                <p className="text-xs text-muted-foreground">{t("record")}</p>
                 <p className="font-medium">{entry.description}</p>
               </div>
             )}
 
-            {fieldKeys.length === 0 && <p className="text-muted-foreground">No field-level details recorded.</p>}
+            {fieldKeys.length === 0 && <p className="text-muted-foreground">{t("noFieldLevelDetails")}</p>}
 
             {isUpdate ? (
               <div className="space-y-3">
                 {fieldKeys.map((key) => (
                   <div key={key} className="grid grid-cols-2 gap-3 rounded-md border p-2.5">
                     <div>
-                      <p className="text-xs text-muted-foreground">{fieldLabel(key)} — Before</p>
+                      <p className="text-xs text-muted-foreground">{fieldLabel(key, t)} — {t("before")}</p>
                       <p>{formatValue(entry.oldValues[key])}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">{fieldLabel(key)} — After</p>
+                      <p className="text-xs text-muted-foreground">{fieldLabel(key, t)} — {t("after")}</p>
                       <p>{formatValue(entry.newValues[key])}</p>
                     </div>
                   </div>
@@ -82,7 +86,7 @@ export function ActivityDetailDialog({
                 <div className="space-y-1.5 rounded-md border p-2.5">
                   {fieldKeys.map((key) => (
                     <div key={key} className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">{fieldLabel(key)}</span>
+                      <span className="text-muted-foreground">{fieldLabel(key, t)}</span>
                       <span>{formatValue(entry.action === "delete" ? entry.oldValues[key] : entry.newValues[key])}</span>
                     </div>
                   ))}

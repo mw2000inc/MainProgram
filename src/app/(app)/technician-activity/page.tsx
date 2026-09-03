@@ -3,16 +3,20 @@
 import { Hammer } from "lucide-react"
 import { ActivityLogView } from "@/components/activity/activity-log-view"
 import { useTechnicianActivityLogs } from "@/lib/hooks/use-activity-logs"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 
 export default function TechnicianActivityPage() {
+  const { t } = useTranslation("nav")
+  const { t: tActivity } = useTranslation("activity")
+  const { t: tCommon } = useTranslation("common")
   return (
     <ActivityLogView
-      title="Technician Activity"
-      description="Job status changes made by technicians in the field, and when."
+      title={t("technicianActivity")}
+      description={tActivity("technicianActivityDescription")}
       icon={Hammer}
-      actorLabel="Technician"
-      searchPlaceholder="Search by technician or job..."
-      emptyMessage="No technician activity recorded yet."
+      actorLabel={tCommon("technician")}
+      searchPlaceholder={tActivity("technicianSearchPlaceholder")}
+      emptyMessage={tActivity("technicianEmptyMessage")}
       useLogs={useTechnicianActivityLogs}
     />
   )

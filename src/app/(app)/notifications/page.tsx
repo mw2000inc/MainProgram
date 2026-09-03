@@ -17,6 +17,7 @@ import {
   useMarkNotificationRead,
   useNotifications,
 } from "@/lib/hooks/use-misc"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDateTime } from "@/lib/utils"
 import type { NotificationType } from "@/lib/types"
 
@@ -36,17 +37,19 @@ const ICON_COLORS: Record<NotificationType, string> = {
   "new-sale": "bg-success/10 text-success",
 }
 
-const TYPE_LABELS: Record<NotificationType, string> = {
-  "low-stock": "Low Inventory",
-  "out-of-stock": "Out of Stock",
-  "expiring-contract": "Expiring Contract",
-  "new-customer": "New Customer",
-  "new-sale": "New Sale",
+const TYPE_LABEL_KEYS: Record<NotificationType, string> = {
+  "low-stock": "typeLowStock",
+  "out-of-stock": "typeOutOfStock",
+  "expiring-contract": "typeExpiringContract",
+  "new-customer": "typeNewCustomer",
+  "new-sale": "typeNewSale",
 }
 
 type TypeFilter = "all" | NotificationType
 
 export default function NotificationsPage() {
+  const { t } = useTranslation("notifications")
+  const { t: tCommon } = useTranslation("common")
   const { data: notifications = [], isPending } = useNotifications()
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
@@ -79,15 +82,15 @@ export default function NotificationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Bell className="h-6 w-6 text-primary" /> Notifications
+            <Bell className="h-6 w-6 text-primary" /> {t("pageTitle")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {unreadCount > 0 ? `You have ${unreadCount} unread notification(s).` : "You're all caught up."}
+            {unreadCount > 0 ? t("pageDescriptionUnread", { count: unreadCount }) : t("pageDescriptionCaughtUp")}
           </p>
         </div>
         {unreadCount > 0 && (
           <Button variant="outline" onClick={() => markAllRead.mutate()} className="gap-1.5">
-            Mark all as read
+            {t("markAllRead")}
           </Button>
         )}
       </div>
@@ -95,25 +98,25 @@ export default function NotificationsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
           <SelectTrigger className="h-9 w-[190px]">
-            <SelectValue placeholder="Type" />
+            <SelectValue placeholder={t("typePlaceholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {Object.entries(TYPE_LABELS).map(([value, label]) => (
+            <SelectItem value="all">{t("allTypes")}</SelectItem>
+            {Object.entries(TYPE_LABEL_KEYS).map(([value, labelKey]) => (
               <SelectItem key={value} value={value}>
-                {label}
+                {t(labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={readFilter} onValueChange={(v) => setReadFilter(v as typeof readFilter)}>
           <SelectTrigger className="h-9 w-[140px]">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("statusPlaceholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="unread">Unread</SelectItem>
-            <SelectItem value="read">Read</SelectItem>
+            <SelectItem value="all">{tCommon("all")}</SelectItem>
+            <SelectItem value="unread">{t("unread")}</SelectItem>
+            <SelectItem value="read">{t("read")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -121,7 +124,7 @@ export default function NotificationsPage() {
       <Card>
         <CardContent className="pt-6 divide-y">
           {filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground py-12 text-center">No notifications found.</p>
+            <p className="text-sm text-muted-foreground py-12 text-center">{t("noNotificationsFound")}</p>
           )}
           {filtered.map((n) => {
             const Icon = ICONS[n.type]
@@ -143,7 +146,7 @@ export default function NotificationsPage() {
                     {!n.isRead && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {TYPE_LABELS[n.type]} &middot; {formatDateTime(n.createdAt)}
+                    {t(TYPE_LABEL_KEYS[n.type])} &middot; {formatDateTime(n.createdAt)}
                   </p>
                 </div>
               </button>

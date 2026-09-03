@@ -2,7 +2,9 @@ import type { ActivityLogEntry } from "@/lib/types"
 
 export type ActivityLogTarget =
   | { kind: "href"; href: string }
-  | { kind: "unavailable"; message: string }
+  // messageKey points into activity.json rather than carrying literal text,
+  // so the caller can translate it via useTranslation("activity").
+  | { kind: "unavailable"; messageKey: string }
 
 // Maps an audit log entry's entity_type (+ entity_id) to wherever that
 // record is actually viewable in the app today — checked against the real
@@ -70,17 +72,14 @@ export function resolveActivityLogTarget(entry: ActivityLogEntry): ActivityLogTa
         | string
         | undefined
       if (!scheduleJobId) {
-        return { kind: "unavailable", message: "Can't trace this filter item back to its schedule job from this entry." }
+        return { kind: "unavailable", messageKey: "cantTraceFilterItem" }
       }
       return { kind: "href", href: `/schedule?id=${scheduleJobId}` }
     }
     case "suppliers":
-      return {
-        kind: "unavailable",
-        message: "Suppliers don't have their own page — manage them from Inventory when adding or editing a product.",
-      }
+      return { kind: "unavailable", messageKey: "suppliersNoOwnPage" }
     case "sales":
-      return { kind: "unavailable", message: "This record type doesn't have a page in the app." }
+      return { kind: "unavailable", messageKey: "recordTypeNoPage" }
     default:
       return undefined
   }

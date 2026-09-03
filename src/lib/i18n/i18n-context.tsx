@@ -43,6 +43,12 @@ import enConfirm from "@/lib/i18n/dictionaries/en/confirm.json"
 import koConfirm from "@/lib/i18n/dictionaries/ko/confirm.json"
 import enPortal from "@/lib/i18n/dictionaries/en/portal.json"
 import koPortal from "@/lib/i18n/dictionaries/ko/portal.json"
+import enActivity from "@/lib/i18n/dictionaries/en/activity.json"
+import koActivity from "@/lib/i18n/dictionaries/ko/activity.json"
+import enSettings from "@/lib/i18n/dictionaries/en/settings.json"
+import koSettings from "@/lib/i18n/dictionaries/ko/settings.json"
+import enNotifications from "@/lib/i18n/dictionaries/en/notifications.json"
+import koNotifications from "@/lib/i18n/dictionaries/ko/notifications.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
 // 1,500+ eventual keys organized instead of one giant dictionary.
@@ -67,6 +73,9 @@ export type Namespace =
   | "cpSystem"
   | "confirm"
   | "portal"
+  | "activity"
+  | "settings"
+  | "notifications"
 
 type Dictionary = Record<string, string>
 
@@ -92,6 +101,9 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     cpSystem: enCpSystem,
     confirm: enConfirm,
     portal: enPortal,
+    activity: enActivity,
+    settings: enSettings,
+    notifications: enNotifications,
   },
   ko: {
     common: koCommon,
@@ -114,6 +126,9 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     cpSystem: koCpSystem,
     confirm: koConfirm,
     portal: koPortal,
+    activity: koActivity,
+    settings: koSettings,
+    notifications: koNotifications,
   },
 }
 

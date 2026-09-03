@@ -14,6 +14,7 @@ import { getActivityColumns } from "@/components/activity/activity-columns"
 import { ActivityDetailDialog } from "@/components/activity/activity-detail-dialog"
 import { DeletedRecordDialog } from "@/components/activity/deleted-record-dialog"
 import { resolveActivityLogTarget } from "@/lib/activity-log-navigation"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { ActivityLogEntry } from "@/lib/types"
 
 // Shared by the Admin Activity and Technician Activity pages — same table,
@@ -39,6 +40,7 @@ export function ActivityLogView({
   useLogs: (date: string | undefined) => UseQueryResult<ActivityLogEntry[]>
 }) {
   const router = useRouter()
+  const { t } = useTranslation("activity")
   const [date, setDate] = React.useState<string | undefined>(undefined)
   const { data: entries = [], isPending } = useLogs(date)
   const [selected, setSelected] = React.useState<ActivityLogEntry | undefined>(undefined)
@@ -65,11 +67,11 @@ export function ActivityLogView({
     }
     const target = resolveActivityLogTarget(entry)
     if (!target) {
-      toast.error("No page is mapped for this record type yet.")
+      toast.error(t("noPageMappedYet"))
       return
     }
     if (target.kind === "unavailable") {
-      toast.error(target.message)
+      toast.error(t(target.messageKey))
       return
     }
     router.push(target.href)
@@ -105,7 +107,7 @@ export function ActivityLogView({
               columns={columns}
               data={entries}
               searchPlaceholder={searchPlaceholder}
-              emptyMessage={date ? "No activity recorded for this date." : emptyMessage}
+              emptyMessage={date ? t("noActivityForDate") : emptyMessage}
               onRowClick={handleRowClick}
             />
           </CardContent>

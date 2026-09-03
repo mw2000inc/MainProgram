@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useDailyReportSections, useReorderDailyReportSections, useUpdateDailyReportSection } from "@/lib/hooks/use-daily-report-sections"
 import { SECTION_FIELDS, SECTION_ICONS, resolveSectionConfigs } from "@/lib/daily-report-sections-config"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn } from "@/lib/utils"
 import type { DailyReportSectionConfig, DailyReportSectionKey } from "@/lib/types"
 
@@ -48,6 +49,7 @@ function SortableRow({
   onEdit: () => void
   onToggleEnabled: (enabled: boolean) => void
 }) {
+  const { t } = useTranslation("settings")
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.sectionKey,
   })
@@ -69,14 +71,18 @@ function SortableRow({
         {...attributes}
         {...listeners}
         className="touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
-        aria-label="Drag to reorder"
+        aria-label={t("dragToReorder")}
       >
         <GripVertical className="h-4 w-4" />
       </button>
       <Icon className="h-4 w-4 text-primary shrink-0" />
       <span className="flex-1 min-w-0 truncate text-sm font-medium">{section.label}</span>
       <div className="flex items-center gap-2">
-        <Switch checked={section.enabled} onCheckedChange={onToggleEnabled} aria-label={`${section.enabled ? "Disable" : "Enable"} ${section.label}`} />
+        <Switch
+          checked={section.enabled}
+          onCheckedChange={onToggleEnabled}
+          aria-label={`${section.enabled ? t("disable") : t("enable")} ${section.label}`}
+        />
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5" />
         </Button>
@@ -93,6 +99,8 @@ function EditSectionDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const updateSection = useUpdateDailyReportSection()
+  const { t } = useTranslation("settings")
+  const { t: tCommon } = useTranslation("common")
   const fields = section ? SECTION_FIELDS[section.sectionKey] : undefined
 
   // Lazy initializers, not an effect — the parent remounts this component
@@ -139,21 +147,21 @@ function EditSectionDialog({
     <Dialog open={!!section} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Section</DialogTitle>
-          <DialogDescription>Change how this section appears on the Daily Report for every user.</DialogDescription>
+          <DialogTitle>{t("editSectionTitle")}</DialogTitle>
+          <DialogDescription>{t("editSectionDescription")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Section Name</Label>
+            <Label>{t("sectionName")}</Label>
             <Input value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="flex items-center justify-between rounded-md border p-3">
-            <Label className="cursor-pointer">Enabled</Label>
+            <Label className="cursor-pointer">{t("enabled")}</Label>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
           {fields && (
             <div className="space-y-2">
-              <Label>Visible Fields</Label>
+              <Label>{t("visibleFields")}</Label>
               <div className="space-y-1.5 rounded-md border p-3">
                 {fields.map((field) => (
                   <label key={field.key} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -170,10 +178,10 @@ function EditSectionDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon("cancel")}
           </Button>
           <Button type="button" onClick={handleSave} disabled={updateSection.isPending}>
-            {updateSection.isPending ? "Saving..." : "Save"}
+            {updateSection.isPending ? tCommon("saving") : tCommon("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

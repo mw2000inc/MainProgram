@@ -1,0 +1,20 @@
+{
+  "pageTitle": "Notifications",
+  "pageDescriptionUnread": "You have {count} unread notification(s).",
+  "pageDescriptionCaughtUp": "You're all caught up.",
+  "markAllRead": "Mark all as read",
+  "typePlaceholder": "Type",
+  "allTypes": "All Types",
+  "typeLowStock": "Low Inventory",
+  "typeOutOfStock": "Out of Stock",
+  "typeExpiringContract": "Expiring Contract",
+  "typeNewCustomer": "New Customer",
+  "typeNewSale": "New Sale",
+  "statusPlaceholder": "Status",
+  "unread": "Unread",
+  "read": "Read",
+  "noNotificationsFound": "No notifications found.",
+  "markAllReadShort": "Mark all read",
+  "noNotifications": "No notifications",
+  "viewAllNotifications": "View all notifications"
+}

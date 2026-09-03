@@ -15,6 +15,7 @@ import { ProductCatalogPanel } from "@/components/settings/product-catalog-panel
 import { LanguagePanel } from "@/components/settings/language-panel"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { ContactEntry } from "@/lib/types"
 
 function ContactEntryList({
@@ -30,6 +31,7 @@ function ContactEntryList({
   labelPlaceholder: string
   valuePlaceholder: string
 }) {
+  const { t } = useTranslation("common")
   return (
     <div className="space-y-2">
       <Label>{title}</Label>
@@ -66,7 +68,7 @@ function ContactEntryList({
         className="gap-1.5"
         onClick={() => onChange([...entries, { label: "", value: "" }])}
       >
-        <Plus className="h-3.5 w-3.5" /> Add
+        <Plus className="h-3.5 w-3.5" /> {t("add")}
       </Button>
     </div>
   )
@@ -75,6 +77,9 @@ function ContactEntryList({
 export default function SettingsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  const { t } = useTranslation("settings")
+  const { t: tNav } = useTranslation("nav")
+  const { t: tCommon } = useTranslation("common")
   const { data: settings, isPending } = useSettings()
   const updateSettings = useUpdateSettings()
 
@@ -140,9 +145,9 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <SettingsIcon className="h-6 w-6 text-primary" /> Settings
+          <SettingsIcon className="h-6 w-6 text-primary" /> {tNav("settings")}
         </h1>
-        <p className="text-sm text-muted-foreground">Manage company information, preferences, and data.</p>
+        <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
       </div>
 
       {/* Visible to every signed-in user, not just admins — a language
@@ -157,8 +162,8 @@ export default function SettingsPage() {
         <>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Company Information</CardTitle>
-            <CardDescription>Shown on invoices and throughout the app.</CardDescription>
+            <CardTitle className="text-base">{t("companyInformation")}</CardTitle>
+            <CardDescription>{t("companyInformationDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
@@ -170,24 +175,24 @@ export default function SettingsPage() {
               </Avatar>
               <div className="space-y-1">
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5">
-                  <Upload className="h-3.5 w-3.5" /> Upload Logo
+                  <Upload className="h-3.5 w-3.5" /> {t("uploadLogo")}
                 </Button>
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                <p className="text-xs text-muted-foreground">PNG or JPG, square recommended.</p>
+                <p className="text-xs text-muted-foreground">{t("logoHint")}</p>
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Company Name</Label>
+              <Label>{t("companyName")}</Label>
               <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Support Email</Label>
+              <Label>{t("supportEmail")}</Label>
               <Input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
-                <Label className="cursor-pointer">Email Notifications</Label>
-                <p className="text-xs text-muted-foreground">Send email alerts for low stock and expiring contracts.</p>
+                <Label className="cursor-pointer">{t("emailNotifications")}</Label>
+                <p className="text-xs text-muted-foreground">{t("emailNotificationsDescription")}</p>
               </div>
               <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
             </div>
@@ -196,26 +201,26 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Company Contact Details</CardTitle>
-            <CardDescription>Our own company&apos;s contact info, shown to staff from customer profiles.</CardDescription>
+            <CardTitle className="text-base">{t("companyContactDetails")}</CardTitle>
+            <CardDescription>{t("companyContactDetailsDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Office Address</Label>
+              <Label>{t("officeAddress")}</Label>
               <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} />
             </div>
             <ContactEntryList
-              title="Mobile Numbers"
+              title={t("mobileNumbers")}
               entries={contactNumbers}
               onChange={setContactNumbers}
-              labelPlaceholder="Department"
+              labelPlaceholder={t("department")}
               valuePlaceholder="0917 000 0000"
             />
             <ContactEntryList
-              title="Email Addresses"
+              title={t("emailAddresses")}
               entries={contactEmails}
               onChange={setContactEmails}
-              labelPlaceholder="Department"
+              labelPlaceholder={t("department")}
               valuePlaceholder="dept@aquatrack.ph"
             />
           </CardContent>
@@ -223,16 +228,16 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Billing Preferences</CardTitle>
-            <CardDescription>Applied to new sales and invoices.</CardDescription>
+            <CardTitle className="text-base">{t("billingPreferences")}</CardTitle>
+            <CardDescription>{t("billingPreferencesDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label>{t("currency")}</Label>
               <Input value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="PHP" />
             </div>
             <div className="space-y-2">
-              <Label>Tax Rate (%)</Label>
+              <Label>{t("taxRate")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -254,7 +259,7 @@ export default function SettingsPage() {
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={updateSettings.isPending}>
-            {updateSettings.isPending ? "Saving..." : "Save Settings"}
+            {updateSettings.isPending ? tCommon("saving") : t("saveSettings")}
           </Button>
         </div>
         </>

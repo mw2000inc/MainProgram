@@ -13,16 +13,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Logo } from "@/components/shared/logo"
 import { supabase } from "@/lib/supabase/client"
 import { authErrorMessage } from "@/lib/supabase/errors"
+import { useTranslation, usePreAuthLocale } from "@/lib/i18n/i18n-context"
 
-const schema = z
-  .object({
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
+function createSchema(t: (key: string) => string) {
+  return z
+    .object({
+      password: z.string().min(6, t("passwordMinLength6")),
+      confirmPassword: z.string(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t("passwordsDoNotMatch"),
+      path: ["confirmPassword"],
+    })
+}
 
 type Status = "checking" | "ready" | "invalid"
 
@@ -33,6 +36,8 @@ type Status = "checking" | "ready" | "invalid"
 // showing the new-password form.
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const { t } = useTranslation("auth")
+  const { locale, setLocale } = usePreAuthLocale()
   const [status, setStatus] = React.useState<Status>("checking")
 
   React.useEffect(() => {
@@ -68,6 +73,7 @@ export default function ResetPasswordPage() {
     }
   }, [])
 
+  const schema = React.useMemo(() => createSchema(t), [t])
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { password: "", confirmPassword: "" },
@@ -79,7 +85,7 @@ export default function ResetPasswordPage() {
       toast.error(authErrorMessage(error))
       return
     }
-    toast.success("Password updated — please sign in with your new password.")
+    toast.success(t("passwordUpdatedSignIn"))
     await supabase.auth.signOut()
     router.push("/login")
   }
@@ -93,33 +99,46 @@ export default function ResetPasswordPage() {
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <Logo className="h-12 w-12" />
           <h1 className="text-xl font-semibold">MW2000</h1>
+          <div className="flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              className={locale === "en" ? "font-semibold underline" : "text-muted-foreground"}
+              onClick={() => setLocale("en")}
+            >
+              English
+            </button>
+            <span className="text-muted-foreground">/</span>
+            <button
+              type="button"
+              className={locale === "ko" ? "font-semibold underline" : "text-muted-foreground"}
+              onClick={() => setLocale("ko")}
+            >
+              한국어
+            </button>
+          </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Reset your password</CardTitle>
-            <CardDescription>
-              {status === "ready" ? "Choose a new password for your account." : " "}
-            </CardDescription>
+            <CardTitle className="text-base">{t("resetYourPassword")}</CardTitle>
+            <CardDescription>{status === "ready" ? t("chooseNewPassword") : " "}</CardDescription>
           </CardHeader>
           <CardContent>
             {status === "checking" && (
-              <p className="text-sm text-muted-foreground">Verifying your reset link&hellip;</p>
+              <p className="text-sm text-muted-foreground">{t("verifyingResetLink")}</p>
             )}
             {status === "invalid" && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  This reset link is invalid or has expired. Request a new one from the sign-in page.
-                </p>
+                <p className="text-sm text-muted-foreground">{t("resetLinkInvalid")}</p>
                 <Button className="w-full" onClick={() => router.push("/login")}>
-                  Back to sign in
+                  {t("backToSignIn")}
                 </Button>
               </div>
             )}
             {status === "ready" && (
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid gap-2">
-                  <Label>New Password</Label>
+                  <Label>{t("newPassword")}</Label>
                   <PasswordInput
                     placeholder="••••••••"
                     autoComplete="new-password"
@@ -129,7 +148,7 @@ export default function ResetPasswordPage() {
                   {passwordError && <p className="text-destructive text-sm">{passwordError}</p>}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Confirm New Password</Label>
+                  <Label>{t("confirmNewPassword")}</Label>
                   <PasswordInput
                     placeholder="••••••••"
                     autoComplete="new-password"
@@ -139,7 +158,7 @@ export default function ResetPasswordPage() {
                   {confirmPasswordError && <p className="text-destructive text-sm">{confirmPasswordError}</p>}
                 </div>
                 <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Updating..." : "Update password"}
+                  {form.formState.isSubmitting ? t("updating") : t("updatePassword")}
                 </Button>
               </form>
             )}
