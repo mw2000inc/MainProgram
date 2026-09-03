@@ -12,6 +12,7 @@ import { CommentThread } from "@/components/announcements/comment-thread"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { useAnnouncements, useDeleteAnnouncement } from "@/lib/hooks/use-announcements"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDateTime } from "@/lib/utils"
 import type { Announcement } from "@/lib/types"
 
@@ -19,6 +20,7 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const dragHandle = useDragHandle()
+  const { t } = useTranslation("announcements")
   const { data: announcements = [], isPending } = useAnnouncements()
   const deleteAnnouncement = useDeleteAnnouncement()
 
@@ -47,7 +49,7 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
               setFormOpen(true)
             }}
           >
-            <Plus className="h-3.5 w-3.5" /> New Announcement
+            <Plus className="h-3.5 w-3.5" /> {t("newAnnouncement")}
           </Button>
         )}
       </CardHeader>
@@ -64,7 +66,7 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
         )}
         {!isPending && announcements.length === 0 && (
           <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
-            No announcements yet.
+            {t("noAnnouncementsYet")}
           </p>
         )}
         {announcements.map((a, i) => (
@@ -110,8 +112,8 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title="Delete announcement?"
-        description="This will permanently remove this announcement and all of its comments."
+        title={t("deleteAnnouncement")}
+        description={t("deleteAnnouncementDescription")}
         loading={deleteAnnouncement.isPending}
         onConfirm={async () => {
           if (!deleting) return

@@ -1,0 +1,11 @@
+{
+  "newAnnouncement": "New Announcement",
+  "noAnnouncementsYet": "No announcements yet.",
+  "deleteAnnouncement": "Delete announcement?",
+  "deleteAnnouncementDescription": "This will permanently remove this announcement and all of its comments.",
+  "noCommentsYet": "No comments yet.",
+  "edit": "Edit",
+  "writeAComment": "Write a comment...",
+  "deleteComment": "Delete comment?",
+  "deleteCommentDescription": "This will permanently remove this comment."
+}

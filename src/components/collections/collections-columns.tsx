@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineNumberCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { ColumnHeader } from "@/components/shared/column-header"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 
@@ -25,6 +27,29 @@ export const COLLECTIONS_STATUS_OPTIONS = ["Pending", "Collected", "Cancelled"] 
 function FilterChangeRequiredCell({ required }: { required: boolean | undefined }) {
   if (!required) return <span className="text-muted-foreground">—</span>
   return <StatusBadge tone="warning" label="Required" />
+}
+
+// Named component (not an inline arrow function in the cell def below) —
+// react-hooks/rules-of-hooks requires a real component/hook name for
+// useTranslation to be called safely here, even though TanStack Table's
+// flexRender does render a function `cell` value as a component either way.
+function NoteCell({
+  entry,
+  onFieldChange,
+}: {
+  entry: CollectionPlan
+  onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note">>) => void
+}) {
+  const { t } = useTranslation("fields")
+  if (!onFieldChange) return <span className="inline-block min-w-[180px] text-muted-foreground">{entry.note || "—"}</span>
+  return (
+    <InlineTextCell
+      value={entry.note}
+      placeholder={t("note")}
+      className="min-w-[180px]"
+      onCommit={(next) => onFieldChange(entry, { note: next })}
+    />
+  )
 }
 
 // 'recurring_schedule' rows are auto-generated from a sale list entry's C/T
@@ -127,32 +152,32 @@ export function getCollectionsDailyReportColumns({
   return [
     {
       accessorKey: "orderNo",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[110px] font-medium">{row.original.orderNo}</span>,
     },
     {
       accessorKey: "accountName",
-      header: "Member Account#",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[150px]">{row.original.accountName}</span>,
     },
     {
       accessorKey: "amount",
-      header: "Amount",
+      header: () => <ColumnHeader tKey="amount" ns="fields" />,
       cell: ({ row }) => {
         const entry = row.original
         if (!onFieldChange) return <span className="inline-block min-w-[90px]">{formatCurrency(entry.amount)}</span>
         return <InlineNumberCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
       },
     },
-    { accessorKey: "ct", header: "C/T" },
+    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
     {
       accessorKey: "collectionDate",
-      header: "Plan D",
+      header: () => <ColumnHeader tKey="planD" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[100px]">{formatDate(row.original.collectionDate)}</span>,
     },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => {
         const entry = row.original
         if (!onFieldChange)
@@ -162,36 +187,24 @@ export function getCollectionsDailyReportColumns({
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (
         <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
       ),
     },
     {
       accessorKey: "note",
-      header: "Note",
-      cell: ({ row }) => {
-        const entry = row.original
-        if (!onFieldChange)
-          return <span className="inline-block min-w-[180px] text-muted-foreground">{entry.note || "—"}</span>
-        return (
-          <InlineTextCell
-            value={entry.note}
-            placeholder="Note"
-            className="min-w-[180px]"
-            onCommit={(next) => onFieldChange(entry, { note: next })}
-          />
-        )
-      },
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
+      cell: ({ row }) => <NoteCell entry={row.original} onFieldChange={onFieldChange} />,
     },
     {
       accessorKey: "filterChangeRequired",
-      header: "Filter Change",
+      header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
     },
   ]

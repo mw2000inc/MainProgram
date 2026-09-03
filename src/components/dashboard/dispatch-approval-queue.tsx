@@ -19,6 +19,7 @@ import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus } from "@/lib/types"
@@ -85,6 +86,16 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
 // before a second notification goes out for something else.
 const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
+// Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
+// its own small copy here rather than a shared import, to avoid a
+// cross-import between these two otherwise-independent panel files.
+const DISPATCH_STATUS_KEYS: Record<string, string> = {
+  Draft: "draft",
+  "Pending Customer Confirmation": "pendingCustomerConfirmation",
+  Confirmed: "confirmed",
+  "Reschedule Requested": "rescheduleRequested",
+}
+
 // Admin approval queue for newly-scheduled Filter Change/Installation/
 // Collection/Repair dispatches (see the dispatch_confirmation_workflow and
 // dispatch_dual_channel_notifications migrations) — only rows created via
@@ -105,6 +116,8 @@ const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Conf
 // before; finding something opens a confirmation dialog listing what was
 // found, and only proceeds on an explicit "Send Anyway".
 export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation("dispatch")
+  const { t: tCommon } = useTranslation("common")
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: installPlans = [] } = useInstallPlans()
   const { data: collections = [] } = useCollections()
@@ -137,7 +150,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       list.push({
         entityType: "filter_change_plans",
         entityId: p.id,
-        moduleLabel: "Filter Change",
+        moduleLabel: "filterChangeModule",
         recordLabel: p.memberAccount || p.orderNumber,
         scheduledDate: p.preD || p.planDate,
         dispatchStatus: p.dispatchStatus,
@@ -154,7 +167,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       list.push({
         entityType: "install_plans",
         entityId: p.id,
-        moduleLabel: "Installation",
+        moduleLabel: "installationModule",
         recordLabel: p.name || p.orderNo,
         scheduledDate: p.preInstalledDate || p.inputDate,
         dispatchStatus: p.dispatchStatus,
@@ -176,7 +189,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       list.push({
         entityType: "collections",
         entityId: c.id,
-        moduleLabel: "Collection",
+        moduleLabel: "collectionModule",
         recordLabel: c.accountName || c.orderNo,
         scheduledDate: c.preD || c.collectionDate,
         dispatchStatus: c.dispatchStatus,
@@ -197,7 +210,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       list.push({
         entityType: "repair_plans",
         entityId: r.id,
-        moduleLabel: "Repair",
+        moduleLabel: "repairModule",
         recordLabel: r.accountName || r.orderNo,
         scheduledDate: r.preD || r.issuedDate,
         dispatchStatus: r.dispatchStatus,
@@ -355,11 +368,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     await acceptReschedule.mutateAsync({ entityType: item.entityType, entityId: item.entityId })
   }
 
-  function channelBadge(result: DispatchChannelResult | undefined, label: string) {
+  function channelBadge(result: DispatchChannelResult | undefined, channel: "sms" | "email") {
     if (!result) return null
     const tone = result.status === "sent" ? "success" : result.status === "failed" ? "danger" : "neutral"
-    const text = result.status === "sent" ? `${label} sent` : result.status === "failed" ? `${label} failed` : `${label} skipped`
-    return <StatusBadge tone={tone} label={text} />
+    const key = `${channel}${result.status === "sent" ? "Sent" : result.status === "failed" ? "Failed" : "Skipped"}`
+    return <StatusBadge tone={tone} label={t(key)} />
   }
 
   return (
@@ -368,7 +381,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-6">
-              <span>Pending Dispatch Approval</span>
+              <span>{t("title")}</span>
               {items.length > 0 && (
                 <Button
                   variant="outline"
@@ -377,24 +390,21 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                   disabled={bulkApproving || approve.isPending}
                   onClick={handleApproveAll}
                 >
-                  <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? "Approving..." : `Approve All (${items.length})`}
+                  <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? t("approving") : t("approveAllCount", { count: items.length })}
                 </Button>
               )}
             </DialogTitle>
-            <DialogDescription>
-              Newly-scheduled Filter Change, Installation, Collection, and Repair items wait here for admin approval.
-              Approving sends a real SMS and/or email to whichever contact fields are filled in below.
-            </DialogDescription>
+            <DialogDescription>{t("description")}</DialogDescription>
           </DialogHeader>
 
           {lastResult && (
             <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                {channelBadge(lastResult.sms, "SMS")}
-                {channelBadge(lastResult.email, "Email")}
+                {channelBadge(lastResult.sms, "sms")}
+                {channelBadge(lastResult.email, "email")}
               </div>
               <p className="text-muted-foreground">
-                Confirmation link: <span className="break-all font-mono">{lastResult.confirmUrl}</span>
+                {t("confirmationLink")} <span className="break-all font-mono">{lastResult.confirmUrl}</span>
               </p>
             </div>
           )}
@@ -402,29 +412,29 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           {bulkSummary && (
             <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
               <p className="font-medium">
-                Approve All finished — {bulkSummary.approved.length} sent
-                {bulkSummary.skippedConflict.length > 0 && `, ${bulkSummary.skippedConflict.length} skipped (possible duplicate)`}
-                {bulkSummary.skippedNoContact.length > 0 && `, ${bulkSummary.skippedNoContact.length} skipped (no contact entered)`}
+                {t("approveAllFinishedSent", { count: bulkSummary.approved.length })}
+                {bulkSummary.skippedConflict.length > 0 && t("skippedPossibleDuplicate", { count: bulkSummary.skippedConflict.length })}
+                {bulkSummary.skippedNoContact.length > 0 && t("skippedNoContactEntered", { count: bulkSummary.skippedNoContact.length })}
               </p>
               {bulkSummary.skippedConflict.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-muted-foreground">
-                    Skipped for a possible duplicate/conflict — review and use that row&apos;s own Approve button if it&apos;s
-                    actually fine:
-                  </p>
+                  <p className="text-muted-foreground">{t("skippedDuplicateReviewNote")}</p>
                   {bulkSummary.skippedConflict.map(({ item, conflicts }) => (
                     <p key={`${item.entityType}-${item.entityId}`}>
-                      {item.moduleLabel} — {item.recordLabel} (matches {conflicts.length} other item{conflicts.length === 1 ? "" : "s"})
+                      {t(item.moduleLabel)} — {item.recordLabel}{" "}
+                      {conflicts.length === 1
+                        ? t("matchesOtherItem", { count: conflicts.length })
+                        : t("matchesOtherItems", { count: conflicts.length })}
                     </p>
                   ))}
                 </div>
               )}
               {bulkSummary.skippedNoContact.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-muted-foreground">Skipped — no phone or email entered:</p>
+                  <p className="text-muted-foreground">{t("skippedNoPhoneOrEmail")}</p>
                   {bulkSummary.skippedNoContact.map((item) => (
                     <p key={`${item.entityType}-${item.entityId}`}>
-                      {item.moduleLabel} — {item.recordLabel}
+                      {t(item.moduleLabel)} — {item.recordLabel}
                     </p>
                   ))}
                 </div>
@@ -433,7 +443,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           )}
 
           {items.length === 0 && rescheduleRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Nothing is waiting on approval right now.</p>
+            <p className="text-sm text-muted-foreground py-8 text-center">{t("nothingWaiting")}</p>
           ) : items.length === 0 ? null : (
             <div className="space-y-3">
               {items.map((item) => (
@@ -441,27 +451,27 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <StatusBadge tone="secondary" label={item.moduleLabel} />
+                        <StatusBadge tone="secondary" label={t(item.moduleLabel)} />
                         <span className="font-medium truncate">{item.recordLabel}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">Scheduled {formatDate(item.scheduledDate)}</p>
+                      <p className="text-xs text-muted-foreground">{t("scheduled", { date: formatDate(item.scheduledDate) })}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[160px] space-y-1">
-                      <Label className="text-xs text-muted-foreground">Phone</Label>
+                      <Label className="text-xs text-muted-foreground">{t("phone")}</Label>
                       <Input
                         className="h-8"
-                        placeholder="Phone number (SMS)"
+                        placeholder={t("phoneNumberSms")}
                         value={phoneFor(item)}
                         onChange={(e) => setPhoneDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
                       />
                     </div>
                     <div className="flex-1 min-w-[200px] space-y-1">
-                      <Label className="text-xs text-muted-foreground">Email</Label>
+                      <Label className="text-xs text-muted-foreground">{t("email")}</Label>
                       <Input
                         className="h-8"
-                        placeholder="Email address"
+                        placeholder={t("emailAddress")}
                         value={emailFor(item)}
                         onChange={(e) => setEmailDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
                       />
@@ -472,13 +482,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                       disabled={(!phoneFor(item).trim() && !emailFor(item).trim()) || approve.isPending || bulkApproving}
                       onClick={() => handleApproveClick(item)}
                     >
-                      <Send className="h-3.5 w-3.5" /> Approve
+                      <Send className="h-3.5 w-3.5" /> {tCommon("approve")}
                     </Button>
                   </div>
                   {item.customerId && (
-                    <p className="text-xs text-muted-foreground">
-                      A changed phone or email here also saves to this customer&apos;s permanent record on Approve.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("contactSavesToCustomer")}</p>
                   )}
                 </div>
               ))}
@@ -489,22 +497,18 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-2 border-t pt-4">
                 <CalendarClock className="h-4 w-4 text-warning" />
-                <h3 className="text-sm font-medium">Reschedule Requests ({rescheduleRequests.length})</h3>
+                <h3 className="text-sm font-medium">{t("rescheduleRequestsCount", { count: rescheduleRequests.length })}</h3>
               </div>
-              <p className="text-xs text-muted-foreground">
-                These customers declined their originally proposed date. Accepting a proposed date applies it directly and
-                confirms it — no further customer action needed. To offer a different date instead, edit Pre D on that
-                record directly; it re-enters the Draft queue above automatically.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("rescheduleRequestsDescription")}</p>
               {rescheduleRequests.map((item) => (
                 <div key={`${item.entityType}-${item.entityId}`} className="rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <StatusBadge tone="secondary" label={item.moduleLabel} />
+                        <StatusBadge tone="secondary" label={t(item.moduleLabel)} />
                         <span className="font-medium truncate">{item.recordLabel}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">Originally scheduled {formatDate(item.scheduledDate)}</p>
+                      <p className="text-xs text-muted-foreground">{t("originallyScheduled", { date: formatDate(item.scheduledDate) })}</p>
                     </div>
                     {item.requestedDate ? (
                       <Button
@@ -513,17 +517,17 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                         disabled={acceptReschedule.isPending}
                         onClick={() => handleAcceptReschedule(item)}
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {t("accept")}
                       </Button>
                     ) : null}
                   </div>
                   {item.requestedDate ? (
                     <div className="rounded-md border bg-warning/5 p-2 text-xs">
-                      Customer requested: <span className="font-medium">{formatDate(item.requestedDate)}</span>
-                      {item.requestedTime && <span className="font-medium"> at {item.requestedTime}</span>}
+                      {t("customerRequested")} <span className="font-medium">{formatDate(item.requestedDate)}</span>
+                      {item.requestedTime && <span className="font-medium"> {t("at")} {item.requestedTime}</span>}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No alternate date was given — edit Pre D directly to propose one.</p>
+                    <p className="text-xs text-muted-foreground">{t("noAlternateDate")}</p>
                   )}
                 </div>
               ))}
@@ -536,25 +540,24 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 text-warning" /> Possible duplicate or conflict
+              <TriangleAlert className="h-4 w-4 text-warning" /> {t("possibleDuplicateOrConflict")}
             </DialogTitle>
             <DialogDescription>
-              This customer already has {pendingApproval?.conflicts.length === 1 ? "another item" : "other items"} that look
-              related — check before sending a notification for this one too.
+              {pendingApproval?.conflicts.length === 1 ? t("conflictDescriptionSingle") : t("conflictDescriptionMultiple")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             {pendingApproval?.conflicts.map((c) => (
               <div key={`${c.entityType}-${c.entityId}`} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
                 <div className="flex items-center gap-2 min-w-0">
-                  <StatusBadge tone="secondary" label={c.moduleLabel} />
+                  <StatusBadge tone="secondary" label={t(c.moduleLabel)} />
                   <span className="truncate">{c.recordLabel}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
                   <span>{formatDate(c.scheduledDate)}</span>
                   <StatusBadge
                     tone={c.dispatchStatus === "Confirmed" ? "success" : c.dispatchStatus === "Draft" ? "neutral" : "warning"}
-                    label={c.dispatchStatus ?? "Unknown"}
+                    label={c.dispatchStatus ? t(DISPATCH_STATUS_KEYS[c.dispatchStatus] ?? c.dispatchStatus) : t("unknown")}
                   />
                 </div>
               </div>
@@ -562,10 +565,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setPendingApproval(null)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button className="gap-1.5" disabled={approve.isPending} onClick={handleSendAnyway}>
-              <Send className="h-3.5 w-3.5" /> Send Anyway
+              <Send className="h-3.5 w-3.5" /> {t("sendAnyway")}
             </Button>
           </div>
         </DialogContent>

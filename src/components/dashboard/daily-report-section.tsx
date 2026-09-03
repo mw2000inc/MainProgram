@@ -57,6 +57,7 @@ import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
@@ -163,10 +164,18 @@ function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
 // can't be mistaken for confirmed just because it's sitting on the same
 // day's list now (see isDailyReportEligible's own comment for why they're
 // on this list at all).
+const DISPATCH_STATUS_KEYS: Record<string, string> = {
+  Draft: "draft",
+  "Pending Customer Confirmation": "pendingCustomerConfirmation",
+  Confirmed: "confirmed",
+  "Reschedule Requested": "rescheduleRequested",
+}
+
 function DispatchStatusCell({ status }: { status: DispatchStatus | undefined }) {
+  const { t } = useTranslation("dispatch")
   if (!status || status === "Confirmed") return null
   const tone = status === "Draft" ? "neutral" : "warning"
-  return <StatusBadge tone={tone} label={status} />
+  return <StatusBadge tone={tone} label={t(DISPATCH_STATUS_KEYS[status] ?? status)} />
 }
 
 // Prepends a purely-visual, accessorKey-less "Dispatch" indicator column

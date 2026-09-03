@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
+import { ColumnHeader } from "@/components/shared/column-header"
 import { TECHNICIANS } from "@/lib/constants"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
@@ -91,33 +92,33 @@ function dailyReportColumnDefs({
   return {
     orderNumber: {
       accessorKey: "orderNumber",
-      header: "Order Number",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[110px] font-medium">{row.original.orderNumber}</span>,
     },
     memberAccount: {
       accessorKey: "memberAccount",
-      header: "Member Account#",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[140px]">{row.original.memberAccount}</span>,
     },
-    filterType: { accessorKey: "filterType", header: "Filter" },
+    filterType: { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     contactNumber: {
       accessorKey: "contactNumber",
-      header: "Contact #",
+      header: () => <ColumnHeader tKey="contactNumber" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[130px]">{row.original.contactNumber || "—"}</span>,
     },
     address: {
       accessorKey: "address",
-      header: "Address",
+      header: () => <ColumnHeader tKey="address" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[220px]">{row.original.address || "—"}</span>,
     },
     planDate: {
       accessorKey: "planDate",
-      header: "Plan D",
+      header: () => <ColumnHeader tKey="planD" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[100px]">{formatDate(row.original.planDate)}</span>,
     },
     preD: {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) return <span className="inline-block min-w-[100px]">{plan.preD ? formatDate(plan.preD) : "—"}</span>
@@ -126,14 +127,14 @@ function dailyReportColumnDefs({
     },
     accD: {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (
         <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
       ),
     },
     serviceman: {
       accessorKey: "serviceman",
-      header: "Serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) return <span className="inline-block min-w-[150px]">{plan.serviceman || "—"}</span>
@@ -148,7 +149,7 @@ function dailyReportColumnDefs({
     },
     status: {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   }

@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
+import { ColumnHeader } from "@/components/shared/column-header"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
 
@@ -32,42 +33,42 @@ export function getInstallColumns({
   return [
     {
       accessorKey: "name",
-      header: "Name",
+      header: () => <ColumnHeader tKey="name" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
     },
-    { accessorKey: "orderNo", header: "Order No" },
-    { accessorKey: "address", header: "Address" },
-    { accessorKey: "contactNumber", header: "Contact #" },
-    { accessorKey: "inOut", header: "In or Out" },
-    { accessorKey: "model", header: "Model" },
+    { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
+    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
+    { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
+    { accessorKey: "inOut", header: () => <ColumnHeader tKey="inOrOut" ns="fields" /> },
+    { accessorKey: "model", header: () => <ColumnHeader tKey="model" ns="fields" /> },
     {
       accessorKey: "unitPrice",
-      header: "Unit Price",
+      header: () => <ColumnHeader tKey="unitPrice" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.unitPrice),
     },
     {
       accessorKey: "cpPrice",
-      header: "C/P Price",
+      header: () => <ColumnHeader tKey="cpPrice" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.cpPrice),
     },
     {
       accessorKey: "preInstalledDate",
-      header: "Pre Installed Date",
+      header: () => <ColumnHeader tKey="preInstalledDate" ns="fields" />,
       cell: ({ row }) => (row.original.preInstalledDate ? formatDate(row.original.preInstalledDate) : "—"),
     },
     {
       accessorKey: "installedDate",
-      header: "Installed Date",
+      header: () => <ColumnHeader tKey="installedDate" ns="fields" />,
       cell: ({ row }) => (row.original.installedDate ? formatDate(row.original.installedDate) : "—"),
     },
     {
       accessorKey: "note",
-      header: "Note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]

@@ -33,6 +33,7 @@ import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
@@ -55,6 +56,8 @@ function MarkJobDoneDialog({
   const updateJob = useUpdateScheduleJob()
   const createFilterItems = useCreateScheduleJobFilterItems()
   const { data: products = [] } = useProducts()
+  const { t } = useTranslation("schedule")
+  const { t: tCommon } = useTranslation("common")
   const [remarks, setRemarks] = React.useState(() => job?.remarks ?? "")
   const [filterChangeRequired, setFilterChangeRequired] = React.useState(false)
   const [filterItems, setFilterItems] = React.useState<FilterItemDraft[]>([
@@ -71,23 +74,23 @@ function MarkJobDoneDialog({
     <Dialog open={!!job} onOpenChange={onOpenChange}>
       <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Mark Job as Done</DialogTitle>
+          <DialogTitle>{t("markJobAsDone")}</DialogTitle>
           <DialogDescription>
-            Add remarks about what was done for this {job ? JOB_TYPE_LABELS[job.jobType].toLowerCase() : "job"}.
+            {t("addRemarksAbout", { jobType: (job ? t(job.jobType) : t("job")).toLowerCase() })}
           </DialogDescription>
         </DialogHeader>
         <Textarea
           value={remarks}
           onChange={(e) => setRemarks(e.target.value)}
           rows={4}
-          placeholder="What did you do on this job/errand?"
+          placeholder={t("whatDidYouDo")}
           autoFocus
         />
 
         <div className="space-y-3 rounded-md border p-3">
           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
             <Checkbox checked={filterChangeRequired} onCheckedChange={(v) => setFilterChangeRequired(v === true)} />
-            Filter Change Required
+            {t("filterChangeRequired")}
           </label>
           {filterChangeRequired && (
             <div className="space-y-2">
@@ -95,7 +98,7 @@ function MarkJobDoneDialog({
                 <div key={item.key} className="flex items-center gap-2">
                   <Select value={item.productId} onValueChange={(v) => updateItem(item.key, { productId: v })}>
                     <SelectTrigger className="flex-1 min-w-0">
-                      <SelectValue placeholder="Select filter..." />
+                      <SelectValue placeholder={t("selectFilter")} />
                     </SelectTrigger>
                     <SelectContent>
                       {products.map((p) => (
@@ -131,19 +134,16 @@ function MarkJobDoneDialog({
                 className="gap-1.5"
                 onClick={() => setFilterItems((items) => [...items, { key: filterItemDraftKey++, productId: "", quantity: "1" }])}
               >
-                <Plus className="h-3.5 w-3.5" /> Add Filter
+                <Plus className="h-3.5 w-3.5" /> {t("addFilter")}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Each filter creates its own inventory transaction, kept Pending until an admin approves it — actual
-                stock isn&apos;t deducted yet.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("pendingInventoryNote")}</p>
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {tCommon("cancel")}
           </Button>
           <Button
             disabled={saving}
@@ -161,7 +161,7 @@ function MarkJobDoneDialog({
               onOpenChange(false)
             }}
           >
-            {saving ? "Saving..." : "Save & Mark Done"}
+            {saving ? t("saving") : t("saveAndMarkDone")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -181,6 +181,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const dragHandle = useDragHandle()
+  const { t } = useTranslation("schedule")
   const { data: jobs = [], isPending } = useScheduleJobs()
   const updateJob = useUpdateScheduleJob()
   const [formOpen, setFormOpen] = React.useState(false)
@@ -250,19 +251,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap">
           {isAdmin && (
             <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
-              <Plus className="h-3.5 w-3.5" /> Schedule Job
+              <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
             </Button>
           )}
           {isAdmin && (
             <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
               <Button size="sm" variant="outline" className="w-full gap-1.5">
-                Full Schedule <ArrowRight className="h-3.5 w-3.5" />
+                {t("fullSchedule")} <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
           )}
           <div className="flex items-center gap-1">
             <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Print" onClick={handlePrint}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" title={t("print")} onClick={handlePrint}>
               <Printer className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -282,7 +283,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         )}
         {!isPending && todaysJobs.length === 0 && (
           <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
-            No jobs scheduled for this date.
+            {t("noJobsScheduled")}
           </p>
         )}
         {!isPending && todaysJobs.length > 0 && (
@@ -293,22 +294,22 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   checked={job.status === "completed"}
                   onCheckedChange={() => toggleComplete(job)}
                   disabled={!canEditStatus(job, isAdmin, user?.id)}
-                  aria-label="Mark complete"
+                  aria-label={t("markComplete")}
                   title={
                     canEditStatus(job, isAdmin, user?.id)
                       ? undefined
-                      : "Only an admin or the assigned technician can change a job's status"
+                      : t("onlyAdminOrAssignedTechnician")
                   }
                   className="mt-0.5"
                 />
                 <div
                   className={cn("flex-1 min-w-0 flex items-start gap-3", isAdmin && "cursor-pointer")}
                   onClick={isAdmin ? () => openEdit(job) : undefined}
-                  title={isAdmin ? "Click to edit this job" : undefined}
+                  title={isAdmin ? t("clickToEditJob") : undefined}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-                      <span className="font-medium">{JOB_TYPE_LABELS[job.jobType]}</span>
+                      <span className="font-medium">{t(job.jobType)}</span>
                       {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
                     </div>
                     {/* One scheduledDate on the shared job — shown explicitly (even

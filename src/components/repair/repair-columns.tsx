@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
+import { ColumnHeader } from "@/components/shared/column-header"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
@@ -31,40 +32,40 @@ export function getRepairColumns({
   return [
     {
       accessorKey: "accountName",
-      header: "Account Name",
+      header: () => <ColumnHeader tKey="accountName" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.accountName}</span>,
     },
-    { accessorKey: "orderNo", header: "Order No" },
-    { accessorKey: "unitInOut", header: "Unit IN/OUT" },
+    { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
+    { accessorKey: "unitInOut", header: () => <ColumnHeader tKey="unitInOut" ns="fields" /> },
     {
       accessorKey: "problem",
-      header: "Problem",
+      header: () => <ColumnHeader tKey="problem" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.problem || "—"}</span>,
     },
     {
       accessorKey: "solutionStatus",
-      header: "Solution / Status",
+      header: () => <ColumnHeader tKey="solutionStatus" ns="fields" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.solutionStatus || "—"}</span>,
     },
     {
       accessorKey: "preD",
-      header: "Pre D",
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
     {
       accessorKey: "accD",
-      header: "Acc D",
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
     {
       accessorKey: "amt",
-      header: "AMT",
+      header: () => <ColumnHeader tKey="amt" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.amt),
     },
-    { accessorKey: "th", header: "TH" },
+    { accessorKey: "th", header: () => <ColumnHeader tKey="th" ns="fields" /> },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]

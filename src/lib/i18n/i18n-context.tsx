@@ -13,16 +13,44 @@ import enStatus from "@/lib/i18n/dictionaries/en/status.json"
 import koStatus from "@/lib/i18n/dictionaries/ko/status.json"
 import enAuth from "@/lib/i18n/dictionaries/en/auth.json"
 import koAuth from "@/lib/i18n/dictionaries/ko/auth.json"
+import enFields from "@/lib/i18n/dictionaries/en/fields.json"
+import koFields from "@/lib/i18n/dictionaries/ko/fields.json"
+import enSchedule from "@/lib/i18n/dictionaries/en/schedule.json"
+import koSchedule from "@/lib/i18n/dictionaries/ko/schedule.json"
+import enAnnouncements from "@/lib/i18n/dictionaries/en/announcements.json"
+import koAnnouncements from "@/lib/i18n/dictionaries/ko/announcements.json"
+import enDispatch from "@/lib/i18n/dictionaries/en/dispatch.json"
+import koDispatch from "@/lib/i18n/dictionaries/ko/dispatch.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
 // 1,500+ eventual keys organized instead of one giant dictionary.
-export type Namespace = "common" | "nav" | "dataTable" | "status" | "auth"
+export type Namespace = "common" | "nav" | "dataTable" | "status" | "auth" | "fields" | "schedule" | "announcements" | "dispatch"
 
 type Dictionary = Record<string, string>
 
 const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
-  en: { common: enCommon, nav: enNav, dataTable: enDataTable, status: enStatus, auth: enAuth },
-  ko: { common: koCommon, nav: koNav, dataTable: koDataTable, status: koStatus, auth: koAuth },
+  en: {
+    common: enCommon,
+    nav: enNav,
+    dataTable: enDataTable,
+    status: enStatus,
+    auth: enAuth,
+    fields: enFields,
+    schedule: enSchedule,
+    announcements: enAnnouncements,
+    dispatch: enDispatch,
+  },
+  ko: {
+    common: koCommon,
+    nav: koNav,
+    dataTable: koDataTable,
+    status: koStatus,
+    auth: koAuth,
+    fields: koFields,
+    schedule: koSchedule,
+    announcements: koAnnouncements,
+    dispatch: koDispatch,
+  },
 }
 
 const PRE_AUTH_LOCALE_KEY = "mw2000-locale"

@@ -8,10 +8,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { useAddComment, useComments, useDeleteComment, useUpdateComment } from "@/lib/hooks/use-announcements"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDateTime, initials } from "@/lib/utils"
 
 export function CommentThread({ announcementId }: { announcementId: string }) {
   const { user } = useAuth()
+  const { t } = useTranslation("announcements")
+  const { t: tCommon } = useTranslation("common")
   const { data: comments = [], isPending } = useComments(announcementId)
   const addComment = useAddComment(announcementId, user?.id ?? "")
   const updateComment = useUpdateComment(announcementId)
@@ -39,7 +42,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
   return (
     <div className="space-y-3 border-t pt-3 mt-3">
       {!isPending && comments.length === 0 && (
-        <p className="text-xs text-muted-foreground">No comments yet.</p>
+        <p className="text-xs text-muted-foreground">{t("noCommentsYet")}</p>
       )}
       {comments.map((c) => {
         const canModify = c.authorId === user?.id
@@ -65,7 +68,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
                   />
                   <div className="flex items-center gap-1.5">
                     <Button size="sm" className="h-6 gap-1 px-2 text-xs" onClick={() => submitEdit(c.id)}>
-                      <Check className="h-3 w-3" /> Save
+                      <Check className="h-3 w-3" /> {tCommon("save")}
                     </Button>
                     <Button
                       size="sm"
@@ -73,7 +76,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
                       className="h-6 gap-1 px-2 text-xs"
                       onClick={() => setEditingId(null)}
                     >
-                      <X className="h-3 w-3" /> Cancel
+                      <X className="h-3 w-3" /> {tCommon("cancel")}
                     </Button>
                   </div>
                 </div>
@@ -90,7 +93,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
                         setEditDraft(c.body)
                       }}
                     >
-                      <Pencil className="h-3 w-3" /> Edit
+                      <Pencil className="h-3 w-3" /> {t("edit")}
                     </button>
                   )}
                   {canDelete && (
@@ -98,7 +101,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
                       className="text-[11px] text-muted-foreground hover:text-danger inline-flex items-center gap-1"
                       onClick={() => setDeletingId(c.id)}
                     >
-                      <Trash2 className="h-3 w-3" /> Delete
+                      <Trash2 className="h-3 w-3" /> {tCommon("delete")}
                     </button>
                   )}
                 </div>
@@ -116,7 +119,7 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Write a comment..."
+            placeholder={t("writeAComment")}
             rows={1}
             className="text-sm min-h-9 resize-none"
             onKeyDown={(e) => {
@@ -140,8 +143,8 @@ export function CommentThread({ announcementId }: { announcementId: string }) {
       <ConfirmDialog
         open={!!deletingId}
         onOpenChange={(o) => !o && setDeletingId(null)}
-        title="Delete comment?"
-        description="This will permanently remove this comment."
+        title={t("deleteComment")}
+        description={t("deleteCommentDescription")}
         loading={deleteComment.isPending}
         onConfirm={async () => {
           if (!deletingId) return

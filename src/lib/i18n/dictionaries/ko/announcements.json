@@ -1,0 +1,11 @@
+{
+  "newAnnouncement": "새 공지사항",
+  "noAnnouncementsYet": "아직 공지사항이 없습니다.",
+  "deleteAnnouncement": "공지사항을 삭제하시겠습니까?",
+  "deleteAnnouncementDescription": "이 공지사항과 모든 댓글이 영구적으로 삭제됩니다.",
+  "noCommentsYet": "아직 댓글이 없습니다.",
+  "edit": "수정",
+  "writeAComment": "댓글을 입력하세요...",
+  "deleteComment": "댓글을 삭제하시겠습니까?",
+  "deleteCommentDescription": "이 댓글이 영구적으로 삭제됩니다."
+}
