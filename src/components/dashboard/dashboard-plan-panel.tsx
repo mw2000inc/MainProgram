@@ -90,12 +90,21 @@ const TABLE_CHROME_HEIGHT = 250
 // TableCell components' own classes.
 const TABLE_ROW_HEIGHT = 41
 const DEFAULT_PAGE_SIZE = 5
+// Caps a never-resized panel's height at roughly 14 rows worth (see
+// DEFAULT_MAX_HEIGHT_PX's own comment on `table()` below) — deliberately the
+// same TABLE_CHROME_HEIGHT + TABLE_ROW_HEIGHT budget used above, just solved
+// for a fixed pixel cap instead of a row count.
+const DEFAULT_MAX_HEIGHT_PX = TABLE_CHROME_HEIGHT + 14 * TABLE_ROW_HEIGHT
 
 // More vertical room (a taller resized panel) shows more rows instead of
-// leaving blank space below a fixed 5-row table — this is what actually
+// leaving blank space below a fixed-size table — this is what actually
 // makes a resize "count" for these panels, not just a bigger empty box.
-function computePageSize(panelHeight: number | undefined): number {
-  if (!panelHeight) return DEFAULT_PAGE_SIZE
+// With no resize at all (panelHeight unset — the fresh, never-customized
+// default), this now shows every row instead of an arbitrary 5 — see
+// DEFAULT_MAX_HEIGHT_PX for how an unusually busy day still gets capped
+// instead of ballooning the whole dashboard.
+function computePageSize(panelHeight: number | undefined, rowCount: number): number {
+  if (!panelHeight) return Math.max(rowCount, 1)
   const availableForRows = panelHeight - TABLE_CHROME_HEIGHT
   if (availableForRows <= 0) return DEFAULT_PAGE_SIZE
   return Math.max(DEFAULT_PAGE_SIZE, Math.floor(availableForRows / TABLE_ROW_HEIGHT))
@@ -281,7 +290,23 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     // below, this wrapper's parent isn't a flex container, so these classes
     // are simply inert there — DataTable keeps sizing to its content as
     // before (already showing every row, no scaling needed).
-    <div className="min-h-0 flex-1 flex flex-col">
+    //
+    // max-h-[...] only when compact AND never resized: computePageSize now
+    // shows every row by default (see its own comment), so this is what
+    // stops an unusually busy day from growing the whole panel — and the
+    // dashboard below it — to fit dozens of rows. DataTable's own inner
+    // table-container div already has overflow-y-auto, so this cap just
+    // gives that flex chain a height to shrink against; the search bar and
+    // pagination footer stay pinned, only the row area scrolls. Once an
+    // admin resizes the panel, SortablePanel's own explicit height + scroll
+    // takes over completely and this cap no longer applies.
+    <div
+      className="min-h-0 flex-1 flex flex-col"
+      // Inline, not a Tailwind arbitrary-value class -- DEFAULT_MAX_HEIGHT_PX
+      // is a computed JS value, and Tailwind's build-time scanner can't
+      // discover a class name assembled at runtime via string interpolation.
+      style={!isExpanded && !panelHeight ? { maxHeight: DEFAULT_MAX_HEIGHT_PX } : undefined}
+    >
       <DataTable
         columns={cols}
         data={filteredData}
@@ -310,13 +335,13 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
             of being pushed to its content's natural size and overflowing
             the parent) — DataTable's own pageSize scales with that same
             height (see computePageSize) so a taller panel shows more rows
-            instead of just more blank space below a fixed 5-row table. */}
+            instead of just more blank space below a fixed-size table. */}
         <CardContent className="flex-1 min-h-0 flex flex-col space-y-2">
           {selectionBar}
           {loading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading...</div>
           ) : (
-            table(compactColumns, computePageSize(panelHeight), false)
+            table(compactColumns, computePageSize(panelHeight, filteredData.length), false)
           )}
         </CardContent>
       </Card>
