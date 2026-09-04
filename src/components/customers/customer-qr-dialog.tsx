@@ -345,14 +345,15 @@ function splitNearMiddle(text: string): [string, string] {
 // legacy rows that are just a bare name with no code/slash at all ("F5",
 // "Hercules"). Takes everything after the first " / " (or the whole
 // string if there's no slash), strips any such leading "XX) " prefix to
-// get the plain base name, then re-adds the "MW) " prefix only for the F5
-// and F7 products specifically — every other product (Hercules, Oasis-S2,
-// Standard K, the PR/ETC groups, etc.) shows its plain name with no
-// prefix at all, regardless of which brand group it actually belongs to.
+// get the plain base name, then re-adds a plain "MW " prefix (no
+// parenthesis) only for the F5 and F7 products specifically — every other
+// product (Hercules, Oasis-S2, Standard K, the PR/ETC groups, etc.) shows
+// its plain name with no prefix at all, regardless of which brand group
+// it actually belongs to.
 function extractProductName(productNo: string): string {
   const afterSlash = productNo.includes(" / ") ? productNo.split(" / ").slice(1).join(" / ").trim() : productNo.trim()
   const baseName = afterSlash.replace(/^[A-Za-z]{2,4}\)\s*/, "")
-  return baseName === "F5" || baseName === "F7" ? `MW) ${baseName}` : baseName
+  return baseName === "F5" || baseName === "F7" ? `MW ${baseName}` : baseName
 }
 
 // Shrinks font size (via setSize) down to minSize while `text` overflows
