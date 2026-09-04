@@ -24,7 +24,10 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
 
 // A factory, not a module-scope constant — validation messages need t(),
@@ -101,6 +104,7 @@ export function FilterChangeFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
   const updatePlan = useUpdateFilterChangePlan()
+  const { data: customers = [] } = useCustomers()
   const { t } = useTranslation("filterChange")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -111,9 +115,43 @@ export function FilterChangeFormDialog({
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
+    if (!open) return
+    form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
+    // Same lookup the blur handler runs below — opening this dialog already
+    // pointed at a real order (e.g. from that order's own detail page)
+    // fills the rest in immediately, without needing the admin to click
+    // into and back out of a field that's already correctly filled.
+    if (!plan && defaultOrderNumber) handleOrderNumberBlur(defaultOrderNumber)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNumber, plan])
+
+  // Looks up the typed order number against the customers table (one row
+  // per order — see customer-lookup.ts) the moment the admin tabs off the
+  // field, and fills in whatever it finds — but only into fields still
+  // empty, so it can never overwrite something already typed here, whether
+  // that happened before or after this fires. Add-only: while editing an
+  // existing plan every field already has real data, so this would have
+  // nothing to safely fill anyway.
+  function handleOrderNumberBlur(orderNumber: string) {
+    if (isEdit) return
+    const customer = findCustomerByOrderNumber(customers, orderNumber)
+    if (!customer) return
+    let filled = false
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("memberAccount").trim()) {
+      form.setValue("memberAccount", name)
+      filled = true
+    }
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
+  }
 
   async function onSubmit(values: FormValues) {
     const input = {
@@ -155,7 +193,14 @@ export function FilterChangeFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="SK001-0001" {...field} />
+                      <Input
+                        placeholder="SK001-0001"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleOrderNumberBlur(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

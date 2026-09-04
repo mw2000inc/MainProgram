@@ -31,7 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { toast } from "sonner"
 import type { CollectionPlan } from "@/lib/types"
 
 // This form had no way to actually mark a collection Collected before —
@@ -106,6 +109,7 @@ export function CollectionsFormDialog({
   const isEdit = !!entry
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
+  const { data: customers = [] } = useCustomers()
   const { t } = useTranslation("collection")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -117,9 +121,29 @@ export function CollectionsFormDialog({
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, defaultOrderNo, entry))
+    if (!open) return
+    form.reset(defaultValues(defaultDate, defaultOrderNo, entry))
+    // Same lookup the blur handler runs below — opening this dialog already
+    // pointed at a real order fills accountName immediately, without
+    // needing the admin to click into and back out of the field.
+    if (!entry && defaultOrderNo) handleOrderNoBlur(defaultOrderNo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNo, entry])
+
+  // See filter-change-form-dialog.tsx's own comment on this same pattern —
+  // fills only if accountName is still empty, add-only. Collections has no
+  // contact/address columns of its own, so accountName is the only field
+  // there is to fill.
+  function handleOrderNoBlur(orderNo: string) {
+    if (isEdit) return
+    const customer = findCustomerByOrderNumber(customers, orderNo)
+    if (!customer) return
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("accountName").trim()) {
+      form.setValue("accountName", name)
+      toast.success(tCommon("customerInfoFilled"))
+    }
+  }
 
   async function onSubmit(values: FormValues) {
     const input = { ...values, amount: Number(values.amount), ct: values.ct ?? "" }
@@ -160,7 +184,14 @@ export function CollectionsFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="SK001-0001" {...field} />
+                      <Input
+                        placeholder="SK001-0001"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleOrderNoBlur(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

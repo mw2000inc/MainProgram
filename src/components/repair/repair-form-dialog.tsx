@@ -32,13 +32,22 @@ import {
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { toast } from "sonner"
 import type { RepairPlan } from "@/lib/types"
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   return z.object({
     issuedDate: z.string().min(1, t("requiredField", { field: tf("issuedDate") })),
-    orderNo: z.string().min(1, t("selectField", { field: tf("orderNo") })),
+    orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
+    // Previously derived silently on submit from whichever customer's
+    // orderNumber happened to match (only possible because Order No. used
+    // to be a required Select of existing customers, guaranteeing a match).
+    // Now a real, visible field — Order No. is free text and can refer to
+    // an order with no customer record at all, so there has to be somewhere
+    // for the admin to type a name in that case.
+    accountName: z.string().min(1, t("requiredField", { field: tf("accountName") })),
     problem: z.string().min(1, t("requiredField", { field: tf("problem") })),
     solutionStatus: z.string().optional(),
     preD: z.string().optional(),
@@ -57,6 +66,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     return {
       issuedDate: plan.issuedDate,
       orderNo: plan.orderNo,
+      accountName: plan.accountName,
       problem: plan.problem,
       solutionStatus: plan.solutionStatus ?? "",
       preD: plan.preD ?? "",
@@ -70,6 +80,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
   return {
     issuedDate: defaultDate,
     orderNo: defaultOrderNo ?? "",
+    accountName: "",
     problem: "",
     solutionStatus: "",
     preD: "",
@@ -91,9 +102,10 @@ export function RepairFormDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
-  // Pre-fills Order No. when opened from an order's own detail page — only
-  // takes effect if a customer with a matching order number exists, since
-  // this field is a select sourced from the customers list.
+  // Pre-fills Order No. when opened from an order's own detail page — free
+  // text now (see the schema's own comment), so this always takes even when
+  // there's no matching customer; the lookup effect below fills accountName
+  // from it too, same as if the admin had typed it and tabbed off.
   defaultOrderNo?: string
   // Editing an existing plan instead of creating a new one.
   plan?: RepairPlan
@@ -111,16 +123,36 @@ export function RepairFormDialog({
     defaultValues: defaultValues(defaultDate, defaultOrderNo, plan),
   })
 
+  // See filter-change-form-dialog.tsx's own comment on this same pattern —
+  // fills accountName only if it's still empty, add-only. Repair has no
+  // contact/address columns, so accountName is the only field to fill.
+  function handleOrderNoBlur(orderNo: string) {
+    if (isEdit) return
+    const customer = findCustomerByOrderNumber(customers, orderNo)
+    if (!customer) return
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("accountName").trim()) {
+      form.setValue("accountName", name)
+      toast.success(tCommon("customerInfoFilled"))
+    }
+  }
+
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    if (!open) return
+    form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    // Same lookup the blur handler runs, so opening this dialog already
+    // pointed at a real order (e.g. from that order's own detail page)
+    // fills accountName immediately — matching how this used to resolve
+    // automatically back when Order No. was a required Select of existing
+    // customers, rather than needing the admin to click into and back out
+    // of a field that's already correctly filled.
+    if (!plan && defaultOrderNo) handleOrderNoBlur(defaultOrderNo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNo, plan])
 
   async function onSubmit(values: FormValues) {
-    const customer = customers.find((c) => c.orderNumber === values.orderNo)
     const input = {
       ...values,
-      accountName: customer?.companyName || customer?.fullName || plan?.accountName || "",
       amt: Number(values.amt),
     }
     if (isEdit) {
@@ -163,20 +195,29 @@ export function RepairFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("orderNoDot")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("selectOrderNumber")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.orderNumber}>
-                          {c.orderNumber} — {c.companyName || c.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input
+                      placeholder="SK001-0001"
+                      {...field}
+                      onBlur={(e) => {
+                        field.onBlur()
+                        handleOrderNoBlur(e.target.value)
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="accountName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("accountName")}</FormLabel>
+                  <FormControl>
+                    <Input placeholder={t("customerOrBusinessName")} {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

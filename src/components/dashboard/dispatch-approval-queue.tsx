@@ -19,6 +19,7 @@ import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
@@ -54,16 +55,14 @@ interface DispatchRow {
 
 // Best-effort customer lookup for prefilling a phone/email default — tries
 // an explicit customerId link first (Filter Change, Collections), falling
-// back to matching Customer.orderNumber (every module's own order number
-// field lines up with it, since a Customer row is really "one row per
-// order" in this app's data model) for the modules that don't carry a
-// customerId at all (Installation).
+// back to the shared order-number match (see customer-lookup.ts) for the
+// modules that don't carry a customerId at all (Installation).
 function findCustomer(customers: Customer[], { customerId, orderNumber }: { customerId?: string; orderNumber?: string }) {
   if (customerId) {
     const byId = customers.find((c) => c.id === customerId)
     if (byId) return byId
   }
-  if (orderNumber) return customers.find((c) => c.orderNumber === orderNumber)
+  if (orderNumber) return findCustomerByOrderNumber(customers, orderNumber)
   return undefined
 }
 

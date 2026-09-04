@@ -66,5 +66,6 @@
   "notFound": "{item} not found",
   "stacked": "Stacked",
   "grid": "Grid",
-  "layout": "Layout"
+  "layout": "Layout",
+  "customerInfoFilled": "Found an existing order — filled in the customer's info."
 }

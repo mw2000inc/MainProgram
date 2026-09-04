@@ -32,7 +32,10 @@ import {
 } from "@/components/ui/select"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
@@ -109,6 +112,7 @@ export function InstallFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateInstallPlan()
   const updatePlan = useUpdateInstallPlan()
+  const { data: customers = [] } = useCustomers()
   const { t } = useTranslation("install")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -122,6 +126,30 @@ export function InstallFormDialog({
     if (open) form.reset(defaultValues(defaultDate, plan))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, plan])
+
+  // See filter-change-form-dialog.tsx's own comment on this same pattern —
+  // fills only currently-empty fields, add-only, never overwrites anything
+  // already typed.
+  function handleOrderNoBlur(orderNo: string) {
+    if (isEdit) return
+    const customer = findCustomerByOrderNumber(customers, orderNo)
+    if (!customer) return
+    let filled = false
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("name").trim()) {
+      form.setValue("name", name)
+      filled = true
+    }
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
+  }
 
   async function onSubmit(values: FormValues) {
     const input = {
@@ -340,7 +368,14 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("orderNo")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="SK001-0001" {...field} />
+                      <Input
+                        placeholder="SK001-0001"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleOrderNoBlur(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
