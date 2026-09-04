@@ -179,7 +179,7 @@ export function CustomerQrDialog({
                there's no spare vertical space on a 3cm-tall card to give a
                long product name a second line. */
             .product {
-              font-size: 9pt; color: ${VALUE_COLOR}; white-space: nowrap;
+              font-size: 8pt; color: ${VALUE_COLOR}; white-space: nowrap;
               overflow: hidden; text-overflow: ellipsis; margin-top: 1px;
             }
           </style>
@@ -304,7 +304,7 @@ function PreviewCard({
             a 3cm-tall card for a second line here. */}
         {productName && (
           <div
-            style={{ fontSize: "9pt", color: VALUE_COLOR, marginTop: "1px" }}
+            style={{ fontSize: "8pt", color: VALUE_COLOR, marginTop: "1px" }}
             className="truncate"
           >
             {productName}
@@ -338,15 +338,21 @@ function splitNearMiddle(text: string): [string, string] {
   return [text.slice(0, mid), text.slice(mid)]
 }
 
-// Product# is stored as "{code} / {name}" (e.g. "102 / MW) F5"). Takes
-// everything after the first " / " (or the whole string if there's no
-// slash) — verified against every one of the 14 distinct product_no
-// values actually on file before writing this, including legacy rows
-// that are just a bare name with no code/slash at all ("F5", "Hercules").
-// A name's own brand-code prefix ("MW) F5", "SK) Standard K (black)") is
-// deliberately kept rather than stripped, so the card reads "MW) F5".
+// Product# is stored as "{code} / {name}" (e.g. "102 / MW) F5"), and name
+// itself often has its own brand-code prefix baked in ("MW) F5", "SK)
+// Standard K (black)") — verified against every one of the 14 distinct
+// product_no values actually on file before writing this, including
+// legacy rows that are just a bare name with no code/slash at all ("F5",
+// "Hercules"). Takes everything after the first " / " (or the whole
+// string if there's no slash), strips any such leading "XX) " prefix to
+// get the plain base name, then re-adds the "MW) " prefix only for the F5
+// and F7 products specifically — every other product (Hercules, Oasis-S2,
+// Standard K, the PR/ETC groups, etc.) shows its plain name with no
+// prefix at all, regardless of which brand group it actually belongs to.
 function extractProductName(productNo: string): string {
-  return productNo.includes(" / ") ? productNo.split(" / ").slice(1).join(" / ").trim() : productNo.trim()
+  const afterSlash = productNo.includes(" / ") ? productNo.split(" / ").slice(1).join(" / ").trim() : productNo.trim()
+  const baseName = afterSlash.replace(/^[A-Za-z]{2,4}\)\s*/, "")
+  return baseName === "F5" || baseName === "F7" ? `MW) ${baseName}` : baseName
 }
 
 // Shrinks font size (via setSize) down to minSize while `text` overflows
@@ -440,13 +446,13 @@ function drawCardCanvas(
   // than wrapped — see fitTextOrTruncate's own comment.
   if (productName) {
     ctx.fillStyle = VALUE_COLOR
-    let productFs = 0.39 * pxPerCm
+    let productFs = 0.345 * pxPerCm
     ctx.font = `${productFs}px Arial`
     const fitted = fitTextOrTruncate(
       productName,
       maxTextW,
       productFs,
-      0.2 * pxPerCm,
+      0.18 * pxPerCm,
       (size) => {
         productFs = size
         ctx.font = `${size}px Arial`
@@ -505,13 +511,13 @@ function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, label:
   if (productName) {
     doc.setTextColor(15, 23, 41) // same navy as the value, but plain weight
     doc.setFont("helvetica", "normal")
-    let productFs = 8
+    let productFs = 7
     doc.setFontSize(productFs)
     const fitted = fitTextOrTruncate(
       productName,
       maxTextW,
       productFs,
-      5,
+      4.5,
       (size) => {
         productFs = size
         doc.setFontSize(size)
