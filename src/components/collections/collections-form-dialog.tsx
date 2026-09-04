@@ -187,7 +187,7 @@ export function CollectionsFormDialog({
                     <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="SK001-0001"
+                        placeholder="001-0001"
                         {...field}
                         onBlur={(e) => {
                           field.onBlur()

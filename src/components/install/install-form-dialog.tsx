@@ -32,9 +32,10 @@ import {
 } from "@/components/ui/select"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
-import { useCustomers } from "@/lib/hooks/use-customers"
-import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
+import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { newMemberDefaults } from "@/lib/customer-defaults"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
@@ -56,6 +57,12 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     modelDp: z.string().optional(),
     orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
     inOut: z.string().min(1),
+    // Transient — never saved onto the install_plans row itself (it has no
+    // such column). Only used, on add, as the new Customer's own
+    // memberAccountNumber when this order turns out to have no existing
+    // customer match (see onSubmit) — optional since it defaults to '' at
+    // the database level either way.
+    memberAccountNumber: z.string().optional(),
   })
 }
 
@@ -78,6 +85,7 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
       modelDp: plan.modelDp ?? "",
       orderNo: plan.orderNo,
       inOut: plan.inOut,
+      memberAccountNumber: "",
     }
   }
   return {
@@ -95,6 +103,7 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
     modelDp: "",
     orderNo: "",
     inOut: "IN",
+    memberAccountNumber: "",
   }
 }
 
@@ -113,6 +122,8 @@ export function InstallFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateInstallPlan()
   const updatePlan = useUpdateInstallPlan()
+  const createCustomer = useCreateCustomer()
+  const createSaleListEntry = useCreateSaleListEntry()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("install")
@@ -168,6 +179,41 @@ export function InstallFormDialog({
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration.
       await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+
+      // This order has no existing customer/sale-list-entry match — one
+      // form, three records: also create the Member and Sale List entry,
+      // instead of leaving the admin to do those as separate steps. Fields
+      // with no source in this form (contract number, email, assigned
+      // technician, S/C, C/F, C/T, CP Y1/Y2) are left blank/defaulted per
+      // the explicit decision on this — never fabricated, admin fills them
+      // in later via Edit. Contract start/end are the one exception: those
+      // two are NOT NULL columns with no blank option at the database
+      // level, so they get the exact same "one year from today" default
+      // the Add Member form has always silently used for a brand-new
+      // member missing this info (see customer-defaults.ts).
+      if (!findCustomerByOrderNumber(customers, saleListEntries, values.orderNo)) {
+        const newCustomer = await createCustomer.mutateAsync({
+          ...newMemberDefaults(),
+          fullName: values.name,
+          address: values.address ?? "",
+          contactNumber: values.contactNumber ?? "",
+          dispenserType: values.model,
+          installedDate: values.installedDate || undefined,
+          memberAccountNumber: values.memberAccountNumber || "",
+          email: "",
+        })
+        await createSaleListEntry.mutateAsync({
+          orderNumber: values.orderNo,
+          customerId: newCustomer.id,
+          installedDate: values.installedDate || undefined,
+          productNo: "",
+          sc: "",
+          cf: "",
+          ct: "",
+          cpY1Y2: "",
+          status: "ACTIVE",
+        })
+      }
     }
     onOpenChange(false)
   }
@@ -371,13 +417,26 @@ export function InstallFormDialog({
                     <FormLabel>{tFields("orderNo")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="SK001-0001"
+                        placeholder="001-0001"
                         {...field}
                         onBlur={(e) => {
                           field.onBlur()
                           handleOrderNoBlur(e.target.value)
                         }}
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="memberAccountNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("memberAccount")}</FormLabel>
+                    <FormControl>
+                      <Input placeholder={t("memberAccountNumberHint")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

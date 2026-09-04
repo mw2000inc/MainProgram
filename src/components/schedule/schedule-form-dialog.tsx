@@ -335,7 +335,7 @@ export function ScheduleFormDialog({
                 <FormItem>
                   <FormLabel>{t("orderNoOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="SK001-0001" {...field} />
+                    <Input placeholder="001-0001" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

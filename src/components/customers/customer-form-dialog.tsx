@@ -25,8 +25,7 @@ import {
 } from "@/components/ui/form"
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { todayIso } from "@/lib/utils"
-import { format } from "date-fns"
+import { newMemberDefaults } from "@/lib/customer-defaults"
 import type { Customer } from "@/lib/types"
 
 function createSchema(
@@ -67,19 +66,9 @@ function defaultValues(customer?: Customer): FormValues {
 // Water Purification Type, Contract Start/End Date, Assigned Technician, and
 // Water Filter Installed are no longer collected on this form, but the
 // customers table still requires contract_start/contract_end/dispenser_type on
-// insert — new members get these silent defaults; existing members are simply
-// left untouched on edit (the update payload never includes these keys).
-function newMemberDefaults() {
-  const oneYearLater = new Date()
-  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
-  return {
-    dispenserType: "",
-    contractStart: todayIso(),
-    contractEnd: format(oneYearLater, "yyyy-MM-dd"),
-    assignedTechnician: "",
-    filterInstalled: false,
-  }
-}
+// insert — new members get these silent defaults (see customer-defaults.ts,
+// shared with Install's own auto-create-a-member flow); existing members are
+// simply left untouched on edit (the update payload never includes these keys).
 
 export function CustomerFormDialog({
   open,

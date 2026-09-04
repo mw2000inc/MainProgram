@@ -10,5 +10,6 @@
   "noPlansFound": "No install plans found.",
   "deleteTitle": "Delete this install plan?",
   "deleteDescription": "This will permanently remove this install record.",
-  "noPlansForDate": "No installs for this date."
+  "noPlansForDate": "No installs for this date.",
+  "memberAccountNumberHint": "Only used if this order creates a new member"
 }

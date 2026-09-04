@@ -10,5 +10,6 @@
   "noPlansFound": "설치 계획을 찾을 수 없습니다.",
   "deleteTitle": "이 설치 계획을 삭제하시겠습니까?",
   "deleteDescription": "이 설치 기록이 영구적으로 삭제됩니다.",
-  "noPlansForDate": "이 날짜에 해당하는 설치 작업이 없습니다."
+  "noPlansForDate": "이 날짜에 해당하는 설치 작업이 없습니다.",
+  "memberAccountNumberHint": "이 주문으로 새 회원이 생성될 때만 사용됩니다"
 }
