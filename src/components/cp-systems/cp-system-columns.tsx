@@ -81,10 +81,15 @@ export function getCpSystemColumns({
       header: () => <ColumnHeader tKey="cpDetailsAll" ns="cpSystem" />,
       // Same "name - Xm" comma-joined shape as the old AppSheet free-text
       // column, just derived from the structured data instead of being the
-      // source of truth itself.
+      // source of truth itself. "x{quantity}" only when it's not the
+      // implied default of 1 (also covers every component predating the
+      // field, which has no quantity at all) — keeps the common case exactly
+      // as compact as before this field existed.
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {row.original.components.map((c) => `${c.name} - ${c.intervalMonths}M`).join(", ")}
+          {row.original.components
+            .map((c) => `${c.name}${c.quantity && c.quantity !== 1 ? ` x${c.quantity}` : ""} - ${c.intervalMonths}M`)
+            .join(", ")}
         </span>
       ),
     },
@@ -121,9 +126,9 @@ export function getCpSystemNarrowColumn(): ColumnDef<CpSystem, unknown>[] {
 }
 
 // The "CP_SystemDetails" sub-table on a system's detail panel — one row per
-// filter component, Filter (name) + Filter Term (interval). Edit/Delete
-// operate on CpSystemComponentRow's synthesized index-based id (see above),
-// not a real database row.
+// filter component: Filter (name), Quantity, Filter Term (interval).
+// Edit/Delete operate on CpSystemComponentRow's synthesized index-based id
+// (see above), not a real database row.
 export function getCpSystemDetailColumns({
   canEdit,
   canDelete,
@@ -137,6 +142,14 @@ export function getCpSystemDetailColumns({
 }): ColumnDef<CpSystemComponentRow, unknown>[] {
   const columns: ColumnDef<CpSystemComponentRow, unknown>[] = [
     { accessorKey: "name", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
+    {
+      accessorKey: "quantity",
+      header: () => <ColumnHeader tKey="quantity" ns="fields" />,
+      // Every component predating this field has no quantity stored at all
+      // — displayed as the implied default of 1, same fallback the form and
+      // the parent list's summary string both use.
+      cell: ({ row }) => row.original.quantity ?? 1,
+    },
     {
       accessorKey: "intervalMonths",
       header: () => <ColumnHeader tKey="filterTerm" ns="cpSystem" />,

@@ -132,6 +132,16 @@ export interface SaleListEntry {
 export interface CpSystemComponent {
   name: string
   intervalMonths: number
+  // How many units this component needs replaced at once (e.g. 2 identical
+  // sediment filters). Optional — every existing CP System predates this
+  // field, so anywhere it's read falls back to 1 for a component that
+  // doesn't have it, rather than treating it as "0" or blank. Purely
+  // informational for now: not read by the filter-change scheduling cron
+  // (which only cares about intervalMonths) or by stock deduction (driven
+  // entirely by schedule_job_filter_items.quantity, a technician's own
+  // record of what was actually replaced on a job — unrelated to this
+  // catalog's free-text component names, which have no FK to real products).
+  quantity?: number
 }
 
 export interface CpSystem {

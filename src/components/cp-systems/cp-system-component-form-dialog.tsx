@@ -28,6 +28,7 @@ function createSchema(
   return z.object({
     name: z.string().min(1, t("requiredField", { field: tf("filter") })),
     intervalMonths: z.number().int().min(1, tc("mustBeAtLeastOne")),
+    quantity: z.number().int().min(1, tc("mustBeAtLeastOne")),
   })
 }
 
@@ -37,6 +38,9 @@ function defaultValues(component?: CpSystemComponent): FormValues {
   return {
     name: component?.name ?? "",
     intervalMonths: component?.intervalMonths ?? 6,
+    // Every existing component predates this field — default an edit of one
+    // of those to 1 (the common case) rather than leaving it blank.
+    quantity: component?.quantity ?? 1,
   }
 }
 
@@ -108,17 +112,31 @@ export function CpSystemComponentFormDialog({
                 </FormItem>
               )}
             />
-            <div className="grid gap-2">
-              <Label>{t("filterTermMonths")}</Label>
-              <Input
-                type="number"
-                min={1}
-                onFocus={(e) => e.target.select()}
-                {...form.register("intervalMonths", { valueAsNumber: true })}
-              />
-              {form.formState.errors.intervalMonths && (
-                <p className="text-destructive text-sm">{form.formState.errors.intervalMonths.message}</p>
-              )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>{t("filterTermMonths")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  onFocus={(e) => e.target.select()}
+                  {...form.register("intervalMonths", { valueAsNumber: true })}
+                />
+                {form.formState.errors.intervalMonths && (
+                  <p className="text-destructive text-sm">{form.formState.errors.intervalMonths.message}</p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label>{tFields("quantity")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  onFocus={(e) => e.target.select()}
+                  {...form.register("quantity", { valueAsNumber: true })}
+                />
+                {form.formState.errors.quantity && (
+                  <p className="text-destructive text-sm">{form.formState.errors.quantity.message}</p>
+                )}
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
