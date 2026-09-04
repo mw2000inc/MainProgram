@@ -28,6 +28,7 @@ function createSchema(
   const componentSchema = z.object({
     name: z.string().min(1, tf("required")),
     intervalMonths: z.number().int().min(1, tc("mustBeAtLeastOne")),
+    quantity: z.number().int().min(1, tc("mustBeAtLeastOne")),
   })
 
   return z.object({
@@ -41,7 +42,13 @@ type FormValues = z.infer<ReturnType<typeof createSchema>>
 function defaultValues(system?: CpSystem): FormValues {
   return {
     systemCode: system?.systemCode ?? "",
-    components: system?.components?.length ? system.components : [{ name: "", intervalMonths: 6 }],
+    // Every existing component predates the quantity field — normalize it to
+    // the implied default of 1 here so an existing system's row never opens
+    // this dialog with a blank quantity input (same fallback used throughout
+    // the app wherever a component's quantity is read).
+    components: system?.components?.length
+      ? system.components.map((c) => ({ ...c, quantity: c.quantity ?? 1 }))
+      : [{ name: "", intervalMonths: 6, quantity: 1 }],
   }
 }
 
@@ -109,10 +116,19 @@ export function CpSystemFormDialog({
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => append({ name: "", intervalMonths: 6 })}
+                onClick={() => append({ name: "", intervalMonths: 6, quantity: 1 })}
               >
                 <Plus className="h-3.5 w-3.5" /> {t("addComponent")}
               </Button>
+            </div>
+            {/* Column headers, shown once above the list rather than
+                repeated per row — the Name column is self-explanatory from
+                its placeholder, same as before this field existed. */}
+            <div className="flex items-center gap-2 px-0.5">
+              <div className="flex-1" />
+              <Label className="w-20 shrink-0 text-xs text-muted-foreground font-normal">{t("filterTermMonths")}</Label>
+              <Label className="w-20 shrink-0 text-xs text-muted-foreground font-normal">{tFields("quantity")}</Label>
+              <div className="w-9 shrink-0" />
             </div>
             <div className="space-y-2">
               {fields.map((field, index) => (
@@ -123,18 +139,26 @@ export function CpSystemFormDialog({
                       <p className="text-destructive text-xs mt-1">{errors.components[index]?.name?.message}</p>
                     )}
                   </div>
-                  <div className="w-28 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        type="number"
-                        min={1}
-                        onFocus={(e) => e.target.select()}
-                        {...form.register(`components.${index}.intervalMonths`, { valueAsNumber: true })}
-                      />
-                      <span className="text-xs text-muted-foreground shrink-0">mo</span>
-                    </div>
+                  <div className="w-20 shrink-0">
+                    <Input
+                      type="number"
+                      min={1}
+                      onFocus={(e) => e.target.select()}
+                      {...form.register(`components.${index}.intervalMonths`, { valueAsNumber: true })}
+                    />
                     {errors.components?.[index]?.intervalMonths && (
                       <p className="text-destructive text-xs mt-1">{errors.components[index]?.intervalMonths?.message}</p>
+                    )}
+                  </div>
+                  <div className="w-20 shrink-0">
+                    <Input
+                      type="number"
+                      min={1}
+                      onFocus={(e) => e.target.select()}
+                      {...form.register(`components.${index}.quantity`, { valueAsNumber: true })}
+                    />
+                    {errors.components?.[index]?.quantity && (
+                      <p className="text-destructive text-xs mt-1">{errors.components[index]?.quantity?.message}</p>
                     )}
                   </div>
                   <Button
