@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/form"
 import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
@@ -105,6 +106,7 @@ export function FilterChangeFormDialog({
   const createPlan = useCreateFilterChangePlan()
   const updatePlan = useUpdateFilterChangePlan()
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("filterChange")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -134,7 +136,7 @@ export function FilterChangeFormDialog({
   // nothing to safely fill anyway.
   function handleOrderNumberBlur(orderNumber: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, orderNumber)
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNumber)
     if (!customer) return
     let filled = false
     const name = customer.companyName || customer.fullName

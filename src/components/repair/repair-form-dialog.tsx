@@ -32,6 +32,7 @@ import {
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
@@ -114,6 +115,7 @@ export function RepairFormDialog({
   const createPlan = useCreateRepairPlan()
   const updatePlan = useUpdateRepairPlan()
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("repair")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -128,7 +130,7 @@ export function RepairFormDialog({
   // contact/address columns, so accountName is the only field to fill.
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, orderNo)
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
     if (!customer) return
     const name = customer.companyName || customer.fullName
     if (name && !form.getValues("accountName").trim()) {

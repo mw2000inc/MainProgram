@@ -33,6 +33,7 @@ import {
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
@@ -113,6 +114,7 @@ export function InstallFormDialog({
   const createPlan = useCreateInstallPlan()
   const updatePlan = useUpdateInstallPlan()
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("install")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -132,7 +134,7 @@ export function InstallFormDialog({
   // already typed.
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, orderNo)
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
     if (!customer) return
     let filled = false
     const name = customer.companyName || customer.fullName

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
@@ -110,6 +111,7 @@ export function CollectionsFormDialog({
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("collection")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -136,7 +138,7 @@ export function CollectionsFormDialog({
   // there is to fill.
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, orderNo)
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
     if (!customer) return
     const name = customer.companyName || customer.fullName
     if (name && !form.getValues("accountName").trim()) {

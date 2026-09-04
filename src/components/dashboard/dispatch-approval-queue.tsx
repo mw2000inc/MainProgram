@@ -18,12 +18,13 @@ import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
-import type { Customer, DispatchStatus } from "@/lib/types"
+import type { Customer, DispatchStatus, SaleListEntry } from "@/lib/types"
 
 // Every dispatch row this queue cares about, across all four modules,
 // regardless of its current dispatchStatus — Draft ones are what actually
@@ -55,14 +56,21 @@ interface DispatchRow {
 
 // Best-effort customer lookup for prefilling a phone/email default — tries
 // an explicit customerId link first (Filter Change, Collections), falling
-// back to the shared order-number match (see customer-lookup.ts) for the
-// modules that don't carry a customerId at all (Installation).
-function findCustomer(customers: Customer[], { customerId, orderNumber }: { customerId?: string; orderNumber?: string }) {
+// back to the shared order-number match (see customer-lookup.ts, which
+// checks sale_list_entries — not customers.order_number, a completely
+// different numbering scheme that never overlaps with what these modules'
+// own order numbers actually look like) for the modules that don't carry a
+// customerId at all (Installation, Repair).
+function findCustomer(
+  customers: Customer[],
+  saleListEntries: SaleListEntry[],
+  { customerId, orderNumber }: { customerId?: string; orderNumber?: string }
+) {
   if (customerId) {
     const byId = customers.find((c) => c.id === customerId)
     if (byId) return byId
   }
-  if (orderNumber) return findCustomerByOrderNumber(customers, orderNumber)
+  if (orderNumber) return findCustomerByOrderNumber(customers, saleListEntries, orderNumber)
   return undefined
 }
 
@@ -122,6 +130,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const { data: collections = [] } = useCollections()
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const approve = useApproveDispatchItem()
   const acceptReschedule = useAcceptRequestedReschedule()
   const updateCustomer = useUpdateCustomer()
@@ -145,7 +154,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const allRows: DispatchRow[] = React.useMemo(() => {
     const list: DispatchRow[] = []
     for (const p of filterChangePlans) {
-      const customer = findCustomer(customers, { customerId: p.customerId, orderNumber: p.orderNumber })
+      const customer = findCustomer(customers, saleListEntries, { customerId: p.customerId, orderNumber: p.orderNumber })
       list.push({
         entityType: "filter_change_plans",
         entityId: p.id,
@@ -162,7 +171,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       })
     }
     for (const p of installPlans) {
-      const customer = findCustomer(customers, { orderNumber: p.orderNo })
+      const customer = findCustomer(customers, saleListEntries, { orderNumber: p.orderNo })
       list.push({
         entityType: "install_plans",
         entityId: p.id,
@@ -184,7 +193,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       })
     }
     for (const c of collections) {
-      const customer = findCustomer(customers, { customerId: c.customerId, orderNumber: c.orderNo })
+      const customer = findCustomer(customers, saleListEntries, { customerId: c.customerId, orderNumber: c.orderNo })
       list.push({
         entityType: "collections",
         entityId: c.id,
@@ -205,7 +214,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       // orderNumber match below (same fallback Installation already uses)
       // is the only way to resolve a real customer for it at all, both for
       // prefilling phone/email here and as the write-back target below.
-      const customer = findCustomer(customers, { orderNumber: r.orderNo })
+      const customer = findCustomer(customers, saleListEntries, { orderNumber: r.orderNo })
       list.push({
         entityType: "repair_plans",
         entityId: r.id,
@@ -222,7 +231,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       })
     }
     return list
-  }, [filterChangePlans, installPlans, collections, repairPlans, customers])
+  }, [filterChangePlans, installPlans, collections, repairPlans, customers, saleListEntries])
 
   const items = React.useMemo(
     () => allRows.filter((r) => r.dispatchStatus === "Draft").sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
