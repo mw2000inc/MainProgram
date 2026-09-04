@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatTechnicians, matchesTechnician, getDistinctTechnicians } from "@/components/schedule/schedule-columns"
+import { formatTechnicians, matchesTechnician } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -23,6 +23,7 @@ import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { printScheduleTable, type ScheduleTableRow } from "@/lib/export/print"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { TECHNICIANS } from "@/lib/constants"
 import type { ScheduleJob, Customer, FilterChangePlan, CollectionPlan, SaleListEntry } from "@/lib/types"
 
 // Picks the best soft-match among same-order-number candidates from a
@@ -104,13 +105,14 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   const { data: saleListEntries = [], isPending: p5 } = useSaleListEntries()
   const isPending = p1 || p2 || p3 || p4 || p5
 
-  // Same "All" + distinct-technician-from-the-data filter as the Schedule
-  // page's own List view (see schedule-columns.tsx's own comment on why
-  // this is shared rather than duplicated) — its own independent state, not
-  // synced with the List view's filter, same as this view's date isn't
-  // either. Defaults to "all", matching today's unfiltered behavior.
+  // Same "All" + roster filter as the Schedule page's own List view (see
+  // matchesTechnician's own comment on why the match itself is shared) —
+  // its own independent state, not synced with the List view's filter,
+  // same as this view's date isn't either. Defaults to "all", matching
+  // today's unfiltered behavior. Options come from the TECHNICIANS roster,
+  // not the jobs actually on record — a name stays choosable even on a day
+  // with nothing assigned to them yet, matching the List view.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
-  const technicianOptions = React.useMemo(() => getDistinctTechnicians(jobs), [jobs])
 
   const dayJobs = React.useMemo(() => jobs.filter((j) => j.scheduledDate === date), [jobs, date])
   const scopedDayJobs = React.useMemo(
@@ -155,7 +157,7 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("allTechnicians")}</SelectItem>
-                  {technicianOptions.map((tech) => (
+                  {TECHNICIANS.map((tech) => (
                     <SelectItem key={tech} value={tech}>
                       {tech}
                     </SelectItem>
