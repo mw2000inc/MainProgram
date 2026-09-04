@@ -14,7 +14,7 @@ import {
 
 export const dynamic = "force-dynamic"
 
-// Real SMS (Semaphore) + Email (Resend) dispatch-approval delivery — see
+// Real SMS (textbee) + Email (Resend) dispatch-approval delivery — see
 // the dispatch_dual_channel_notifications migration's own comment for why
 // this lives here rather than in the approve_dispatch_item() RPC itself
 // (Postgres can't make outbound HTTP calls the way this project is set

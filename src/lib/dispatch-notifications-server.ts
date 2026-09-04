@@ -80,37 +80,62 @@ export async function sendEmail(to: string, subject: string, html: string, text:
   }
 }
 
-// Semaphore SMS Gateway (https://semaphore.co) — PH-focused, REST API,
-// form-encoded POST. SEMAPHORE_API_KEY is required; SEMAPHORE_SENDER_NAME
-// is optional (Semaphore defaults to its own shared sender name if the
-// account has no approved custom one). Missing SEMAPHORE_API_KEY is
-// treated as "not configured yet" (status 'skipped_no_provider'), not an
-// error — lets the rest of whichever flow called this still succeed
-// before SMS credentials are added.
+// Every phone number this app actually has on file was typed by hand over
+// time (customers.contact_number/contact_number2, no format ever
+// enforced) — verified directly against live data before writing this:
+// alongside the expected "09XXXXXXXXX" and bare "9XXXXXXXXX" shapes, real
+// rows include ones with spaces ("0906 350 4878"), a name typed into the
+// same field ("09754694987 - Michelle Gaston"), landlines ("02)9126175"),
+// an extension ("9814311 local 41602 or 41604"), and at least one row
+// that's an address, not a phone number at all. Stripping to digits-only
+// and then requiring the result to be *exactly* a valid PH mobile shape
+// (10 digits starting with 9, 11 starting with 09, or 12 starting with
+// 639) handles the common "real number plus junk text" cases for free
+// (the junk contributes no digits) while safely rejecting the landline/
+// extension/address rows instead of guessing at a mangled destination —
+// returns null for anything that doesn't confidently resolve.
+export function toPhilippineE164(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "")
+  if (/^0?9\d{9}$/.test(digits)) return `+63${digits.slice(-10)}`
+  if (/^639\d{9}$/.test(digits)) return `+${digits}`
+  return null
+}
+
+// textbee (https://textbee.dev) — sends through an admin's own Android
+// phone via its companion app, rather than a traditional SMS gateway.
+// TEXTBEE_API_KEY is required (replaces the old SEMAPHORE_API_KEY —
+// Semaphore is fully retired, not just superseded, see this function's own
+// git history if the old implementation is ever needed for reference).
+// Missing TEXTBEE_API_KEY is treated as "not configured yet" (status
+// 'skipped_no_provider'), not an error — lets the rest of whichever flow
+// called this still succeed before SMS credentials are added. An
+// unrecognizable phone number (see toPhilippineE164 above) is a 'failed'
+// result, not skipped — a real destination was expected and there wasn't
+// one to send to.
 //
-// Character-set note (not a Semaphore-specific quirk — this is standard
-// GSM/SMPP behavior any SMS gateway follows): any character outside the
-// GSM-7 alphabet — emoji being the most common way this bites a template
-// — forces the *entire* message to UCS-2 encoding, dropping the
-// per-segment limit from ~153 chars to ~67. Every SMS template calling
-// this is deliberately plain ASCII (no emoji) specifically to stay on
-// GSM-7 — worth re-checking this note if a template ever changes to
-// include emoji, curly quotes, or other non-GSM-7 punctuation.
+// Character-set note (not a textbee-specific quirk — standard GSM/SMPP
+// behavior any SMS transport follows, phone-network-level rather than
+// provider-level): any character outside the GSM-7 alphabet — emoji being
+// the most common way this bites a template — forces the *entire* message
+// to UCS-2 encoding, dropping the per-segment limit from ~153 chars to
+// ~67. Every SMS template calling this is deliberately plain ASCII (no
+// emoji) specifically to stay on GSM-7 — worth re-checking this note if a
+// template ever changes to include emoji, curly quotes, or other
+// non-GSM-7 punctuation.
 export async function sendSms(phone: string, message: string): Promise<ChannelResult> {
-  const apiKey = process.env.SEMAPHORE_API_KEY
-  if (!apiKey) return { status: "skipped_no_provider", detail: "SEMAPHORE_API_KEY is not set" }
+  const apiKey = process.env.TEXTBEE_API_KEY
+  if (!apiKey) return { status: "skipped_no_provider", detail: "TEXTBEE_API_KEY is not set" }
+  const recipient = toPhilippineE164(phone)
+  if (!recipient) return { status: "failed", detail: `"${phone}" isn't a recognizable PH mobile number` }
   try {
-    const params = new URLSearchParams({ apikey: apiKey, number: phone, message })
-    const senderName = process.env.SEMAPHORE_SENDER_NAME
-    if (senderName) params.set("sendername", senderName)
-    const response = await fetch("https://api.semaphore.co/api/v4/messages", { method: "POST", body: params })
+    const response = await fetch("https://api.textbee.dev/api/v1/gateway/send-sms", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipients: [recipient], message }),
+    })
     const data = await response.json().catch(() => null)
     if (!response.ok) {
       return { status: "failed", detail: typeof data === "object" ? JSON.stringify(data) : `HTTP ${response.status}` }
-    }
-    const first = Array.isArray(data) ? data[0] : data
-    if (!first?.message_id) {
-      return { status: "failed", detail: "Semaphore response had no message_id" }
     }
     return { status: "sent" }
   } catch (err) {

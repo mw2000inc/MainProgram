@@ -109,7 +109,7 @@ const DISPATCH_STATUS_KEYS: Record<string, string> = {
 // each module's own "Add" form start here at dispatchStatus='Draft';
 // auto-generated recurring-schedule/C/T-completion rows skip this queue
 // entirely (see the migration's own comment for why). Approving here
-// always attempts BOTH a real SMS (Semaphore) and a real email (Resend)
+// always attempts BOTH a real SMS (textbee) and a real email (Resend)
 // to whichever of phone/email is filled in — either can be left blank to
 // skip that channel entirely, but at least one is required.
 //

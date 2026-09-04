@@ -5,22 +5,25 @@ export const dynamic = "force-dynamic"
 
 // Best-effort webhook stub for an inbound SMS reply to a dispatch
 // confirmation text (see the dispatch_confirmation_workflow migration and
-// its respond_to_dispatch_confirmation_by_contact() follow-up). No SMS
-// provider is actually connected yet (see the same migration's own note on
-// that) — this exists so the wiring is already in place the day one is
-// chosen, but it WILL need adjustment then, because every provider shapes
-// its webhook payload differently:
+// its respond_to_dispatch_confirmation_by_contact() follow-up). Outbound
+// SMS goes through textbee now (see dispatch-notifications-server.ts), but
+// this inbound side is still just a stub — textbee's own inbound-webhook
+// payload shape (if it has one at all; it sends through an admin's own
+// Android phone via a companion app, not a traditional two-way gateway)
+// hasn't been looked up and wired here yet. Written provider-agnostic in
+// the meantime, since the closest analogues shape their payloads
+// differently:
 //   - Twilio posts form-urlencoded fields named "From" and "Body".
-//   - Many others (Semaphore, Vonage, etc.) post JSON with different field
-//     names again (e.g. "sender"/"message", "msisdn"/"text").
+//   - Many others post JSON with different field names again (e.g.
+//     "sender"/"message", "msisdn"/"text").
 // To stay useful across that uncertainty, this reads a handful of common
 // field name variants from either a form-urlencoded or JSON body rather
 // than betting on one provider's exact shape — replace this parsing block
-// with the real provider's documented payload once one is chosen, and add
-// that provider's signature/HMAC verification (Twilio's X-Twilio-Signature
-// or equivalent) before trusting the body at all. Right now ANY caller who
-// finds this URL could flip a customer's dispatch_status, since there's no
-// secret shared with a not-yet-chosen provider to validate against.
+// with textbee's real documented payload once it's actually looked up, and
+// add its signature/HMAC verification (or equivalent) before trusting the
+// body at all. Right now ANY caller who finds this URL could flip a
+// customer's dispatch_status, since there's no secret shared with a
+// not-yet-verified provider to validate against.
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? ""
   let from: string | undefined

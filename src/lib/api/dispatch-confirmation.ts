@@ -6,7 +6,7 @@ export type DispatchEntityType = "filter_change_plans" | "install_plans" | "coll
 export type DispatchChannelResult = { status: "sent" | "failed" | "skipped_no_provider"; detail?: string }
 
 // Admin approval step — hits the server route (not the DB directly)
-// because sending a real SMS/email needs the Semaphore/Resend API keys,
+// because sending a real SMS/email needs the textbee/Resend API keys,
 // which only ever live server-side (see
 // src/app/api/dispatch/approve/route.ts). That route re-checks
 // admin-ness itself (via approve_dispatch_item(), under the caller's own

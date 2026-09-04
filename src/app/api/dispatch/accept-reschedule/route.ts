@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic"
 // Admin's "yes, that date works" action on a Reschedule Requested item
 // (the Pending Dispatch Approval queue's Reschedule Requests section) —
 // see the reschedule_request_with_date migration for why this needs its
-// own route (same reason /api/dispatch/approve does: real Semaphore/
+// own route (same reason /api/dispatch/approve does: real textbee/
 // Resend credentials only ever live server-side). Unlike approve, this
 // jumps straight to a "you're confirmed" notification rather than a
 // "please confirm" ask — the customer already told us this exact date
