@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { ClipboardCheck, Droplets, Banknote, Wrench, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -32,6 +33,7 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
@@ -59,6 +61,7 @@ export default function SaleListPage() {
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: collections = [] } = useCollections()
   const { data: repairPlans = [] } = useRepairPlans()
+  const { data: cpSystems = [] } = useCpSystems()
   const deleteEntries = useDeleteSaleListEntries()
 
   const [formOpen, setFormOpen] = React.useState(false)
@@ -121,6 +124,10 @@ export default function SaleListPage() {
   const orderRepairs = React.useMemo(
     () => (selected ? repairPlans.filter((r) => r.orderNo === selected.orderNumber) : []),
     [repairPlans, selected]
+  )
+  const selectedCpSystem = React.useMemo(
+    () => (selected?.cpSystemId ? cpSystems.find((s) => s.id === selected.cpSystemId) : undefined),
+    [cpSystems, selected]
   )
 
   if (isPending) {
@@ -255,6 +262,16 @@ export default function SaleListPage() {
               <DetailField label={tFields("account")} value={selected.accountLabel} />
               <DetailField label={tFields("productNo")} value={selected.productNo} />
               <DetailField label={tFields("sc")} value={selected.sc} />
+              <DetailField
+                label={t("cpSystem")}
+                value={
+                  selectedCpSystem && (
+                    <Link href={`/cp-system?id=${selectedCpSystem.id}`} className="text-primary hover:underline">
+                      {selectedCpSystem.systemCode}
+                    </Link>
+                  )
+                }
+              />
               <DetailField label={tFields("cf")} value={selected.cf} />
               <DetailField label={tFields("ct")} value={selected.ct} />
               <DetailField label={tFields("cpY1Y2")} value={selected.cpY1Y2} />

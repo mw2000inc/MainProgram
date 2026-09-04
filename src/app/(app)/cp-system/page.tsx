@@ -35,8 +35,11 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 // split-view pattern as Member/Sale List: a flat searchable table, and a
 // per-system detail panel (CP_SystemDetails component sub-table + Related
 // Sales_Lists/Repairs) once a row is opened. Read-only for staff; admins
-// manage it here. Not yet wired into the filter-change scheduling cron (see
-// the migration's own comment) — this is just the catalog.
+// manage it here. Once a Sale List order links to a system here (see
+// SaleListFormDialog's own CP System field), the filter-change scheduling
+// cron's second pass paces that order off this system's own components
+// (shortest interval wins) instead of the flat customer-level fallback
+// every other order still uses — see filter-change-schedule/route.ts.
 function CpSystemContent() {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"

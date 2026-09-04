@@ -17,5 +17,6 @@
   "orderInfo": "Order Info",
   "viewFullMemberProfile": "View Full Member Profile",
   "noMemberLinked": "No member linked",
-  "noMemberLinkedDescription": "No member is linked to this order — link one by editing this entry from the Sale List page."
+  "noMemberLinkedDescription": "No member is linked to this order — link one by editing this entry from the Sale List page.",
+  "cpSystem": "CP System"
 }

@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Users,
   ArrowRight,
+  Layers,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,6 +32,7 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, initials, todayIso as today } from "@/lib/utils"
@@ -56,6 +58,7 @@ export default function SaleListOrderDetailPage() {
   const { data: filterChangePlans = [], isPending: pFilter } = useFilterChangePlans()
   const { data: collections = [], isPending: pCollections } = useCollections()
   const { data: repairPlans = [], isPending: pRepairs } = useRepairPlans()
+  const { data: cpSystems = [] } = useCpSystems()
 
   const [filterFormOpen, setFilterFormOpen] = React.useState(false)
   const [collectionFormOpen, setCollectionFormOpen] = React.useState(false)
@@ -82,6 +85,10 @@ export default function SaleListOrderDetailPage() {
   const orderRepairs = React.useMemo(
     () => (entry ? repairPlans.filter((r) => r.orderNo === entry.orderNumber) : []),
     [repairPlans, entry]
+  )
+  const linkedCpSystem = React.useMemo(
+    () => (entry?.cpSystemId ? cpSystems.find((s) => s.id === entry.cpSystemId) : undefined),
+    [cpSystems, entry]
   )
 
   const isPending = pEntries || pCustomers || pFilter || pCollections || pRepairs
@@ -144,6 +151,19 @@ export default function SaleListOrderDetailPage() {
             <InfoRow icon={Users} label={tFields("memberAccount")} value={customer?.memberAccountNumber || tCommon("notAvailable")} />
             <InfoRow icon={Package} label={tFields("productNo")} value={entry.productNo || tCommon("notAvailable")} />
             <InfoRow icon={Hash} label={tFields("sc")} value={entry.sc || tCommon("notAvailable")} />
+            <InfoRow
+              icon={Layers}
+              label={t("cpSystem")}
+              value={
+                linkedCpSystem ? (
+                  <Link href={`/cp-system?id=${linkedCpSystem.id}`} className="text-primary hover:underline">
+                    {linkedCpSystem.systemCode}
+                  </Link>
+                ) : (
+                  tCommon("notAvailable")
+                )
+              }
+            />
             <InfoRow icon={Hash} label={tFields("cf")} value={entry.cf || tCommon("notAvailable")} />
             <InfoRow icon={Hash} label={tFields("ct")} value={entry.ct || tCommon("notAvailable")} />
             <InfoRow icon={Hash} label={tFields("cpY1Y2")} value={entry.cpY1Y2 || tCommon("notAvailable")} />

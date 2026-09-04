@@ -35,6 +35,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useProducts } from "@/lib/hooks/use-inventory"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { ctIntervalMonths } from "@/lib/ct-interval"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -42,6 +43,11 @@ import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
 const STATUSES: SaleListStatus[] = ["ACTIVE", "INACTIVE", "RENT", "DIY"]
 const STATUS_KEYS: Record<SaleListStatus, string> = { ACTIVE: "active", INACTIVE: "inactive", RENT: "rent", DIY: "diy" }
+
+// Sentinel for the Select's own "none" option — cpSystemId itself stays ""
+// (never this literal) in form state and on submit, same convention as
+// every other optional-link-with-a-clear-option field in this app.
+const CP_SYSTEM_NONE = "__none__"
 
 // The legacy AppSheet catalog stays alongside live Inventory products rather
 // than being replaced — productNo is (and remains) free text with no FK, so
@@ -76,6 +82,10 @@ function createSchema(
     cpEnd: z.string().optional(),
     note: z.string().optional(),
     status: z.enum(["ACTIVE", "INACTIVE", "RENT", "DIY"]),
+    // Optional link to a real CP System (see cp-systems) — separate from the
+    // free-text S/C field above, not a replacement for it (S/C stays exactly
+    // as admins have always typed it).
+    cpSystemId: z.string().optional(),
   })
 }
 
@@ -96,6 +106,7 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
       cpEnd: entry.cpEnd ?? "",
       note: entry.note ?? "",
       status: entry.status,
+      cpSystemId: entry.cpSystemId ?? "",
     }
   }
   return {
@@ -111,6 +122,7 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
     cpEnd: "",
     note: "",
     status: "ACTIVE",
+    cpSystemId: "",
   }
 }
 
@@ -141,6 +153,7 @@ export function SaleListFormDialog({
   const updateEntry = useUpdateSaleListEntry()
   const { data: customers = [] } = useCustomers()
   const { data: products = [] } = useProducts()
+  const { data: cpSystems = [] } = useCpSystems()
   const { t } = useTranslation("saleList")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -296,6 +309,34 @@ export function SaleListFormDialog({
                     <FormControl>
                       <Input placeholder={tCommon("optional")} {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cpSystemId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("cpSystem")}</FormLabel>
+                    <Select
+                      value={field.value || CP_SYSTEM_NONE}
+                      onValueChange={(v) => field.onChange(v === CP_SYSTEM_NONE ? "" : v)}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={tCommon("selectField", { field: t("cpSystem") })} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={CP_SYSTEM_NONE}>{tCommon("none")}</SelectItem>
+                        {cpSystems.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.systemCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

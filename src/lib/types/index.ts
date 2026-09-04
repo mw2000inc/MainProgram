@@ -116,8 +116,11 @@ export interface SaleListEntry {
   status: SaleListStatus
   createdAt: string
   // Which CP System (see CpSystem below) was actually installed for this
-  // order — not yet read by the filter-change scheduling cron, which still
-  // runs on the customer's dispenser_type + Settings' monitoring intervals.
+  // order. When set, the filter-change scheduling cron paces off this
+  // system's own components (shortest interval wins — see
+  // getCpSystemFilterChangeDueDate) anchored on this order's own
+  // installedDate, instead of the customer-level dispenser_type + Settings'
+  // monitoring intervals fallback every other order still uses.
   cpSystemId?: string
 }
 

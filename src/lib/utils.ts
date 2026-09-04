@@ -77,6 +77,33 @@ export function getCustomerFilterChangeDueDate(
   return getMonitoringEndDate(anchor, months)
 }
 
+// The interval that actually paces a linked CP System's next filter change —
+// the shortest of its components' intervals, not the longest or an average.
+// A system like UF71 mixes a 4-month Sediment stage with 12/24-month stages;
+// pacing off anything but the shortest would let that faster component run
+// overdue while the schedule waits on a slower one. Returns null for a
+// system with no components defined yet — nothing to schedule off of.
+export function getCpSystemMinIntervalMonths(components: { intervalMonths: number }[]): number | null {
+  if (components.length === 0) return null
+  return Math.min(...components.map((c) => c.intervalMonths))
+}
+
+// Same due-date shape as getCustomerFilterChangeDueDate above, for an order
+// that has a real CP System linked (see SaleListEntry.cpSystemId) — anchored
+// on that ORDER's own installed date, not the customer's. Deliberately not
+// the customer's installedDate/contractStart: one customer can have several
+// orders, each with a different system installed at a different time (see
+// the cp_systems migration), so the due date has to live at the order level
+// once a link exists, not the customer level the flat-interval path uses.
+export function getCpSystemFilterChangeDueDate(
+  orderInstalledDate: string,
+  components: { intervalMonths: number }[]
+): Date | null {
+  const months = getCpSystemMinIntervalMonths(components)
+  if (months === null) return null
+  return getMonitoringEndDate(orderInstalledDate, months)
+}
+
 // Three-bucket customer-facing status derived from the monitoring End Date:
 // past due -> for replacement, within the expiry window -> expiring, else active.
 export function getMonitoringStatus(endDate: Date | string, today: Date = new Date()): MonitoringViewStatus {

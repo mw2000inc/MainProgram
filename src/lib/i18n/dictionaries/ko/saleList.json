@@ -17,5 +17,6 @@
   "orderInfo": "주문 정보",
   "viewFullMemberProfile": "회원 전체 프로필 보기",
   "noMemberLinked": "연결된 회원 없음",
-  "noMemberLinkedDescription": "이 주문에 연결된 회원이 없습니다 — 판매 목록 페이지에서 이 항목을 수정하여 회원을 연결하세요."
+  "noMemberLinkedDescription": "이 주문에 연결된 회원이 없습니다 — 판매 목록 페이지에서 이 항목을 수정하여 회원을 연결하세요.",
+  "cpSystem": "CP 시스템"
 }
