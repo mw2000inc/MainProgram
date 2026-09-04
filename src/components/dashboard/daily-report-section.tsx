@@ -299,14 +299,18 @@ export function DailyReportSection() {
   )
 
   // A technician never fetches or saves a layout at all (the query is
-  // disabled below) — they always render the hardcoded stacked default
+  // disabled below) — they always render the hardcoded grid default
   // order/sizes.
   const { data: myLayout } = useMyDailyReportLayout(isAdmin ? user?.id : undefined)
   const saveLayout = useSaveMyDailyReportLayout(user?.id)
 
   // Same saved-layout pattern as order/sizes below. The mode toggle itself
   // is still per-admin — only the arrangement *within* Grid mode is fixed.
-  const savedLayoutMode = myLayout?.layoutMode ?? "stacked"
+  // "grid" (the AppSheet-matching arrangement, see DEFAULT_GRID_ORDER) is
+  // the fallback so a never-customized admin — and every technician, who
+  // can never toggle this at all (see canArrange) — lands there directly,
+  // not on Stacked.
+  const savedLayoutMode = myLayout?.layoutMode ?? "grid"
   const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
   const layoutMode = localLayoutMode ?? savedLayoutMode
 
