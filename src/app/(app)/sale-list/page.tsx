@@ -18,6 +18,7 @@ import {
   getSaleListOrderNumberColumn,
   getSaleListRowClassName,
   SALE_LIST_EXPORT_COLUMNS,
+  StatusCell,
   type SaleListRow,
 } from "@/components/sale-list/sale-list-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
@@ -259,7 +260,7 @@ export default function SaleListPage() {
               <DetailField label={tFields("cpY1Y2")} value={selected.cpY1Y2} />
               <DetailField label={tFields("cpStart")} value={selected.cpStart ? formatDate(selected.cpStart) : undefined} />
               <DetailField label={tFields("cpEnd")} value={selected.cpEnd ? formatDate(selected.cpEnd) : undefined} />
-              <DetailField label={tFields("status")} value={selected.status} />
+              <DetailField label={tFields("status")} value={<StatusCell status={selected.status} />} />
               <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           }

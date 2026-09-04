@@ -100,6 +100,18 @@ const PLAN_STATUS_KEYS: Record<string, string> = {
   canceled: "cancelled",
 }
 
+// Shared by PlanStatusBadge (read-only) and PlanStatusSelect (the admin-only
+// inline dropdown that replaces it) so both ever show the same translated
+// label for the same underlying DB value — exported rather than duplicated,
+// since the two badly drifted out of sync before this (the Select rendered
+// its raw English options untranslated). The status string itself is never
+// translated in place: `value`/`onChange` still carry the original English
+// word, since that's what's written back to the DB and compared elsewhere.
+export function planStatusLabel(status: string, t: (key: string) => string): string {
+  const key = PLAN_STATUS_KEYS[status.toLowerCase()]
+  return key ? t(key) : status.charAt(0).toUpperCase() + status.slice(1)
+}
+
 // Free-text status used by the daily-report plan tables (filter change, install,
 // repair, collection, schedule jobs) — normalizes common values to a tone.
 export function PlanStatusBadge({ status }: { status: string }) {
@@ -108,7 +120,5 @@ export function PlanStatusBadge({ status }: { status: string }) {
   let tone: BadgeTone = "warning"
   if (normalized === "completed" || normalized === "done" || normalized === "active" || normalized === "collected") tone = "success"
   else if (normalized === "cancelled" || normalized === "canceled") tone = "danger"
-  const key = PLAN_STATUS_KEYS[normalized]
-  const label = key ? t(key) : status.charAt(0).toUpperCase() + status.slice(1)
-  return <StatusBadge tone={tone} label={label} />
+  return <StatusBadge tone={tone} label={planStatusLabel(status, t)} />
 }

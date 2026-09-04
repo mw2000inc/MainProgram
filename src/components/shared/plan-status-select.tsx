@@ -7,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { planStatusLabel } from "@/components/shared/status-badge"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn } from "@/lib/utils"
 
 // One shared inline status control for the four Daily Report plan tables
@@ -37,6 +39,7 @@ export function PlanStatusSelect({
   onChange: (next: string) => void
   disabled?: boolean
 }) {
+  const { t } = useTranslation("status")
   return (
     // Stops the click from bubbling into the row's own onRowClick (which
     // would otherwise navigate away) before the dropdown even opens —
@@ -44,12 +47,12 @@ export function PlanStatusSelect({
     <div onClick={(e) => e.stopPropagation()} className="inline-block">
       <Select value={status} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className={cn("h-7 w-[118px] text-xs", TONE_CLASS[status.toLowerCase()])}>
-          <SelectValue />
+          <SelectValue>{planStatusLabel(status, t)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((s) => (
             <SelectItem key={s} value={s}>
-              {s}
+              {planStatusLabel(s, t)}
             </SelectItem>
           ))}
         </SelectContent>

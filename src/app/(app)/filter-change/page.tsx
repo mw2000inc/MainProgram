@@ -17,6 +17,7 @@ import { useDeleteFilterChangePlans, useFilterChangePlans, useUpdateFilterChange
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { planStatusLabel } from "@/components/shared/status-badge"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
 
@@ -31,6 +32,7 @@ function FilterChangePageContent() {
   const { t: tNav } = useTranslation("nav")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
   const { data: plans = [], isPending } = useFilterChangePlans()
   const deletePlans = useDeleteFilterChangePlans()
   const updatePlan = useUpdateFilterChangePlan()
@@ -192,7 +194,7 @@ function FilterChangePageContent() {
               <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
               <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
               <DetailField label={tFields("serviceman")} value={selected.serviceman} />
-              <DetailField label={tFields("status")} value={selected.status} />
+              <DetailField label={tFields("status")} value={planStatusLabel(selected.status, tStatus)} />
               <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           )
