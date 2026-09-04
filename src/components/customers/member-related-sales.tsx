@@ -82,6 +82,7 @@ export function MemberRelatedSalesTable({
         onOpenChange={(o) => !o && setQrEntry(undefined)}
         customer={customer}
         orderNumber={qrEntry?.orderNumber}
+        productNo={qrEntry?.productNo}
       />
 
       <ConfirmDialog

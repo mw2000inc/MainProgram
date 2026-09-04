@@ -44,11 +44,18 @@ export function CustomerQrDialog({
   // page. Omitted, this is the member-level QR: "MEMBER ACCOUNT #" + the
   // customer's own member_account_number, plain (non-deep-linked) scan link.
   orderNumber,
+  // That same order's own Product# (e.g. "102 / MW) F5") — only meaningful
+  // alongside orderNumber; a member-level card has no single associated
+  // product, since one member can have several orders. See
+  // extractProductName's own comment for why this needs more than a plain
+  // split on "/".
+  productNo,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   customer: Customer
   orderNumber?: string
+  productNo?: string
 }) {
   const { t } = useTranslation("member")
   const { t: tCommon } = useTranslation("common")
@@ -59,6 +66,7 @@ export function CustomerQrDialog({
   // card is never split mid-batch between two languages.
   const displayLabel = isOrderCard ? "Order #" : "Member Account #"
   const displayValue = isOrderCard ? orderNumber : customer.memberAccountNumber
+  const productName = isOrderCard && productNo ? extractProductName(productNo) : undefined
   const qrCanvasRef = React.useRef<HTMLCanvasElement>(null)
   const [scanUrl, setScanUrl] = React.useState("")
 
@@ -102,7 +110,7 @@ export function CustomerQrDialog({
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     const qrImg = await loadImage(dataUrl)
-    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, displayLabel, displayValue)
+    drawCardCanvas(ctx, margin, margin, cardW, cardH, PX_PER_CM, qrImg, displayLabel, displayValue, productName)
 
     const a = document.createElement("a")
     a.href = canvas.toDataURL("image/png")
@@ -121,7 +129,7 @@ export function CustomerQrDialog({
     const pageH = margin * 2 + cardH
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [pageW, pageH] })
 
-    drawCardPdf(doc, margin, margin, dataUrl, displayLabel, displayValue)
+    drawCardPdf(doc, margin, margin, dataUrl, displayLabel, displayValue, productName)
 
     doc.save(`${displayValue}-qr-card.pdf`)
   }
@@ -132,12 +140,16 @@ export function CustomerQrDialog({
     if (!dataUrl) return
     const printWindow = window.open("", "_blank", "width=800,height=400")
     if (!printWindow) return
+    // Not HTML-escaped, matching displayLabel/displayValue right below —
+    // this print window is a transient preview only, never persisted.
+    const productHtml = productName ? `<div class="product">${productName}</div>` : ""
     const cardHtml = `
       <div class="card">
         <img src="${dataUrl}" alt="QR" />
         <div class="meta">
           <div class="label">${displayLabel}</div>
           <div class="value">${displayValue}</div>
+          ${productHtml}
         </div>
       </div>`
     printWindow.document.write(`
@@ -162,6 +174,15 @@ export function CustomerQrDialog({
                number wraps onto a second line (breaking after a "-" where
                possible) instead of running off the card. */
             .value { font-size: 8pt; font-weight: 700; font-family: 'Courier New', monospace; color: ${VALUE_COLOR}; }
+            /* Secondary line — the product name, order cards only. Plain
+               weight and truncated with an ellipsis rather than wrapped:
+               this is a supporting detail, not the primary lookup key, and
+               there's no spare vertical space on a 3cm-tall card to give a
+               long product name a second line. */
+            .product {
+              font-size: 7pt; color: ${VALUE_COLOR}; white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; margin-top: 1px;
+            }
           </style>
         </head>
         <body>
@@ -189,7 +210,7 @@ export function CustomerQrDialog({
             CSS, so it's always visible and doubles as the export source (read
             through qrCanvasRef at click time). */}
         <div className="flex justify-center overflow-x-auto py-2">
-          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} label={displayLabel} value={displayValue} />
+          <PreviewCard qrCanvasRef={qrCanvasRef} scanUrl={scanUrl} label={displayLabel} value={displayValue} productName={productName} />
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -216,11 +237,13 @@ function PreviewCard({
   scanUrl,
   label,
   value,
+  productName,
 }: {
   qrCanvasRef: React.Ref<HTMLCanvasElement>
   scanUrl: string
   label: string
   value: string
+  productName?: string
 }) {
   const valueRef = React.useRef<HTMLDivElement>(null)
   const [valueFontPt, setValueFontPt] = React.useState(12)
@@ -275,6 +298,19 @@ function PreviewCard({
         >
           {value}
         </div>
+        {/* Secondary line — order cards only, plain weight and truncated
+            with an ellipsis (via CSS, same idea as the print HTML's own
+            .product rule) rather than wrapped: a supporting detail, not
+            the primary lookup key, and there's no spare vertical space on
+            a 3cm-tall card for a second line here. */}
+        {productName && (
+          <div
+            style={{ fontSize: "7pt", color: VALUE_COLOR, marginTop: "1px" }}
+            className="truncate"
+          >
+            {productName}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -303,6 +339,50 @@ function splitNearMiddle(text: string): [string, string] {
   return [text.slice(0, mid), text.slice(mid)]
 }
 
+// Product# is stored as "{code} / {name}" (e.g. "102 / MW) F5"), and name
+// itself often has its own brand-code prefix baked in ("MW) F5", "SK)
+// Standard K (black)") — verified against every one of the 14 distinct
+// product_no values actually on file before writing this, including
+// legacy rows that are just a bare name with no code/slash at all ("F5",
+// "Hercules"). Takes everything after the first " / " (or the whole
+// string if there's no slash), then strips one optional leading "XX) "
+// brand-code prefix if present — a group like PT ("Pre-filtration Housing
+// Package...") has no such prefix, and is correctly left alone.
+function extractProductName(productNo: string): string {
+  const afterSlash = productNo.includes(" / ") ? productNo.split(" / ").slice(1).join(" / ").trim() : productNo.trim()
+  return afterSlash.replace(/^[A-Za-z]{2,4}\)\s*/, "")
+}
+
+// Shrinks font size (via setSize) down to minSize while `text` overflows
+// maxWidth; if it's still too wide even at the floor, truncates the string
+// itself with an ellipsis rather than letting it run off the card —
+// appropriate for the product name line specifically, a supporting detail
+// rather than the primary lookup key (which wraps onto two lines instead,
+// see splitNearMiddle/drawCardCanvas's own value handling). Shared between
+// the canvas and PDF export paths rather than writing the same shrink-then-
+// truncate loop twice.
+function fitTextOrTruncate(
+  text: string,
+  maxWidth: number,
+  startSize: number,
+  minSize: number,
+  setSize: (size: number) => void,
+  measure: (text: string) => number
+): string {
+  let size = startSize
+  setSize(size)
+  while (measure(text) > maxWidth && size > minSize) {
+    size -= 1
+    setSize(size)
+  }
+  if (measure(text) <= maxWidth) return text
+  let truncated = text
+  while (truncated.length > 1 && measure(`${truncated}…`) > maxWidth) {
+    truncated = truncated.slice(0, -1)
+  }
+  return `${truncated}…`
+}
+
 function drawCardCanvas(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -312,7 +392,8 @@ function drawCardCanvas(
   pxPerCm: number,
   qrImg: HTMLImageElement,
   label: string,
-  value: string
+  value: string,
+  productName?: string
 ) {
   const pad = PAD_CM * pxPerCm
   const qr = QR_CM * pxPerCm
@@ -355,9 +436,32 @@ function drawCardCanvas(
   } else {
     ctx.fillText(value, textX, y + cardH / 2 + 0.42 * pxPerCm)
   }
+
+  // Third, secondary line — order cards only (productName is never passed
+  // for a member-level card, whose value also never wraps to two lines, so
+  // there's no conflict between this and the split-onto-two-lines branch
+  // above). Plain weight, shrunk then truncated with an ellipsis rather
+  // than wrapped — see fitTextOrTruncate's own comment.
+  if (productName) {
+    ctx.fillStyle = VALUE_COLOR
+    let productFs = 0.3 * pxPerCm
+    ctx.font = `${productFs}px Arial`
+    const fitted = fitTextOrTruncate(
+      productName,
+      maxTextW,
+      productFs,
+      0.16 * pxPerCm,
+      (size) => {
+        productFs = size
+        ctx.font = `${size}px Arial`
+      },
+      (text) => ctx.measureText(text).width
+    )
+    ctx.fillText(fitted, textX, y + cardH / 2 + 0.82 * pxPerCm)
+  }
 }
 
-function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, label: string, value: string) {
+function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, label: string, value: string, productName?: string) {
   const cardW = CARD_W_CM * 10
   const cardH = CARD_H_CM * 10
   const pad = PAD_CM * 10
@@ -398,5 +502,26 @@ function drawCardPdf(doc: jsPDF, x: number, y: number, qrDataUrl: string, label:
     doc.text(line2, textX, cardH / 2 + y + 4.5)
   } else {
     doc.text(value, textX, cardH / 2 + y + 3)
+  }
+
+  // Third, secondary line — order cards only, same reasoning as
+  // drawCardCanvas's own copy of this.
+  if (productName) {
+    doc.setTextColor(15, 23, 41) // same navy as the value, but plain weight
+    doc.setFont("helvetica", "normal")
+    let productFs = 6
+    doc.setFontSize(productFs)
+    const fitted = fitTextOrTruncate(
+      productName,
+      maxTextW,
+      productFs,
+      4,
+      (size) => {
+        productFs = size
+        doc.setFontSize(size)
+      },
+      (text) => doc.getTextWidth(text)
+    )
+    doc.text(fitted, textX, cardH / 2 + y + 6)
   }
 }
