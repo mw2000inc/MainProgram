@@ -63,5 +63,8 @@
   "yes": "Yes",
   "no": "No",
   "backTo": "Back to {page}",
-  "notFound": "{item} not found"
+  "notFound": "{item} not found",
+  "stacked": "Stacked",
+  "grid": "Grid",
+  "layout": "Layout"
 }

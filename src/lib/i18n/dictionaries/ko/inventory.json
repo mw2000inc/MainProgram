@@ -78,5 +78,8 @@
   "deleteMovementGenericDescription": "이 이동 내역이 영구적으로 삭제되고 {product}의 재고가 그에 맞게 조정됩니다.",
   "theProduct": "이 제품",
   "inventoryListTitle": "재고 목록",
-  "noMovementsForDate": "이 날짜에 해당하는 재고 이동 내역이 없습니다."
+  "noMovementsForDate": "이 날짜에 해당하는 재고 이동 내역이 없습니다.",
+  "pendingApprovalButton": "재고 승인 대기",
+  "pendingApprovalDescription": "완료된 일정 작업에서 기록된 필터 항목으로부터 자동 생성된 재고 이동 내역이 관리자 승인을 기다리고 있습니다 — 승인 전까지는 재고에 아무 변화도 없습니다.",
+  "nothingPendingApproval": "현재 재고 승인 대기 중인 항목이 없습니다."
 }

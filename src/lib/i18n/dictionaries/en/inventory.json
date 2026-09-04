@@ -78,5 +78,8 @@
   "deleteMovementGenericDescription": "This will permanently remove this movement and adjust {product}'s stock accordingly.",
   "theProduct": "the product",
   "inventoryListTitle": "Inventory List",
-  "noMovementsForDate": "No inventory movements for this date."
+  "noMovementsForDate": "No inventory movements for this date.",
+  "pendingApprovalButton": "Pending Inventory Approval",
+  "pendingApprovalDescription": "Stock movements auto-created from a completed schedule job's recorded filter items wait here for admin approval — nothing changes in inventory until approved.",
+  "nothingPendingApproval": "Nothing is waiting on inventory approval right now."
 }

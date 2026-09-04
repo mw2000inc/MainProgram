@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, ClipboardCheck } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -42,6 +42,7 @@ import {
 } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-queue"
+import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import {
   getInventoryListColumns,
   getInventoryListExpandedColumns,
@@ -250,6 +251,8 @@ export function DailyReportSection() {
   const { t: tRepair } = useTranslation("repair")
   const { t: tCollection } = useTranslation("collection")
   const { t: tInventory } = useTranslation("inventory")
+  const { t: tDispatch } = useTranslation("dispatch")
+  const { t: tCommon } = useTranslation("common")
 
   // Same collapse mechanism as a split-view detail panel — the nav rail goes
   // icon-only for as long as this section is mounted (i.e. the Daily Report
@@ -394,6 +397,16 @@ export function DailyReportSection() {
       collectionPlans.filter((p) => p.dispatchStatus === "Draft").length
     )
   }, [filterChangePlans, installPlans, repairPlans, collectionPlans])
+
+  // Same idea, for pending stock movement approvals (see
+  // StockMovementApprovalQueue's own comment) — reuses the same
+  // stockMovements already fetched for the Inventory List panel above, so
+  // this adds no extra query.
+  const [inventoryQueueOpen, setInventoryQueueOpen] = React.useState(false)
+  const pendingStockMovementCount = React.useMemo(
+    () => stockMovements.filter((m) => m.status === "pending").length,
+    [stockMovements]
+  )
 
   const deleteFilterChangePlans = useDeleteFilterChangePlans()
   const deleteInstallPlans = useDeleteInstallPlans()
@@ -675,7 +688,7 @@ export function DailyReportSection() {
       <div className="flex items-center gap-2 flex-wrap">
         {isAdmin && (
           <>
-            <span className="text-sm font-medium text-muted-foreground">Layout:</span>
+            <span className="text-sm font-medium text-muted-foreground">{tCommon("layout")}:</span>
             <div className="inline-flex rounded-lg border p-0.5">
               <Button
                 type="button"
@@ -684,7 +697,7 @@ export function DailyReportSection() {
                 className="gap-1.5"
                 onClick={() => handleLayoutModeChange("stacked")}
               >
-                <Rows3 className="h-3.5 w-3.5" /> Stacked
+                <Rows3 className="h-3.5 w-3.5" /> {tCommon("stacked")}
               </Button>
               <Button
                 type="button"
@@ -693,7 +706,7 @@ export function DailyReportSection() {
                 className="gap-1.5"
                 onClick={() => handleLayoutModeChange("grid")}
               >
-                <LayoutGrid className="h-3.5 w-3.5" /> Grid
+                <LayoutGrid className="h-3.5 w-3.5" /> {tCommon("grid")}
               </Button>
             </div>
           </>
@@ -709,9 +722,20 @@ export function DailyReportSection() {
               onClick={() => setDispatchQueueOpen(true)}
             >
               <ClipboardCheck className="h-3.5 w-3.5" />
-              Pending Dispatch Approval{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
+              {tDispatch("title")}{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
             </Button>
             <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
+            <Button
+              type="button"
+              size="sm"
+              variant={pendingStockMovementCount > 0 ? "default" : "outline"}
+              className="gap-1.5"
+              onClick={() => setInventoryQueueOpen(true)}
+            >
+              <PackageCheck className="h-3.5 w-3.5" />
+              {tInventory("pendingApprovalButton")}{pendingStockMovementCount > 0 ? ` (${pendingStockMovementCount})` : ""}
+            </Button>
+            <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />
           </>
         )}
       </div>

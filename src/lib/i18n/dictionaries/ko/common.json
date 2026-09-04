@@ -63,5 +63,8 @@
   "yes": "예",
   "no": "아니오",
   "backTo": "{page}(으)로 돌아가기",
-  "notFound": "{item}을(를) 찾을 수 없습니다"
+  "notFound": "{item}을(를) 찾을 수 없습니다",
+  "stacked": "스택형",
+  "grid": "격자형",
+  "layout": "레이아웃"
 }
