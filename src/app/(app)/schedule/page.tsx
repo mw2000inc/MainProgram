@@ -20,13 +20,12 @@ import { TranslatableText } from "@/components/shared/translatable-text"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
-import { getScheduleColumns, formatTechnicians } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, formatTechnicians, matchesTechnician, getDistinctTechnicians } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, todayIso } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
 import type { ScheduleJob } from "@/lib/types"
 
 function ScheduleContent() {
@@ -58,8 +57,10 @@ function ScheduleContent() {
 
   const scopedJobs = React.useMemo(() => {
     if (technicianFilter === "all") return jobs
-    return jobs.filter((j) => j.technician === technicianFilter || j.technician2 === technicianFilter)
+    return jobs.filter((j) => matchesTechnician(j, technicianFilter))
   }, [jobs, technicianFilter])
+
+  const technicianOptions = React.useMemo(() => getDistinctTechnicians(jobs), [jobs])
 
   const selection = useSplitViewSelection(filteredRows, initialId)
   useDeepLinkNotFoundToast(initialId, isPending, jobs.some((j) => j.id === initialId))
@@ -151,7 +152,7 @@ function ScheduleContent() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("allTechnicians")}</SelectItem>
-                        {TECHNICIANS.map((tech) => (
+                        {technicianOptions.map((tech) => (
                           <SelectItem key={tech} value={tech}>
                             {tech}
                           </SelectItem>

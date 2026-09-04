@@ -6,8 +6,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatTechnicians } from "@/components/schedule/schedule-columns"
+import { formatTechnicians, matchesTechnician, getDistinctTechnicians } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -97,10 +104,24 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   const { data: saleListEntries = [], isPending: p5 } = useSaleListEntries()
   const isPending = p1 || p2 || p3 || p4 || p5
 
+  // Same "All" + distinct-technician-from-the-data filter as the Schedule
+  // page's own List view (see schedule-columns.tsx's own comment on why
+  // this is shared rather than duplicated) — its own independent state, not
+  // synced with the List view's filter, same as this view's date isn't
+  // either. Defaults to "all", matching today's unfiltered behavior.
+  const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
+  const technicianOptions = React.useMemo(() => getDistinctTechnicians(jobs), [jobs])
+
   const dayJobs = React.useMemo(() => jobs.filter((j) => j.scheduledDate === date), [jobs, date])
+  const scopedDayJobs = React.useMemo(
+    () => (technicianFilter === "all" ? dayJobs : dayJobs.filter((j) => matchesTechnician(j, technicianFilter))),
+    [dayJobs, technicianFilter]
+  )
+  // Printing reflects whatever's currently filtered on screen, same as
+  // every other page's export/print already does.
   const rows = React.useMemo(
-    () => resolveRows(dayJobs, customers, filterChangePlans, collections, saleListEntries),
-    [dayJobs, customers, filterChangePlans, collections, saleListEntries]
+    () => resolveRows(scopedDayJobs, customers, filterChangePlans, collections, saleListEntries),
+    [scopedDayJobs, customers, filterChangePlans, collections, saleListEntries]
   )
 
   const dateHeading = formatDate(date, "MMMM d, yyyy — EEEE")
@@ -113,17 +134,35 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
     <Card>
       <CardContent className="pt-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="table-view-date" className="text-xs text-muted-foreground">
-              {t("date")}
-            </Label>
-            <Input
-              id="table-view-date"
-              type="date"
-              value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="w-full max-w-xs"
-            />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="table-view-date" className="text-xs text-muted-foreground">
+                {t("date")}
+              </Label>
+              <Input
+                id="table-view-date"
+                type="date"
+                value={date}
+                onChange={(e) => onDateChange(e.target.value)}
+                className="w-full max-w-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("technician")}</Label>
+              <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
+                <SelectTrigger className="h-9 w-[220px]">
+                  <SelectValue placeholder={t("allTechnicians")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("allTechnicians")}</SelectItem>
+                  {technicianOptions.map((tech) => (
+                    <SelectItem key={tech} value={tech}>
+                      {tech}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <Button variant="outline" className="gap-1.5" onClick={handlePrint}>
             <Printer className="h-4 w-4" /> {tCommon("print")}

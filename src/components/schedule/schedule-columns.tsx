@@ -58,6 +58,30 @@ export function formatTechnicians(technician: string, technician2?: string, andW
   return technician2 ? `${technician} ${andWord} ${technician2}` : technician
 }
 
+// True if `technician` is either of a job's two assigned technicians — a
+// shared job (technician + technician2) matches on either name, same as
+// every other technician-scoped view in this app already treats it. Shared
+// between the Schedule page's List view and its Table View so a technician
+// filter can never mean something subtly different in one than the other.
+export function matchesTechnician(job: Pick<ScheduleJob, "technician" | "technician2">, technician: string): boolean {
+  return job.technician === technician || job.technician2 === technician
+}
+
+// Every technician name actually assigned to at least one job — not the
+// fixed TECHNICIANS roster from constants.ts, deliberately: a filter built
+// from the roster would offer someone with zero scheduled jobs (a dead
+// choice that always empties the list) and silently miss a name that ended
+// up in the data some other way (e.g. a legacy import) but isn't on that
+// list. Sorted for a stable, predictable dropdown order.
+export function getDistinctTechnicians(jobs: Pick<ScheduleJob, "technician" | "technician2">[]): string[] {
+  const set = new Set<string>()
+  for (const j of jobs) {
+    if (j.technician) set.add(j.technician)
+    if (j.technician2) set.add(j.technician2)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
 function JobTypeCell({ jobType }: { jobType: ScheduleJobType }) {
   const { t } = useTranslation("schedule")
   return <>{t(jobType)}</>
