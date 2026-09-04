@@ -10,7 +10,6 @@ export const TECHNICIANS = [
   "Jerson Capellon",
   "Jayson Sapitin",
   "Eubert Montalbo",
-  "Jason Pabalan",
   "Jeric Salirio",
   "N/A",
 ] as const
