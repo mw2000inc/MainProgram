@@ -23,6 +23,12 @@ function summarizeChannel(name: string, result?: api.DispatchChannelResult): str
   return `${name} failed`
 }
 
+export const dispatchNotificationsKey = ["dispatchNotifications"] as const
+
+export function useDispatchNotifications() {
+  return useQuery({ queryKey: dispatchNotificationsKey, queryFn: api.listDispatchNotifications })
+}
+
 export function useApproveDispatchItem() {
   const qc = useQueryClient()
   return useMutation({
@@ -32,6 +38,7 @@ export function useApproveDispatchItem() {
       qc.invalidateQueries({ queryKey: installPlansKey })
       qc.invalidateQueries({ queryKey: collectionsKey })
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: dispatchNotificationsKey })
       if (!result) {
         toast.error("That item is no longer awaiting approval.")
         return
@@ -82,6 +89,7 @@ export function useAcceptRequestedReschedule() {
       qc.invalidateQueries({ queryKey: installPlansKey })
       qc.invalidateQueries({ queryKey: collectionsKey })
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: dispatchNotificationsKey })
       if (!result) {
         toast.error("That item is no longer a pending reschedule request.")
         return

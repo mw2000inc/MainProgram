@@ -5,6 +5,56 @@ export type DispatchEntityType = "filter_change_plans" | "install_plans" | "coll
 
 export type DispatchChannelResult = { status: "sent" | "failed" | "skipped_no_provider"; detail?: string }
 
+// One row per actual send attempt (see the dispatch_dual_channel_
+// notifications migration) — both approveDispatchItem and
+// acceptRequestedReschedule log into this same table the same way, so a
+// row here doesn't distinguish "initial approval" from "reschedule
+// confirmation"; DispatchHistoryDialog groups by timing to tell those
+// apart rather than needing a new column for it.
+export interface DispatchNotificationRecord {
+  id: string
+  entityType: DispatchEntityType
+  entityId: string
+  channel: "sms" | "email"
+  recipient: string
+  status: "sent" | "failed" | "skipped_no_provider"
+  createdAt: string
+  createdBy?: string
+}
+
+type DispatchNotificationRow = {
+  id: string
+  entity_type: DispatchEntityType
+  entity_id: string
+  channel: "sms" | "email"
+  recipient: string
+  status: "sent" | "failed" | "skipped_no_provider"
+  created_at: string
+  created_by: string | null
+}
+
+// Admin-only per RLS (dispatch_notifications_select_admin) — every past
+// send attempt across all four modules, newest first. Small enough today
+// (low double digits) that this reads the whole table rather than paging;
+// revisit if that stops being true.
+export async function listDispatchNotifications(): Promise<DispatchNotificationRecord[]> {
+  const { data, error } = await supabase
+    .from("dispatch_notifications")
+    .select("id, entity_type, entity_id, channel, recipient, status, created_at, created_by")
+    .order("created_at", { ascending: false })
+  if (error) throw error
+  return (data as DispatchNotificationRow[]).map((row) => ({
+    id: row.id,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    channel: row.channel,
+    recipient: row.recipient,
+    status: row.status,
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? undefined,
+  }))
+}
+
 // Admin approval step — hits the server route (not the DB directly)
 // because sending a real SMS/email needs the textbee/Resend API keys,
 // which only ever live server-side (see

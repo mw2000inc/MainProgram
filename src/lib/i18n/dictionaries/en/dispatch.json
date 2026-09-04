@@ -43,5 +43,13 @@
   "filterChangeModule": "Filter Change",
   "installationModule": "Installation",
   "collectionModule": "Collection",
-  "repairModule": "Repair"
+  "repairModule": "Repair",
+  "historyButton": "History",
+  "historyTitle": "Dispatch History",
+  "historyDescription": "Every past dispatch approval and reschedule confirmation across Filter Change, Installation, Collection, and Repair, newest first.",
+  "historySearchPlaceholder": "Search by record or module...",
+  "noHistoryYet": "No dispatch history yet.",
+  "noHistoryMatches": "No history matches that search.",
+  "approvedBy": "Approved by {name}",
+  "recordNoLongerAvailable": "Record no longer available"
 }

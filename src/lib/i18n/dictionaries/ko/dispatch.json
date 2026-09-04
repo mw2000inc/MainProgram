@@ -43,5 +43,13 @@
   "filterChangeModule": "필터 교체",
   "installationModule": "설치",
   "collectionModule": "수거",
-  "repairModule": "수리"
+  "repairModule": "수리",
+  "historyButton": "이력",
+  "historyTitle": "발송 이력",
+  "historyDescription": "필터 교체, 설치, 수거, 수리 전체에 걸친 과거 발송 승인 및 일정 변경 확정 이력입니다 (최신순).",
+  "historySearchPlaceholder": "기록 또는 모듈로 검색...",
+  "noHistoryYet": "아직 발송 이력이 없습니다.",
+  "noHistoryMatches": "검색 결과와 일치하는 이력이 없습니다.",
+  "approvedBy": "{name}님이 승인함",
+  "recordNoLongerAvailable": "더 이상 존재하지 않는 기록"
 }

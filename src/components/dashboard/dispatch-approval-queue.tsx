@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock } from "lucide-react"
+import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock, History } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import { DispatchHistoryDialog } from "@/components/dashboard/dispatch-history-dialog"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
@@ -134,6 +135,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const approve = useApproveDispatchItem()
   const acceptReschedule = useAcceptRequestedReschedule()
   const updateCustomer = useUpdateCustomer()
+  const [historyOpen, setHistoryOpen] = React.useState(false)
 
   const [phoneDrafts, setPhoneDrafts] = React.useState<Record<string, string>>({})
   const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
@@ -390,17 +392,27 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-6">
               <span>{t("title")}</span>
-              {items.length > 0 && (
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   className="h-7 gap-1.5 font-normal"
-                  disabled={bulkApproving || approve.isPending}
-                  onClick={handleApproveAll}
+                  onClick={() => setHistoryOpen(true)}
                 >
-                  <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? t("approving") : t("approveAllCount", { count: items.length })}
+                  <History className="h-3.5 w-3.5" /> {t("historyButton")}
                 </Button>
-              )}
+                {items.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 font-normal"
+                    disabled={bulkApproving || approve.isPending}
+                    onClick={handleApproveAll}
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? t("approving") : t("approveAllCount", { count: items.length })}
+                  </Button>
+                )}
+              </div>
             </DialogTitle>
             <DialogDescription>{t("description")}</DialogDescription>
           </DialogHeader>
@@ -581,6 +593,8 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           </div>
         </DialogContent>
       </Dialog>
+
+      <DispatchHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </>
   )
 }
