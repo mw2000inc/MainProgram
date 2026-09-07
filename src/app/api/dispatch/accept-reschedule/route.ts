@@ -76,10 +76,13 @@ export async function POST(request: Request) {
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]
   const actionPhrase = MODULE_ACTION_PHRASES[entityType]
-  // Reuses the existing token from the original approval rather than
-  // minting a new one — it was never invalidated by the reschedule
-  // request, and get_dispatch_confirmation_details reads the schedule
-  // date live, so this link already correctly shows "you're confirmed"
+  // token here is a FRESH one minted by accept_requested_reschedule() itself
+  // (see the reschedule_accept_fresh_token migration), not the original
+  // approval's — that one is genuinely invalidated by this exact accept,
+  // via reset_dispatch_status_on_pre_d_change firing when pre_d changes
+  // (its own documented behavior: invalidate a token that's about to point
+  // at a moved date). get_dispatch_confirmation_details reads the schedule
+  // date live, so this new link still correctly shows "you're confirmed"
   // for the new date.
   const confirmUrl = token ? `${appBaseUrl(request)}/confirm/${token}` : undefined
 
