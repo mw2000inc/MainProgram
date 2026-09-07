@@ -174,7 +174,16 @@ export function CustomerFormDialog({
                   <FormItem>
                     <FormLabel>{t("contactNumber1Main")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="09171234567" {...field} />
+                      {/* autoComplete="off" + a non-standard name to actually
+                          suppress Chrome's own remembered-value dropdown —
+                          plain off alone is well known to be ignored by
+                          Chrome for a field it's decided looks like a phone
+                          number. The name override is safe here: this is a
+                          controlled field (value/onChange from RHF's field
+                          object, not native form submission), so nothing
+                          reads the DOM name back for state — only the
+                          browser's autofill heuristics see it. */}
+                      <Input placeholder="09171234567" {...field} autoComplete="off" name="member-contact-number-1" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -187,7 +196,7 @@ export function CustomerFormDialog({
                   <FormItem>
                     <FormLabel>{t("contactNumber2SubOptional")}</FormLabel>
                     <FormControl>
-                      <Input placeholder={tCommon("optional")} {...field} />
+                      <Input placeholder={tCommon("optional")} {...field} autoComplete="off" name="member-contact-number-2" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
