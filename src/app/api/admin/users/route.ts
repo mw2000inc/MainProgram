@@ -63,7 +63,26 @@ export async function POST(request: Request) {
   // anything the client sent), so it's safe to set explicitly; the audit
   // trigger's coalesce(auth.uid(), ...) fallback picks it up since
   // auth.uid() is null in exactly this one path.
-  await admin.from("profiles").update({ created_by: caller.id, updated_by: caller.id }).eq("id", data.user.id)
+  //
+  // `role` is also explicitly re-asserted here, right alongside those same
+  // two columns — not because handle_new_user() reads it wrong, but because
+  // admin.auth.admin.createUser() doesn't write the app_metadata this route
+  // just passed it atomically with the auth.users row it inserts: it
+  // appears to insert the row first (firing the AFTER INSERT trigger
+  // against a row whose app_metadata doesn't have `role` on it yet) and
+  // merge the caller's custom app_metadata in afterward. Since that trigger
+  // only fires on INSERT, never on the later update, profiles.role was
+  // permanently stuck at the trigger's own fallback default for every
+  // admin-created account — confirmed live: an account created here with
+  // role "admin" landed as "technician" even though auth.users.app_metadata
+  // genuinely did say "admin" moments later. This directly, privileged
+  // write is this route's own follow-up correction for that, exactly like
+  // created_by/updated_by right below it. handle_new_user() itself is
+  // deliberately left alone — it's still correct for the one path with no
+  // separate privileged caller able to do a follow-up write like this: a
+  // brand-new public self-signup, which has no app_metadata.role at all and
+  // is supposed to land on the 'technician' default.
+  await admin.from("profiles").update({ role, created_by: caller.id, updated_by: caller.id }).eq("id", data.user.id)
 
   return NextResponse.json({ id: data.user.id })
 }
