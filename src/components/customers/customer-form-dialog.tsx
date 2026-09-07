@@ -38,11 +38,17 @@ function createSchema(
     companyName: z.string().min(1, tCommon("requiredField", { field: tf("accountName") })),
     // Account Contact Person (= fullName) has no minimum length — optional.
     fullName: z.string(),
-    // Deliberately not format/length-validated beyond "not empty" — real
-    // contact numbers on file take many legitimate shapes ("09171234567",
-    // "9171234567", "02 8123 4567", "+63 917 123 4567", a landline, etc.),
-    // and this app has no business dictating what counts as a valid one.
-    contactNumber: z.string().min(1, tCommon("requiredField", { field: tf("contactNumber") })),
+    // Optional, like contactNumber2 right below — not format/length-
+    // validated at all (real contact numbers on file take many legitimate
+    // shapes: "09171234567", "9171234567", "02 8123 4567",
+    // "+63 917 123 4567", a landline, etc., and this app has no business
+    // dictating what counts as a valid one), and not required either. The
+    // customers.contact_number DB column is still `text not null` (no
+    // migration needed) — this controlled input always submits a real
+    // string, "" when left blank, which satisfies NOT NULL without being
+    // NULL. Same pattern this form's own `email` field already uses for
+    // the same reason (`customers.email` is also NOT NULL).
+    contactNumber: z.string().optional(),
     contactNumber2: z.string().optional(),
     address: z.string().min(5, tCommon("requiredField", { field: tf("address") })),
     email: z.string().email(t("enterValidEmail")).or(z.literal("")),
@@ -104,10 +110,15 @@ export function CustomerFormDialog({
   }, [open, customer])
 
   async function onSubmit(values: FormValues) {
+    // contactNumber is optional in the schema now, but customers.contact_number
+    // is still `text not null` at the database level (no migration needed,
+    // same reasoning as this form's own `email` field) — "" satisfies NOT
+    // NULL without being NULL.
+    const input = { ...values, contactNumber: values.contactNumber ?? "" }
     if (isEdit) {
-      await updateCustomer.mutateAsync({ id: customer.id, input: values })
+      await updateCustomer.mutateAsync({ id: customer.id, input })
     } else {
-      const created = await createCustomer.mutateAsync({ ...values, ...newMemberDefaults() })
+      const created = await createCustomer.mutateAsync({ ...input, ...newMemberDefaults() })
       onCreated?.(created)
     }
     onOpenChange(false)

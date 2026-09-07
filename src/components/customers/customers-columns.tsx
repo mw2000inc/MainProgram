@@ -90,6 +90,7 @@ export function getCustomerColumns({
     {
       accessorKey: "contactNumber",
       header: () => <ColumnHeader tKey="contactNumber1MainHeader" ns="member" />,
+      cell: ({ row }) => row.original.contactNumber || "—",
     },
     {
       accessorKey: "contactNumber2",
