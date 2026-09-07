@@ -19,6 +19,9 @@ export type StockMovementRow = StockMovement & {
   // approveStockMovement). Used by the Daily Report's Inventory List, which
   // needs this alongside userName (who created it) for its audit display.
   approvedByName?: string
+  // Same idea, present only for a rejected movement — who rejected it (see
+  // rejectStockMovement). Used by StockMovementHistoryDialog.
+  rejectedByName?: string
   // Present only for a movement traceable back to a schedule job (the
   // filter-change auto-deduction, old and new — see scheduleJobId) — the
   // customer/order that job was for, joined client-side the same way
@@ -84,13 +87,15 @@ export function useStockMovementRows() {
     // admin-approved) has NOT actually been applied to stock_quantity — it must
     // be excluded from both the opening back-solve and the running walk, or it
     // would show a stock change that hasn't really happened yet, and corrupt
-    // the balance shown for every later movement on the same product.
+    // the balance shown for every later movement on the same product. A
+    // 'rejected' entry (see the stock_movement_rejection migration) never
+    // gets applied either — same exclusion, for the same reason.
     const actualStockByMovementId = new Map<string, number>()
     const currentStockByMovementId = new Map<string, number>()
     byProduct.forEach((entries, productId) => {
       const product = products.find((p) => p.id === productId)
       const netRegular = entries.reduce(
-        (sum, e) => (e.status === "pending" ? sum : sum + e.quantityAdded - e.quantityRemoved),
+        (sum, e) => (e.status === "pending" || e.status === "rejected" ? sum : sum + e.quantityAdded - e.quantityRemoved),
         0
       )
       const liveRegular = product?.stockQuantity ?? netRegular
@@ -101,7 +106,7 @@ export function useStockMovementRows() {
       let running = opening
       for (const entry of chronological) {
         currentStockByMovementId.set(entry.id, running)
-        if (entry.status !== "pending") {
+        if (entry.status !== "pending" && entry.status !== "rejected") {
           running +=
             entry.quantityAdded -
             entry.quantityRemoved +
@@ -127,6 +132,7 @@ export function useStockMovementRows() {
         minStockLevel: product?.minStockLevel ?? 0,
         userName: users.find((u) => u.id === m.userId)?.name ?? "Unknown",
         approvedByName: m.approvedBy ? (users.find((u) => u.id === m.approvedBy)?.name ?? "Unknown") : undefined,
+        rejectedByName: m.rejectedBy ? (users.find((u) => u.id === m.rejectedBy)?.name ?? "Unknown") : undefined,
         relatedCustomerName: customer ? customer.companyName || customer.fullName : undefined,
         relatedJobOrderNo: job?.orderNo,
       }
@@ -243,6 +249,23 @@ export function useApproveStockMovement() {
       warnIfLowStock(result)
     },
     onError: (error: Error) => toast.error(error.message || "Failed to approve stock movement"),
+  })
+}
+
+// No products/notifications invalidation like useApproveStockMovement above —
+// rejecting never touches stock_quantity or raises a low/out-of-stock
+// notification (see rejectStockMovement's own comment), so there's nothing
+// there to refresh.
+export function useRejectStockMovement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, rejectedBy }: { id: string; rejectedBy: string }) => api.rejectStockMovement(id, rejectedBy),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
+      qc.invalidateQueries({ queryKey: ["activityLogs"] })
+      toast.success("Stock movement rejected")
+    },
+    onError: (error: Error) => toast.error(error.message || "Failed to reject stock movement"),
   })
 }
 

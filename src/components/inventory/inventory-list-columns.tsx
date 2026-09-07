@@ -13,16 +13,15 @@ import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 // already was, on Inventory > In & Out — this panel only reads the same
 // stock_movements ledger that page's own table already reads.
 
-// 'pending'/'approved' are the only two real statuses this app has (see
+// 'pending'/'approved'/'rejected' (see the stock_movement_rejection
+// migration) are the three real statuses this app has (see
 // ApprovalStatusBadge on the In & Out page) — matches that badge's tones
 // exactly so a movement reads the same way in both places.
 function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }) {
   const { t } = useTranslation("status")
-  return status === "pending" ? (
-    <StatusBadge tone="warning" label={t("pending")} />
-  ) : (
-    <StatusBadge tone="success" label={t("approved")} />
-  )
+  if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
+  if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
+  return <StatusBadge tone="success" label={t("approved")} />
 }
 
 // A row's quantity is (almost) always entirely on one side — quantityAdded

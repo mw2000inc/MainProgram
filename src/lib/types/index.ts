@@ -210,9 +210,15 @@ export interface StockMovement {
   // triggers the stock deduction — see approveStockMovement. Optional (not
   // client-defaulted) so existing manual-entry code doesn't need to know
   // about it — the database column defaults to 'approved' when omitted.
-  status?: "pending" | "approved"
+  // 'rejected' (see the stock_movement_rejection migration) never triggers
+  // any stock effect at all — every trigger that applies a quantity is
+  // scoped specifically to a 'pending' -> 'approved' transition, which a
+  // pending -> rejected one can never match.
+  status?: "pending" | "approved" | "rejected"
   approvedAt?: string
   approvedBy?: string
+  rejectedAt?: string
+  rejectedBy?: string
 }
 
 export type NotificationType =

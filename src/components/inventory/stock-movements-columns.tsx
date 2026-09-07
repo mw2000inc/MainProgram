@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Pencil, Trash2, Check } from "lucide-react"
+import { MoreHorizontal, Pencil, Trash2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,13 +20,14 @@ export type { StockMovementRow }
 // 'pending' rows are only ever produced by a completed job's recorded
 // filter items (see the ct_filter_change_collection_inventory_link
 // migration) — an ordinary manual/sale movement is always 'approved'.
+// 'rejected' (see the stock_movement_rejection migration) is the third
+// real status, handled explicitly rather than falling into the "else"
+// branch with approved — those two need very different tones.
 function ApprovalStatusBadge({ status }: { status: StockMovementRow["status"] }) {
   const { t } = useTranslation("status")
-  return status === "pending" ? (
-    <StatusBadge tone="warning" label={t("pending")} />
-  ) : (
-    <StatusBadge tone="success" label={t("approved")} />
-  )
+  if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
+  if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
+  return <StatusBadge tone="success" label={t("approved")} />
 }
 
 function signedQtyCell(qty: number) {
@@ -43,6 +44,7 @@ function RowActionsCell({
   onEdit,
   onDelete,
   onApprove,
+  onReject,
 }: {
   movement: StockMovementRow
   canEdit: boolean
@@ -51,6 +53,7 @@ function RowActionsCell({
   onEdit: (movement: StockMovementRow) => void
   onDelete: (movement: StockMovementRow) => void
   onApprove: (movement: StockMovementRow) => void
+  onReject: (movement: StockMovementRow) => void
 }) {
   const { t } = useTranslation("common")
   return (
@@ -64,6 +67,11 @@ function RowActionsCell({
         {canApprove && movement.status === "pending" && (
           <DropdownMenuItem onClick={() => onApprove(movement)}>
             <Check className="h-4 w-4" /> {t("approve")}
+          </DropdownMenuItem>
+        )}
+        {canApprove && movement.status === "pending" && (
+          <DropdownMenuItem variant="destructive" onClick={() => onReject(movement)}>
+            <X className="h-4 w-4" /> {t("reject")}
           </DropdownMenuItem>
         )}
         {canEdit && (
@@ -88,6 +96,7 @@ export function getStockMovementsColumns({
   onEdit,
   onDelete,
   onApprove,
+  onReject,
 }: {
   canEdit: boolean
   canDelete: boolean
@@ -95,6 +104,7 @@ export function getStockMovementsColumns({
   onEdit: (movement: StockMovementRow) => void
   onDelete: (movement: StockMovementRow) => void
   onApprove: (movement: StockMovementRow) => void
+  onReject: (movement: StockMovementRow) => void
 }): ColumnDef<StockMovementRow, unknown>[] {
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
     {
@@ -199,6 +209,7 @@ export function getStockMovementsColumns({
           onEdit={onEdit}
           onDelete={onDelete}
           onApprove={onApprove}
+          onReject={onReject}
         />
       ),
     })

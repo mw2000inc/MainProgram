@@ -89,5 +89,6 @@
   "noHistoryYet": "No approval history yet.",
   "noHistoryMatches": "No history matches that search.",
   "requestedBy": "Requested by {name}",
-  "historyApprovedBy": "Approved by {name}"
+  "historyApprovedBy": "Approved by {name}",
+  "historyRejectedBy": "Rejected by {name}"
 }

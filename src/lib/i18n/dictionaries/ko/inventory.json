@@ -89,5 +89,6 @@
   "noHistoryYet": "아직 승인 이력이 없습니다.",
   "noHistoryMatches": "검색 결과와 일치하는 이력이 없습니다.",
   "requestedBy": "{name}님이 요청함",
-  "historyApprovedBy": "{name}님이 승인함"
+  "historyApprovedBy": "{name}님이 승인함",
+  "historyRejectedBy": "{name}님이 거절함"
 }

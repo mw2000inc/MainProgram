@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, History } from "lucide-react"
+import { Check, History, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
-import { useStockMovementRows, useApproveStockMovement } from "@/lib/hooks/use-inventory"
+import { useStockMovementRows, useApproveStockMovement, useRejectStockMovement } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
@@ -35,6 +35,7 @@ export function StockMovementApprovalQueue({
   const { user } = useAuth()
   const { data: movements = [] } = useStockMovementRows()
   const approve = useApproveStockMovement()
+  const reject = useRejectStockMovement()
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
   const [historyOpen, setHistoryOpen] = React.useState(false)
@@ -87,9 +88,18 @@ export function StockMovementApprovalQueue({
                       hiding an addition. */}
                   {m.quantityAdded > 0 && <span className="text-sm font-medium text-success">+{m.quantityAdded}</span>}
                   <Button
+                    variant="destructive"
                     size="sm"
                     className="h-8 gap-1.5"
-                    disabled={approve.isPending || !user}
+                    disabled={reject.isPending || approve.isPending || !user}
+                    onClick={() => user && reject.mutate({ id: m.id, rejectedBy: user.id })}
+                  >
+                    <X className="h-3.5 w-3.5" /> {tCommon("reject")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    disabled={approve.isPending || reject.isPending || !user}
                     onClick={() => user && approve.mutate({ id: m.id, approvedBy: user.id })}
                   >
                     <Check className="h-3.5 w-3.5" /> {tCommon("approve")}

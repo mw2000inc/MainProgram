@@ -16,5 +16,6 @@
   "inactive": "Inactive",
   "rent": "Rent",
   "diy": "DIY",
-  "approved": "Approved"
+  "approved": "Approved",
+  "rejected": "Rejected"
 }

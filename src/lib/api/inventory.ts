@@ -109,6 +109,8 @@ type StockMovementRow = {
   status: string
   approved_at: string | null
   approved_by: string | null
+  rejected_at: string | null
+  rejected_by: string | null
 }
 
 function movementFromRow(row: StockMovementRow): StockMovement {
@@ -129,6 +131,8 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     status: (row.status as StockMovement["status"]) ?? "approved",
     approvedAt: row.approved_at ?? undefined,
     approvedBy: row.approved_by ?? undefined,
+    rejectedAt: row.rejected_at ?? undefined,
+    rejectedBy: row.rejected_by ?? undefined,
   }
 }
 
@@ -241,4 +245,26 @@ export async function approveStockMovement(id: string, approvedBy: string): Prom
   if (error) throw error
   const movement = movementFromRow(data as StockMovementRow)
   return resultingProductStock(movement.productId, movement)
+}
+
+// Admin-only (see stock_movements_update_admin RLS) — transitions a pending
+// movement to rejected instead of approved. Unlike approveStockMovement,
+// no trigger reacts to this at all (see the stock_movement_rejection
+// migration's own comment) — every trigger that applies a quantity to
+// products.stock_quantity is scoped specifically to a 'pending' ->
+// 'approved' transition, so a rejected movement genuinely never touches
+// stock rather than applying it and then needing to undo it. No
+// resultingProductStock() call for that same reason — there's no stock
+// change to report or warn about. rejectedBy is the current admin's own
+// id, same real server-verified pattern as approveStockMovement's
+// approvedBy.
+export async function rejectStockMovement(id: string, rejectedBy: string): Promise<StockMovement> {
+  const { data, error } = await supabase
+    .from("stock_movements")
+    .update({ status: "rejected", rejected_at: new Date().toISOString(), rejected_by: rejectedBy })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  return movementFromRow(data as StockMovementRow)
 }

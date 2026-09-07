@@ -23,7 +23,12 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { getStockMovementsColumns, type StockMovementRow } from "@/components/inventory/stock-movements-columns"
-import { useApproveStockMovement, useDeleteStockMovement, useStockMovementRows } from "@/lib/hooks/use-inventory"
+import {
+  useApproveStockMovement,
+  useRejectStockMovement,
+  useDeleteStockMovement,
+  useStockMovementRows,
+} from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -200,6 +205,7 @@ function InAndOutSummaryContent() {
   const { data: rows, isPending } = useStockMovementRows()
   const deleteMovement = useDeleteStockMovement()
   const approveMovement = useApproveStockMovement()
+  const rejectMovement = useRejectStockMovement()
 
   // Deep link from the Activity Log (?id=<movementId>) — opens that
   // movement's edit dialog directly, the closest thing this page has to a
@@ -258,8 +264,12 @@ function InAndOutSummaryContent() {
           if (!user) return
           approveMovement.mutate({ id: m.id, approvedBy: user.id })
         },
+        onReject: (m) => {
+          if (!user) return
+          rejectMovement.mutate({ id: m.id, rejectedBy: user.id })
+        },
       }),
-    [can, user, approveMovement]
+    [can, user, approveMovement, rejectMovement]
   )
 
   if (isPending) {
