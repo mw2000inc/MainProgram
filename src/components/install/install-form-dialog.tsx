@@ -30,18 +30,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { newMemberDefaults } from "@/lib/customer-defaults"
+import { moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
-  const money = z.string().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), t("mustBeZeroOrMore"))
+  const money = moneySchema(t)
   return z.object({
     inputDate: z.string().min(1, t("requiredField", { field: tf("inputDate") })),
     name: z.string().min(1, t("requiredField", { field: tf("name") })),
@@ -313,7 +315,7 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("unitPrice")}</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <CurrencyInput {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -326,7 +328,7 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("cpPrice")}</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <CurrencyInput {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -339,7 +341,7 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("deliveryInstallationFee")}</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <CurrencyInput {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

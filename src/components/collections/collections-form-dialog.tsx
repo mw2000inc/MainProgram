@@ -30,10 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { CollectionPlan } from "@/lib/types"
@@ -50,10 +52,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
   return z.object({
     orderNo: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
     accountName: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
-    amount: z
-      .string()
-      .min(1, t("requiredField", { field: tf("amount") }))
-      .refine((v) => !Number.isNaN(Number(v)) && Number(v) >= 0, t("mustBeZeroOrMore")),
+    amount: moneySchema(t, tf("amount")),
     ct: z.string().optional(),
     collectionDate: z.string().min(1, t("requiredField", { field: tf("planD") })),
     status: z.string().min(1),
@@ -219,7 +218,7 @@ export function CollectionsFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("amount")}</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <CurrencyInput {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

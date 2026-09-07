@@ -26,9 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
 import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
+import { moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Product } from "@/lib/types"
 
@@ -47,8 +49,11 @@ function createSchema(
     barcode: z.string().optional(),
     stockQuantity: z.number().int().min(0),
     minStockLevel: z.number().int().min(0),
-    purchasePrice: z.number().min(0),
-    sellingPrice: z.number().min(0),
+    // Kept as strings, not z.number(), like every other money field —
+    // CurrencyInput (see its own comment) needs a plain editable string to
+    // format on blur; converted to a real number only in onSubmit below.
+    purchasePrice: moneySchema(t),
+    sellingPrice: moneySchema(t),
   })
 }
 
@@ -63,8 +68,8 @@ function defaultValues(product?: Product): FormValues {
     barcode: product?.barcode ?? "",
     stockQuantity: product?.stockQuantity ?? 0,
     minStockLevel: product?.minStockLevel ?? 10,
-    purchasePrice: product?.purchasePrice ?? 0,
-    sellingPrice: product?.sellingPrice ?? 0,
+    purchasePrice: String(product?.purchasePrice ?? 0),
+    sellingPrice: String(product?.sellingPrice ?? 0),
   }
 }
 
@@ -99,10 +104,15 @@ export function ProductFormDialog({
   }, [open, product])
 
   async function onSubmit(values: FormValues) {
+    const input = {
+      ...values,
+      purchasePrice: Number(values.purchasePrice),
+      sellingPrice: Number(values.sellingPrice),
+    }
     if (isEdit) {
-      await updateProduct.mutateAsync({ id: product.id, input: values })
+      await updateProduct.mutateAsync({ id: product.id, input })
     } else {
-      await createProduct.mutateAsync(values)
+      await createProduct.mutateAsync(input)
     }
     onOpenChange(false)
   }
@@ -114,19 +124,38 @@ export function ProductFormDialog({
   // this is the same fix used for the login page: some browser/extension setups fight
   // a *controlled* value, and it also means a "0" can be backspaced/replaced in one go
   // instead of requiring a double-click-to-select first.
-  const numberField = (name: keyof FormValues, label: string, step = "1") => (
+  const numberField = (name: keyof FormValues, label: string) => (
     <div className="grid gap-2">
       <Label>{label}</Label>
       <Input
         type="number"
         min={0}
-        step={step}
+        step="1"
         aria-invalid={!!errors[name]}
         onFocus={(e) => e.target.select()}
         {...form.register(name, { valueAsNumber: true })}
       />
       {errors[name] && <p className="text-destructive text-sm">{errors[name]?.message as string}</p>}
     </div>
+  )
+
+  // purchasePrice/sellingPrice are the one pair here that needs a
+  // Controller binding rather than the plain register() above — CurrencyInput
+  // has to be a controlled component (it swaps between the raw and
+  // "₱X,XXX.XX"-formatted string depending on focus), unlike the two plain
+  // integer counts numberField handles above.
+  const moneyField = (name: "purchasePrice" | "sellingPrice", label: string) => (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <div className="grid gap-2">
+          <Label>{label}</Label>
+          <CurrencyInput {...field} aria-invalid={!!errors[name]} />
+          {errors[name] && <p className="text-destructive text-sm">{errors[name]?.message as string}</p>}
+        </div>
+      )}
+    />
   )
 
   return (
@@ -216,8 +245,8 @@ export function ProductFormDialog({
               </div>
               {numberField("stockQuantity", tFields("stockQuantity"))}
               {numberField("minStockLevel", tFields("minStockLevel"))}
-              {numberField("purchasePrice", tFields("purchasePrice"), "0.01")}
-              {numberField("sellingPrice", tFields("sellingPrice"), "0.01")}
+              {moneyField("purchasePrice", tFields("purchasePrice"))}
+              {moneyField("sellingPrice", tFields("sellingPrice"))}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

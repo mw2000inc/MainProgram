@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -348,7 +349,7 @@ export function SaleListFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("cf")}</FormLabel>
                     <FormControl>
-                      <Input placeholder={tCommon("optional")} {...field} />
+                      <CurrencyInput {...field} value={field.value ?? ""} placeholder={tCommon("optional")} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

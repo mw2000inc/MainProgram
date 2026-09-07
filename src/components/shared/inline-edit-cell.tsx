@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Input } from "@/components/ui/input"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import {
   Select,
   SelectContent,
@@ -120,6 +121,45 @@ export function InlineNumberCell({
         else setDraft(String(value))
       }}
     />
+  )
+}
+
+// Same draft/blur-commit shape as InlineNumberCell above, but for a
+// currency/payment amount specifically (Collections' Amount) — wraps the
+// shared CurrencyInput instead of a plain type="number" input, so this
+// cell gets the same "₱X,XXX.XX" format-on-blur formatting as the Amount
+// field in the Add/Edit form. An invalid or negative entry snaps back to
+// the last known value, same as InlineNumberCell.
+export function InlineCurrencyCell({
+  value,
+  onCommit,
+  className,
+}: {
+  value: number
+  onCommit: (next: number) => void
+  className?: string
+}) {
+  // Same "adjust state during render, not in an effect" resync pattern as
+  // InlineTextCell above — see its comment.
+  const [lastSeenValue, setLastSeenValue] = React.useState(value)
+  const [draft, setDraft] = React.useState(String(value))
+  if (value !== lastSeenValue) {
+    setLastSeenValue(value)
+    setDraft(String(value))
+  }
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="inline-block">
+      <CurrencyInput
+        value={draft}
+        onChange={setDraft}
+        className={cn("h-7 w-24 text-xs", className)}
+        onBlur={() => {
+          const next = Number(draft)
+          if (!Number.isNaN(next) && next >= 0 && next !== value) onCommit(next)
+          else setDraft(String(value))
+        }}
+      />
+    </div>
   )
 }
 

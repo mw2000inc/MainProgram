@@ -29,11 +29,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CurrencyInput } from "@/components/shared/currency-input"
 import { TECHNICIANS } from "@/lib/constants"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { RepairPlan } from "@/lib/types"
@@ -55,7 +57,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     accD: z.string().optional(),
     th: z.string().min(1, t("selectField", { field: tf("serviceman") })),
     partNo: z.string().optional(),
-    amt: z.string().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), t("mustBeZeroOrMore")),
+    amt: moneySchema(t),
     unitInOut: z.string().min(1),
   })
 }
@@ -320,7 +322,7 @@ export function RepairFormDialog({
                 <FormItem>
                   <FormLabel>{tFields("amt")}</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" min="0" {...field} />
+                    <CurrencyInput {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

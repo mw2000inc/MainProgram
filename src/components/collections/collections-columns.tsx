@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineNumberCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineCurrencyCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -180,7 +180,7 @@ export function getCollectionsDailyReportColumns({
       cell: ({ row }) => {
         const entry = row.original
         if (!onFieldChange) return <span className="inline-block min-w-[90px]">{formatCurrency(entry.amount)}</span>
-        return <InlineNumberCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
+        return <InlineCurrencyCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
       },
     },
     { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
