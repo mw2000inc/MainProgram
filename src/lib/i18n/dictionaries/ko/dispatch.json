@@ -23,7 +23,7 @@
   "originallyScheduled": "원래 예정일: {date}",
   "accept": "수락",
   "customerRequested": "고객 요청:",
-  "at": ",",
+  "at": "",
   "noAlternateDate": "대체 날짜가 제공되지 않았습니다 — Pre D를 직접 수정하여 날짜를 제안하세요.",
   "possibleDuplicateOrConflict": "중복 또는 충돌 가능성",
   "conflictDescriptionSingle": "이 고객은 이미 관련된 것으로 보이는 다른 항목이 있습니다 — 이 항목도 알림을 보내기 전에 확인하세요.",

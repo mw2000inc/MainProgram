@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { format, parse, parseISO } from "date-fns"
+import { ko } from "date-fns/locale"
 import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock, History } from "lucide-react"
 import {
   Dialog,
@@ -25,7 +27,34 @@ import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
-import type { Customer, DispatchStatus, SaleListEntry } from "@/lib/types"
+import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
+
+// The Reschedule Requests card's "customer requested" line is the one spot
+// in this file rendering a date/time from data, not a translated string —
+// item.requestedDate/requestedTime are a courtesy display detail only
+// (see the DispatchRow interface's own comment above), never applied to
+// the real schedule, so localizing them is scoped to exactly these two
+// small helpers rather than touching the shared formatDate() used
+// elsewhere in the app (86 other call sites, all of which keep rendering
+// exactly as before).
+//
+// English keeps calling the shared formatDate() unchanged ("Sep 4, 2026");
+// Korean uses date-fns's own ko locale directly for a properly Korean-
+// ordered date ("2026년 9월 4일").
+function formatRequestedDate(dateStr: string, locale: Locale): string {
+  if (locale === "ko") return format(parseISO(dateStr), "yyyy년 M월 d일", { locale: ko })
+  return formatDate(dateStr)
+}
+
+// requestedTime is raw 24-hour "HH:mm" straight from the customer's native
+// <input type="time"> on the confirm page — never parsed or reformatted
+// before this. Turns it into a real 12-hour display: "2:00 PM" in English,
+// "오후 2:00" in Korean (date-fns's own token order for ko already puts
+// 오전/오후 before the number, which is the natural Korean word order).
+function formatRequestedTime(timeStr: string, locale: Locale): string {
+  const parsed = parse(timeStr, "HH:mm", new Date())
+  return locale === "ko" ? format(parsed, "a h:mm", { locale: ko }) : format(parsed, "h:mm a")
+}
 
 // Every dispatch row this queue cares about, across all four modules,
 // regardless of its current dispatchStatus — Draft ones are what actually
@@ -124,7 +153,7 @@ const DISPATCH_STATUS_KEYS: Record<string, string> = {
 // before; finding something opens a confirmation dialog listing what was
 // found, and only proceeds on an explicit "Send Anyway".
 export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { t } = useTranslation("dispatch")
+  const { t, locale } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: installPlans = [] } = useInstallPlans()
@@ -543,8 +572,14 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                   </div>
                   {item.requestedDate ? (
                     <div className="rounded-md border bg-warning/5 p-2 text-xs">
-                      {t("customerRequested")} <span className="font-medium">{formatDate(item.requestedDate)}</span>
-                      {item.requestedTime && <span className="font-medium"> {t("at")} {item.requestedTime}</span>}
+                      {t("customerRequested")}{" "}
+                      <span className="font-medium">{formatRequestedDate(item.requestedDate, locale)}</span>
+                      {item.requestedTime && (
+                        <span className="font-medium">
+                          {t("at") ? ` ${t("at")} ` : " "}
+                          {formatRequestedTime(item.requestedTime, locale)}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">{t("noAlternateDate")}</p>
