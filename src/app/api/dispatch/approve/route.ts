@@ -9,22 +9,32 @@ import {
   escapeHtml,
   appBaseUrl,
   sendEmail,
-  sendSms,
 } from "@/lib/dispatch-notifications-server"
 
 export const dynamic = "force-dynamic"
 
-// Real SMS (textbee) + Email (Resend) dispatch-approval delivery — see
-// the dispatch_dual_channel_notifications migration's own comment for why
-// this lives here rather than in the approve_dispatch_item() RPC itself
+// Email (Resend) dispatch-approval delivery — see the
+// dispatch_dual_channel_notifications migration's own comment for why this
+// lives here rather than in the approve_dispatch_item() RPC itself
 // (Postgres can't make outbound HTTP calls the way this project is set
 // up). This route does the admin recheck + DB transition via the caller's
 // own session (same RLS-backed is_admin() check as before, just reached
 // through a route instead of a direct client-side RPC call), then the
-// real sends, then logs exactly what happened — 'sent' or 'failed' per
-// channel, never a blind stub — via the service-role client, matching
+// real send, then logs exactly what happened — 'sent' or 'failed', never a
+// blind stub — via the service-role client, matching
 // src/app/api/admin/users/route.ts's own recheck-then-service-role
 // pattern.
+//
+// SMS was fully removed as a notification channel (email is the only one
+// now). approve_dispatch_item()'s p_notify_phone parameter is deliberately
+// left in the RPC's signature rather than migrated away — this route is
+// its only caller, so a signature change would be safe in principle, but
+// it would also require the DB migration to be manually applied (this
+// project has no CLI migration access) in lock-step with this exact
+// deploy, or every approval would fail in the gap between the two. Always
+// passing null costs nothing and needs no migration at all: the RPC has
+// always treated a null phone as "don't set notify_phone," which is
+// exactly the behavior wanted here now that there's no phone to collect.
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -37,15 +47,13 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     entityType?: DispatchEntityType
     entityId?: string
-    notifyPhone?: string
     notifyEmail?: string
   } | null
   const entityType = body?.entityType
   const entityId = body?.entityId
-  const notifyPhone = body?.notifyPhone?.trim() || undefined
   const notifyEmail = body?.notifyEmail?.trim() || undefined
-  if (!entityType || !entityId || (!notifyPhone && !notifyEmail)) {
-    return NextResponse.json({ error: "entityType, entityId, and at least one of notifyPhone/notifyEmail are required" }, { status: 400 })
+  if (!entityType || !entityId || !notifyEmail) {
+    return NextResponse.json({ error: "entityType, entityId, and notifyEmail are required" }, { status: 400 })
   }
 
   // Re-validates admin-ness itself (is_admin(), under the caller's own
@@ -55,8 +63,8 @@ export async function POST(request: Request) {
   const { data: rpcData, error: rpcError } = await supabase.rpc("approve_dispatch_item", {
     p_entity_type: entityType,
     p_entity_id: entityId,
-    p_notify_phone: notifyPhone ?? null,
-    p_notify_email: notifyEmail ?? null,
+    p_notify_phone: null,
+    p_notify_email: notifyEmail,
   })
   if (rpcError) {
     return NextResponse.json({ error: rpcError.message }, { status: 403 })
@@ -77,37 +85,20 @@ export async function POST(request: Request) {
   const actionPhrase = MODULE_ACTION_PHRASES[entityType]
   const confirmUrl = `${appBaseUrl(request)}/confirm/${token}`
 
-  const result: { sms?: ChannelResult; email?: ChannelResult } = {}
-
-  if (notifyPhone) {
-    const message = buildSmsMessage({ companyName, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
-    const sendResult = await sendSms(notifyPhone, message)
-    result.sms = sendResult
-    await admin.from("dispatch_notifications").insert({
-      entity_type: entityType,
-      entity_id: entityId,
-      channel: "sms",
-      recipient: notifyPhone,
-      message,
-      status: sendResult.status,
-      created_by: caller.id,
-    })
-  }
-
-  if (notifyEmail) {
-    const { subject, html, text } = buildEmailContent({ companyName, moduleLabel, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
-    const sendResult = await sendEmail(notifyEmail, subject, html, text)
-    result.email = sendResult
-    await admin.from("dispatch_notifications").insert({
-      entity_type: entityType,
-      entity_id: entityId,
-      channel: "email",
-      recipient: notifyEmail,
-      message: text,
-      status: sendResult.status,
-      created_by: caller.id,
-    })
-  }
+  // notifyEmail is guaranteed present — validated required above, now that
+  // it's the only channel.
+  const { subject, html, text } = buildEmailContent({ companyName, moduleLabel, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
+  const sendResult = await sendEmail(notifyEmail, subject, html, text)
+  const result: { email: ChannelResult } = { email: sendResult }
+  await admin.from("dispatch_notifications").insert({
+    entity_type: entityType,
+    entity_id: entityId,
+    channel: "email",
+    recipient: notifyEmail,
+    message: text,
+    status: sendResult.status,
+    created_by: caller.id,
+  })
 
   return NextResponse.json({ token, confirmUrl, ...result })
 }
@@ -118,8 +109,8 @@ export async function POST(request: Request) {
 // row has (see the ct_filter_change_collection_inventory_link migration);
 // Repair has no address or customer link at all (see the
 // dispatch_confirmation_workflow migration's own note on that gap). A
-// null return just means the message omits the "at <address>" clause —
-// see buildSmsMessage.
+// null return just means the message omits the address line — see
+// buildEmailContent.
 async function getEntityAddress(
   admin: ReturnType<typeof createAdminClient>,
   entityType: DispatchEntityType,
@@ -139,41 +130,10 @@ async function getEntityAddress(
   return null
 }
 
-// Warmer, more conversational copy (confirmed wording) — SMS asks for a
-// reply since that's the natural action on a phone, but still includes
-// the same functional confirm/reschedule link right after it (the reply
-// path is best-effort — see /api/webhooks/sms-reply — the link is the
-// one fully-working confirmation path for every case). Email points at
-// the button instead of "reply". No emoji here on purpose (kept in
-// buildEmailContent below) — they'd force this into UCS-2 encoding and
-// roughly double the billed SMS segment count for two characters; the
-// wording alone already carries the warm tone. Plain ASCII throughout
-// keeps this on GSM-7 (~153 chars/segment) instead.
-function buildSmsMessage({
-  companyName,
-  actionPhrase,
-  scheduledDate,
-  address,
-  confirmUrl,
-}: {
-  companyName: string
-  actionPhrase: string
-  scheduledDate: string
-  address: string | null
-  confirmUrl: string
-}): string {
-  const location = address ? ` at ${address}` : ""
-  return [
-    "Hello Sir/Ma'am, good day! We hope you're doing well!",
-    "",
-    `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}${location}.`,
-    "",
-    `We'd be happy to assist you with the service. Kindly reply to this message to confirm if the scheduled date works for you, or tap this link to confirm or request a reschedule: ${confirmUrl}`,
-    "",
-    `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day!`,
-  ].join("\n")
-}
-
+// Warmer, more conversational copy (confirmed wording) — points at the
+// button to confirm or reschedule rather than asking for a reply (SMS used
+// to ask for a reply as the natural action on a phone; that channel was
+// fully removed, see dispatch-notifications-server.ts's own note).
 function buildEmailContent({
   companyName,
   moduleLabel,

@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation"
 import { DispatchConfirmationView } from "@/components/confirm/dispatch-confirmation-view"
 
-// Public, no-login route linked from a customer's SMS/Email dispatch
+// Public, no-login route linked from a customer's email dispatch
 // confirmation message (see approve_dispatch_item() in the
 // dispatch_confirmation_workflow migration). The token is a random uuid —
 // all lookups/updates go through security-definer RPCs scoped to exactly

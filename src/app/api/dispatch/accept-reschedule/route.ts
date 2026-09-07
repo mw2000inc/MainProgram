@@ -9,7 +9,6 @@ import {
   escapeHtml,
   appBaseUrl,
   sendEmail,
-  sendSms,
 } from "@/lib/dispatch-notifications-server"
 
 export const dynamic = "force-dynamic"
@@ -17,14 +16,20 @@ export const dynamic = "force-dynamic"
 // Admin's "yes, that date works" action on a Reschedule Requested item
 // (the Pending Dispatch Approval queue's Reschedule Requests section) —
 // see the reschedule_request_with_date migration for why this needs its
-// own route (same reason /api/dispatch/approve does: real textbee/
-// Resend credentials only ever live server-side). Unlike approve, this
-// jumps straight to a "you're confirmed" notification rather than a
-// "please confirm" ask — the customer already told us this exact date
-// works when they requested it, so asking them to re-confirm their own
-// suggestion would be redundant. Phone/email come from the row itself
-// (already stored from the original approval), not from the request body
-// — there's nothing for the admin to type in here.
+// own route (same reason /api/dispatch/approve does: real Resend
+// credentials only ever live server-side). Unlike approve, this jumps
+// straight to a "you're confirmed" notification rather than a "please
+// confirm" ask — the customer already told us this exact date works when
+// they requested it, so asking them to re-confirm their own suggestion
+// would be redundant. Email comes from the row itself (already stored
+// from the original approval), not from the request body — there's
+// nothing for the admin to type in here.
+//
+// SMS was fully removed as a notification channel (email is the only one
+// now) — accept_requested_reschedule() still returns out_notify_phone
+// (harmless historical data from whatever the original approval stored;
+// see dispatch-notifications-server.ts's own note), it's just no longer
+// read here.
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -64,7 +69,7 @@ export async function POST(request: Request) {
   if (!row?.out_ok) {
     return NextResponse.json({ error: "This item is no longer a pending reschedule request." }, { status: 409 })
   }
-  const { out_scheduled_date: scheduledDate, out_requested_time: requestedTime, out_notify_phone: notifyPhone, out_notify_email: notifyEmail, out_confirmation_token: token } = row
+  const { out_scheduled_date: scheduledDate, out_requested_time: requestedTime, out_notify_email: notifyEmail, out_confirmation_token: token } = row
 
   const admin = createAdminClient()
   const { data: settingsRow } = await admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle()
@@ -78,22 +83,12 @@ export async function POST(request: Request) {
   // for the new date.
   const confirmUrl = token ? `${appBaseUrl(request)}/confirm/${token}` : undefined
 
-  const result: { sms?: ChannelResult; email?: ChannelResult } = {}
-
-  if (notifyPhone) {
-    const message = buildSmsMessage({ companyName, actionPhrase, scheduledDate: scheduledDate ?? "", requestedTime, confirmUrl })
-    const sendResult = await sendSms(notifyPhone, message)
-    result.sms = sendResult
-    await admin.from("dispatch_notifications").insert({
-      entity_type: entityType,
-      entity_id: entityId,
-      channel: "sms",
-      recipient: notifyPhone,
-      message,
-      status: sendResult.status,
-      created_by: caller.id,
-    })
-  }
+  // notifyEmail is normally always present here — approve now requires it
+  // — but this guard is kept for a row approved before this change with
+  // only a phone on file (email null): with SMS gone, such a row simply
+  // gets no "you're confirmed" notification sent, which is an accepted
+  // consequence of removing the channel entirely, not a bug to work around.
+  const result: { email?: ChannelResult } = {}
 
   if (notifyEmail) {
     const { subject, html, text } = buildEmailContent({
@@ -118,30 +113,6 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(result)
-}
-
-function buildSmsMessage({
-  companyName,
-  actionPhrase,
-  scheduledDate,
-  requestedTime,
-  confirmUrl,
-}: {
-  companyName: string
-  actionPhrase: string
-  scheduledDate: string
-  requestedTime: string | null
-  confirmUrl: string | undefined
-}): string {
-  const when = requestedTime ? `${scheduledDate} at ${requestedTime}` : scheduledDate
-  const lines = [
-    "Hello Sir/Ma'am, good day! We hope you're doing well!",
-    "",
-    `Great news — ${companyName} has confirmed your requested reschedule for ${actionPhrase}: now set for ${when}.`,
-  ]
-  if (confirmUrl) lines.push("", `View your confirmation here: ${confirmUrl}`)
-  lines.push("", `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day!`)
-  return lines.join("\n")
 }
 
 function buildEmailContent({

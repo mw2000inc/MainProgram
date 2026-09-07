@@ -2,7 +2,7 @@
 // translation of live user-authored content (Notes, Announcements,
 // comments) — see /api/translate. DEEPL_API_KEY required; missing it is
 // treated as "not configured yet" (returns null), not an error, same
-// convention as sendEmail/sendSms in dispatch-notifications-server.ts.
+// convention as sendEmail in dispatch-notifications-server.ts.
 import type { Locale } from "@/lib/types"
 
 // A free-tier key always ends in ":fx" and only works against the free

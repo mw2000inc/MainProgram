@@ -35,7 +35,7 @@ const STATUS_KEYS: Record<DispatchStatus, string> = {
   "Reschedule Requested": "rescheduleRequested",
 }
 
-// Public, no-login page a customer lands on from their SMS/Email
+// Public, no-login page a customer lands on from their email
 // confirmation link (see approve_dispatch_item() in the
 // dispatch_confirmation_workflow migration). All data access goes through
 // the security-definer get_dispatch_confirmation_details/

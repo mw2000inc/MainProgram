@@ -56,28 +56,26 @@ export async function listDispatchNotifications(): Promise<DispatchNotificationR
 }
 
 // Admin approval step — hits the server route (not the DB directly)
-// because sending a real SMS/email needs the textbee/Resend API keys,
-// which only ever live server-side (see
-// src/app/api/dispatch/approve/route.ts). That route re-checks
-// admin-ness itself (via approve_dispatch_item(), under the caller's own
-// session), generates the confirmation token, moves the row to 'Pending
-// Customer Confirmation', sends whichever of phone/email is provided, and
-// logs each channel's real outcome to dispatch_notifications — 'sent' or
-// 'failed' from the provider's own response, or 'skipped_no_provider' if
-// that channel's API key isn't configured yet.
+// because sending a real email needs the Resend API key, which only ever
+// lives server-side (see src/app/api/dispatch/approve/route.ts). That
+// route re-checks admin-ness itself (via approve_dispatch_item(), under
+// the caller's own session), generates the confirmation token, moves the
+// row to 'Pending Customer Confirmation', sends to the provided email, and
+// logs the real outcome to dispatch_notifications — 'sent' or 'failed'
+// from Resend's own response, or 'skipped_no_provider' if RESEND_API_KEY
+// isn't configured yet. SMS was fully removed as a notification channel —
+// see dispatch-notifications-server.ts's own note.
 export async function approveDispatchItem(input: {
   entityType: DispatchEntityType
   entityId: string
-  notifyPhone?: string
-  notifyEmail?: string
-}): Promise<{ token: string; confirmUrl: string; sms?: DispatchChannelResult; email?: DispatchChannelResult } | null> {
+  notifyEmail: string
+}): Promise<{ token: string; confirmUrl: string; email?: DispatchChannelResult } | null> {
   const response = await fetch("/api/dispatch/approve", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       entityType: input.entityType,
       entityId: input.entityId,
-      notifyPhone: input.notifyPhone,
       notifyEmail: input.notifyEmail,
     }),
   })
@@ -153,12 +151,12 @@ export async function respondToDispatchConfirmation(
 // it straight to the real schedule field and jumping directly to
 // 'Confirmed' (see accept_requested_reschedule() — no second customer
 // click needed, they already told us this date works). Sends a "you're
-// confirmed" notification using the phone/email already on the row from
-// the original approval, same shared send mechanism as approveDispatchItem.
+// confirmed" notification using the email already on the row from the
+// original approval, same shared send mechanism as approveDispatchItem.
 export async function acceptRequestedReschedule(input: {
   entityType: DispatchEntityType
   entityId: string
-}): Promise<{ sms?: DispatchChannelResult; email?: DispatchChannelResult } | null> {
+}): Promise<{ email?: DispatchChannelResult } | null> {
   const response = await fetch("/api/dispatch/accept-reschedule", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

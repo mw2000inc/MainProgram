@@ -29,6 +29,14 @@ import { formatDate } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
+// SMS was fully removed as a notification channel (email is the only one
+// now) — see dispatch-notifications-server.ts's own note. This queue no
+// longer collects or matches on a phone number at all; DispatchRow's old
+// `phone` field, the phone input, and every bit of phone-specific state
+// below it are gone. General phone number fields on customer/member
+// records themselves (contactNumber, etc.) are untouched — this was
+// scoped strictly to the dispatch-notification feature.
+
 // The Reschedule Requests card's "customer requested" line is the one spot
 // in this file rendering a date/time from data, not a translated string —
 // item.requestedDate/requestedTime are a courtesy display detail only
@@ -70,11 +78,10 @@ interface DispatchRow {
   scheduledDate: string
   dispatchStatus?: DispatchStatus
   // Whichever of these a row actually has — see each module's own gap
-  // (Installation/Repair have no customerId; Repair has no phone/email
-  // link at all). isSameCustomer() falls through these in priority order.
+  // (Installation/Repair have no customerId; Repair has no email link at
+  // all). isSameCustomer() falls through these in priority order.
   customerId?: string
   orderNumber?: string
-  phone?: string
   email?: string
   // Only meaningful when dispatchStatus is 'Reschedule Requested' — the
   // customer's own proposed replacement date/time, collected on the
@@ -84,7 +91,7 @@ interface DispatchRow {
   requestedTime?: string
 }
 
-// Best-effort customer lookup for prefilling a phone/email default — tries
+// Best-effort customer lookup for prefilling an email default — tries
 // an explicit customerId link first (Filter Change, Collections), falling
 // back to the shared order-number match (see customer-lookup.ts, which
 // checks sale_list_entries — not customers.order_number, a completely
@@ -108,11 +115,10 @@ function findCustomer(
 // have — checked in priority order (only falls through to the next signal
 // when the higher one is missing on either side, not when it's present
 // but different) since customerId/orderNumber are structural identity and
-// far more reliable than a phone/email string match.
-function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: string; phone?: string; email?: string }): boolean {
+// far more reliable than an email string match.
+function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: string; email?: string }): boolean {
   if (a.customerId && b.customerId) return a.customerId === b.customerId
   if (a.orderNumber && b.orderNumber) return a.orderNumber === b.orderNumber
-  if (a.phone && b.phone && a.phone.trim() === b.phone.trim()) return true
   if (a.email && b.email && a.email.trim().toLowerCase() === b.email.trim().toLowerCase()) return true
   return false
 }
@@ -139,9 +145,9 @@ const DISPATCH_STATUS_KEYS: Record<string, string> = {
 // each module's own "Add" form start here at dispatchStatus='Draft';
 // auto-generated recurring-schedule/C/T-completion rows skip this queue
 // entirely (see the migration's own comment for why). Approving here
-// always attempts BOTH a real SMS (textbee) and a real email (Resend)
-// to whichever of phone/email is filled in — either can be left blank to
-// skip that channel entirely, but at least one is required.
+// sends a real email (Resend) to whichever address is filled in — email
+// is required. SMS (textbee) was fully removed as a notification channel;
+// see dispatch-notifications-server.ts's own note.
 //
 // Before actually sending, Approve first checks whether the same customer
 // already has another Confirmed/Pending/Draft item anywhere across all
@@ -166,12 +172,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const updateCustomer = useUpdateCustomer()
   const [historyOpen, setHistoryOpen] = React.useState(false)
 
-  const [phoneDrafts, setPhoneDrafts] = React.useState<Record<string, string>>({})
   const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
-  const [lastResult, setLastResult] = React.useState<{ confirmUrl: string; sms?: DispatchChannelResult; email?: DispatchChannelResult } | null>(null)
+  const [lastResult, setLastResult] = React.useState<{ confirmUrl: string; email?: DispatchChannelResult } | null>(null)
   const [pendingApproval, setPendingApproval] = React.useState<{
     item: DispatchRow
-    notifyPhone: string
     notifyEmail: string
     conflicts: DispatchRow[]
   } | null>(null)
@@ -195,7 +199,6 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         dispatchStatus: p.dispatchStatus,
         customerId: p.customerId,
         orderNumber: p.orderNumber,
-        phone: p.contactNumber || undefined,
         email: customer?.email,
         requestedDate: p.requestedDate,
         requestedTime: p.requestedTime,
@@ -213,11 +216,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         // install_plans has no real customer_id column (see the
         // auto_create_schedule_job_on_confirm migration's own note) — this
         // is purely the in-memory result of the orderNumber match above,
-        // used here only as the write-back target for a corrected
-        // phone/email (see doApprove), never persisted onto the plan row.
+        // used here only as the write-back target for a corrected email
+        // (see doApprove), never persisted onto the plan row.
         customerId: customer?.id,
         orderNumber: p.orderNo,
-        phone: p.contactNumber || undefined,
         email: customer?.email,
         requestedDate: p.requestedDate,
         requestedTime: p.requestedTime,
@@ -234,17 +236,16 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         dispatchStatus: c.dispatchStatus,
         customerId: c.customerId,
         orderNumber: c.orderNo,
-        phone: customer?.contactNumber,
         email: customer?.email,
         requestedDate: c.requestedDate,
         requestedTime: c.requestedTime,
       })
     }
     for (const r of repairPlans) {
-      // repair_plans has no phone/email/customer_id column of its own — the
+      // repair_plans has no email/customer_id column of its own — the
       // orderNumber match below (same fallback Installation already uses)
       // is the only way to resolve a real customer for it at all, both for
-      // prefilling phone/email here and as the write-back target below.
+      // prefilling email here and as the write-back target below.
       const customer = findCustomer(customers, saleListEntries, { orderNumber: r.orderNo })
       list.push({
         entityType: "repair_plans",
@@ -255,7 +256,6 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         dispatchStatus: r.dispatchStatus,
         customerId: customer?.id,
         orderNumber: r.orderNo,
-        phone: customer?.contactNumber,
         email: customer?.email,
         requestedDate: r.requestedDate,
         requestedTime: r.requestedTime,
@@ -278,20 +278,17 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     [allRows]
   )
 
-  function phoneFor(item: DispatchRow) {
-    return phoneDrafts[item.entityId] ?? item.phone ?? ""
-  }
   function emailFor(item: DispatchRow) {
     return emailDrafts[item.entityId] ?? item.email ?? ""
   }
 
   // Every other Confirmed/Pending Customer Confirmation/Draft row (any
-  // module) that looks like the same customer as `item` — using the
-  // phone/email actually typed into this queue (not just item's own
-  // default), since that's the most current signal for who this
-  // notification is really going to.
-  function findConflicts(item: DispatchRow, typedPhone: string, typedEmail: string): DispatchRow[] {
-    const candidate = { customerId: item.customerId, orderNumber: item.orderNumber, phone: typedPhone, email: typedEmail }
+  // module) that looks like the same customer as `item` — using the email
+  // actually typed into this queue (not just item's own default), since
+  // that's the most current signal for who this notification is really
+  // going to.
+  function findConflicts(item: DispatchRow, typedEmail: string): DispatchRow[] {
+    const candidate = { customerId: item.customerId, orderNumber: item.orderNumber, email: typedEmail }
     return allRows.filter(
       (r) =>
         !(r.entityType === item.entityType && r.entityId === item.entityId) &&
@@ -301,55 +298,50 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     )
   }
 
-  // A phone/email typed here otherwise only ever lands on this one dispatch
-  // row's notify_phone/notify_email — the next dispatch for the same
-  // customer would start blank again. Whenever this item resolved to a real
-  // customer (customerId — see allRows above, filled in for every module
-  // now), and the typed value differs from what's on that customer's
-  // permanent record, save it back too. Deliberately one-directional and
-  // additive-only: an empty typed value never clears/overwrites anything on
-  // the customer record, it just means that channel isn't sent this time.
-  function saveContactToCustomer(item: DispatchRow, notifyPhone: string, notifyEmail: string) {
+  // An email typed here otherwise only ever lands on this one dispatch
+  // row's notify_email — the next dispatch for the same customer would
+  // start blank again. Whenever this item resolved to a real customer
+  // (customerId — see allRows above, filled in for every module now), and
+  // the typed value differs from what's on that customer's permanent
+  // record, save it back too. Deliberately one-directional and additive-
+  // only: an empty typed value never clears/overwrites anything on the
+  // customer record, it just means the email isn't sent this time.
+  function saveContactToCustomer(item: DispatchRow, notifyEmail: string) {
     if (!item.customerId) return
     const customer = customers.find((c) => c.id === item.customerId)
     if (!customer) return
-    const patch: { email?: string; contactNumber?: string } = {}
-    if (notifyEmail && notifyEmail !== (customer.email ?? "")) patch.email = notifyEmail
-    if (notifyPhone && notifyPhone !== (customer.contactNumber ?? "")) patch.contactNumber = notifyPhone
-    if (Object.keys(patch).length > 0) {
-      updateCustomer.mutate({ id: customer.id, input: patch })
+    if (notifyEmail && notifyEmail !== (customer.email ?? "")) {
+      updateCustomer.mutate({ id: customer.id, input: { email: notifyEmail } })
     }
   }
 
-  async function doApprove(item: DispatchRow, notifyPhone: string, notifyEmail: string) {
+  async function doApprove(item: DispatchRow, notifyEmail: string) {
     const result = await approve.mutateAsync({
       entityType: item.entityType,
       entityId: item.entityId,
-      notifyPhone: notifyPhone || undefined,
-      notifyEmail: notifyEmail || undefined,
+      notifyEmail,
     })
     if (!result) return
     setLastResult(result)
-    saveContactToCustomer(item, notifyPhone, notifyEmail)
+    saveContactToCustomer(item, notifyEmail)
   }
 
   function handleApproveClick(item: DispatchRow) {
-    const notifyPhone = phoneFor(item).trim()
     const notifyEmail = emailFor(item).trim()
-    if (!notifyPhone && !notifyEmail) return
-    const conflicts = findConflicts(item, notifyPhone, notifyEmail)
+    if (!notifyEmail) return
+    const conflicts = findConflicts(item, notifyEmail)
     if (conflicts.length > 0) {
-      setPendingApproval({ item, notifyPhone, notifyEmail, conflicts })
+      setPendingApproval({ item, notifyEmail, conflicts })
       return
     }
-    doApprove(item, notifyPhone, notifyEmail)
+    doApprove(item, notifyEmail)
   }
 
   function handleSendAnyway() {
     if (!pendingApproval) return
-    const { item, notifyPhone, notifyEmail } = pendingApproval
+    const { item, notifyEmail } = pendingApproval
     setPendingApproval(null)
-    doApprove(item, notifyPhone, notifyEmail)
+    doApprove(item, notifyEmail)
   }
 
   // A conflict blocks only the one item it's found on, never the whole
@@ -371,25 +363,24 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     // so iterating the live memo would skip whatever's left after the
     // first successful approval re-renders this component.
     for (const item of [...items]) {
-      const notifyPhone = phoneFor(item).trim()
       const notifyEmail = emailFor(item).trim()
-      if (!notifyPhone && !notifyEmail) {
+      if (!notifyEmail) {
         skippedNoContact.push(item)
         continue
       }
-      const candidate = { customerId: item.customerId, orderNumber: item.orderNumber, phone: notifyPhone, email: notifyEmail }
+      const candidate = { customerId: item.customerId, orderNumber: item.orderNumber, email: notifyEmail }
       // allRows (and therefore findConflicts) won't reflect an approval
       // that just happened earlier in *this* loop — the query cache only
       // updates once its invalidated queries actually refetch, which
       // doesn't happen synchronously inside this loop — so a same-batch
       // duplicate is checked separately against what's already been
       // approved so far this run.
-      const conflicts = [...findConflicts(item, notifyPhone, notifyEmail), ...approved.filter((a) => isSameCustomer(a, candidate))]
+      const conflicts = [...findConflicts(item, notifyEmail), ...approved.filter((a) => isSameCustomer(a, candidate))]
       if (conflicts.length > 0) {
         skippedConflict.push({ item, conflicts })
         continue
       }
-      await doApprove(item, notifyPhone, notifyEmail)
+      await doApprove(item, notifyEmail)
       approved.push(item)
     }
     setBulkSummary({ approved, skippedNoContact, skippedConflict })
@@ -407,10 +398,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     await acceptReschedule.mutateAsync({ entityType: item.entityType, entityId: item.entityId })
   }
 
-  function channelBadge(result: DispatchChannelResult | undefined, channel: "sms" | "email") {
+  function emailChannelBadge(result: DispatchChannelResult | undefined) {
     if (!result) return null
     const tone = result.status === "sent" ? "success" : result.status === "failed" ? "danger" : "neutral"
-    const key = `${channel}${result.status === "sent" ? "Sent" : result.status === "failed" ? "Failed" : "Skipped"}`
+    const key = result.status === "sent" ? "emailSent" : result.status === "failed" ? "emailFailed" : "emailSkipped"
     return <StatusBadge tone={tone} label={t(key)} />
   }
 
@@ -449,8 +440,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           {lastResult && (
             <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                {channelBadge(lastResult.sms, "sms")}
-                {channelBadge(lastResult.email, "email")}
+                {emailChannelBadge(lastResult.email)}
               </div>
               <p className="text-muted-foreground">
                 {t("confirmationLink")} <span className="break-all font-mono">{lastResult.confirmUrl}</span>
@@ -507,15 +497,6 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     </div>
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
-                    <div className="flex-1 min-w-[160px] space-y-1">
-                      <Label className="text-xs text-muted-foreground">{t("phone")}</Label>
-                      <Input
-                        className="h-8"
-                        placeholder={t("phoneNumberSms")}
-                        value={phoneFor(item)}
-                        onChange={(e) => setPhoneDrafts((prev) => ({ ...prev, [item.entityId]: e.target.value }))}
-                      />
-                    </div>
                     <div className="flex-1 min-w-[200px] space-y-1">
                       <Label className="text-xs text-muted-foreground">{t("email")}</Label>
                       <Input
@@ -528,7 +509,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     <Button
                       size="sm"
                       className="h-8 gap-1.5"
-                      disabled={(!phoneFor(item).trim() && !emailFor(item).trim()) || approve.isPending || bulkApproving}
+                      disabled={!emailFor(item).trim() || approve.isPending || bulkApproving}
                       onClick={() => handleApproveClick(item)}
                     >
                       <Send className="h-3.5 w-3.5" /> {tCommon("approve")}

@@ -427,10 +427,14 @@ export type DispatchStatus = "Draft" | "Pending Customer Confirmation" | "Confir
 
 export interface DispatchFields {
   dispatchStatus?: DispatchStatus
-  // Superseded by notifyPhone/notifyEmail below (see the
+  // notifyContact was superseded by notifyPhone/notifyEmail below (see the
   // dispatch_dual_channel_notifications migration) — left in the type for
   // any pre-existing row approved before that migration ran, but no longer
-  // written to by anything new.
+  // written to by anything new. notifyPhone is now legacy too, the same
+  // way: SMS was fully removed as a notification channel (see
+  // dispatch-notifications-server.ts's own note), so this only ever holds
+  // whatever a pre-removal approval already stored — nothing writes it
+  // going forward.
   notifyContact?: string
   notifyPhone?: string
   notifyEmail?: string

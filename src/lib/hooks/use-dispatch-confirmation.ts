@@ -43,8 +43,8 @@ export function useApproveDispatchItem() {
         toast.error("That item is no longer awaiting approval.")
         return
       }
-      const summaries = [summarizeChannel("SMS", result.sms), summarizeChannel("Email", result.email)].filter(Boolean)
-      const anyFailed = result.sms?.status === "failed" || result.email?.status === "failed"
+      const summaries = [summarizeChannel("Email", result.email)].filter(Boolean)
+      const anyFailed = result.email?.status === "failed"
       const message = summaries.length > 0 ? summaries.join(" · ") : "Approved"
       if (anyFailed) toast.error(message)
       else toast.success(message)
@@ -94,8 +94,8 @@ export function useAcceptRequestedReschedule() {
         toast.error("That item is no longer a pending reschedule request.")
         return
       }
-      const summaries = [summarizeChannel("SMS", result.sms), summarizeChannel("Email", result.email)].filter(Boolean)
-      const anyFailed = result.sms?.status === "failed" || result.email?.status === "failed"
+      const summaries = [summarizeChannel("Email", result.email)].filter(Boolean)
+      const anyFailed = result.email?.status === "failed"
       const message = summaries.length > 0 ? summaries.join(" · ") : "Confirmed"
       if (anyFailed) toast.error(message)
       else toast.success(message)

@@ -115,8 +115,8 @@ export function DispatchHistoryDialog({ open, onOpenChange }: { open: boolean; o
 
   // Current record label/module/status per entity — deliberately its own
   // small lookup rather than reusing DispatchApprovalQueue's own allRows
-  // (which also resolves phone/email/customer-conflict data this read-only
-  // view has no use for) — same field mappings, just the subset history
+  // (which also resolves email/customer-conflict data this read-only view
+  // has no use for) — same field mappings, just the subset history
   // actually needs.
   const recordIndex = React.useMemo(() => {
     const map = new Map<string, RecordInfo>()
@@ -169,6 +169,14 @@ export function DispatchHistoryDialog({ open, onOpenChange }: { open: boolean; o
     })
   }, [events, recordIndex, search, t])
 
+  // Still handles "sms" deliberately, even though SMS was fully removed as
+  // a live notification channel (see dispatch-notifications-server.ts's
+  // own note) — this is a read-only history view over real past
+  // dispatch_notifications rows, and every 'sms' row that already exists
+  // is kept exactly as-is (real audit history, not touched by that
+  // removal). Don't strip the "sms" branch here; that would just hide
+  // genuine history rather than reflect that the channel is gone going
+  // forward.
   function channelBadge(result: DispatchNotificationRecord | undefined, channel: "sms" | "email") {
     if (!result) return null
     const tone = result.status === "sent" ? "success" : result.status === "failed" ? "danger" : "neutral"
