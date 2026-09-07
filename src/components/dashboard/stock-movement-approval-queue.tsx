@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check } from "lucide-react"
+import { Check, History } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
 import { useStockMovementRows, useApproveStockMovement } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -36,6 +37,7 @@ export function StockMovementApprovalQueue({
   const approve = useApproveStockMovement()
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
+  const [historyOpen, setHistoryOpen] = React.useState(false)
 
   const items = React.useMemo(
     () => movements.filter((m) => m.status === "pending").sort((a, b) => a.date.localeCompare(b.date)),
@@ -43,10 +45,21 @@ export function StockMovementApprovalQueue({
   )
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{t("pendingApprovalButton")}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+            <span>{t("pendingApprovalButton")}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 font-normal"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <History className="h-3.5 w-3.5" /> {t("historyButton")}
+            </Button>
+          </DialogTitle>
           <DialogDescription>{t("pendingApprovalDescription")}</DialogDescription>
         </DialogHeader>
 
@@ -88,5 +101,8 @@ export function StockMovementApprovalQueue({
         )}
       </DialogContent>
     </Dialog>
+
+    <StockMovementHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
+    </>
   )
 }

@@ -81,5 +81,13 @@
   "noMovementsForDate": "No inventory movements for this date.",
   "pendingApprovalButton": "Pending Inventory Approval",
   "pendingApprovalDescription": "Stock movements auto-created from a completed schedule job's recorded filter items wait here for admin approval — nothing changes in inventory until approved.",
-  "nothingPendingApproval": "Nothing is waiting on inventory approval right now."
+  "nothingPendingApproval": "Nothing is waiting on inventory approval right now.",
+  "historyButton": "History",
+  "historyTitle": "Inventory Approval History",
+  "historyDescription": "Every past admin decision on a stock movement that went through the Pending Inventory Approval queue, newest first.",
+  "historySearchPlaceholder": "Search by product, job, or customer...",
+  "noHistoryYet": "No approval history yet.",
+  "noHistoryMatches": "No history matches that search.",
+  "requestedBy": "Requested by {name}",
+  "historyApprovedBy": "Approved by {name}"
 }
