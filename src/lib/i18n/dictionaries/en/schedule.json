@@ -64,5 +64,13 @@
   "secondaryAddress": "Secondary Address",
   "time": "Time",
   "deleteJobTitle": "Delete this job?",
-  "deleteJobDescription": "This will permanently remove this scheduled job."
+  "deleteJobDescription": "This will permanently remove this scheduled job.",
+  "routeStop": "Stop {n}",
+  "locationUnavailableAdminReview": "Location unavailable — needs admin review to assign a technician.",
+  "routeOrder": "Route #",
+  "locationUnavailableShort": "Unavailable",
+  "unassigned": "Unassigned",
+  "scheduledDateLabel": "Technician Errand / Scheduled Date",
+  "scheduleAtLeastOneDayAheadHelp": "Schedules must be created at least 1 day in advance. Select the date when the technician will perform the errand.",
+  "scheduleAtLeastOneDayAhead": "This job must be scheduled at least 1 day in advance — today or an earlier date can't be selected."
 }

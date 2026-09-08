@@ -20,6 +20,10 @@ type ScheduleJobRow = {
   secondary_address: string | null
   technician_user_id: string | null
   technician_2_user_id: string | null
+  latitude: number | null
+  longitude: number | null
+  location_source: ScheduleJob["locationSource"] | null
+  route_sequence: number | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -42,6 +46,10 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     secondaryAddress: row.secondary_address ?? undefined,
     technicianUserId: row.technician_user_id ?? undefined,
     technician2UserId: row.technician_2_user_id ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    locationSource: row.location_source ?? undefined,
+    routeSequence: row.route_sequence ?? undefined,
   }
 }
 

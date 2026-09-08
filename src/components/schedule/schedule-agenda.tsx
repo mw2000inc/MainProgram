@@ -28,7 +28,7 @@ import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
-import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians } from "@/components/schedule/schedule-columns"
+import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
 import { useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -199,10 +199,42 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     setFormOpen(true)
   }
 
-  const todaysJobs = React.useMemo(
-    () => jobs.filter((j) => j.scheduledDate === date),
-    [jobs, date]
-  )
+  // Grouped by technician, then by routeSequence within that technician's
+  // day (nulls last — a job the automation hasn't placed, or one that
+  // predates this feature, just falls back to whatever order it was
+  // already in rather than being treated as "first"). Purely a display
+  // order; the ScheduleFormDialog admins already use to reassign anything
+  // is completely unaffected.
+  const todaysJobs = React.useMemo(() => {
+    const filtered = jobs.filter((j) => j.scheduledDate === date)
+    return [...filtered].sort((a, b) => {
+      if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
+      if (a.routeSequence == null && b.routeSequence == null) return 0
+      if (a.routeSequence == null) return 1
+      if (b.routeSequence == null) return -1
+      return a.routeSequence - b.routeSequence
+    })
+  }, [jobs, date])
+
+  // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
+  // same computation the Schedule page's List view uses (see
+  // computeStopNumbers' own comment on why it's shared), so the two can
+  // never disagree about which stop number a given job shows.
+  const stopNumberByJobId = React.useMemo(() => computeStopNumbers(todaysJobs), [todaysJobs])
+
+  // Technician group boundaries within todaysJobs' own sort order above —
+  // just the index of each first-of-a-technician row, so the list below can
+  // drop a "TECHNICIAN" header exactly there without a second data
+  // structure duplicating todaysJobs itself.
+  const technicianHeaderAt = React.useMemo(() => {
+    const set = new Set<number>()
+    let last: string | undefined
+    todaysJobs.forEach((job, i) => {
+      if (job.technician !== last) set.add(i)
+      last = job.technician
+    })
+    return set
+  }, [todaysJobs])
 
   // Export/print read jobType and technician off the row directly (same
   // {header,key} pattern as every other panel's export), so swap in the
@@ -287,9 +319,20 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           </p>
         )}
         {!isPending && todaysJobs.length > 0 && (
-          <div className="divide-y">
-            {todaysJobs.map((job) => (
-              <div key={job.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+          <div>
+            {todaysJobs.map((job, i) => (
+              <React.Fragment key={job.id}>
+                {technicianHeaderAt.has(i) && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                      i === 0 ? "pt-0" : "pt-3"
+                    )}
+                  >
+                    {job.technician || t("unassigned")}
+                  </div>
+                )}
+                <div className={cn("flex items-start gap-3 py-2.5", !technicianHeaderAt.has(i) && "border-t")}>
                 <Checkbox
                   checked={job.status === "completed"}
                   onCheckedChange={() => toggleComplete(job)}
@@ -318,14 +361,23 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
                     <p className="text-xs text-muted-foreground truncate">
                       {formatTechnicians(job.technician, job.technician2, t("and"))}
+                      {stopNumberByJobId.has(job.id) && (
+                        <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                          {t("routeStop", { n: String(stopNumberByJobId.get(job.id)) })}
+                        </span>
+                      )}
                     </p>
+                    {job.locationSource === "unavailable" && (
+                      <p className="text-xs text-warning">{t("locationUnavailableAdminReview")}</p>
+                    )}
                     {job.remarks && (
                       <p className="text-xs text-muted-foreground mt-1 italic wrap-break-word">&ldquo;{job.remarks}&rdquo;</p>
                     )}
                   </div>
                   <PlanStatusBadge status={job.status} />
                 </div>
-              </div>
+                </div>
+              </React.Fragment>
             ))}
           </div>
         )}

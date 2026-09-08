@@ -114,7 +114,21 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   // with nothing assigned to them yet, matching the List view.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
 
-  const dayJobs = React.useMemo(() => jobs.filter((j) => j.scheduledDate === date), [jobs, date])
+  // Sorted by technician, then by route_sequence within that technician's
+  // day (nulls last) — same ordering ScheduleAgenda applies, so this
+  // printable sheet reflects the technician's actual visiting order once
+  // the automation has placed a job, rather than whatever order the jobs
+  // happen to come back in.
+  const dayJobs = React.useMemo(() => {
+    const filtered = jobs.filter((j) => j.scheduledDate === date)
+    return [...filtered].sort((a, b) => {
+      if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
+      if (a.routeSequence == null && b.routeSequence == null) return 0
+      if (a.routeSequence == null) return 1
+      if (b.routeSequence == null) return -1
+      return a.routeSequence - b.routeSequence
+    })
+  }, [jobs, date])
   const scopedDayJobs = React.useMemo(
     () => (technicianFilter === "all" ? dayJobs : dayJobs.filter((j) => matchesTechnician(j, technicianFilter))),
     [dayJobs, technicianFilter]

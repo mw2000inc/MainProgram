@@ -10,6 +10,7 @@ import {
   appBaseUrl,
   sendEmail,
 } from "@/lib/dispatch-notifications-server"
+import { autoAssignScheduleJob, fetchScheduleContext } from "@/lib/scheduling/smart-schedule"
 
 export const dynamic = "force-dynamic"
 
@@ -72,6 +73,30 @@ export async function POST(request: Request) {
   const { out_scheduled_date: scheduledDate, out_requested_time: requestedTime, out_notify_email: notifyEmail, out_confirmation_token: token } = row
 
   const admin = createAdminClient()
+
+  // Smart Automatic Scheduling: safe to call unconditionally here, whether
+  // accept_requested_reschedule() just relocated an already-staffed job in
+  // place (Bug #1's fix — technician already set, autoAssignScheduleJob's
+  // own "already staffed" check makes this a no-op) or fell through to
+  // find_or_create_schedule_job for a record that never reached a plain
+  // 'Confirmed' before (fresh row, technician still blank). Fire-and-forget
+  // relative to the admin's own accept action, same reasoning as the
+  // confirm route: a failure here must never turn a successful accept into
+  // an error, and autoAssignScheduleJob never throws on its own.
+  if (scheduledDate) {
+    const ctx = await fetchScheduleContext(admin, entityType, entityId)
+    if (ctx.scheduleJobId) {
+      await autoAssignScheduleJob(admin, {
+        scheduleJobId: ctx.scheduleJobId,
+        jobType: ctx.jobType,
+        entityType,
+        entityId,
+        customerId: ctx.customerId,
+        orderNo: ctx.orderNo,
+        scheduledDate,
+      }).catch(() => {})
+    }
+  }
   const { data: settingsRow } = await admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle()
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]

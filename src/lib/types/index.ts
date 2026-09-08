@@ -401,6 +401,20 @@ export interface ScheduleJob {
   productId?: string
   quantity?: number
   inventoryDeductedAt?: string
+  // Smart Automatic Scheduling System (smart_schedule_assignment_columns
+  // migration). latitude/longitude/locationSource are the point this job's
+  // technician assignment was actually computed against — resolved once at
+  // auto-assignment time (see src/lib/scheduling/smart-schedule.ts), not
+  // kept live-in-sync with the customer's own address afterward.
+  // routeSequence is this job's position in its technician's day (gapped,
+  // not dense — see that module's own comment on why); null on any job the
+  // automation hasn't placed (including every job that existed before this
+  // feature, or one an admin scheduled by hand) — the UI treats a null
+  // value as simply unordered rather than "first".
+  latitude?: number
+  longitude?: number
+  locationSource?: "customer_cached" | "customer_geocoded" | "install_geocoded" | "repair_via_customer" | "unavailable"
+  routeSequence?: number
 }
 
 // One row from public.schedule_job_filter_items — the filters (and

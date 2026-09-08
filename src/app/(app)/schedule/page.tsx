@@ -20,7 +20,7 @@ import { TranslatableText } from "@/components/shared/translatable-text"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
-import { getScheduleColumns, formatTechnicians, matchesTechnician } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers } from "@/components/schedule/schedule-columns"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -57,9 +57,30 @@ function ScheduleContent() {
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
 
   const scopedJobs = React.useMemo(() => {
-    if (technicianFilter === "all") return jobs
-    return jobs.filter((j) => matchesTechnician(j, technicianFilter))
+    const base = technicianFilter === "all" ? jobs : jobs.filter((j) => matchesTechnician(j, technicianFilter))
+    // Default display order only — column-header sorting (DataTable's own
+    // sorting state) still takes over the instant an admin clicks a column,
+    // exactly as before. Grouped by technician, then date, then
+    // route_sequence, so a technician's stops for one day land on
+    // consecutive rows with Stop 1/2/3 reading in order — the same grouping
+    // ScheduleAgenda applies for a single day, just extended across every
+    // date this flat, all-dates table shows at once. A job the automation
+    // hasn't placed (routeSequence null) simply falls back to whatever
+    // order it was already in within its technician+date group.
+    return [...base].sort((a, b) => {
+      if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
+      if (a.scheduledDate !== b.scheduledDate) return a.scheduledDate.localeCompare(b.scheduledDate)
+      if (a.routeSequence == null && b.routeSequence == null) return 0
+      if (a.routeSequence == null) return 1
+      if (b.routeSequence == null) return -1
+      return a.routeSequence - b.routeSequence
+    })
   }, [jobs, technicianFilter])
+
+  // Same computation ScheduleAgenda uses (see computeStopNumbers' own
+  // comment on why it's shared) — the List view and the Daily Report panel
+  // can never disagree about which stop number a job shows.
+  const stopNumberByJobId = React.useMemo(() => computeStopNumbers(scopedJobs), [scopedJobs])
 
   const selection = useSplitViewSelection(filteredRows, initialId)
   useDeepLinkNotFoundToast(initialId, isPending, jobs.some((j) => j.id === initialId))
@@ -69,8 +90,9 @@ function ScheduleContent() {
       getScheduleColumns({
         canDelete: isAdmin,
         onDelete: (job) => setDeleting(job),
+        stopNumberByJobId,
       }),
-    [isAdmin]
+    [isAdmin, stopNumberByJobId]
   )
 
   if (isPending) {

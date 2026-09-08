@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { type DispatchEntityType, MODULE_LABELS, escapeHtml, appBaseUrl, dashboardRecordUrl, sendEmail } from "@/lib/dispatch-notifications-server"
+import { autoAssignScheduleJob, fetchScheduleContext } from "@/lib/scheduling/smart-schedule"
 
 export const dynamic = "force-dynamic"
 
@@ -70,7 +71,29 @@ export async function POST(request: Request) {
     requestedTime: body?.requestedTime,
   })
 
+  // Smart Automatic Scheduling: only a genuine 'confirm' ever creates/links
+  // a schedule_jobs row at all (respond_to_dispatch_confirmation's own
+  // logic — a 'reschedule' response never reaches this). Fire-and-forget
+  // relative to the customer's own response: a failure here must never turn
+  // their successful confirm into an error response — autoAssignScheduleJob
+  // itself never throws, it just leaves the job unassigned with an honest
+  // 'unavailable' note when it can't resolve something, same as any other
+  // best-effort step in this route (the admin email above works the same
+  // way).
+  if (action === "confirm") {
+    await autoAssignAfterConfirm(row.out_entity_type as DispatchEntityType, row.out_entity_id as string, row.out_scheduled_date as string).catch(
+      () => {}
+    )
+  }
+
   return NextResponse.json({ ok: true, status: row.out_status })
+}
+
+async function autoAssignAfterConfirm(entityType: DispatchEntityType, entityId: string, scheduledDate: string): Promise<void> {
+  const admin = createAdminClient()
+  const ctx = await fetchScheduleContext(admin, entityType, entityId)
+  if (!ctx.scheduleJobId) return
+  await autoAssignScheduleJob(admin, { scheduleJobId: ctx.scheduleJobId, jobType: ctx.jobType, entityType, entityId, customerId: ctx.customerId, orderNo: ctx.orderNo, scheduledDate })
 }
 
 // "Support Email" + "Email Notifications" in Settings have existed since

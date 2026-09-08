@@ -71,6 +71,36 @@ export function matchesTechnician(job: Pick<ScheduleJob, "technician" | "technic
   return job.technician === technician || job.technician2 === technician
 }
 
+// Smart Automatic Scheduling System: turns each job's raw route_sequence
+// (deliberately gapped — e.g. 10, 20, -10, see smart-schedule.ts's own
+// comment on why — so a new stop never forces renumbering an existing one)
+// into a friendly "Stop 1, Stop 2, ..." position for display. Grouped by
+// (technician, scheduledDate) rather than technician alone, since a stop
+// position only ever means something within one technician's one day —
+// two different dates each start back at Stop 1. A job with no
+// route_sequence at all (nothing the automation has placed — including
+// every job that existed before this feature, or one entered by hand) is
+// left out of the numbering entirely rather than being shown as "Stop 1".
+// Shared by the Schedule page's List view and ScheduleAgenda (the Daily
+// Report panel) so the two can never disagree about which stop number a
+// given job shows — same single computation, not two.
+export function computeStopNumbers(jobs: Pick<ScheduleJob, "id" | "technician" | "scheduledDate" | "routeSequence">[]): Map<string, number> {
+  const groups = new Map<string, typeof jobs>()
+  for (const job of jobs) {
+    if (job.routeSequence == null) continue
+    const key = `${job.technician}::${job.scheduledDate}`
+    const group = groups.get(key)
+    if (group) group.push(job)
+    else groups.set(key, [job])
+  }
+  const result = new Map<string, number>()
+  for (const group of groups.values()) {
+    group.sort((a, b) => (a.routeSequence as number) - (b.routeSequence as number))
+    group.forEach((job, i) => result.set(job.id, i + 1))
+  }
+  return result
+}
+
 function JobTypeCell({ jobType }: { jobType: ScheduleJobType }) {
   const { t } = useTranslation("schedule")
   return <>{t(jobType)}</>
@@ -96,12 +126,30 @@ function DeleteCell({ job, onDelete }: { job: ScheduleJob; onDelete: (job: Sched
   )
 }
 
+function RouteStopCell({ job, stopNumberByJobId }: { job: ScheduleJob; stopNumberByJobId: Map<string, number> }) {
+  const { t } = useTranslation("schedule")
+  const n = stopNumberByJobId.get(job.id)
+  if (n == null) {
+    return job.locationSource === "unavailable" ? (
+      <span className="text-warning text-xs">{t("locationUnavailableShort")}</span>
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    )
+  }
+  return <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{t("routeStop", { n: String(n) })}</span>
+}
+
 export function getScheduleColumns({
   canDelete,
   onDelete,
+  stopNumberByJobId,
 }: {
   canDelete: boolean
   onDelete: (job: ScheduleJob) => void
+  // Optional: only the Schedule page's List view passes this (see
+  // computeStopNumbers above) — every other call site of getScheduleColumns
+  // simply doesn't get a Stop column, rather than showing one full of dashes.
+  stopNumberByJobId?: Map<string, number>
 }): ColumnDef<ScheduleJob, unknown>[] {
   return [
     {
@@ -119,6 +167,17 @@ export function getScheduleColumns({
       header: () => <ColumnHeader tKey="technician" ns="schedule" />,
       cell: ({ row }) => <TechnicianCell technician={row.original.technician} technician2={row.original.technician2} />,
     },
+    ...(stopNumberByJobId
+      ? [
+          {
+            id: "routeStop",
+            header: () => <ColumnHeader tKey="routeOrder" ns="schedule" />,
+            cell: ({ row }: { row: { original: ScheduleJob } }) => (
+              <RouteStopCell job={row.original} stopNumberByJobId={stopNumberByJobId} />
+            ),
+          } satisfies ColumnDef<ScheduleJob, unknown>,
+        ]
+      : []),
     {
       accessorKey: "orderNo",
       header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
