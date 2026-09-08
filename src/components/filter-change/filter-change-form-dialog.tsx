@@ -27,6 +27,7 @@ import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hook
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { dateFieldSchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
@@ -39,13 +40,13 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     orderNumber: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
     memberAccount: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
     filterType: z.string().min(1, t("requiredField", { field: tf("filter") })),
-    planDate: z.string().min(1, t("requiredField", { field: tf("planD") })),
+    planDate: dateFieldSchema(t, tf("planD")),
     contactNumber: z.string().optional(),
     address: z.string().optional(),
     sc: z.string().optional(),
     productNo: z.string().optional(),
-    preD: z.string().optional(),
-    accD: z.string().optional(),
+    preD: dateFieldSchema(t),
+    accD: dateFieldSchema(t),
     serviceman: z.string().optional(),
     note: z.string().optional(),
   })

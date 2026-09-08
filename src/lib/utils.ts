@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { addDays, addMonths, differenceInCalendarDays, format, parseISO } from "date-fns"
+import { addDays, addMonths, differenceInCalendarDays, format, isValid, parseISO } from "date-fns"
 import type { ContractStatus, MonitoringViewStatus, StockStatus } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
@@ -139,14 +139,36 @@ export function formatCurrency(value: number, currency = "PHP"): string {
   }).format(value)
 }
 
+// date-fns' own format() throws a RangeError ("Invalid time value") on an
+// Invalid Date rather than returning something — and a Date IS invalid for
+// plenty of realistic inputs, not just obviously-garbage text: a 1-digit
+// year typed into a native <input type="date"> before the rest of it is
+// filled in, a year with 5+ digits, an out-of-range month/day (parseISO
+// doesn't validate day-of-month against the actual month, e.g.
+// "2026-02-30"), or a day-picker artifact landing outside JS's own
+// representable date range. formatDate/formatDateTime are used at 85+
+// call sites across this app, several of them re-rendering live as
+// someone types into a date field — any one of those throwing crashes
+// whatever component called it instead of showing a validation message.
+// Guarding here, once, fixes all of them at once rather than requiring
+// every call site to remember to check first. Returns "—", the same
+// placeholder this app already shows for any other missing/unavailable
+// value (see e.g. every `|| "—"` column cell), so an unformattable date
+// degrades the same way a blank one already does instead of looking like
+// a different kind of broken.
+export function safeFormat(date: Date, pattern: string, options?: Parameters<typeof format>[2], fallback = "—"): string {
+  if (!isValid(date)) return fallback
+  return format(date, pattern, options)
+}
+
 export function formatDate(date: string | Date, pattern = "MMM d, yyyy"): string {
   const d = typeof date === "string" ? parseISO(date) : date
-  return format(d, pattern)
+  return safeFormat(d, pattern)
 }
 
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === "string" ? parseISO(date) : date
-  return format(d, "MMM d, yyyy h:mm a")
+  return safeFormat(d, "MMM d, yyyy h:mm a")
 }
 
 export function initials(name: string): string {

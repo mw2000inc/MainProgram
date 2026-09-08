@@ -5,6 +5,8 @@
   "linkInvalidDescription": "링크가 만료되었거나 이미 사용되었거나, 발송 이후 일정이 변경되었을 수 있습니다. 방문 확정이나 일정 변경이 여전히 필요하시면 저희에게 연락해 주세요.",
   "confirmedTitle": "감사합니다 — 방문이 확정되었습니다!",
   "rescheduleTitle": "확인했습니다 — 일정 변경을 위해 곧 연락드리겠습니다",
+  "rejectedTitle": "이 요청은 거부되었습니다",
+  "rejectedDescription": "이 요청을 진행할 수 없습니다. 다른 방식으로 조율하고 싶으시면 저희에게 연락해 주세요.",
   "confirmedDescription": "{date}의 {module} 방문이 확정되었습니다.",
   "rescheduleSubmittedDescription": "저희 팀에 전달했습니다 — {date}{time}을(를) 선호하신다고 하셨습니다. 검토 후 곧 확정해 드리겠습니다.",
   "rescheduleAtTime": " {time}",

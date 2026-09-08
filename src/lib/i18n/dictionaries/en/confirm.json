@@ -5,6 +5,8 @@
   "linkInvalidDescription": "It may have expired, already been used, or the schedule item may have changed since it was sent. Please contact us if you still need to confirm or reschedule a visit.",
   "confirmedTitle": "Thanks — your visit is confirmed!",
   "rescheduleTitle": "Got it — we'll be in touch to reschedule",
+  "rejectedTitle": "This request was declined",
+  "rejectedDescription": "We're unable to proceed with this request. Please contact us if you'd like to arrange it differently.",
   "confirmedDescription": "Your {module} visit on {date} is locked in.",
   "rescheduleSubmittedDescription": "We've let our team know — you'd prefer {date}{time}. They'll review it and confirm shortly.",
   "rescheduleAtTime": " at {time}",

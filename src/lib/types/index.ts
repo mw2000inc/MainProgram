@@ -348,7 +348,15 @@ export interface AnnouncementComment {
 }
 
 export type ScheduleJobType = "installation" | "filter_change" | "repair" | "collection" | "monitoring" | "other"
-export type ScheduleJobStatus = "pending" | "completed" | "cancelled"
+// 'pending_approval' added by the schedule_pending_approval_status
+// migration -- an admin's own manually-created job (ScheduleFormDialog)
+// only, never Smart Scheduling or the dispatch-confirm flow (both keep
+// inserting 'pending' directly, already an active/approved job). Not
+// technician-readable at all (schedule_jobs_select) until an admin
+// approves it, which is the same row transitioning to 'pending' -- 'pending'
+// itself keeps its existing meaning ("active, not yet completed")
+// unchanged.
+export type ScheduleJobStatus = "pending" | "pending_approval" | "completed" | "cancelled"
 
 export interface ScheduleJob {
   id: string
@@ -443,10 +451,27 @@ export interface ScheduleJobFilterItem {
 // still creates), or an admin explicitly approved it from 'Draft' (see
 // DispatchApprovalQueue) and the customer then confirmed via their
 // /confirm/[token] link.
-export type DispatchStatus = "Draft" | "Pending Customer Confirmation" | "Confirmed" | "Reschedule Requested"
+// 'Rejected' added by the dispatch_rejected_and_admin_reschedule migration
+// — an outright admin decline, distinct from 'Reschedule Requested' (which
+// still expects a different date to come back around). See that
+// migration's own comment for the full status-vocabulary mapping used by
+// the Schedule page's Pending Approvals tab.
+export type DispatchStatus = "Draft" | "Pending Customer Confirmation" | "Confirmed" | "Reschedule Requested" | "Rejected"
 
 export interface DispatchFields {
   dispatchStatus?: DispatchStatus
+  // Set by reject_dispatch_item() — mirrors stock_movements' own
+  // approvedBy/approvedAt/rejectedBy/rejectedAt naming (see StockMovement).
+  // Only ever present when dispatchStatus is 'Rejected'.
+  rejectedBy?: string
+  rejectedAt?: string
+  rejectionReason?: string
+  // Set by request_reschedule_by_admin() — the admin's own message when
+  // *they* ask for a different date, as opposed to requestedDate/
+  // requestedTime below (the customer's own proposed replacement). Only
+  // ever meaningful when dispatchStatus is 'Reschedule Requested'; a
+  // customer-initiated reschedule request leaves this unset.
+  rescheduleReason?: string
   // notifyContact was superseded by notifyPhone/notifyEmail below (see the
   // dispatch_dual_channel_notifications migration) — left in the type for
   // any pre-existing row approved before that migration ran, but no longer

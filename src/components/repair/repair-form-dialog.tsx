@@ -35,14 +35,14 @@ import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
-import { moneySchema } from "@/lib/form-schemas"
+import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { RepairPlan } from "@/lib/types"
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   return z.object({
-    issuedDate: z.string().min(1, t("requiredField", { field: tf("issuedDate") })),
+    issuedDate: dateFieldSchema(t, tf("issuedDate")),
     orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
     // Previously derived silently on submit from whichever customer's
     // orderNumber happened to match (only possible because Order No. used
@@ -53,8 +53,8 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     accountName: z.string().min(1, t("requiredField", { field: tf("accountName") })),
     problem: z.string().min(1, t("requiredField", { field: tf("problem") })),
     solutionStatus: z.string().optional(),
-    preD: z.string().optional(),
-    accD: z.string().optional(),
+    preD: dateFieldSchema(t),
+    accD: dateFieldSchema(t),
     th: z.string().min(1, t("selectField", { field: tf("serviceman") })),
     partNo: z.string().optional(),
     amt: moneySchema(t),

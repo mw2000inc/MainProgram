@@ -37,7 +37,7 @@ import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { newMemberDefaults } from "@/lib/customer-defaults"
-import { moneySchema } from "@/lib/form-schemas"
+import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
@@ -45,7 +45,7 @@ import type { InstallPlan } from "@/lib/types"
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   const money = moneySchema(t)
   return z.object({
-    inputDate: z.string().min(1, t("requiredField", { field: tf("inputDate") })),
+    inputDate: dateFieldSchema(t, tf("inputDate")),
     name: z.string().min(1, t("requiredField", { field: tf("name") })),
     address: z.string().optional(),
     contactNumber: z.string().optional(),
@@ -53,8 +53,8 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     unitPrice: money,
     cpPrice: money,
     deliveryInstallationFee: money,
-    preInstalledDate: z.string().optional(),
-    installedDate: z.string().optional(),
+    preInstalledDate: dateFieldSchema(t),
+    installedDate: dateFieldSchema(t),
     note: z.string().optional(),
     modelDp: z.string().optional(),
     orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),

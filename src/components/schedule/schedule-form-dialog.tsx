@@ -36,11 +36,16 @@ import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { isReasonableDateString } from "@/lib/form-schemas"
 import { tomorrowIso } from "@/lib/utils"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
-const STATUSES: ScheduleJobStatus[] = ["pending", "completed", "cancelled"]
+// pending_approval included so editing an already-pending-approval job shows
+// its real current status correctly in this dropdown (and an admin can
+// manually set it back if they want) — the dedicated "Approve Schedule"
+// button below is still the normal way to move it to 'pending'.
+const STATUSES: ScheduleJobStatus[] = ["pending_approval", "pending", "completed", "cancelled"]
 
 // Radix Select forbids an empty-string item value, so "none selected" needs
 // its own sentinel — mapped back to "" (unset) on submit. Shared by every
@@ -72,6 +77,11 @@ function createSchema(
     scheduledDate: z
       .string()
       .min(1, tCommon("requiredField", { field: t("date") }))
+      // Same sanity check as every other date field in the app (see
+      // form-schemas.ts's own comment) — catches a malformed/extreme year
+      // the date input's own `min` attribute never guards against (that
+      // only sets a *lower* bound), before it reaches the database.
+      .refine(isReasonableDateString, tCommon("invalidDate"))
       .refine((v) => v === originalDate || v >= tomorrowIso(), { message: t("scheduleAtLeastOneDayAhead") }),
     // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
     scheduledTime: z.string().optional(),
@@ -131,7 +141,13 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     // (opened from a future day) is left alone.
     scheduledDate: defaultDate < tomorrowIso() ? tomorrowIso() : defaultDate,
     scheduledTime: "",
-    status: "pending",
+    // Admin Schedule Approval workflow: a brand-new manually-created job
+    // starts out awaiting approval, not immediately active — see the
+    // schedule_pending_approval_status migration's own comment. Smart
+    // Scheduling and the dispatch-confirm flow don't go through this form
+    // at all (they insert 'pending' directly via find_or_create_schedule_job),
+    // so they're completely unaffected by this default.
+    status: "pending_approval",
     notes: "",
     productId: "",
     quantity: "",
@@ -195,6 +211,17 @@ export function ScheduleFormDialog({
       // carry a stale product/quantity along if the type gets switched away.
       productId: isFilterChange ? values.productId || undefined : undefined,
       quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
+      // A brand-new manually-created job must always start at
+      // 'pending_approval', never whatever the Status field happens to
+      // hold — that field is hidden for a new job (see the FormField
+      // below) specifically so there's nothing to pick here, but this is
+      // the belt-and-suspenders guarantee: even if a value somehow reached
+      // this payload for a create (a stale defaultValues call, devtools
+      // tampering with form state, etc.), the actual submitted status is
+      // still forced here rather than trusted from `values`. Editing an
+      // existing job is unaffected — values.status is whatever the (visible,
+      // for edits) dropdown has, unchanged.
+      status: isEdit ? values.status : "pending_approval",
     }
     if (isEdit) {
       await updateJob.mutateAsync({ id: job.id, input })
@@ -204,17 +231,58 @@ export function ScheduleFormDialog({
     onOpenChange(false)
   }
 
+  // Admin Schedule Approval workflow's explicit "Approve Schedule" action —
+  // saves whatever the admin just edited (date, technician, etc. — "review
+  // before approving" per the workflow) in the SAME update as moving
+  // status from 'pending_approval' to 'pending', one write, same row. Only
+  // ever wired up when editing an existing pending_approval job (see the
+  // button below); createJob is never reached from here. Admin-only in
+  // practice at the actual enforcement boundary — the update this sends
+  // still goes through the ordinary schedule_jobs_update RLS policy plus
+  // restrict_schedule_job_technician_update, which now rejects a non-admin
+  // touching a pending_approval row outright (see the
+  // schedule_pending_approval_rls_and_dedup migration) — not just a
+  // client-side check.
+  async function onApprove(values: FormValues) {
+    if (!isEdit) return
+    const input = {
+      ...values,
+      technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
+      technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
+      technician2UserId:
+        values.technician2UserId && values.technician2UserId !== NONE_SENTINEL ? values.technician2UserId : "",
+      productId: isFilterChange ? values.productId || undefined : undefined,
+      quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
+      status: "pending" as ScheduleJobStatus,
+    }
+    await updateJob.mutateAsync({ id: job.id, input })
+    onOpenChange(false)
+  }
+
   const pending = createJob.isPending || updateJob.isPending
+  const showApprove = isEdit && job?.status === "pending_approval"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
+      {/* Capped at 85vh (same convention customer-form-dialog.tsx already
+          uses for its own long form) and turned into a flex column so the
+          header and footer stay put while only the field list in between
+          scrolls — this form gets long enough (extra Filter Change fields,
+          a second technician's own fields) that the close button and
+          Cancel/Schedule buttons could otherwise end up pushed off-screen
+          with no way to reach them. */}
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} className="flex max-h-[85vh] flex-col">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("editJobTitle") : t("scheduleAJobTitle")}</DialogTitle>
           <DialogDescription>{isEdit ? t("editJobDescription") : t("addJobDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* id + the footer's submit button below referencing it by
+              `form=` is what lets the footer live outside this element
+              (so it isn't part of the scrolling area) while still
+              submitting normally. */}
+          <form id="schedule-job-form" onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-0.5 pr-1">
             <FormField
               control={form.control}
               name="jobType"
@@ -420,30 +488,40 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tFields("status")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("selectStatus")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {tStatus(s)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Hidden entirely for a new job — status is not a choice at
+                creation time, it's always 'pending_approval' (see onSubmit's
+                own hard-coded override, which holds regardless of whatever
+                this field would otherwise contain). Shown only when editing
+                an existing job, where changing it directly is still a
+                legitimate admin action distinct from the dedicated Approve
+                Schedule button below (e.g. cancelling a job, or manually
+                reverting an approval). */}
+            {isEdit && (
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("status")}</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={t("selectStatus")} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {tStatus(s)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             {isFilterChange && (
               <>
                 <FormField
@@ -498,16 +576,28 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                {tCommon("cancel")}
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("scheduleButton")}
-              </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {tCommon("cancel")}
+          </Button>
+          <Button type="submit" form="schedule-job-form" variant={showApprove ? "outline" : "default"} disabled={pending}>
+            {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("scheduleButton")}
+          </Button>
+          {/* Not type="submit" with form="schedule-job-form" — that would
+              trigger the ordinary onSubmit above via native form submission
+              instead of this one. form.handleSubmit(onApprove) runs the
+              same field validation, then calls onApprove with the
+              validated values on success, exactly the same way RHF's own
+              <form onSubmit> wiring does. */}
+          {showApprove && (
+            <Button type="button" onClick={form.handleSubmit(onApprove)} disabled={pending}>
+              {pending ? tCommon("saving") : t("approveSchedule")}
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

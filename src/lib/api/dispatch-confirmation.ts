@@ -167,3 +167,44 @@ export async function acceptRequestedReschedule(input: {
   if (!response.ok) throw new Error(data?.error ?? "Failed to accept this requested reschedule")
   return data
 }
+
+// Admin's outright decline on a Pending Approvals item — see
+// reject_dispatch_item() and /api/dispatch/reject/route.ts. Valid from
+// Draft, Pending Customer Confirmation, or Reschedule Requested; never from
+// an already-Confirmed or already-Rejected row (409, same "no longer
+// actionable" convention as approve/accept above).
+export async function rejectDispatchItem(input: {
+  entityType: DispatchEntityType
+  entityId: string
+  reason?: string
+}): Promise<{ email?: DispatchChannelResult } | null> {
+  const response = await fetch("/api/dispatch/reject", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entityType: input.entityType, entityId: input.entityId, reason: input.reason }),
+  })
+  if (response.status === 409) return null
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error ?? "Failed to reject this dispatch item")
+  return data
+}
+
+// Admin-initiated "actually, let's find a different date" — see
+// request_reschedule_by_admin() and /api/dispatch/request-reschedule/route.ts.
+// Only valid from Draft or Pending Customer Confirmation (not from an
+// already Reschedule Requested/Confirmed/Rejected row).
+export async function requestRescheduleByAdmin(input: {
+  entityType: DispatchEntityType
+  entityId: string
+  reason: string
+}): Promise<{ email?: DispatchChannelResult } | null> {
+  const response = await fetch("/api/dispatch/request-reschedule", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entityType: input.entityType, entityId: input.entityId, reason: input.reason }),
+  })
+  if (response.status === 409) return null
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error ?? "Failed to request a reschedule for this item")
+  return data
+}

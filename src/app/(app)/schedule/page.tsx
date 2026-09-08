@@ -17,10 +17,13 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
 import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers } from "@/components/schedule/schedule-columns"
+import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
+import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -51,13 +54,25 @@ function ScheduleContent() {
   const [filteredRows, setFilteredRows] = React.useState<ScheduleJob[]>(jobs)
   const [view, setView] = React.useState<"list" | "table">("list")
   const [tableDate, setTableDate] = React.useState(todayIso)
+  const [tab, setTab] = React.useState<"schedule" | "pending" | "pendingSchedule">("schedule")
+  const pendingApprovalsCount = usePendingApprovalsCount()
+  const pendingScheduleApprovalCount = usePendingScheduleApprovalCount()
   // "All Technicians" by default. A shared job (technician + technician2) shows
   // up for either name — filtering by "Eubert Montalbo" surfaces a job where
   // he's only the second technician, same as if he were primary.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
 
   const scopedJobs = React.useMemo(() => {
-    const base = technicianFilter === "all" ? jobs : jobs.filter((j) => matchesTechnician(j, technicianFilter))
+    // The main Schedule tab (List + Table View) shows only active/approved
+    // jobs — a manually-created job still awaiting admin approval
+    // ('pending_approval', see the Admin Schedule Approval workflow) lives
+    // in its own "Pending Schedule Approval" tab instead, the same way an
+    // unconfirmed dispatch item never reaches this list at all. Admin
+    // sessions CAN read pending_approval rows (RLS lets them; a technician
+    // can't), so without this filter they'd otherwise show up mixed into
+    // the active schedule here.
+    const active = jobs.filter((j) => j.status !== "pending_approval")
+    const base = technicianFilter === "all" ? active : active.filter((j) => matchesTechnician(j, technicianFilter))
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
     // exactly as before. Grouped by technician, then date, then
@@ -115,45 +130,67 @@ function ScheduleContent() {
           </h1>
           <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border p-0.5">
-            <Button
-              type="button"
-              size="sm"
-              variant={view === "list" ? "default" : "ghost"}
-              className="gap-1.5"
-              onClick={() => setView("list")}
-            >
-              <List className="h-3.5 w-3.5" /> {t("list")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={view === "table" ? "default" : "ghost"}
-              className="gap-1.5"
-              onClick={() => setView("table")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> {t("tableView")}
-            </Button>
-          </div>
-          {isAdmin && (
-            <Button
-              className="gap-1.5"
-              onClick={() => {
-                setEditing(undefined)
-                setFormOpen(true)
-              }}
-            >
-              <Plus className="h-4 w-4" /> {t("scheduleJob")}
-            </Button>
-          )}
-        </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "schedule" | "pending" | "pendingSchedule")}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger value="schedule">{t("scheduleTabLabel")}</TabsTrigger>
+            <TabsTrigger value="pendingSchedule">
+              {t("pendingScheduleApprovalTabLabel", { count: String(pendingScheduleApprovalCount) })}
+            </TabsTrigger>
+            <TabsTrigger value="pending">{t("pendingApprovalsTabLabel", { count: String(pendingApprovalsCount) })}</TabsTrigger>
+          </TabsList>
+          {tab === "schedule" && (
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-lg border p-0.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={view === "list" ? "default" : "ghost"}
+                  className="gap-1.5"
+                  onClick={() => setView("list")}
+                >
+                  <List className="h-3.5 w-3.5" /> {t("list")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={view === "table" ? "default" : "ghost"}
+                  className="gap-1.5"
+                  onClick={() => setView("table")}
+                >
+                  <Table2 className="h-3.5 w-3.5" /> {t("tableView")}
+                </Button>
+              </div>
+              {isAdmin && (
+                <Button
+                  className="gap-1.5"
+                  onClick={() => {
+                    setEditing(undefined)
+                    setFormOpen(true)
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> {t("scheduleJob")}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <TabsContent value="pendingSchedule" className="mt-4">
+          <PendingScheduleApprovalPanel />
+        </TabsContent>
+
+        <TabsContent value="pending" className="mt-4">
+          <PendingApprovalsPanel />
+        </TabsContent>
+
+        <TabsContent value="schedule" className="mt-4">
       {view === "table" ? (
-        <ScheduleTableView date={tableDate} onDateChange={setTableDate} />
-      ) : (
-        <SplitViewLayout
+          <ScheduleTableView date={tableDate} onDateChange={setTableDate} />
+        ) : (
+          <SplitViewLayout
           isOpen={selection.isOpen}
           expanded={selection.expanded}
           list={
@@ -242,6 +279,8 @@ function ScheduleContent() {
           }
         />
       )}
+        </TabsContent>
+      </Tabs>
 
       <ScheduleFormDialog
         open={formOpen}

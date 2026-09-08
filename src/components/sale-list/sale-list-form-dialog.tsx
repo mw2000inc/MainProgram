@@ -4,7 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { addMonths, format, parseISO } from "date-fns"
+import { addMonths, format, isValid, parseISO } from "date-fns"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ import { useProducts } from "@/lib/hooks/use-inventory"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { ctIntervalMonths } from "@/lib/ct-interval"
+import { dateFieldSchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { SaleListEntry, SaleListStatus } from "@/lib/types"
 
@@ -71,7 +72,7 @@ function createSchema(
 ) {
   return z.object({
     orderNumber: z.string().min(1, tCommon("requiredField", { field: tf("orderNumber") })),
-    installedDate: z.string().optional(),
+    installedDate: dateFieldSchema(tCommon),
     // "Account#" links to an existing Member rather than free text.
     customerId: z.string().min(1, t("selectMemberRequired")),
     productNo: z.string().optional(),
@@ -79,8 +80,8 @@ function createSchema(
     cf: z.string().optional(),
     ct: z.string().optional(),
     cpY1Y2: z.string().optional(),
-    cpStart: z.string().optional(),
-    cpEnd: z.string().optional(),
+    cpStart: dateFieldSchema(tCommon),
+    cpEnd: dateFieldSchema(tCommon),
     note: z.string().optional(),
     status: z.enum(["ACTIVE", "INACTIVE", "RENT", "DIY"]),
     // Optional link to a real CP System (see cp-systems) — separate from the
@@ -130,8 +131,15 @@ function defaultValues(entry?: SaleListEntry, defaultCustomerId?: string): FormV
 // Uses the centralized C/T-to-months mapping (see ct-interval.ts) — also
 // used by the Collection Plan's recurring collection schedule, so the two
 // features can never compute a different interval for the same C/T value.
+// Runs on every keystroke into the CP Start date field (see the effect
+// below), so cpStartStr can be a still-incomplete or otherwise invalid
+// value while someone is mid-typing/picking — format() throws on that
+// (Invalid Date) rather than returning something, so this bails out to ""
+// (leaving CP End untouched/blank) instead of crashing the whole dialog
+// over a date that isn't finished yet.
 function calculateCpEnd(cpStartStr: string, ct: string | undefined): string {
   const start = parseISO(cpStartStr)
+  if (!isValid(start)) return ""
   return format(addMonths(start, ctIntervalMonths(ct)), "yyyy-MM-dd")
 }
 

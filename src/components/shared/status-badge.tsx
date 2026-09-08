@@ -92,6 +92,12 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
 // translation, since this field is free text in the DB, not a real enum.
 const PLAN_STATUS_KEYS: Record<string, string> = {
   pending: "pending",
+  // Admin Schedule Approval workflow — a manually-created schedule_jobs row
+  // awaiting admin approval (see the schedule_pending_approval_status
+  // migration). Falls into this same shared badge/label helper since it's
+  // still just schedule_jobs.status, free text as far as this component is
+  // concerned.
+  pending_approval: "pendingApproval",
   completed: "completed",
   done: "completed",
   active: "active",

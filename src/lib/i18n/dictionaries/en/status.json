@@ -8,6 +8,7 @@
   "outOfStock": "Out of Stock",
   "paid": "Paid",
   "pending": "Pending",
+  "pendingApproval": "Pending Approval",
   "overdue": "Overdue",
   "partial": "Partial",
   "completed": "Completed",

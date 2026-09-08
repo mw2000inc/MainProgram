@@ -155,8 +155,11 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
 // See rawDispatchStatusBadge below for how Draft/Pending are visually
 // called out once they're on the list, so the day view can't be
 // mistaken for "everything here is locked in."
+// 'Rejected' (Admin Schedule Approval workflow) excluded for the same
+// reason 'Reschedule Requested' already is — the shown date no longer
+// applies at all, so it doesn't belong on that day's active list either.
 function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
-  return status !== "Reschedule Requested"
+  return status !== "Reschedule Requested" && status !== "Rejected"
 }
 
 // Renders nothing for a 'Confirmed' (or legacy-undefined) row — those are

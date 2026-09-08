@@ -103,3 +103,50 @@ export function useAcceptRequestedReschedule() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to accept this requested reschedule"),
   })
 }
+
+// Same cache-invalidation shape as the other two mutations above — the
+// Pending Approvals tab and its count need the just-rejected item gone
+// immediately.
+export function useRejectDispatchItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.rejectDispatchItem,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: installPlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: dispatchNotificationsKey })
+      if (!result) {
+        toast.error("This item can no longer be rejected.")
+        return
+      }
+      const summary = summarizeChannel("Email", result.email)
+      if (result.email?.status === "failed") toast.error(summary ?? "Rejected")
+      else toast.success(summary ?? "Rejected")
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to reject this dispatch item"),
+  })
+}
+
+export function useRequestRescheduleByAdmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.requestRescheduleByAdmin,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: installPlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: dispatchNotificationsKey })
+      if (!result) {
+        toast.error("This item is no longer awaiting initial approval.")
+        return
+      }
+      const summary = summarizeChannel("Email", result.email)
+      if (result.email?.status === "failed") toast.error(summary ?? "Reschedule requested")
+      else toast.success(summary ?? "Reschedule requested")
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request a reschedule for this item"),
+  })
+}

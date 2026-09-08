@@ -120,7 +120,10 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   // the automation has placed a job, rather than whatever order the jobs
   // happen to come back in.
   const dayJobs = React.useMemo(() => {
-    const filtered = jobs.filter((j) => j.scheduledDate === date)
+    // Same pending_approval exclusion as ScheduleAgenda's own todaysJobs —
+    // this printable sheet represents the active technician schedule, not
+    // a manually-created job an admin hasn't approved yet.
+    const filtered = jobs.filter((j) => j.scheduledDate === date && j.status !== "pending_approval")
     return [...filtered].sort((a, b) => {
       if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
       if (a.routeSequence == null && b.routeSequence == null) return 0

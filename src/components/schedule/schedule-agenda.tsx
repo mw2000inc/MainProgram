@@ -206,7 +206,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // order; the ScheduleFormDialog admins already use to reassign anything
   // is completely unaffected.
   const todaysJobs = React.useMemo(() => {
-    const filtered = jobs.filter((j) => j.scheduledDate === date)
+    // Excludes a manually-created job still awaiting admin approval
+    // ('pending_approval', see the Admin Schedule Approval workflow) — this
+    // agenda represents the active technician schedule, and RLS already
+    // keeps a technician from ever fetching such a row at all; an admin's
+    // own session can read it (is_admin() bypasses that), so it still needs
+    // filtering out here or it would show up mixed into "today's schedule"
+    // for the admin viewing their own Daily Report.
+    const filtered = jobs.filter((j) => j.scheduledDate === date && j.status !== "pending_approval")
     return [...filtered].sort((a, b) => {
       if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
       if (a.routeSequence == null && b.routeSequence == null) return 0

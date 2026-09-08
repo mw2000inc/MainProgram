@@ -26,6 +26,7 @@ const STATUS_TONE: Record<DispatchStatus, BadgeTone> = {
   "Pending Customer Confirmation": "warning",
   Confirmed: "success",
   "Reschedule Requested": "danger",
+  Rejected: "danger",
 }
 
 const STATUS_KEYS: Record<DispatchStatus, string> = {
@@ -33,6 +34,7 @@ const STATUS_KEYS: Record<DispatchStatus, string> = {
   "Pending Customer Confirmation": "pendingCustomerConfirmation",
   Confirmed: "confirmed",
   "Reschedule Requested": "rescheduleRequested",
+  Rejected: "rejected",
 }
 
 // Public, no-login page a customer lands on from their email
@@ -108,6 +110,25 @@ export function DispatchConfirmationView({ token }: { token: string }) {
     const effectiveStatus = respondedTo ?? details.status
     const moduleKey = MODULE_KEYS[details.entityType]
     const moduleLabel = moduleKey ? tDispatch(moduleKey) : details.entityType
+
+    // A stale link on an item the admin has since rejected outright — the
+    // confirmation_token itself isn't cleared by reject_dispatch_item()
+    // (nothing to invalidate defensively against, since
+    // respond_to_dispatch_confirmation's own WHERE clause already only
+    // ever matches 'Pending Customer Confirmation'), so this has to be an
+    // explicit read-only branch rather than falling through to the
+    // actionable Confirm/Reschedule buttons below.
+    if (effectiveStatus === "Rejected") {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <XCircle className="h-8 w-8 text-danger" />
+            <p className="text-lg font-medium">{t("rejectedTitle")}</p>
+            <p className="text-sm text-muted-foreground max-w-sm">{t("rejectedDescription")}</p>
+          </CardContent>
+        </Card>
+      )
+    }
 
     if (effectiveStatus === "Confirmed" || effectiveStatus === "Reschedule Requested") {
       const isConfirmed = effectiveStatus === "Confirmed"

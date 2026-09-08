@@ -1,0 +1,23 @@
+-- Admin Schedule Approval workflow, part 1 of 2 -- deliberately split into
+-- two migration files, not one, for a real Postgres constraint: a new enum
+-- value cannot be referenced (in a policy, function, or anywhere else)
+-- until the transaction that added it has committed ("unsafe use of new
+-- value of enum type ... New enum values must be committed before they can
+-- be used"). Since this file and the next one are applied as two separate
+-- statements/transactions in the Supabase SQL Editor (same one-at-a-time
+-- workflow every migration this session has used), this file must be run
+-- and committed BEFORE 20260908070000. Running them out of order or pasted
+-- together in one SQL Editor execution will fail with exactly that error.
+--
+-- 'pending' already means "an active, approved job the technician hasn't
+-- finished yet" -- both a manually-created job and a Smart-Scheduling/
+-- dispatch-confirm-created job land there today, and that meaning is NOT
+-- changing. 'pending_approval' is new: "a manually-created job an admin
+-- hasn't approved yet -- not active, not technician-visible." Only the
+-- admin's own manual "Schedule Job" creation (ScheduleFormDialog) will ever
+-- insert this value; Smart Scheduling and the dispatch-confirm flow
+-- (find_or_create_schedule_job) keep inserting 'pending' directly,
+-- completely unaffected -- see the next migration's own comment on why
+-- their duplicate-detection lookup still needs a small update even though
+-- their own insert doesn't.
+alter type public.schedule_job_status add value if not exists 'pending_approval';

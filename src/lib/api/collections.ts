@@ -27,6 +27,10 @@ type Row = {
   requested_time: string | null
   customer_notified_at: string | null
   customer_responded_at: string | null
+  rejected_by: string | null
+  rejected_at: string | null
+  rejection_reason: string | null
+  reschedule_reason: string | null
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -56,6 +60,10 @@ function fromRow(row: Row): CollectionPlan {
     requestedTime: row.requested_time ?? undefined,
     customerNotifiedAt: row.customer_notified_at ?? undefined,
     customerRespondedAt: row.customer_responded_at ?? undefined,
+    rejectedBy: row.rejected_by ?? undefined,
+    rejectedAt: row.rejected_at ?? undefined,
+    rejectionReason: row.rejection_reason ?? undefined,
+    rescheduleReason: row.reschedule_reason ?? undefined,
   }
 }
 

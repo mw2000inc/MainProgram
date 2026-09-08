@@ -35,7 +35,7 @@ import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collec
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
-import { moneySchema } from "@/lib/form-schemas"
+import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { CollectionPlan } from "@/lib/types"
@@ -54,10 +54,10 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     accountName: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
     amount: moneySchema(t, tf("amount")),
     ct: z.string().optional(),
-    collectionDate: z.string().min(1, t("requiredField", { field: tf("planD") })),
+    collectionDate: dateFieldSchema(t, tf("planD")),
     status: z.string().min(1),
-    preD: z.string().optional(),
-    accD: z.string().optional(),
+    preD: dateFieldSchema(t),
+    accD: dateFieldSchema(t),
     note: z.string().optional(),
   })
 }

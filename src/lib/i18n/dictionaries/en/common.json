@@ -34,6 +34,7 @@
   "saving": "Saving...",
   "optionalNotes": "Optional notes...",
   "mustBeZeroOrMore": "Must be zero or more",
+  "invalidDate": "Enter a valid date",
   "selectField": "Select {field}",
   "optional": "Optional",
   "edit": "Edit",
