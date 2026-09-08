@@ -36,6 +36,7 @@ import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { tomorrowIso } from "@/lib/utils"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
@@ -47,7 +48,20 @@ const STATUSES: ScheduleJobStatus[] = ["pending", "completed", "cancelled"]
 // account).
 const NONE_SENTINEL = "__none__"
 
-function createSchema(t: (key: string) => string, tCommon: (key: string, params?: Record<string, string>) => string) {
+// Technician jobs must be scheduled at least 1 day in advance — enforced
+// here (not just the date input's `min` attribute) so a value can't reach
+// the server via a manually-typed/pasted date the browser's own picker
+// constraint doesn't stop. `originalDate` is the job's own scheduledDate
+// when editing — left unchanged, an already-existing job's date is never
+// forced through this check just because it happens to be today or in the
+// past (e.g. editing a same-day job's remarks/status shouldn't suddenly
+// fail validation over a field nobody touched); only an actual *move* to a
+// new date has to land on tomorrow or later, same as a brand-new job.
+function createSchema(
+  t: (key: string) => string,
+  tCommon: (key: string, params?: Record<string, string>) => string,
+  originalDate?: string
+) {
   return z.object({
     jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, t("selectJobType")),
     technician: z.string().min(1, t("selectTechnician")),
@@ -55,7 +69,10 @@ function createSchema(t: (key: string) => string, tCommon: (key: string, params?
     // only for jobs that genuinely need two people (e.g. pull-out + install).
     technician2: z.string().optional(),
     orderNo: z.string().optional(),
-    scheduledDate: z.string().min(1, tCommon("requiredField", { field: t("date") })),
+    scheduledDate: z
+      .string()
+      .min(1, tCommon("requiredField", { field: t("date") }))
+      .refine((v) => v === originalDate || v >= tomorrowIso(), { message: t("scheduleAtLeastOneDayAhead") }),
     // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
     scheduledTime: z.string().optional(),
     status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, t("selectStatus")),
@@ -88,6 +105,9 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
       technician: job.technician,
       technician2: job.technician2 ?? NONE_SENTINEL,
       orderNo: job.orderNo ?? "",
+      // Editing keeps the job's own existing date exactly as-is — even one
+      // already today/in the past — the 1-day-advance rule only stops a
+      // *new* date from landing there (see createSchema's own comment).
       scheduledDate: job.scheduledDate,
       scheduledTime: job.scheduledTime ?? "",
       status: job.status,
@@ -104,7 +124,12 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     technician: "",
     technician2: NONE_SENTINEL,
     orderNo: "",
-    scheduledDate: defaultDate,
+    // A brand-new job must land on tomorrow or later regardless of which
+    // day's agenda this dialog was opened from — e.g. clicking "Schedule
+    // Job" from *today's* Daily Report shouldn't default to a date the form
+    // itself is about to reject. Any defaultDate already tomorrow or beyond
+    // (opened from a future day) is left alone.
+    scheduledDate: defaultDate < tomorrowIso() ? tomorrowIso() : defaultDate,
     scheduledTime: "",
     status: "pending",
     notes: "",
@@ -138,7 +163,7 @@ export function ScheduleFormDialog({
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
-  const schema = React.useMemo(() => createSchema(t, tCommon), [t, tCommon])
+  const schema = React.useMemo(() => createSchema(t, tCommon, job?.scheduledDate), [t, tCommon, job?.scheduledDate])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, job),
@@ -346,10 +371,17 @@ export function ScheduleFormDialog({
               name="scheduledDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("date")}</FormLabel>
+                  <FormLabel>{t("scheduledDateLabel")}</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    {/* min only applies going forward for a NEW job — editing
+                        an existing job whose date is already today/in the
+                        past isn't blocked from opening this input just
+                        because of that pre-existing value (see createSchema's
+                        own comment on why the validation itself mirrors this
+                        same "unchanged is fine" allowance). */}
+                    <Input type="date" min={isEdit ? undefined : tomorrowIso()} {...field} />
                   </FormControl>
+                  <p className="text-xs text-muted-foreground">{t("scheduleAtLeastOneDayAheadHelp")}</p>
                   {hasSecondTechnician && (
                     <p className="text-xs text-muted-foreground">
                       {t("bothScheduledNote", {

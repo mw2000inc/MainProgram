@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns"
+import { addDays, addMonths, differenceInCalendarDays, format, parseISO } from "date-fns"
 import type { ContractStatus, MonitoringViewStatus, StockStatus } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
@@ -32,6 +32,17 @@ export function daysUntil(date: string, today: Date = new Date()): number {
 // it, not UTC's version of today.
 export function todayIso(): string {
   return format(new Date(), "yyyy-MM-dd")
+}
+
+// Same local-timezone reasoning as todayIso above, one day forward — the
+// earliest a technician job may be scheduled for under the "at least 1 day
+// in advance" scheduling rule (see ScheduleFormDialog). Not `new
+// Date(Date.now() + 86400000)`: that's a fixed 24h offset, which is exactly
+// today's timestamp plus a day, not "tomorrow" as a calendar date near a
+// DST transition — addDays(new Date(), 1) advances the calendar day
+// correctly instead.
+export function tomorrowIso(): string {
+  return format(addDays(new Date(), 1), "yyyy-MM-dd")
 }
 
 // Rolls a date forward in 3-month increments so it always reflects the next quarterly checkpoint.
