@@ -19,8 +19,11 @@ import {
   getCpSystemColumns,
   getCpSystemNarrowColumn,
   getCpSystemDetailColumns,
+  formatCpSystemComponents,
+  CP_SYSTEM_EXPORT_COLUMNS,
   type CpSystemComponentRow,
 } from "@/components/cp-systems/cp-system-columns"
+import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { useCpSystems, useDeleteCpSystem, useUpdateCpSystem } from "@/lib/hooks/use-cp-systems"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
@@ -128,6 +131,16 @@ function CpSystemContent() {
 
   const saleListSummaryColumns = React.useMemo(() => getSaleListSummaryColumns(), [])
 
+  // Same {...row, someField: "readable text"} shape every other page's own
+  // export rows use (see e.g. ScheduleAgenda's exportRows) — the raw
+  // components array on each CpSystem isn't something PanelExportMenu can
+  // render on its own, so it's turned into the same comma-joined summary
+  // the table's own components column already shows.
+  const exportRows = React.useMemo(
+    () => systems.map((s) => ({ ...s, componentsSummary: formatCpSystemComponents(s.components) })),
+    [systems]
+  )
+
   if (isPending) {
     return (
       <div className="space-y-4">
@@ -154,17 +167,20 @@ function CpSystemContent() {
           </h1>
           <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>
-        {isAdmin && (
-          <Button
-            className="gap-1.5"
-            onClick={() => {
-              setEditing(undefined)
-              setFormOpen(true)
-            }}
-          >
-            <Plus className="h-4 w-4" /> {tCommon("add")}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <PanelExportMenu columns={CP_SYSTEM_EXPORT_COLUMNS} rows={exportRows} fileName="cp-system" />
+          {isAdmin && (
+            <Button
+              className="gap-1.5"
+              onClick={() => {
+                setEditing(undefined)
+                setFormOpen(true)
+              }}
+            >
+              <Plus className="h-4 w-4" /> {tCommon("add")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {selected ? (

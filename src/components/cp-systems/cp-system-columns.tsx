@@ -13,6 +13,21 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 // across renders.
 export type CpSystemComponentRow = CpSystemComponent & { id: string; status?: string }
 
+// Same "name - Xm" comma-joined summary the table's own components cell
+// renders (see getCpSystemColumns below) — pulled out here so the CSV/Excel
+// export can show the same readable text instead of a raw components array,
+// without duplicating the formatting rule in two places.
+export function formatCpSystemComponents(components: CpSystemComponent[]): string {
+  return components
+    .map((c) => `${c.name}${c.quantity && c.quantity !== 1 ? ` x${c.quantity}` : ""} - ${c.intervalMonths}M`)
+    .join(", ")
+}
+
+export const CP_SYSTEM_EXPORT_COLUMNS = [
+  { header: "System Code", key: "systemCode" },
+  { header: "Components", key: "componentsSummary" },
+]
+
 function RowActionsCell({
   canEdit,
   canDelete,
@@ -86,11 +101,7 @@ export function getCpSystemColumns({
       // field, which has no quantity at all) — keeps the common case exactly
       // as compact as before this field existed.
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {row.original.components
-            .map((c) => `${c.name}${c.quantity && c.quantity !== 1 ? ` x${c.quantity}` : ""} - ${c.intervalMonths}M`)
-            .join(", ")}
-        </span>
+        <span className="text-sm text-muted-foreground">{formatCpSystemComponents(row.original.components)}</span>
       ),
     },
   ]

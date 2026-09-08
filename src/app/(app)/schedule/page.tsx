@@ -21,7 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
-import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers } from "@/components/schedule/schedule-columns"
+import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers, JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS } from "@/components/schedule/schedule-columns"
+import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
@@ -100,6 +101,23 @@ function ScheduleContent() {
   const selection = useSplitViewSelection(filteredRows, initialId)
   useDeepLinkNotFoundToast(initialId, isPending, jobs.some((j) => j.id === initialId))
 
+  // Same {header,key} shape every other panel's export uses — swap in the
+  // human job-type label and combined technician names here (same
+  // transform ScheduleAgenda's own exportRows already applies) rather than
+  // the raw "filter_change"-style enum value or a lone primary technician.
+  // Reads filteredRows (the search box's own current result), so the
+  // export matches whatever's actually on screen, same as scopedPlans on
+  // the other list pages.
+  const exportRows = React.useMemo(
+    () =>
+      filteredRows.map((j) => ({
+        ...j,
+        jobType: JOB_TYPE_LABELS[j.jobType],
+        technician: formatTechnicians(j.technician, j.technician2),
+      })),
+    [filteredRows]
+  )
+
   const columns = React.useMemo(
     () =>
       getScheduleColumns({
@@ -163,6 +181,11 @@ function ScheduleContent() {
                   <Table2 className="h-3.5 w-3.5" /> {t("tableView")}
                 </Button>
               </div>
+              {/* List view only — Table View already has its own Print
+                  button for its differently-shaped, resolved-against-
+                  customer/filter-change data (see ScheduleTableView), so a
+                  second export here would just be confusing/redundant. */}
+              {view === "list" && <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />}
               {isAdmin && (
                 <Button
                   className="gap-1.5"

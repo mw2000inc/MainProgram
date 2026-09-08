@@ -23,6 +23,8 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { getStockMovementsColumns, type StockMovementRow } from "@/components/inventory/stock-movements-columns"
+import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
+import { INVENTORY_LIST_EXPORT_COLUMNS } from "@/components/inventory/inventory-list-columns"
 import {
   useApproveStockMovement,
   useRejectStockMovement,
@@ -283,11 +285,20 @@ function InAndOutSummaryContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <ArrowLeftRight className="h-6 w-6 text-primary" /> {t("inAndOutSummary")}
-        </h1>
-        <p className="text-sm text-muted-foreground">{t("inAndOutDescription")}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            <ArrowLeftRight className="h-6 w-6 text-primary" /> {t("inAndOutSummary")}
+          </h1>
+          <p className="text-sm text-muted-foreground">{t("inAndOutDescription")}</p>
+        </div>
+        {/* Exports every movement currently loaded (rows), same "whole
+            dataset" scope every other page's own export uses — this page has
+            no single flat table of its own to read a "currently filtered"
+            subset from (it's a date-bucket drilldown, not a list view). Same
+            row shape (StockMovementRow) and same column set the Daily
+            Report's own Inventory Movements panel already exports with. */}
+        <PanelExportMenu columns={INVENTORY_LIST_EXPORT_COLUMNS} rows={rows} fileName="stock-movements" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
