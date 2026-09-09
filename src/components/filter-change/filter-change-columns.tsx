@@ -31,9 +31,11 @@ export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"
 // 'ct_completion' rows were auto-created/updated by a completed job
 // recording its required filters (see the
 // ct_filter_change_collection_inventory_link migration); 'recurring_schedule'
-// rows were auto-generated every 3 months from the sale list entry's Plan D
-// (see the filter_change_recurring_schedule migration) — 'manual' (the
-// default) is anything typed in directly on this page, same as always.
+// rows were auto-generated from the sale list entry's Plan D — every 3
+// months by default, or on the linked CP System's own shortest component
+// interval once one is set (see the filter_change_recurring_schedule and
+// filter_change_cp_system_interval migrations) — 'manual' (the default) is
+// anything typed in directly on this page, same as always.
 function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
   const { t } = useTranslation("fields")
   if (source === "ct_completion") return <StatusBadge tone="secondary" label={t("autoCT")} />
