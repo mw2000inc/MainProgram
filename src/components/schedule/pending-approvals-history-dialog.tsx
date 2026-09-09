@@ -87,7 +87,7 @@ export function PendingApprovalsHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center justify-between gap-3 pr-6">
               <span>{t("approvalsHistoryTitle")}</span>
@@ -96,8 +96,13 @@ export function PendingApprovalsHistoryDialog({
             <DialogDescription>{t("approvalsHistoryDescription")}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5">
-            <div className="space-y-2">
+          {/* Side by side on a wide dialog (this is now sm:max-w-3xl, wide
+              enough to give each column real room) — stacks back to one
+              column on narrow screens. Both lists are otherwise completely
+              independent (different data sources, different empty states),
+              so a grid is a purely visual pairing, not a shared layout. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="space-y-2 min-w-0">
               <h3 className="text-sm font-medium">{t("approvedSectionTitle", { count: String(approvalEvents.length) })}</h3>
               {approvalsPending ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">{tCommon("loading")}</p>
@@ -124,7 +129,7 @@ export function PendingApprovalsHistoryDialog({
               )}
             </div>
 
-            <div className="space-y-2 border-t pt-4">
+            <div className="space-y-2 min-w-0 sm:border-l sm:pl-5 border-t sm:border-t-0 pt-4 sm:pt-0">
               <h3 className="text-sm font-medium">{t("editedSectionTitle", { count: String(editEntries.length) })}</h3>
               {editsPending ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">{tCommon("loading")}</p>
@@ -140,10 +145,10 @@ export function PendingApprovalsHistoryDialog({
                       onClick={() => setViewingEntry(entry)}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{entry.userName}</span>
-                        <span className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
+                        <span className="font-medium truncate">{entry.userName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{formatDateTime(entry.createdAt)}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
                         {actionLabel(entry.action, tActivity)} {entityTypeLabel(entry.entityType, tActivity)}
                         {entry.description ? ` — ${entry.description}` : ""}
                       </p>

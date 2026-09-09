@@ -44,8 +44,9 @@ export function actionLabel(action: ActivityLogEntry["action"], t: Translator): 
 }
 
 // A human-readable field name for a raw column key, shown in the entry
-// detail view's before/after diff — falls back to the raw key (still
-// readable enough) for anything not worth a friendlier label.
+// detail view's before/after diff — falls back to prettifySnakeCase() (see
+// below), not the literal raw key, for anything not worth a dedicated
+// translated label.
 const FIELD_KEYS: Record<string, string> = {
   scheduled_date: "fieldScheduledDate",
   scheduled_time: "fieldScheduledTime",
@@ -56,6 +57,7 @@ const FIELD_KEYS: Record<string, string> = {
   technician_2_user_id: "fieldTechnician2Account",
   full_name: "fieldFullName",
   company_name: "fieldAccountName",
+  account_name: "fieldAccountName",
   contact_number: "fieldContactNumber",
   contract_start: "fieldContractStart",
   contract_end: "fieldContractEnd",
@@ -73,9 +75,77 @@ const FIELD_KEYS: Record<string, string> = {
   label: "fieldLabel",
   enabled: "fieldEnabled",
   display_order: "fieldDisplayOrder",
+  // Dispatch-workflow tables (filter_change_plans/install_plans/
+  // collections/repair_plans) — every real column across all four, so an
+  // edit to any of them shows a proper label instead of the raw snake_case
+  // key (see the Admin Approval History dialog, the main reason these were
+  // added).
+  id: "fieldRecordId",
+  member_account: "fieldMemberAccount",
+  filter_type: "fieldFilterType",
+  plan_date: "fieldPlanDate",
+  s_c: "fieldSC",
+  product_no: "fieldProductNo",
+  pre_d: "fieldPreD",
+  acc_d: "fieldAccD",
+  serviceman: "fieldServiceman",
+  th: "fieldTechnician",
+  created_at: "fieldCreatedAt",
+  updated_at: "fieldUpdatedAt",
+  created_by: "fieldCreatedBy",
+  updated_by: "fieldUpdatedBy",
+  customer_id: "fieldCustomer",
+  schedule_job_id: "fieldScheduleJob",
+  source: "fieldSource",
+  sale_list_entry_id: "fieldSaleListEntry",
+  occurrence_index: "fieldOccurrenceIndex",
+  dispatch_status: "fieldDispatchStatus",
+  notify_contact: "fieldNotifyContact",
+  notify_phone: "fieldNotifyPhone",
+  notify_email: "fieldNotifyEmail",
+  requested_date: "fieldRequestedDate",
+  requested_time: "fieldRequestedTime",
+  customer_notified_at: "fieldCustomerNotifiedAt",
+  customer_responded_at: "fieldCustomerRespondedAt",
+  rejected_by: "fieldRejectedBy",
+  rejected_at: "fieldRejectedAt",
+  rejection_reason: "fieldRejectionReason",
+  reschedule_reason: "fieldRescheduleReason",
+  input_date: "fieldInputDate",
+  model: "fieldModel",
+  model_dp: "fieldModelDp",
+  unit_price: "fieldUnitPrice",
+  cp_price: "fieldCpPrice",
+  delivery_installation_fee: "fieldDeliveryInstallationFee",
+  pre_installed_date: "fieldPreInstalledDate",
+  installed_date: "fieldInstalledDate",
+  in_out: "fieldInOut",
+  collection_date: "fieldCollectionDate",
+  c_t: "fieldCT",
+  filter_change_required: "fieldFilterChangeRequired",
+  issued_date: "fieldIssuedDate",
+  problem: "fieldProblem",
+  solution_status: "fieldSolutionStatus",
+  part_no: "fieldPartNo",
+  amt: "fieldAmount",
+  unit_in_out: "fieldUnitInOut",
+}
+
+// Turns an unmapped snake_case column name into a readable fallback —
+// "some_new_column" -> "Some New Column" — rather than showing the literal
+// raw key. Every column this app's audit trigger can realistically log
+// should really have a real entry in FIELD_KEYS above; this only ever
+// matters for a genuinely new column added later that hasn't been given
+// one yet.
+function prettifySnakeCase(key: string): string {
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
 
 export function fieldLabel(key: string, t: Translator): string {
   const tKey = FIELD_KEYS[key]
-  return tKey ? t(tKey) : key
+  return tKey ? t(tKey) : prettifySnakeCase(key)
 }
