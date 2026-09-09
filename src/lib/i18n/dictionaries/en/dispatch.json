@@ -92,5 +92,8 @@
   "approvalSummaryTitle": "Approval Summary",
   "totalPendingApprovals": "Total Pending Approvals",
   "allStatuses": "All Status",
-  "approveAndSendConfirmation": "Approve & Send Confirmation"
+  "approveAndSendConfirmation": "Approve & Send Confirmation",
+  "pendingApprovalsButton": "Daily Report Approvals",
+  "pendingApprovalsDialogTitle": "Daily Report Approvals",
+  "pendingApprovalsDialogDescription": "Collection, Repair, Installation, and Filter Change requests waiting for admin approval."
 }

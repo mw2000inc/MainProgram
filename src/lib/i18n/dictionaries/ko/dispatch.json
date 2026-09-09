@@ -92,5 +92,8 @@
   "approvalSummaryTitle": "승인 요약",
   "totalPendingApprovals": "총 승인 대기",
   "allStatuses": "전체 상태",
-  "approveAndSendConfirmation": "승인 및 확인 요청 발송"
+  "approveAndSendConfirmation": "승인 및 확인 요청 발송",
+  "pendingApprovalsButton": "일일 보고서 승인",
+  "pendingApprovalsDialogTitle": "일일 보고서 승인",
+  "pendingApprovalsDialogDescription": "관리자 승인을 기다리는 수거, 수리, 설치, 필터 교체 요청입니다."
 }

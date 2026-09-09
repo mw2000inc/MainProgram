@@ -4,6 +4,7 @@ import * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -396,6 +397,36 @@ export function PendingApprovalsPanel() {
 
       <ApprovalDetailDialog key={reviewing?.entityId ?? "none"} row={reviewing} onOpenChange={(open) => !open && setReviewing(undefined)} />
     </Card>
+  )
+}
+
+// The same PendingApprovalsPanel, popped into a Dialog — for a call site
+// that isn't already a Schedule-page tab (the Daily Report header's own
+// "Pending Approvals" button, matching how DispatchApprovalQueue/
+// StockMovementApprovalQueue are triggered from that same header). No
+// separate data path: the panel's own hooks (usePendingApprovalRows,
+// via the 4 plan queries) are the same react-query cache either call site
+// reads, so approving/rejecting/rescheduling in here updates the header's
+// own badge count live, the moment the mutation settles — closing the
+// dialog needs no explicit refetch of its own.
+export function PendingApprovalsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation("dispatch")
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
+          <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
+        </DialogHeader>
+        <PendingApprovalsPanel />
+      </DialogContent>
+    </Dialog>
   )
 }
 
