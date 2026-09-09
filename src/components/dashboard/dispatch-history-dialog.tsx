@@ -26,18 +26,69 @@ import type { DispatchStatus } from "@/lib/types"
 // kept as its own small copy here too rather than a shared import, same
 // reasoning as those two: avoids a cross-import between otherwise-
 // independent panel files for four lines that essentially never change.
-const DISPATCH_STATUS_KEYS: Record<string, string> = {
+export const DISPATCH_STATUS_KEYS: Record<string, string> = {
   Draft: "draft",
   "Pending Customer Confirmation": "pendingCustomerConfirmation",
   Confirmed: "confirmed",
   "Reschedule Requested": "rescheduleRequested",
 }
 
-interface RecordInfo {
+export interface RecordInfo {
   moduleLabel: string
   recordLabel: string
   scheduledDate: string
   dispatchStatus?: DispatchStatus
+}
+
+// Current record label/module/status per entity, keyed "entityType:id" —
+// shared by this dialog and PendingApprovalsHistoryDialog (which needs the
+// exact same lookup for the same 4 modules' approval events). Deliberately
+// its own small lookup rather than reusing DispatchApprovalQueue's own
+// allRows (which also resolves email/customer-conflict data neither
+// read-only history view has a use for) — same field mappings, just the
+// subset history actually needs.
+export function useDispatchRecordIndex(): Map<string, RecordInfo> {
+  const { data: filterChangePlans = [] } = useFilterChangePlans()
+  const { data: installPlans = [] } = useInstallPlans()
+  const { data: collections = [] } = useCollections()
+  const { data: repairPlans = [] } = useRepairPlans()
+
+  return React.useMemo(() => {
+    const map = new Map<string, RecordInfo>()
+    for (const p of filterChangePlans) {
+      map.set(`filter_change_plans:${p.id}`, {
+        moduleLabel: "filterChangeModule",
+        recordLabel: p.memberAccount || p.orderNumber,
+        scheduledDate: p.preD || p.planDate,
+        dispatchStatus: p.dispatchStatus,
+      })
+    }
+    for (const p of installPlans) {
+      map.set(`install_plans:${p.id}`, {
+        moduleLabel: "installationModule",
+        recordLabel: p.name || p.orderNo,
+        scheduledDate: p.preInstalledDate || p.inputDate,
+        dispatchStatus: p.dispatchStatus,
+      })
+    }
+    for (const c of collections) {
+      map.set(`collections:${c.id}`, {
+        moduleLabel: "collectionModule",
+        recordLabel: c.accountName || c.orderNo,
+        scheduledDate: c.preD || c.collectionDate,
+        dispatchStatus: c.dispatchStatus,
+      })
+    }
+    for (const r of repairPlans) {
+      map.set(`repair_plans:${r.id}`, {
+        moduleLabel: "repairModule",
+        recordLabel: r.accountName || r.orderNo,
+        scheduledDate: r.preD || r.issuedDate,
+        dispatchStatus: r.dispatchStatus,
+      })
+    }
+    return map
+  }, [filterChangePlans, installPlans, collections, repairPlans])
 }
 
 // A notification "event" — every dispatch_notifications row for the same
@@ -55,7 +106,7 @@ interface RecordInfo {
 // events.
 const GROUP_WINDOW_MS = 5000
 
-interface HistoryEvent {
+export interface HistoryEvent {
   key: string
   entityType: DispatchEntityType
   entityId: string
@@ -65,7 +116,11 @@ interface HistoryEvent {
   email?: DispatchNotificationRecord
 }
 
-function groupIntoEvents(rows: DispatchNotificationRecord[]): HistoryEvent[] {
+// Exported for PendingApprovalsHistoryDialog, which needs the exact same
+// "group same-entity notification rows within a few seconds into one
+// approval event" logic, just filtered down to a single calendar day
+// afterward.
+export function groupIntoEvents(rows: DispatchNotificationRecord[]): HistoryEvent[] {
   const sorted = [...rows].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const events: HistoryEvent[] = []
   for (const row of sorted) {
@@ -105,55 +160,11 @@ function groupIntoEvents(rows: DispatchNotificationRecord[]): HistoryEvent[] {
 export function DispatchHistoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
-  const { data: filterChangePlans = [] } = useFilterChangePlans()
-  const { data: installPlans = [] } = useInstallPlans()
-  const { data: collections = [] } = useCollections()
-  const { data: repairPlans = [] } = useRepairPlans()
   const { data: users = [] } = useUsers()
   const { data: notifications = [], isPending } = useDispatchNotifications()
   const [search, setSearch] = React.useState("")
 
-  // Current record label/module/status per entity — deliberately its own
-  // small lookup rather than reusing DispatchApprovalQueue's own allRows
-  // (which also resolves email/customer-conflict data this read-only view
-  // has no use for) — same field mappings, just the subset history
-  // actually needs.
-  const recordIndex = React.useMemo(() => {
-    const map = new Map<string, RecordInfo>()
-    for (const p of filterChangePlans) {
-      map.set(`filter_change_plans:${p.id}`, {
-        moduleLabel: "filterChangeModule",
-        recordLabel: p.memberAccount || p.orderNumber,
-        scheduledDate: p.preD || p.planDate,
-        dispatchStatus: p.dispatchStatus,
-      })
-    }
-    for (const p of installPlans) {
-      map.set(`install_plans:${p.id}`, {
-        moduleLabel: "installationModule",
-        recordLabel: p.name || p.orderNo,
-        scheduledDate: p.preInstalledDate || p.inputDate,
-        dispatchStatus: p.dispatchStatus,
-      })
-    }
-    for (const c of collections) {
-      map.set(`collections:${c.id}`, {
-        moduleLabel: "collectionModule",
-        recordLabel: c.accountName || c.orderNo,
-        scheduledDate: c.preD || c.collectionDate,
-        dispatchStatus: c.dispatchStatus,
-      })
-    }
-    for (const r of repairPlans) {
-      map.set(`repair_plans:${r.id}`, {
-        moduleLabel: "repairModule",
-        recordLabel: r.accountName || r.orderNo,
-        scheduledDate: r.preD || r.issuedDate,
-        dispatchStatus: r.dispatchStatus,
-      })
-    }
-    return map
-  }, [filterChangePlans, installPlans, collections, repairPlans])
+  const recordIndex = useDispatchRecordIndex()
 
   const userNameById = React.useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
 

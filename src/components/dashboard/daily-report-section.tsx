@@ -759,7 +759,11 @@ export function DailyReportSection() {
               <ListChecks className="h-3.5 w-3.5" />
               {tDispatch("pendingApprovalsButton")}{pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
             </Button>
-            <PendingApprovalsDialog open={pendingApprovalsQueueOpen} onOpenChange={setPendingApprovalsQueueOpen} />
+            <PendingApprovalsDialog
+              open={pendingApprovalsQueueOpen}
+              onOpenChange={setPendingApprovalsQueueOpen}
+              historyDefaultDate={reportDate}
+            />
           </>
         )}
       </div>

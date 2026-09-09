@@ -95,5 +95,11 @@
   "approveAndSendConfirmation": "승인 및 확인 요청 발송",
   "pendingApprovalsButton": "일일 보고서 승인",
   "pendingApprovalsDialogTitle": "일일 보고서 승인",
-  "pendingApprovalsDialogDescription": "관리자 승인을 기다리는 수거, 수리, 설치, 필터 교체 요청입니다."
+  "pendingApprovalsDialogDescription": "관리자 승인을 기다리는 수거, 수리, 설치, 필터 교체 요청입니다.",
+  "approvalsHistoryTitle": "승인 및 수정 이력",
+  "approvalsHistoryDescription": "선택한 날짜에 수거, 수리, 설치, 필터 교체 요청을 누가 승인했고 누가 수정했는지 확인합니다.",
+  "approvedSectionTitle": "승인됨 ({count})",
+  "noApprovalsOnDate": "이 날짜에 승인된 항목이 없습니다.",
+  "editedSectionTitle": "수정됨 ({count})",
+  "noEditsOnDate": "이 날짜에 수정된 항목이 없습니다."
 }

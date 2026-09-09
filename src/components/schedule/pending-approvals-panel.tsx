@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { History } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,6 +21,8 @@ import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { computeStopNumbers, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { ApprovalDetailDialog } from "@/components/schedule/approval-detail-dialog"
+import { PendingApprovalsHistoryDialog } from "@/components/schedule/pending-approvals-history-dialog"
+import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -231,11 +234,23 @@ function rowKey(row: PendingApprovalRow): string {
 
 type StatusFilter = "all" | "Draft" | "Reschedule Requested"
 
-export function PendingApprovalsPanel() {
+export function PendingApprovalsPanel({
+  historyDefaultDate,
+}: {
+  // Forwarded to PendingApprovalsHistoryDialog's own initial date — the
+  // Daily Report's own selected report date, when this panel is opened
+  // from PendingApprovalsDialog on that page. Left undefined for the
+  // Schedule page's own Pending Approvals tab, which has no report date of
+  // its own; the history dialog falls back to today in that case.
+  historyDefaultDate?: string
+} = {}) {
   const { t } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
   const { rows, isPending } = usePendingApprovalRows()
   const [reviewing, setReviewing] = React.useState<PendingApprovalRow | undefined>(undefined)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
   // Purely a visual selection column (per-viewer, not persisted) — no bulk
@@ -375,16 +390,23 @@ export function PendingApprovalsPanel() {
             </TabsList>
           </Tabs>
 
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("allStatuses")}</SelectItem>
-              <SelectItem value="Draft">{t("pendingApprovalStatus")}</SelectItem>
-              <SelectItem value="Reschedule Requested">{t("rescheduleRequested")}</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                <SelectItem value="Draft">{t("pendingApprovalStatus")}</SelectItem>
+                <SelectItem value="Reschedule Requested">{t("rescheduleRequested")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {isAdmin && (
+              <Button type="button" size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setHistoryOpen(true)}>
+                <History className="h-3.5 w-3.5" /> {t("historyButton")}
+              </Button>
+            )}
+          </div>
         </div>
 
         <DataTable
@@ -396,6 +418,14 @@ export function PendingApprovalsPanel() {
       </CardContent>
 
       <ApprovalDetailDialog key={reviewing?.entityId ?? "none"} row={reviewing} onOpenChange={(open) => !open && setReviewing(undefined)} />
+      {isAdmin && (
+        <PendingApprovalsHistoryDialog
+          key={historyOpen ? "open" : "closed"}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          defaultDate={historyDefaultDate}
+        />
+      )}
     </Card>
   )
 }
@@ -412,9 +442,12 @@ export function PendingApprovalsPanel() {
 export function PendingApprovalsDialog({
   open,
   onOpenChange,
+  historyDefaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Forwarded straight to PendingApprovalsPanel — see its own comment.
+  historyDefaultDate?: string
 }) {
   const { t } = useTranslation("dispatch")
   return (
@@ -424,7 +457,7 @@ export function PendingApprovalsDialog({
           <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
           <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
         </DialogHeader>
-        <PendingApprovalsPanel />
+        <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} />
       </DialogContent>
     </Dialog>
   )

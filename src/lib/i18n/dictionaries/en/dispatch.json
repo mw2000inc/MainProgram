@@ -95,5 +95,11 @@
   "approveAndSendConfirmation": "Approve & Send Confirmation",
   "pendingApprovalsButton": "Daily Report Approvals",
   "pendingApprovalsDialogTitle": "Daily Report Approvals",
-  "pendingApprovalsDialogDescription": "Collection, Repair, Installation, and Filter Change requests waiting for admin approval."
+  "pendingApprovalsDialogDescription": "Collection, Repair, Installation, and Filter Change requests waiting for admin approval.",
+  "approvalsHistoryTitle": "Approval & Edit History",
+  "approvalsHistoryDescription": "Who approved and who edited Collection, Repair, Installation, and Filter Change requests on the selected day.",
+  "approvedSectionTitle": "Approved ({count})",
+  "noApprovalsOnDate": "No approvals on this date.",
+  "editedSectionTitle": "Edited ({count})",
+  "noEditsOnDate": "No edits on this date."
 }
