@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DailyReportSectionsPanel } from "@/components/settings/daily-report-sections-panel"
+import { AutomationsPanel } from "@/components/settings/automations-panel"
 import { ProductCatalogPanel } from "@/components/settings/product-catalog-panel"
 import { LanguagePanel } from "@/components/settings/language-panel"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
@@ -252,6 +253,11 @@ export default function SettingsPage() {
         {/* Saves itself per action (each toggle/drag/edit is its own mutation) —
             unlike the cards above, it isn't part of the "Save Settings" batch below. */}
         <DailyReportSectionsPanel />
+
+        {/* Same "saves itself per toggle" shape as the panel above — each
+            switch is its own useUpdateSettings() call, not batched into
+            "Save Settings" below. */}
+        <AutomationsPanel />
 
         {/* Live Inventory products (addable right here) plus a frozen legacy
             reference — neither is part of the "Save Settings" batch below. */}

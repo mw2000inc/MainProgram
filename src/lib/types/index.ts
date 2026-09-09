@@ -273,6 +273,13 @@ export interface CompanySettings {
   // the map fall back to `monitoringDefaultMonths`.
   monitoringDefaultMonths: number
   monitoringIntervals: Record<string, number>
+  // Per-automation on/off overrides for the Automation Hub (see
+  // src/lib/automations/*) — keyed by an AutomationId, a missing key means
+  // "use that automation's own code default", not "disabled". Kept as a
+  // plain string-keyed record (this file otherwise has zero cross-imports)
+  // rather than importing AutomationId here; call sites that need the
+  // narrower type import it from @/lib/automations/types directly.
+  automationSettings: Record<string, boolean>
 }
 
 export interface PanelSize {

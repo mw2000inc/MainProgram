@@ -1,5 +1,9 @@
 {
   "pageDescription": "회사 정보, 환경설정, 데이터를 관리합니다.",
+  "automationsTitle": "자동화",
+  "automationsDescription": "앱이 자체 일정에 따라 실행하는 백그라운드 작업입니다 — 개별적으로 끄거나 지금 바로 실행할 수 있습니다.",
+  "automationRunNow": "지금 실행",
+  "automationRunning": "실행 중...",
   "companyInformation": "회사 정보",
   "companyInformationDescription": "송장 및 앱 전반에 표시됩니다.",
   "uploadLogo": "로고 업로드",

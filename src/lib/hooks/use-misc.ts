@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/misc"
 import type { CompanySettings, Locale, User } from "@/lib/types"
 import { useAuth } from "@/lib/auth/auth-context"
+import { automationsKey } from "@/lib/hooks/use-automations"
 import { toast } from "sonner"
 
 export const usersKey = ["users"] as const
@@ -104,6 +105,11 @@ export function useUpdateSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKey })
       qc.invalidateQueries({ queryKey: activityLogsKey })
+      // A save here is also how an automation's on/off override actually
+      // changes (see the Automations panel) — refetch its resolved state
+      // alongside every other settings save, not just when this specific
+      // field changed.
+      qc.invalidateQueries({ queryKey: automationsKey })
       toast.success("Settings saved")
     },
     onError: () => toast.error("Failed to save settings"),

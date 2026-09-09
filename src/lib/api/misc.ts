@@ -133,6 +133,8 @@ type SettingsRow = {
   // keeps working against a database that hasn't run the migration yet.
   monitoring_default_months?: number | null
   monitoring_intervals?: Record<string, number> | null
+  // Added by the automation_hub migration; same defensive read.
+  automation_settings?: Record<string, boolean> | null
 }
 
 function settingsFromRow(row: SettingsRow): CompanySettings {
@@ -150,6 +152,7 @@ function settingsFromRow(row: SettingsRow): CompanySettings {
     contactEmails: row.contact_emails,
     monitoringDefaultMonths: row.monitoring_default_months ?? 6,
     monitoringIntervals: row.monitoring_intervals ?? {},
+    automationSettings: row.automation_settings ?? {},
   }
 }
 
@@ -167,6 +170,7 @@ const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   contactEmails: [],
   monitoringDefaultMonths: 6,
   monitoringIntervals: {},
+  automationSettings: {},
 }
 
 export async function getSettings(): Promise<CompanySettings> {
@@ -200,6 +204,7 @@ export async function updateSettings(input: Partial<CompanySettings>): Promise<C
   if (input.contactEmails !== undefined) row.contact_emails = input.contactEmails
   if (input.monitoringDefaultMonths !== undefined) row.monitoring_default_months = input.monitoringDefaultMonths
   if (input.monitoringIntervals !== undefined) row.monitoring_intervals = input.monitoringIntervals
+  if (input.automationSettings !== undefined) row.automation_settings = input.automationSettings
 
   // Upsert (not update): if the singleton row was wiped, an UPDATE matches zero
   // rows and .single() then throws, so the save fails. Upsert recreates the

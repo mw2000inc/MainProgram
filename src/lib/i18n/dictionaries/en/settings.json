@@ -1,5 +1,9 @@
 {
   "pageDescription": "Manage company information, preferences, and data.",
+  "automationsTitle": "Automations",
+  "automationsDescription": "Background jobs this app runs on its own schedule — toggle one off, or run it right now.",
+  "automationRunNow": "Run Now",
+  "automationRunning": "Running...",
   "companyInformation": "Company Information",
   "companyInformationDescription": "Shown on invoices and throughout the app.",
   "uploadLogo": "Upload Logo",
