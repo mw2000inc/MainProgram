@@ -3,7 +3,10 @@
 import * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
 import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -21,6 +24,18 @@ import { formatDate } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
+
+// The 4 job-type tabs (plus "all"), in the same fixed order used everywhere
+// else in this file (Filter Change, Installation, Collection, Repair) — one
+// small source of truth for both the TabsTrigger list and the Approval
+// Summary cards below it, so the two can never list the types in a
+// different order from each other.
+const TYPE_TABS: { value: DispatchEntityType; moduleKey: PendingApprovalRow["moduleKey"]; tabLabelKey: string }[] = [
+  { value: "filter_change_plans", moduleKey: "filterChangeModule", tabLabelKey: "filterChangeTabLabel" },
+  { value: "install_plans", moduleKey: "installationModule", tabLabelKey: "installationTabLabel" },
+  { value: "collections", moduleKey: "collectionModule", tabLabelKey: "collectionTabLabel" },
+  { value: "repair_plans", moduleKey: "repairModule", tabLabelKey: "repairTabLabel" },
+]
 
 // One row per dispatch item genuinely awaiting admin attention — Draft
 // (never yet approved) or Reschedule Requested (customer-declined-with-a-
@@ -205,18 +220,103 @@ function PendingStatusBadge({ status }: { status: "Draft" | "Reschedule Requeste
   return <StatusBadge tone={tone} label={label} />
 }
 
+// A row's own unique key across all 4 modules — entityId alone isn't
+// guaranteed unique between tables (they're separate uuid sequences), so
+// every place that needs one (selection state, React keys) combines both,
+// same as DispatchApprovalQueue's own row keys already do.
+function rowKey(row: PendingApprovalRow): string {
+  return `${row.entityType}:${row.entityId}`
+}
+
+type StatusFilter = "all" | "Draft" | "Reschedule Requested"
+
 export function PendingApprovalsPanel() {
   const { t } = useTranslation("dispatch")
+  const { t: tCommon } = useTranslation("common")
   const { rows, isPending } = usePendingApprovalRows()
   const [reviewing, setReviewing] = React.useState<PendingApprovalRow | undefined>(undefined)
+  const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
+  // Purely a visual selection column (per-viewer, not persisted) — no bulk
+  // action is wired to it yet, since none of the existing hooks this panel
+  // reuses (useApproveDispatchItem etc.) support a batched call; each row's
+  // own Review action stays the real way to act on it, same as before.
+  const [selected, setSelected] = React.useState<Set<string>>(new Set())
+
+  // Counts are always computed off the full, unfiltered row set — so the
+  // tab labels and the Approval Summary cards report the same numbers
+  // regardless of which tab or status filter is currently applied. Only the
+  // table's own visible rows (below) actually narrow with those filters.
+  const countsByType = React.useMemo(() => {
+    const counts: Record<DispatchEntityType, number> = {
+      filter_change_plans: 0,
+      install_plans: 0,
+      collections: 0,
+      repair_plans: 0,
+    }
+    for (const r of rows) counts[r.entityType]++
+    return counts
+  }, [rows])
+
+  const visibleRows = React.useMemo(
+    () =>
+      rows.filter(
+        (r) => (activeTab === "all" || r.entityType === activeTab) && (statusFilter === "all" || r.dispatchStatus === statusFilter)
+      ),
+    [rows, activeTab, statusFilter]
+  )
 
   const stopNumberByJobId = React.useMemo(
     () => computeStopNumbers(rows.filter((r) => r.routeSequence != null).map((r) => ({ id: r.entityId, technician: r.technician ?? "", scheduledDate: r.scheduledDate, routeSequence: r.routeSequence }))),
     [rows]
   )
 
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((r) => selected.has(rowKey(r)))
+
+  const toggleRow = React.useCallback((key: string, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }, [])
+
+  const toggleAllVisible = React.useCallback(
+    (checked: boolean) => {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const r of visibleRows) {
+          const key = rowKey(r)
+          if (checked) next.add(key)
+          else next.delete(key)
+        }
+        return next
+      })
+    },
+    [visibleRows]
+  )
+
   const columns: ColumnDef<PendingApprovalRow, unknown>[] = React.useMemo(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <Checkbox
+            checked={allVisibleSelected}
+            onCheckedChange={(checked) => toggleAllVisible(checked === true)}
+            aria-label={tCommon("all")}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={selected.has(rowKey(row.original))}
+            onCheckedChange={(checked) => toggleRow(rowKey(row.original), checked === true)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={row.original.recordLabel}
+          />
+        ),
+      },
       { accessorKey: "scheduledDate", header: t("dateColumn"), cell: ({ row }) => formatDate(row.original.scheduledDate) },
       { accessorKey: "moduleKey", header: t("jobTypeColumn"), cell: ({ row }) => t(row.original.moduleKey) },
       { accessorKey: "orderNumber", header: t("orderNoColumn"), cell: ({ row }) => row.original.orderNumber || "—" },
@@ -245,7 +345,7 @@ export function PendingApprovalsPanel() {
         ),
       },
     ],
-    [t, stopNumberByJobId]
+    [t, tCommon, stopNumberByJobId, selected, allVisibleSelected, toggleAllVisible, toggleRow]
   )
 
   if (isPending) {
@@ -259,16 +359,68 @@ export function PendingApprovalsPanel() {
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="pt-6 space-y-4">
+        <ApprovalSummary countsByType={countsByType} />
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "all" | DispatchEntityType)}>
+            <TabsList>
+              <TabsTrigger value="all">{t("allTabLabel", { count: String(rows.length) })}</TabsTrigger>
+              {TYPE_TABS.map(({ value, tabLabelKey }) => (
+                <TabsTrigger key={value} value={value}>
+                  {t(tabLabelKey, { count: String(countsByType[value]) })}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allStatuses")}</SelectItem>
+              <SelectItem value="Draft">{t("pendingApprovalStatus")}</SelectItem>
+              <SelectItem value="Reschedule Requested">{t("rescheduleRequested")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <DataTable
           columns={columns}
-          data={rows}
+          data={visibleRows}
           searchPlaceholder={t("searchPendingApprovals")}
           emptyMessage={t("noPendingApprovals")}
         />
       </CardContent>
+
       <ApprovalDetailDialog key={reviewing?.entityId ?? "none"} row={reviewing} onOpenChange={(open) => !open && setReviewing(undefined)} />
     </Card>
+  )
+}
+
+// The 4 per-type counts + a total, computed straight from countsByType so
+// this can never disagree with the tab labels right above it — both are
+// reading the exact same numbers.
+function ApprovalSummary({ countsByType }: { countsByType: Record<DispatchEntityType, number> }) {
+  const { t } = useTranslation("dispatch")
+  const total = TYPE_TABS.reduce((sum, { value }) => sum + countsByType[value], 0)
+  return (
+    <div className="rounded-lg border p-3">
+      <p className="text-xs font-medium text-muted-foreground mb-2">{t("approvalSummaryTitle")}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {TYPE_TABS.map(({ value, moduleKey }) => (
+          <div key={value}>
+            <p className="text-xs text-muted-foreground">{t(moduleKey)}</p>
+            <p className="text-lg font-semibold">{countsByType[value]}</p>
+          </div>
+        ))}
+        <div>
+          <p className="text-xs text-muted-foreground">{t("totalPendingApprovals")}</p>
+          <p className="text-lg font-semibold">{total}</p>
+        </div>
+      </div>
+    </div>
   )
 }
 

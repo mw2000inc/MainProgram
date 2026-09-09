@@ -83,5 +83,14 @@
   "confirmRejection": "거부 확인",
   "requestRescheduleDialogTitle": "일정 변경 요청",
   "requestRescheduleDialogDescription": "다른 날짜가 필요한 이유를 고객에게 알려주세요. 새 날짜가 정해지면 다시 승인하면 됩니다.",
-  "requestRescheduleMessageLabel": "메시지/사유"
+  "requestRescheduleMessageLabel": "메시지/사유",
+  "allTabLabel": "전체 ({count})",
+  "filterChangeTabLabel": "필터 교체 ({count})",
+  "installationTabLabel": "설치 ({count})",
+  "collectionTabLabel": "수거 ({count})",
+  "repairTabLabel": "수리 ({count})",
+  "approvalSummaryTitle": "승인 요약",
+  "totalPendingApprovals": "총 승인 대기",
+  "allStatuses": "전체 상태",
+  "approveAndSendConfirmation": "승인 및 확인 요청 발송"
 }

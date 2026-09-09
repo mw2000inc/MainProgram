@@ -181,7 +181,7 @@ export function ApprovalDetailDialog({
                 disabled={busy || (row?.dispatchStatus === "Draft" && !notifyEmail.trim())}
                 onClick={handleApprove}
               >
-                {busy ? tCommon("saving") : t("approveAndSchedule")}
+                {busy ? tCommon("saving") : row?.dispatchStatus === "Draft" ? t("approveAndSendConfirmation") : t("approveAndSchedule")}
               </Button>
             </DialogFooter>
           )}

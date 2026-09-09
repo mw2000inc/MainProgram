@@ -83,5 +83,14 @@
   "confirmRejection": "Confirm Rejection",
   "requestRescheduleDialogTitle": "Request Reschedule",
   "requestRescheduleDialogDescription": "Let the customer know a different date is needed and why. You'll set the new date and re-approve once it's settled.",
-  "requestRescheduleMessageLabel": "Message/Reason"
+  "requestRescheduleMessageLabel": "Message/Reason",
+  "allTabLabel": "All ({count})",
+  "filterChangeTabLabel": "Filter Change ({count})",
+  "installationTabLabel": "Installation ({count})",
+  "collectionTabLabel": "Collection ({count})",
+  "repairTabLabel": "Repair ({count})",
+  "approvalSummaryTitle": "Approval Summary",
+  "totalPendingApprovals": "Total Pending Approvals",
+  "allStatuses": "All Status",
+  "approveAndSendConfirmation": "Approve & Send Confirmation"
 }
