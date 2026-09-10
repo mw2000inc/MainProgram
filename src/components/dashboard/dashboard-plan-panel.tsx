@@ -50,21 +50,23 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // falls back to the fixed 5-row default.
   panelHeight?: number
   // Forwarded straight to DataTable's tableContainerClassName — see its own
-  // comment. Only the Filter Change/Collection Daily Report panels pass
-  // this today (scrollbar-always-visible, see globals.css).
+  // comment. The Filter Change/Collection/Inventory Daily Report panels
+  // pass this today (scrollbar-always-visible, see globals.css) so their
+  // horizontal scrollbar is obviously visible rather than relying on the
+  // OS/browser's own possibly-invisible-until-hover default.
   tableContainerClassName?: string
   // Forwarded straight to DataTable's tableClassName for the COMPACT table
-  // only — see its own comment. Only the Collection Daily Report panel
-  // passes this today; Filter Change's compact view is a deliberately
-  // narrow 5-column set (see getFilterChangeDailyReportColumns) that
-  // doesn't need a forced min-width, so it leaves this unset and uses
-  // expandedTableClassName instead (below).
+  // — see its own comment. The Filter Change/Inventory Daily Report panels
+  // pass "min-w-max" today so their (wide, many-column) tables render at
+  // their natural content width and reliably overflow/scroll instead of
+  // silently compressing every column's whitespace-nowrap content to fit.
   tableClassName?: string
   // Same as tableClassName, but for the Maximize2 dialog's table only —
-  // falls back to tableClassName when omitted (every call site except
-  // Filter Change's Daily Report panel, where the dialog reveals 5 more
-  // columns that DO need a forced min-width even though the compact view
-  // doesn't).
+  // falls back to tableClassName when omitted. Unused by every current
+  // call site (each one now shows the exact same columns compact and
+  // expanded, so the same tableClassName already fits both) — kept for
+  // whichever future panel genuinely does want a different width for its
+  // dialog view than its compact one.
   expandedTableClassName?: string
   // The header's title + action buttons normally stack into two rows below
   // an @sm/card-header container-query breakpoint, so a panel resized down

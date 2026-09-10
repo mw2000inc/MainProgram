@@ -4,11 +4,24 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & {
+  // This div, not any ancestor, is the one whose own overflow-x actually
+  // scrolls (its <table> child is the thing that can be wider than it) —
+  // so any custom scrollbar styling (e.g. DataTable's own
+  // tableContainerClassName, see its own comment) has to land here to have
+  // a visible effect. An ancestor further up the tree merely wraps this
+  // div; scrolling *it* would only matter if this div's own box were
+  // somehow wider than that ancestor's, which nothing here does.
+  containerClassName?: string
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"

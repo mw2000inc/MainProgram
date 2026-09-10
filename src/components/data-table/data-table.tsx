@@ -134,8 +134,18 @@ export function DataTable<TData>({
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
       </div>
 
-      <div className={cn("min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto", tableContainerClassName)}>
-        <Table className={tableClassName}>
+      {/* tableContainerClassName goes to Table's own containerClassName
+          below, not this div — that inner div (data-slot="table-container")
+          is the one whose own overflow-x actually scrolls, since it's the
+          direct parent of <table> itself; this outer div's own overflow-x-
+          auto is inert (its child never grows wider than it — the inner
+          div contains that overflow internally), only overflow-y-auto here
+          ever does anything. A custom scrollbar style passed via
+          tableContainerClassName (e.g. scrollbar-always-visible) landing
+          here instead of the inner div would never actually render,
+          exactly the bug this now avoids. */}
+      <div className="min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto">
+        <Table className={tableClassName} containerClassName={tableContainerClassName}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

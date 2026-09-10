@@ -50,24 +50,11 @@ function QtyCell({ row }: { row: StockMovementRow }) {
   return <span className="font-medium">{type === "deduct" ? `-${qty}` : `+${qty}`}</span>
 }
 
-// Compact set for the Daily Report panel itself.
-export function getInventoryListColumns(): ColumnDef<StockMovementRow, unknown>[] {
-  return [
-    { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
-    { id: "type", header: () => <ColumnHeader tKey="type" ns="inventory" />, cell: ({ row }) => <TypeCell row={row.original} /> },
-    { id: "qty", header: () => <ColumnHeader tKey="quantity" ns="fields" />, cell: ({ row }) => <QtyCell row={row.original} /> },
-    { accessorKey: "reason", header: () => <ColumnHeader tKey="reason" ns="inventory" /> },
-    {
-      accessorKey: "status",
-      header: () => <ColumnHeader tKey="status" ns="fields" />,
-      cell: ({ row }) => <InventoryStatusBadge status={row.original.status} />,
-    },
-  ]
-}
-
-// Full set, shown only in the panel's expanded (Maximize2) view — adds
-// everything the "show useful information" list asked for beyond the
-// compact columns above.
+// The Daily Report panel's full column set — shown directly in the compact
+// panel (horizontally scrollable, see daily-report-section.tsx's own
+// tableClassName="min-w-max") as well as the Maximize2 dialog, which
+// renders these exact same columns now that there's no narrower compact
+// set held back from it.
 export function getInventoryListExpandedColumns(): ColumnDef<StockMovementRow, unknown>[] {
   return [
     { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },

@@ -27,7 +27,6 @@ import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
-  getFilterChangeDailyReportColumns,
   getFilterChangeDailyReportExpandedColumns,
   FILTER_CHANGE_EXPORT_COLUMNS,
 } from "@/components/filter-change/filter-change-columns"
@@ -45,7 +44,6 @@ import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
-  getInventoryListColumns,
   getInventoryListExpandedColumns,
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
@@ -72,7 +70,7 @@ import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChang
 // renamed/reordered from Settings > Daily Report Sections, which every role
 // (including a technician) reads to decide what to render. "inventory" (a
 // read-only history view over stock_movements — see
-// getInventoryListColumns) is additionally admin-only outright, not just
+// getInventoryListExpandedColumns) is additionally admin-only outright, not just
 // unconfigurable — a technician can't read stock_movements at all (see the
 // technician_role migration), so it's excluded entirely in the `order`
 // computation below rather than rendering an always-empty panel.
@@ -451,14 +449,10 @@ export function DailyReportSection() {
   // unchecks something.
   // Deliberately NOT run through filterColumnsByVisibility, unlike every
   // other section's compact column memo below — an admin's saved Visible
-  // Fields selection for filter_change predates this panel's own
-  // compact/expanded split, so applying it here risks silently clipping
-  // columns this split already deliberately curates. The compact view is
-  // always exactly these 5 (Order Number, Filter, Plan D, Pre D, Acc D);
-  // the other 5 (Member Account#, Contact #, Address, Serviceman, Status)
-  // only ever show in the Maximize2 full-screen view — see
-  // getFilterChangeDailyReportColumns/getFilterChangeDailyReportExpandedColumns's
-  // own comments.
+  // Fields selection for filter_change predates this panel's own column
+  // set, so applying it here risks silently clipping columns that are now
+  // always shown (see filterChangeColumns below — no compact/expanded
+  // split left to protect).
   const filterChangeColumnParams = React.useMemo(
     () => ({
       onStatusChange: isAdmin ? (plan: FilterChangePlan, status: string) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
@@ -474,11 +468,15 @@ export function DailyReportSection() {
     }),
     [isAdmin, updateFilterChangePlan]
   )
+  // The full 10-column set (getFilterChangeDailyReportExpandedColumns),
+  // used for BOTH the compact panel and the Maximize2 dialog now — see the
+  // "Enable Horizontal Scroll" change: an admin can scroll the compact
+  // panel itself to see every column (Member Account#, Contact #, Address,
+  // Serviceman, Status included) instead of needing the dialog just to see
+  // data that's already loaded. getFilterChangeDailyReportColumns (the
+  // narrower 5) is untouched and still used as-is by member-order-detail.tsx's
+  // own embedded panel, which has its own, different reason to stay compact.
   const filterChangeColumns = React.useMemo(
-    () => withDispatchStatusColumn(getFilterChangeDailyReportColumns(filterChangeColumnParams)),
-    [filterChangeColumnParams]
-  )
-  const filterChangeExpandedColumns = React.useMemo(
     () => withDispatchStatusColumn(getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams)),
     [filterChangeColumnParams]
   )
@@ -524,8 +522,9 @@ export function DailyReportSection() {
   )
   // Not one of the six admin-configurable sections (see the PanelId comment
   // above), so no visibleFieldsFor entry exists for it — always the full
-  // compact/expanded set as defined in inventory-list-columns.tsx.
-  const inventoryListColumns = React.useMemo(() => getInventoryListColumns(), [])
+  // set as defined in inventory-list-columns.tsx (getInventoryListColumns,
+  // the narrower 5-column set, is no longer used by this panel — see the
+  // inventory panel's own comment below).
   const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(), [])
 
   // Pre D, when set, is the record's actual (re)scheduled date — it wins
@@ -563,7 +562,7 @@ export function DailyReportSection() {
   // day it was recorded, and matches the completed job's scheduledDate for
   // the filter-change deduction path), same convention as every other
   // section here filtering by its own date field. History only — this
-  // never approves/edits/creates anything; see getInventoryListColumns.
+  // never approves/edits/creates anything; see getInventoryListExpandedColumns.
   const dayStockMovements = React.useMemo(
     () => stockMovements.filter((m) => m.date === reportDate),
     [stockMovements, reportDate]
@@ -580,7 +579,6 @@ export function DailyReportSection() {
         title={labelFor("filter_change")}
         icon={Droplets}
         columns={filterChangeColumns}
-        expandedColumns={filterChangeExpandedColumns}
         data={dayFilterChangePlans}
         loading={pFilter}
         emptyMessage={tFilterChange("noPlansForDate")}
@@ -592,20 +590,17 @@ export function DailyReportSection() {
         exportFileName="filter-change-plan"
         onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
         panelHeight={sizes["filter-change"]?.height}
-        // The compact view is deliberately just 5 narrow columns (see
-        // getFilterChangeDailyReportColumns) — no forced tableClassName
-        // here, since that set doesn't need to scroll under normal panel
-        // widths. overflow-x-auto/scrollbar-always-visible still apply so
-        // it CAN scroll on an unusually narrow resize, per "whenever
-        // columns exceed the view width" rather than always.
+        // Now the full 10-column set (see filterChangeColumns above) —
+        // min-w-max forces the table to its natural, un-compressed content
+        // width (every cell already renders whitespace-nowrap, see
+        // components/ui/table.tsx) so it reliably overflows the panel and
+        // scrolls instead of silently squeezing columns to fit. No separate
+        // expandedTableClassName needed anymore: with no expandedColumns
+        // prop, the Maximize2 dialog renders the exact same columns and
+        // falls back to this same tableClassName (see DashboardPlanPanel's
+        // own table() helper).
         tableContainerClassName="overflow-x-auto scrollbar-always-visible"
-        // The Maximize2 dialog reveals the other 5 columns (Member
-        // Account#, Contact #, Address, Serviceman, Status) on top of the
-        // compact 5, for 10 total — comfortably enough to need horizontal
-        // scrolling on most screens even before summing every cell's own
-        // min-width, so this pins it explicitly rather than depending on
-        // that sum alone.
-        expandedTableClassName="min-w-[1000px] w-full"
+        tableClassName="min-w-max"
         getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
@@ -677,8 +672,21 @@ export function DailyReportSection() {
       <DashboardPlanPanel
         title={tInventory("inventoryListTitle")}
         icon={Package}
-        columns={inventoryListColumns}
-        expandedColumns={inventoryListExpandedColumns}
+        // The full 10-column set (getInventoryListExpandedColumns) directly
+        // in the compact panel now, not just the Maximize2 dialog — see the
+        // "Enable Horizontal Scroll" change on the Filter Change panel just
+        // above, same reasoning. tableClassName="min-w-max" forces the
+        // table to its natural, un-compressed content width (every cell
+        // already renders whitespace-nowrap, see components/ui/table.tsx)
+        // so it reliably overflows the panel and scrolls instead of
+        // silently squeezing columns to fit; tableContainerClassName makes
+        // that scrollbar obviously visible rather than relying on the OS/
+        // browser's own possibly-invisible-until-hover default (see
+        // .scrollbar-always-visible in globals.css). No separate expanded
+        // column set/tableClassName needed anymore: with no expandedColumns
+        // prop, the dialog renders the exact same columns and falls back to
+        // this same tableClassName.
+        columns={inventoryListExpandedColumns}
         data={dayStockMovements}
         loading={pInventory}
         emptyMessage={tInventory("noMovementsForDate")}
@@ -686,6 +694,8 @@ export function DailyReportSection() {
         exportFileName="inventory-list"
         onRowClick={() => router.push("/inventory/in-and-out")}
         panelHeight={sizes.inventory?.height}
+        tableContainerClassName="overflow-x-auto scrollbar-always-visible"
+        tableClassName="min-w-max"
       />
     ),
   }
