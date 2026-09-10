@@ -131,7 +131,16 @@ const DEFAULT_GRID_ORDER: PanelId[] = [
   "collection",
 ]
 
-function defaultWidthClassName(id: PanelId, isGrid: boolean): string {
+function defaultWidthClassName(id: PanelId, isGrid: boolean, isAdmin: boolean): string {
+  // A technician only ever has Announcements + Schedule left to render (see
+  // isPanelEnabled) — the admin's own grid sizing below (~33% each, tuned
+  // for a 6-panel dashboard) would leave roughly a third of every row empty
+  // once the other four are hidden. Side-by-side halves fill the row
+  // naturally instead — same calc(50%-12px) convention Stacked mode's own
+  // HALF_WIDTH_PANELS already uses, just applied regardless of layout mode
+  // here since a technician is always on Grid (see canArrange) and has no
+  // saved layout of their own to override it.
+  if (!isAdmin) return "w-full md:w-[calc(50%-12px)]"
   if (isGrid) {
     // "collection" is deliberately not in GRID_THREE_ACROSS_PANELS — it
     // falls through to full-width here, same as "inventory" used to before
@@ -282,6 +291,16 @@ export function DailyReportSection() {
       // excluded outright rather than rendering a panel that would only
       // ever show "no movements" for that role.
       if (id === "inventory") return isAdmin
+      // A technician's Daily Report is their own personal work-day view,
+      // not an admin-level operations dashboard — only their own Schedule
+      // (see ScheduleAgenda's own technicianUserId/technician2UserId
+      // filter) and Announcements ever render for that role. This is a
+      // hard role restriction, checked before — and regardless of — the
+      // admin's own Daily Report Sections enable/disable configuration
+      // below, which stays purely an admin-facing customization of what
+      // *admins* see; a technician was never meant to be grantable access
+      // to Filter Change/Install/Repair/Collection via that toggle.
+      if (!isAdmin && id !== "schedule" && id !== "announcements") return false
       return sectionByPanelId.get(id)?.enabled !== false
     },
     [sectionByPanelId, isAdmin]
@@ -795,7 +814,7 @@ export function DailyReportSection() {
                 isAdmin={canArrange}
                 width={sizes[id]?.width}
                 height={sizes[id]?.height}
-                defaultWidthClassName={defaultWidthClassName(id, isGrid)}
+                defaultWidthClassName={defaultWidthClassName(id, isGrid, isAdmin)}
                 onResizeEnd={(size) => handleResizeEnd(id, size)}
               >
                 {rawContent[id]}

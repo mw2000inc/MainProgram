@@ -213,7 +213,26 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     // own session can read it (is_admin() bypasses that), so it still needs
     // filtering out here or it would show up mixed into "today's schedule"
     // for the admin viewing their own Daily Report.
-    const filtered = jobs.filter((j) => j.scheduledDate === date && j.status !== "pending_approval")
+    //
+    // technicianUserId/technician2UserId — belt-and-suspenders, not the
+    // real enforcement: schedule_jobs_select RLS (see the technician_role
+    // and schedule_pending_approval_rls_and_dedup migrations) already
+    // restricts a technician's own session to `technician_user_id =
+    // auth.uid() OR technician_2_user_id = auth.uid()`, so useScheduleJobs()
+    // never actually returns another technician's job to begin with —
+    // confirmed live (a real temp technician account, signed in via the
+    // anon client, querying schedule_jobs directly) rather than assumed.
+    // This client-side check is still worth keeping explicit here: it
+    // documents the intended behavior right where it's displayed, and
+    // keeps this one view correct on its own even if a future RLS change
+    // ever loosened the server-side policy. An admin still sees every
+    // technician's jobs, same as before.
+    const filtered = jobs.filter(
+      (j) =>
+        j.scheduledDate === date &&
+        j.status !== "pending_approval" &&
+        (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
+    )
     return [...filtered].sort((a, b) => {
       if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
       if (a.routeSequence == null && b.routeSequence == null) return 0
@@ -221,7 +240,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobs, date])
+  }, [jobs, date, isAdmin, user?.id])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
