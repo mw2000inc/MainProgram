@@ -12,7 +12,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from "@/lib/hooks/use-misc"
 import { resolveNotificationTarget } from "@/lib/notification-navigation"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -83,22 +82,24 @@ export function NotificationsMenu() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      {/* flex flex-col + overflow-hidden here overrides DropdownMenuContent's
-          own base overflow-y-auto (see dropdown-menu.tsx) — that class was
-          the actual bug: with the header/list/footer just stacked in plain
-          block flow, this outer element could end up scrolling as a whole
-          (its own max-h is Radix's own available-viewport-space var,
-          independent of the list's own fixed max-h-80 below) at the same
-          time the inner ScrollArea scrolled its own content, and the two
-          fighting over the same visual space is exactly what looked like
-          the footer and the last item overlapping/getting cut off. Turning
-          this into a flex column instead means the header and footer keep
-          their natural size (shrink-0) and only the middle ScrollArea
-          — sized to whatever's left via flex-1 min-h-0 — ever scrolls, the
-          same header/scrollable-middle/footer split data-table.tsx already
-          uses for its own toolbar/table/pagination. Radix's own max-h var
-          is left untouched, so this still respects however little vertical
-          room is actually available near the trigger. */}
+      {/* flex flex-col here (plus overflow-hidden, see below) overrides
+          DropdownMenuContent's own base overflow-y-auto (see
+          dropdown-menu.tsx) — that class was the actual original bug: with
+          header/list/footer just stacked in plain block flow, this outer
+          element could end up scrolling as a whole (its own max-h is
+          Radix's own available-viewport-space var) at the same time the
+          list scrolled its own content, and the two fighting over the same
+          space is what looked like the footer and the last item
+          overlapping/getting cut off. overflow-hidden is kept here
+          deliberately, even though it's not in every reference snippet for
+          this pattern: dropping it lets that same base overflow-y-auto
+          reappear (cn()/tailwind-merge only removes it when a competing
+          overflow-* utility is actually present in this className), which
+          is exactly the "content still bleeding past the footer" symptom.
+          Header and footer keep their natural size (shrink-0); only the
+          plain div below scrolls — the same header/scrollable-middle/
+          footer split data-table.tsx already uses for its own toolbar/
+          table/pagination. */}
       <DropdownMenuContent align="end" className="flex w-80 flex-col overflow-hidden p-0">
         <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b">
           <span className="text-sm font-semibold">{t("pageTitle")}</span>
@@ -108,38 +109,46 @@ export function NotificationsMenu() {
             </Button>
           )}
         </div>
-        <ScrollArea className="min-h-0 flex-1">
+        {/* A plain overflow-y-auto div, not the Radix ScrollArea component —
+            ScrollArea's own Viewport wraps its content in an extra layer
+            Radix sizes/measures itself, which turned out not to compute a
+            usable height (and so never showed a scrollbar, custom or
+            native) once this sat inside a flex column instead of a plain
+            block parent. A native div's own overflow-y-auto has no such
+            indirection: max-h-64 caps it (hugging shorter content, capping
+            and scrolling past that, same as before regardless of how much
+            extra room the viewport happens to leave), and the browser's own
+            scrollbar renders directly — nothing here suppresses it
+            (no overflow-hidden/scrollbar-none/no-scrollbar on this div or
+            between it and its own content). pr-1 keeps that scrollbar from
+            sitting flush against the text; pb-1 gives the last item
+            breathing room above the footer. */}
+        <div className="max-h-64 overflow-y-auto pr-1 pb-1">
           {notifications.length === 0 && (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">{t("noNotifications")}</div>
           )}
-          {/* pb-1: breathing room below the last item — it's a genuine
-              sibling of the footer now (not something the footer could ever
-              actually overlap), but a notification butted right up against
-              the footer's own border-t still read as visually cramped. */}
-          <div className="pb-1">
-            {notifications.slice(0, 8).map((n) => {
-              const Icon = ICONS[n.type]
-              return (
-                <button
-                  key={n.id}
-                  onClick={() => handleClick(n)}
-                  className={cn(
-                    "flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b last:border-0",
-                    !n.isRead && "bg-accent/40"
-                  )}
-                >
-                  <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", ICON_COLORS[n.type])} />
-                  <div className="flex-1 min-w-0">
-                    <p className={cn("leading-snug", !n.isRead && "font-medium")}>{n.message}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(n.createdAt)}</p>
-                  </div>
-                  {!n.isRead && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
-                </button>
-              )
-            })}
-          </div>
-        </ScrollArea>
-        <div className="shrink-0 p-2 border-t">
+          {notifications.slice(0, 8).map((n) => {
+            const Icon = ICONS[n.type]
+            return (
+              <button
+                key={n.id}
+                onClick={() => handleClick(n)}
+                className={cn(
+                  "flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b last:border-0",
+                  !n.isRead && "bg-accent/40"
+                )}
+              >
+                <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", ICON_COLORS[n.type])} />
+                <div className="flex-1 min-w-0">
+                  <p className={cn("leading-snug", !n.isRead && "font-medium")}>{n.message}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(n.createdAt)}</p>
+                </div>
+                {!n.isRead && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+        <div className="shrink-0 p-2 border-t bg-popover">
           <Link href="/notifications" onClick={() => setOpen(false)}>
             <Button variant="ghost" size="sm" className="w-full text-xs">
               {t("viewAllNotifications")}
