@@ -83,8 +83,24 @@ export function NotificationsMenu() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between px-3 py-2 border-b">
+      {/* flex flex-col + overflow-hidden here overrides DropdownMenuContent's
+          own base overflow-y-auto (see dropdown-menu.tsx) — that class was
+          the actual bug: with the header/list/footer just stacked in plain
+          block flow, this outer element could end up scrolling as a whole
+          (its own max-h is Radix's own available-viewport-space var,
+          independent of the list's own fixed max-h-80 below) at the same
+          time the inner ScrollArea scrolled its own content, and the two
+          fighting over the same visual space is exactly what looked like
+          the footer and the last item overlapping/getting cut off. Turning
+          this into a flex column instead means the header and footer keep
+          their natural size (shrink-0) and only the middle ScrollArea
+          — sized to whatever's left via flex-1 min-h-0 — ever scrolls, the
+          same header/scrollable-middle/footer split data-table.tsx already
+          uses for its own toolbar/table/pagination. Radix's own max-h var
+          is left untouched, so this still respects however little vertical
+          room is actually available near the trigger. */}
+      <DropdownMenuContent align="end" className="flex w-80 flex-col overflow-hidden p-0">
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b">
           <span className="text-sm font-semibold">{t("pageTitle")}</span>
           {unreadCount > 0 && (
             <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => markAllRead.mutate()}>
@@ -92,32 +108,38 @@ export function NotificationsMenu() {
             </Button>
           )}
         </div>
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="min-h-0 flex-1">
           {notifications.length === 0 && (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">{t("noNotifications")}</div>
           )}
-          {notifications.slice(0, 8).map((n) => {
-            const Icon = ICONS[n.type]
-            return (
-              <button
-                key={n.id}
-                onClick={() => handleClick(n)}
-                className={cn(
-                  "flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b last:border-0",
-                  !n.isRead && "bg-accent/40"
-                )}
-              >
-                <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", ICON_COLORS[n.type])} />
-                <div className="flex-1 min-w-0">
-                  <p className={cn("leading-snug", !n.isRead && "font-medium")}>{n.message}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(n.createdAt)}</p>
-                </div>
-                {!n.isRead && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
-              </button>
-            )
-          })}
+          {/* pb-1: breathing room below the last item — it's a genuine
+              sibling of the footer now (not something the footer could ever
+              actually overlap), but a notification butted right up against
+              the footer's own border-t still read as visually cramped. */}
+          <div className="pb-1">
+            {notifications.slice(0, 8).map((n) => {
+              const Icon = ICONS[n.type]
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => handleClick(n)}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b last:border-0",
+                    !n.isRead && "bg-accent/40"
+                  )}
+                >
+                  <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", ICON_COLORS[n.type])} />
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("leading-snug", !n.isRead && "font-medium")}>{n.message}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(n.createdAt)}</p>
+                  </div>
+                  {!n.isRead && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
+                </button>
+              )
+            })}
+          </div>
         </ScrollArea>
-        <div className="p-2 border-t">
+        <div className="shrink-0 p-2 border-t">
           <Link href="/notifications" onClick={() => setOpen(false)}>
             <Button variant="ghost" size="sm" className="w-full text-xs">
               {t("viewAllNotifications")}
