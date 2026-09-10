@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { AlertTriangle, Bell, FileWarning, PackageX, Receipt, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,9 +19,10 @@ import {
   useMarkNotificationRead,
   useNotifications,
 } from "@/lib/hooks/use-misc"
+import { resolveNotificationTarget } from "@/lib/notification-navigation"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDateTime } from "@/lib/utils"
-import type { NotificationType } from "@/lib/types"
+import type { AppNotification, NotificationType } from "@/lib/types"
 
 const ICONS: Record<NotificationType, React.ElementType> = {
   "low-stock": AlertTriangle,
@@ -48,11 +51,31 @@ const TYPE_LABEL_KEYS: Record<NotificationType, string> = {
 type TypeFilter = "all" | NotificationType
 
 export default function NotificationsPage() {
+  const router = useRouter()
   const { t } = useTranslation("notifications")
   const { t: tCommon } = useTranslation("common")
+  const { t: tActivity } = useTranslation("activity")
   const { data: notifications = [], isPending } = useNotifications()
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
+
+  // Same navigation pattern as ActivityLogView's own row click and the
+  // topbar's NotificationsMenu — see resolveNotificationTarget's own
+  // comment for the type -> route mapping and its two shared fallback
+  // toasts.
+  function handleClick(n: AppNotification) {
+    markRead.mutate(n.id)
+    const target = resolveNotificationTarget(n)
+    if (!target) {
+      toast.error(tActivity("noPageMappedYet"))
+      return
+    }
+    if (target.kind === "unavailable") {
+      toast.error(tActivity(target.messageKey))
+      return
+    }
+    router.push(target.href)
+  }
 
   const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all")
   const [readFilter, setReadFilter] = React.useState<"all" | "unread" | "read">("all")
@@ -131,7 +154,7 @@ export default function NotificationsPage() {
             return (
               <button
                 key={n.id}
-                onClick={() => markRead.mutate(n.id)}
+                onClick={() => handleClick(n)}
                 className={cn(
                   "flex w-full items-start gap-3 py-4 text-left transition-colors hover:bg-muted/50 first:pt-0 last:pb-0",
                   !n.isRead && "bg-accent/30"

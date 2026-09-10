@@ -35,10 +35,17 @@ export type ActivityLogTarget =
 //     sale_list_entries — nothing in the app reads or writes it anymore)
 //     have no page at all: verified by searching the whole app directory,
 //     not assumed.
-export function resolveActivityLogTarget(entry: ActivityLogEntry): ActivityLogTarget | undefined {
-  const { entityType, entityId } = entry
-  if (!entityType || !entityId) return undefined
-
+// The entity_type -> route table itself, split out from
+// resolveActivityLogTarget so anything else that knows a real table name +
+// row id (see resolveNotificationTarget in notification-navigation.ts, for
+// a notification's own related_entity_id) can resolve the exact same
+// destination without a second, independently-maintained copy of these
+// routes. schedule_job_filter_items is deliberately NOT handled here — it
+// has no id-only answer, only entry.newValues/oldValues can trace it back
+// to a parent job (see resolveActivityLogTarget below) — so it's absent
+// from this table on purpose, not an oversight; a caller with only an id
+// for that type gets `undefined`, same as any other unrecognized type.
+export function resolveEntityTarget(entityType: string, entityId: string): ActivityLogTarget | undefined {
   switch (entityType) {
     case "customers":
       return { kind: "href", href: `/customers/${entityId}` }
@@ -67,15 +74,6 @@ export function resolveActivityLogTarget(entry: ActivityLogEntry): ActivityLogTa
       return { kind: "href", href: "/settings" }
     case "announcements":
       return { kind: "href", href: "/" }
-    case "schedule_job_filter_items": {
-      const scheduleJobId = (entry.newValues.schedule_job_id ?? entry.oldValues.schedule_job_id) as
-        | string
-        | undefined
-      if (!scheduleJobId) {
-        return { kind: "unavailable", messageKey: "cantTraceFilterItem" }
-      }
-      return { kind: "href", href: `/schedule?id=${scheduleJobId}` }
-    }
     case "suppliers":
       return { kind: "unavailable", messageKey: "suppliersNoOwnPage" }
     case "sales":
@@ -83,4 +81,21 @@ export function resolveActivityLogTarget(entry: ActivityLogEntry): ActivityLogTa
     default:
       return undefined
   }
+}
+
+export function resolveActivityLogTarget(entry: ActivityLogEntry): ActivityLogTarget | undefined {
+  const { entityType, entityId } = entry
+  if (!entityType || !entityId) return undefined
+
+  if (entityType === "schedule_job_filter_items") {
+    const scheduleJobId = (entry.newValues.schedule_job_id ?? entry.oldValues.schedule_job_id) as
+      | string
+      | undefined
+    if (!scheduleJobId) {
+      return { kind: "unavailable", messageKey: "cantTraceFilterItem" }
+    }
+    return { kind: "href", href: `/schedule?id=${scheduleJobId}` }
+  }
+
+  return resolveEntityTarget(entityType, entityId)
 }

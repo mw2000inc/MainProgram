@@ -1,6 +1,9 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Bell, AlertTriangle, PackageX, FileWarning, UserPlus, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,9 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from "@/lib/hooks/use-misc"
+import { resolveNotificationTarget } from "@/lib/notification-navigation"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDateTime } from "@/lib/utils"
-import type { NotificationType } from "@/lib/types"
+import type { AppNotification, NotificationType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<NotificationType, React.ElementType> = {
@@ -33,14 +37,42 @@ const ICON_COLORS: Record<NotificationType, string> = {
 }
 
 export function NotificationsMenu() {
+  const router = useRouter()
   const { t } = useTranslation("notifications")
+  const { t: tActivity } = useTranslation("activity")
+  const [open, setOpen] = React.useState(false)
   const { data: notifications = [] } = useNotifications()
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
   const unreadCount = notifications.filter((n) => !n.isRead).length
 
+  // Same navigation pattern as ActivityLogView's own row click
+  // (resolveActivityLogTarget) — reused here via resolveNotificationTarget
+  // rather than reinvented, including its two fallback toasts: an
+  // unrecognized type gets the generic "no page mapped yet" message, and a
+  // type that's confirmed to have no page at all (new-sale, pointing at the
+  // legacy sales table) gets its own specific message. A record that *did*
+  // have a page but was since deleted isn't handled here at all — same as
+  // Activity Log, that's the destination page's own job (its `?id=` deep-
+  // link "not found" toast, or a dynamic [id] route's own not-found state),
+  // not something this click handler tries to detect itself.
+  function handleClick(n: AppNotification) {
+    markRead.mutate(n.id)
+    setOpen(false)
+    const target = resolveNotificationTarget(n)
+    if (!target) {
+      toast.error(tActivity("noPageMappedYet"))
+      return
+    }
+    if (target.kind === "unavailable") {
+      toast.error(tActivity(target.messageKey))
+      return
+    }
+    router.push(target.href)
+  }
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label={t("pageTitle")}>
           <Bell className="h-4 w-4" />
@@ -69,7 +101,7 @@ export function NotificationsMenu() {
             return (
               <button
                 key={n.id}
-                onClick={() => markRead.mutate(n.id)}
+                onClick={() => handleClick(n)}
                 className={cn(
                   "flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b last:border-0",
                   !n.isRead && "bg-accent/40"
@@ -86,7 +118,7 @@ export function NotificationsMenu() {
           })}
         </ScrollArea>
         <div className="p-2 border-t">
-          <Link href="/notifications">
+          <Link href="/notifications" onClick={() => setOpen(false)}>
             <Button variant="ghost" size="sm" className="w-full text-xs">
               {t("viewAllNotifications")}
             </Button>
