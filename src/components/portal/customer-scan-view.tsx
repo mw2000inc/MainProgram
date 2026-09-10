@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DataTable } from "@/components/data-table/data-table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { MonitoringViewStatusBadge } from "@/components/shared/status-badge"
+import { MonitoringViewStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
 import { usePortalProfile } from "@/lib/hooks/use-portal"
 import { getFilterChangeColumns } from "@/components/filter-change/filter-change-columns"
@@ -38,6 +38,7 @@ import {
   getMonitoringIntervalMonths,
   getMonitoringStatus,
   initials,
+  todayIso,
 } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
 
@@ -63,6 +64,28 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     const accountLabel = customer.companyName || customer.fullName
     return (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
   }, [profile, customer])
+
+  // The customer's next filter change still on the books — earliest
+  // 'Pending' plan by its effective service date (preD, the real scheduled
+  // date, falling back to planDate, the auto-generated recurring slot).
+  // Same filterChanges array the Orders tab already renders, just reduced
+  // to one headline date here. A pending plan whose date is already past
+  // is surfaced as overdue rather than hidden; no pending plan at all
+  // means there's no active schedule to show.
+  const nextFilterChange = React.useMemo<
+    { kind: "upcoming" | "overdue"; date: string } | { kind: "none" }
+  >(() => {
+    const today = todayIso()
+    const pending = (profile?.filterChanges ?? [])
+      .filter((f) => f.status === "Pending")
+      .map((f) => f.preD ?? f.planDate)
+      .filter((d): d is string => !!d)
+      .sort((a, b) => a.localeCompare(b))
+    if (pending.length === 0) return { kind: "none" }
+    const upcoming = pending.find((d) => d >= today)
+    if (upcoming) return { kind: "upcoming", date: upcoming }
+    return { kind: "overdue", date: pending[pending.length - 1] }
+  }, [profile?.filterChanges])
 
   // Deep link from a per-order QR (?order=001-0009, see member-related-sales.tsx)
   // — once the profile loads, jump straight to that order instead of the
@@ -129,6 +152,21 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
               <p className="text-xs text-muted-foreground mt-1">
                 {tFields("memberAccount")}: <span className="font-mono">{customer.memberAccountNumber}</span>
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border bg-muted/40 px-3 py-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Droplets className="h-3.5 w-3.5 text-primary" /> {t("nextFilterChange")}
+                </span>
+                {nextFilterChange.kind === "none" ? (
+                  <StatusBadge tone="neutral" label={t("noActivePlanDate")} />
+                ) : nextFilterChange.kind === "overdue" ? (
+                  <>
+                    <span className="text-sm font-semibold">{formatDate(nextFilterChange.date)}</span>
+                    <StatusBadge tone="danger" label={t("dueForReplacement")} />
+                  </>
+                ) : (
+                  <span className="text-sm font-semibold">{formatDate(nextFilterChange.date)}</span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
