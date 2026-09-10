@@ -95,13 +95,34 @@ export async function getCustomer(id: string): Promise<Customer | undefined> {
   return data ? fromRow(data as CustomerRow) : undefined
 }
 
+// 23505 = unique violation. Two unique columns an admin can end up
+// colliding on: order_number (a plain `unique` constraint from the init
+// schema) and member_account_number (customers_member_account_number_
+// unique_idx, a partial unique index excluding '' — see the
+// customer_member_account_number_unique migration). Postgres' own error
+// message names the constraint/index it failed, so that's what
+// distinguishes which friendly message to show — falls through to the
+// raw error for anything else (there's nothing else unique on this table
+// today, but this must never silently swallow an unrelated failure).
+function friendlyCustomerError(error: { code?: string; message: string }): Error {
+  if (error.code === "23505") {
+    if (error.message.includes("member_account_number")) {
+      return new Error("This Member Account# already exists.")
+    }
+    if (error.message.includes("order_number")) {
+      return new Error("That order number is already used by another customer.")
+    }
+  }
+  return new Error(error.message)
+}
+
 export async function createCustomer(
   // contractNumber is optional on create — the DB auto-fills it from order_number
   // if omitted (see the set_customer_order_number trigger).
   input: Omit<Customer, "id" | "createdAt" | "orderNumber" | "contractNumber"> & { contractNumber?: string }
 ): Promise<Customer> {
   const { data, error } = await supabase.from("customers").insert(toRow(input)).select().single()
-  if (error) throw error
+  if (error) throw friendlyCustomerError(error)
   return fromRow(data as CustomerRow)
 }
 
@@ -111,14 +132,7 @@ export async function updateCustomer(
   input: Partial<Omit<Customer, "id" | "createdAt">>
 ): Promise<Customer> {
   const { data, error } = await supabase.from("customers").update(toRow(input)).eq("id", id).select().single()
-  if (error) {
-    // 23505 = unique violation; order_number is the only unique column an admin
-    // can edit, so a friendlier message than the raw Postgres error.
-    if (error.code === "23505") {
-      throw new Error("That order number is already used by another customer.")
-    }
-    throw error
-  }
+  if (error) throw friendlyCustomerError(error)
   return fromRow(data as CustomerRow)
 }
 

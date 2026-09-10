@@ -29,7 +29,11 @@ export function useCreateCustomer() {
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
       toast.success("Customer added successfully")
     },
-    onError: () => toast.error("Failed to add customer"),
+    // Surfaces createCustomer()'s own friendly message (e.g. a duplicate
+    // Member Account#/order number) the same way useUpdateCustomer already
+    // does below, instead of always showing the same generic text
+    // regardless of why it actually failed.
+    onError: (error: Error) => toast.error(error.message || "Failed to add customer"),
   })
 }
 

@@ -4,6 +4,7 @@
   "editDescription": "Update member details.",
   "addDescription": "Register a new member.",
   "memberAccountNumber0": "Member Account#0",
+  "memberAccountNumberDuplicate": "This Member Account# already exists.",
   "accountContactPersonOptional": "Account Contact Person (Optional)",
   "contactNumber1Main": "Contact Number1 (Main)",
   "contactNumber2SubOptional": "Contact Number2 (Sub, Optional)",

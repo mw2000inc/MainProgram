@@ -23,38 +23,67 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useCreateCustomer, useUpdateCustomer } from "@/lib/hooks/use-customers"
+import { useCreateCustomer, useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { newMemberDefaults } from "@/lib/customer-defaults"
 import type { Customer } from "@/lib/types"
 
+// Same normalization on both sides of every comparison below (trim +
+// lowercase) — "0007-000-0000-0785" and " 0007-000-0000-0785 " or
+// "0007-000-0000-0785 " typed with different casing/whitespace must still
+// collide, matching what a person would consider "the same account
+// number". Blank is never a duplicate — the database's own partial unique
+// index (customers_member_account_number_unique_idx) excludes '' the same
+// way, since at least one legitimate customer row has no account number
+// assigned yet.
+function normalizeAccountNumber(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 function createSchema(
   t: (key: string) => string,
   tCommon: (key: string, params?: Record<string, string>) => string,
-  tf: (key: string) => string
+  tf: (key: string) => string,
+  // Every OTHER customer's own normalized member account number (never
+  // includes the record being edited, and never includes blank) — the
+  // submit-time safety net behind the Member Account# field's own onBlur
+  // check below, so a duplicate can never get through some path that
+  // skips blur (e.g. pasting then hitting Enter to submit immediately).
+  existingAccountNumbers: Set<string>
 ) {
-  return z.object({
-    memberAccountNumber: z.string().min(1, tCommon("requiredField", { field: t("memberAccountNumber0") })),
-    companyName: z.string().min(1, tCommon("requiredField", { field: tf("accountName") })),
-    // Account Contact Person (= fullName) has no minimum length — optional.
-    fullName: z.string(),
-    // Optional, like contactNumber2 right below — not format/length-
-    // validated at all (real contact numbers on file take many legitimate
-    // shapes: "09171234567", "9171234567", "02 8123 4567",
-    // "+63 917 123 4567", a landline, etc., and this app has no business
-    // dictating what counts as a valid one), and not required either. The
-    // customers.contact_number DB column is still `text not null` (no
-    // migration needed) — this controlled input always submits a real
-    // string, "" when left blank, which satisfies NOT NULL without being
-    // NULL. Same pattern this form's own `email` field already uses for
-    // the same reason (`customers.email` is also NOT NULL).
-    contactNumber: z.string().optional(),
-    contactNumber2: z.string().optional(),
-    address: z.string().min(5, tCommon("requiredField", { field: tf("address") })),
-    email: z.string().email(t("enterValidEmail")).or(z.literal("")),
-    tin: z.string().optional(),
-    notes: z.string().optional(),
-  })
+  return z
+    .object({
+      memberAccountNumber: z.string().min(1, tCommon("requiredField", { field: t("memberAccountNumber0") })),
+      companyName: z.string().min(1, tCommon("requiredField", { field: tf("accountName") })),
+      // Account Contact Person (= fullName) has no minimum length — optional.
+      fullName: z.string(),
+      // Optional, like contactNumber2 right below — not format/length-
+      // validated at all (real contact numbers on file take many legitimate
+      // shapes: "09171234567", "9171234567", "02 8123 4567",
+      // "+63 917 123 4567", a landline, etc., and this app has no business
+      // dictating what counts as a valid one), and not required either. The
+      // customers.contact_number DB column is still `text not null` (no
+      // migration needed) — this controlled input always submits a real
+      // string, "" when left blank, which satisfies NOT NULL without being
+      // NULL. Same pattern this form's own `email` field already uses for
+      // the same reason (`customers.email` is also NOT NULL).
+      contactNumber: z.string().optional(),
+      contactNumber2: z.string().optional(),
+      address: z.string().min(5, tCommon("requiredField", { field: tf("address") })),
+      email: z.string().email(t("enterValidEmail")).or(z.literal("")),
+      tin: z.string().optional(),
+      notes: z.string().optional(),
+    })
+    .superRefine((values, ctx) => {
+      const normalized = normalizeAccountNumber(values.memberAccountNumber)
+      if (normalized && existingAccountNumbers.has(normalized)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["memberAccountNumber"],
+          message: t("memberAccountNumberDuplicate"),
+        })
+      }
+    })
 }
 
 type FormValues = z.infer<ReturnType<typeof createSchema>>
@@ -93,11 +122,34 @@ export function CustomerFormDialog({
 }) {
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
+  const { data: customers = [] } = useCustomers()
   const isEdit = !!customer
   const { t } = useTranslation("member")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
-  const schema = React.useMemo(() => createSchema(t, tCommon, tFields), [t, tCommon, tFields])
+
+  // Every OTHER customer's own account number, normalized — excludes the
+  // record being edited (so saving a customer with their own unchanged
+  // Member Account# never falsely flags as a duplicate of itself) and
+  // excludes blank (a blank account number is never a "duplicate", see
+  // normalizeAccountNumber's own comment). useCustomers() is already
+  // fetched app-wide (Member List's own table), so this adds no extra
+  // query — just a client-side lookup, same instant feel as picking from
+  // an already-loaded list.
+  const existingAccountNumbers = React.useMemo(() => {
+    const set = new Set<string>()
+    for (const c of customers) {
+      if (c.id === customer?.id) continue
+      const normalized = normalizeAccountNumber(c.memberAccountNumber)
+      if (normalized) set.add(normalized)
+    }
+    return set
+  }, [customers, customer?.id])
+
+  const schema = React.useMemo(
+    () => createSchema(t, tCommon, tFields, existingAccountNumbers),
+    [t, tCommon, tFields, existingAccountNumbers]
+  )
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -146,7 +198,21 @@ export function CustomerFormDialog({
                   <FormItem>
                     <FormLabel>{t("memberAccountNumber0")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 0007-000-0000-0006" {...field} />
+                      <Input
+                        placeholder="e.g. 0007-000-0000-0006"
+                        {...field}
+                        onBlur={() => {
+                          field.onBlur()
+                          // Immediate feedback the moment the admin tabs off
+                          // this field, rather than only at submit — runs
+                          // the exact same superRefine duplicate check
+                          // above (trigger() re-validates against the full
+                          // schema regardless of the form's onSubmit-only
+                          // validation mode), so there's only one place
+                          // this rule is ever defined.
+                          form.trigger("memberAccountNumber")
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

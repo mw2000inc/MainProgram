@@ -4,6 +4,7 @@
   "editDescription": "회원 정보를 업데이트합니다.",
   "addDescription": "새 회원을 등록합니다.",
   "memberAccountNumber0": "회원 계정#0",
+  "memberAccountNumberDuplicate": "이 회원 계정#은 이미 존재합니다.",
   "accountContactPersonOptional": "계정 담당자 (선택 사항)",
   "contactNumber1Main": "연락처1 (대표)",
   "contactNumber2SubOptional": "연락처2 (보조, 선택 사항)",
