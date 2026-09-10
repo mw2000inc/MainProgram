@@ -201,7 +201,16 @@ export function MemberMapPanel({
         </form>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
-        <div ref={mapDivRef} className="h-full w-full rounded-b-xl" />
+        {/* isolate: this div becomes Leaflet's own .leaflet-container, whose
+            internal panes/controls carry z-index up to 1000 (leaflet.css) —
+            without a stacking context of its own here, those values aren't
+            scoped to the map at all, they compete directly with whatever
+            page content shares the nearest real stacking context (e.g. the
+            topbar's notification dropdown, portaled to the end of <body> at
+            z-50). isolate contains all of Leaflet's z-indexes inside this
+            div, so nothing it renders can ever paint above a dropdown/
+            dialog/tooltip elsewhere on the page again. */}
+        <div ref={mapDivRef} className="isolate h-full w-full rounded-b-xl" />
       </CardContent>
     </Card>
   )
