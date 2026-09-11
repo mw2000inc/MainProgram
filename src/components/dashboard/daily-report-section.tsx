@@ -150,24 +150,20 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean, isAdmin: boolean): 
   return HALF_WIDTH_PANELS.has(id) ? "w-full md:w-[calc(50%-12px)]" : "w-full"
 }
 
-// Gates every Daily Report day-filter below. Reversed from the original
-// "Confirmed-only" spec: an admin now wants same-day visibility into
-// Draft/Pending Customer Confirmation items too (so nothing scheduled for
-// today is invisible just because approval/confirmation hasn't happened
-// yet), so only 'Reschedule Requested' stays excluded — that one still
-// needs the admin to actively re-approve with a corrected date before it
-// belongs back on an active day's list, unlike Draft/Pending which are
-// just waiting on a step already in motion. undefined also passes as a
-// rollout safety net: if this ships before the migration backfilling the
-// column has actually run, every row's dispatchStatus reads as undefined.
-// See rawDispatchStatusBadge below for how Draft/Pending are visually
-// called out once they're on the list, so the day view can't be
-// mistaken for "everything here is locked in."
-// 'Rejected' (Admin Schedule Approval workflow) excluded for the same
-// reason 'Reschedule Requested' already is — the shown date no longer
-// applies at all, so it doesn't belong on that day's active list either.
+// Gates every Daily Report day-filter below. Reverts an earlier "show
+// Draft/Pending Customer Confirmation too" relaxation back to strictly
+// 'Confirmed' — now that CP-cycle-generated filter-change/collection
+// occurrences require a real once-per-order approval (see the
+// 20260912000000_first_occurrence_requires_approval migration), a Draft or
+// Pending Customer Confirmation row reaching this far means real
+// customer-facing approval work is still outstanding, not something a
+// technician should already be executing today. The Daily Report is meant
+// to be a clean "what's actually locked in and needs doing" view, not a
+// place to surface in-flight approvals — those belong in the dedicated
+// Pending Approval Queue / Pending Approvals panel instead. undefined still
+// passes as a rollout safety net for any row somehow missing the column.
 function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
-  return status !== "Reschedule Requested" && status !== "Rejected"
+  return status === "Confirmed" || status === undefined
 }
 
 // Renders nothing for a 'Confirmed' (or legacy-undefined) row — those are
