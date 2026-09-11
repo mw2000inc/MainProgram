@@ -4,6 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { UserCheck, UserSearch } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import {
   Form,
   FormControl,
@@ -26,6 +28,7 @@ import {
 import { useCreateCustomer, useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { newMemberDefaults } from "@/lib/customer-defaults"
+import { findExistingMemberMatch, type MemberMatch } from "@/lib/customer-lookup"
 import type { Customer } from "@/lib/types"
 
 // Same normalization on both sides of every comparison below (trim +
@@ -123,10 +126,34 @@ export function CustomerFormDialog({
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
   const { data: customers = [] } = useCustomers()
-  const isEdit = !!customer
+  // True only when this dialog was explicitly opened to edit a specific
+  // record (row menu's Edit) — the find-existing-member search/detection
+  // below only makes sense for a genuine "Add Member" invocation, never
+  // while already looking at one particular customer.
+  const explicitEdit = !!customer
   const { t } = useTranslation("member")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
+
+  // Set once the admin confirms a detected/searched-for match really is the
+  // member they meant (see applyMatch below) — from that point on this
+  // dialog behaves exactly like editing that record: submitting updates it
+  // instead of inserting a new, likely-duplicate row.
+  const [matchedCustomer, setMatchedCustomer] = React.useState<Customer | null>(null)
+  // A lower-confidence match surfaced passively as the admin fills out the
+  // form organically (not via the search box) — never applied until the
+  // admin clicks "Use This Member", so a coincidental partial match never
+  // silently overwrites what's already been typed.
+  const [possibleMatch, setPossibleMatch] = React.useState<MemberMatch | null>(null)
+  // Once dismissed, a given match doesn't keep reappearing every time the
+  // admin blurs another field this same dialog session.
+  const [dismissedMatchIds, setDismissedMatchIds] = React.useState<Set<string>>(new Set())
+  const [searchValue, setSearchValue] = React.useState("")
+
+  // The record this form is actually operating on for existing-Member#
+  // exclusion/submit purposes — whichever came first, an explicit Edit
+  // invocation or a match the admin confirmed while adding.
+  const effectiveTarget = customer ?? matchedCustomer ?? undefined
 
   // Every OTHER customer's own account number, normalized — excludes the
   // record being edited (so saving a customer with their own unchanged
@@ -139,12 +166,12 @@ export function CustomerFormDialog({
   const existingAccountNumbers = React.useMemo(() => {
     const set = new Set<string>()
     for (const c of customers) {
-      if (c.id === customer?.id) continue
+      if (c.id === effectiveTarget?.id) continue
       const normalized = normalizeAccountNumber(c.memberAccountNumber)
       if (normalized) set.add(normalized)
     }
     return set
-  }, [customers, customer?.id])
+  }, [customers, effectiveTarget?.id])
 
   const schema = React.useMemo(
     () => createSchema(t, tCommon, tFields, existingAccountNumbers),
@@ -161,14 +188,83 @@ export function CustomerFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customer])
 
+  // Resets the match-related state above whenever the dialog freshly opens
+  // (or, while already open, switches to a different explicit-Edit record)
+  // — done during render via the "adjust state when a prop changes" pattern
+  // (see React's own docs on this) rather than in a useEffect, since a raw
+  // useState setter call inside an effect body is flagged by this repo's
+  // lint rules as a cascading-render risk. resetKey collapses open+customer
+  // into one comparable value; null while closed means nothing resets on
+  // close, matching the effect above's own `if (open)` guard.
+  const resetKey = open ? (customer?.id ?? "__new__") : null
+  const [lastResetKey, setLastResetKey] = React.useState(resetKey)
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
+    if (resetKey !== null) {
+      setMatchedCustomer(null)
+      setPossibleMatch(null)
+      setDismissedMatchIds(new Set())
+      setSearchValue("")
+    }
+  }
+
+  // Explicit search-box selection or "Use This Member" on a detected match
+  // — both count as a deliberate admin confirmation, so both load
+  // immediately with no further click needed (only the passive on-blur
+  // detection itself waits for a click, see checkForMatch below).
+  function applyMatch(matched: Customer) {
+    setMatchedCustomer(matched)
+    setPossibleMatch(null)
+    setSearchValue("")
+    form.reset(defaultValues(matched))
+  }
+
+  function clearMatch() {
+    setMatchedCustomer(null)
+    form.reset(defaultValues(undefined))
+  }
+
+  // Run from onBlur of Member Account#/Contact Number/Name — never while a
+  // match is already loaded or this is an explicit Edit invocation (nothing
+  // to detect against once the target record is already known).
+  function checkForMatch() {
+    if (matchedCustomer || explicitEdit) return
+    const match = findExistingMemberMatch(customers, form.getValues())
+    if (match && !dismissedMatchIds.has(match.customer.id)) setPossibleMatch(match)
+  }
+
+  function dismissPossibleMatch() {
+    if (possibleMatch) setDismissedMatchIds((prev) => new Set(prev).add(possibleMatch.customer.id))
+    setPossibleMatch(null)
+  }
+
+  const searchOptions = React.useMemo(() => {
+    const map = new Map<string, Customer>()
+    const options: ComboboxOption[] = []
+    for (const c of customers) {
+      if (c.isSystem) continue
+      const name = c.companyName || c.fullName || t("unnamedMember")
+      const phone = c.contactNumber || tCommon("none")
+      const account = c.memberAccountNumber || tCommon("none")
+      const label = `${name} • ${phone} • ${account}`
+      // Skip the vanishingly rare exact-label collision rather than letting
+      // a second customer silently overwrite the first in this map — keeps
+      // this a non-issue instead of a silent wrong-record bug.
+      if (map.has(label)) continue
+      map.set(label, c)
+      options.push({ value: label })
+    }
+    return { options, map }
+  }, [customers, t, tCommon])
+
   async function onSubmit(values: FormValues) {
     // contactNumber is optional in the schema now, but customers.contact_number
     // is still `text not null` at the database level (no migration needed,
     // same reasoning as this form's own `email` field) — "" satisfies NOT
     // NULL without being NULL.
     const input = { ...values, contactNumber: values.contactNumber ?? "" }
-    if (isEdit) {
-      await updateCustomer.mutateAsync({ id: customer.id, input })
+    if (effectiveTarget) {
+      await updateCustomer.mutateAsync({ id: effectiveTarget.id, input })
     } else {
       const created = await createCustomer.mutateAsync({ ...input, ...newMemberDefaults() })
       onCreated?.(created)
@@ -185,11 +281,69 @@ export function CustomerFormDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
-          <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
+          <DialogTitle>{effectiveTarget ? t("editTitle") : t("addTitle")}</DialogTitle>
+          <DialogDescription>{effectiveTarget ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {!explicitEdit && !matchedCustomer && (
+              <div className="space-y-1.5">
+                <FormLabel>{t("findExistingMemberLabel")}</FormLabel>
+                <Combobox
+                  value={searchValue}
+                  onChange={(val) => {
+                    setSearchValue(val)
+                    const match = searchOptions.map.get(val)
+                    if (match) applyMatch(match)
+                  }}
+                  options={searchOptions.options}
+                  placeholder={t("findExistingMemberPlaceholder")}
+                />
+                <p className="text-xs text-muted-foreground">{t("findExistingMemberHint")}</p>
+              </div>
+            )}
+
+            {!explicitEdit && matchedCustomer && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <UserCheck className="h-4 w-4 shrink-0 text-primary" />
+                  <span>{t("existingMemberLoaded", { name: matchedCustomer.companyName || matchedCustomer.fullName })}</span>
+                </div>
+                <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={clearMatch}>
+                  {t("startNewMemberInstead")}
+                </Button>
+              </div>
+            )}
+
+            {!explicitEdit && !matchedCustomer && possibleMatch && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-start gap-2 text-sm">
+                  <UserSearch className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="font-medium">{t("existingMemberFoundTitle")}</p>
+                    <p className="text-muted-foreground">
+                      {t(
+                        possibleMatch.matchedOn === "memberAccountNumber"
+                          ? "existingMemberFoundByAccountNumber"
+                          : possibleMatch.matchedOn === "contactNumber"
+                            ? "existingMemberFoundByPhone"
+                            : "existingMemberFoundByName",
+                        { name: possibleMatch.customer.companyName || possibleMatch.customer.fullName }
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={dismissPossibleMatch}>
+                    {tCommon("dismiss")}
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => applyMatch(possibleMatch.customer)}>
+                    {t("useThisMember")}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -211,6 +365,7 @@ export function CustomerFormDialog({
                           // validation mode), so there's only one place
                           // this rule is ever defined.
                           form.trigger("memberAccountNumber")
+                          checkForMatch()
                         }}
                       />
                     </FormControl>
@@ -225,7 +380,14 @@ export function CustomerFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("accountName")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Golden Harvest Corp." {...field} />
+                      <Input
+                        placeholder="Golden Harvest Corp."
+                        {...field}
+                        onBlur={() => {
+                          field.onBlur()
+                          checkForMatch()
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -238,7 +400,14 @@ export function CustomerFormDialog({
                   <FormItem>
                     <FormLabel>{t("accountContactPersonOptional")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Juan Dela Cruz" {...field} />
+                      <Input
+                        placeholder="Juan Dela Cruz"
+                        {...field}
+                        onBlur={() => {
+                          field.onBlur()
+                          checkForMatch()
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -260,7 +429,16 @@ export function CustomerFormDialog({
                           object, not native form submission), so nothing
                           reads the DOM name back for state — only the
                           browser's autofill heuristics see it. */}
-                      <Input placeholder="09171234567" {...field} autoComplete="off" name="member-contact-number-1" />
+                      <Input
+                        placeholder="09171234567"
+                        {...field}
+                        autoComplete="off"
+                        name="member-contact-number-1"
+                        onBlur={() => {
+                          field.onBlur()
+                          checkForMatch()
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -337,7 +515,7 @@ export function CustomerFormDialog({
                 {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : t("addMember")}
+                {pending ? tCommon("saving") : effectiveTarget ? tCommon("saveChanges") : t("addMember")}
               </Button>
             </DialogFooter>
           </form>
