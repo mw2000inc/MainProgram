@@ -556,6 +556,11 @@ export interface InstallPlan extends DispatchFields {
   note?: string
   modelDp?: string
   inOut: string
+  // Plan-level technician, matching FilterChangePlan.serviceman — added
+  // later than every other column here (20260914000000 migration), so an
+  // admin can assign someone before this ever reaches the customer, not
+  // only after confirmation via schedule_jobs.technician.
+  serviceman: string
   createdAt: string
   // Set once a customer confirms this dispatch (see the
   // auto_create_schedule_job_on_confirm migration) -- links to the
@@ -599,6 +604,11 @@ export interface CollectionPlan extends DispatchFields {
   preD?: string
   accD?: string
   note?: string
+  // Plan-level technician, matching FilterChangePlan.serviceman — added
+  // later than every other column here (20260914000000 migration), so an
+  // admin can assign someone before this ever reaches the customer, not
+  // only after confirmation via schedule_jobs.technician.
+  serviceman: string
   createdAt: string
   // Same linking/tagging pattern as FilterChangePlan — see its comments.
   // Both optional (rather than defaulted client-side) so existing manual-

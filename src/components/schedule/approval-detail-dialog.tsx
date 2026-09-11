@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
-import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { PendingApprovalRow } from "@/components/schedule/pending-approvals-panel"
 import {
   useApproveDispatchItem,
@@ -30,7 +29,7 @@ import { useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { TECHNICIANS } from "@/lib/constants"
-import { formatDateTime } from "@/lib/utils"
+import { formatDate, formatDateTime } from "@/lib/utils"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -92,10 +91,12 @@ export function ApprovalDetailDialog({
   const [rescheduleReason, setRescheduleReason] = React.useState("")
 
   // Editable task-detail fields — which of these actually apply depends on
-  // row.entityType (see the conditional rendering below and saveEditedFields):
-  // only filter_change_plans/repair_plans have a plan-level technician
-  // column, only filter_change_plans/install_plans/collections have `note`,
-  // and filter/collection "details" are naturally module-specific.
+  // row.entityType (see the conditional rendering below and
+  // saveEditedFields): all four modules now have a plan-level technician
+  // column (serviceman on filter_change_plans/collections/install_plans,
+  // th on repair_plans — see the 20260914000000 migration), only
+  // filter_change_plans/install_plans/collections have `note`, and filter/
+  // collection "details" are naturally module-specific.
   const [servicemanValue, setServicemanValue] = React.useState(row?.servicemanField ?? "")
   const [dateValue, setDateValue] = React.useState(row?.scheduledDate ?? "")
   const [noteValue, setNoteValue] = React.useState(row?.planNote ?? "")
@@ -129,16 +130,28 @@ export function ApprovalDetailDialog({
         input: { preD: dateValue, serviceman: servicemanValue, note: noteValue, filterType: filterTypeValue, productNo: productNoValue, sc: scValue },
       })
     } else if (row.entityType === "install_plans") {
-      await updateInstallPlan.mutateAsync({ id: row.entityId, input: { preInstalledDate: dateValue, note: noteValue } })
+      await updateInstallPlan.mutateAsync({
+        id: row.entityId,
+        input: { preInstalledDate: dateValue, note: noteValue, serviceman: servicemanValue },
+      })
     } else if (row.entityType === "collections") {
       await updateCollection.mutateAsync({
         id: row.entityId,
-        input: { preD: dateValue, note: noteValue, amount: Number(amountValue) || 0, ct: ctValue },
+        input: { preD: dateValue, note: noteValue, amount: Number(amountValue) || 0, ct: ctValue, serviceman: servicemanValue },
       })
     } else if (row.entityType === "repair_plans") {
       await updateRepairPlan.mutateAsync({ id: row.entityId, input: { preD: dateValue, th: servicemanValue } })
     }
   }
+
+  // Already approved and sent — nothing left for the admin to approve, and
+  // editing task fields here would silently bounce it back to Draft via
+  // reset_dispatch_status_on_pre_d_change() the moment pre_d changed
+  // without any corresponding action to move it forward again. Reject and
+  // an admin-initiated Request Reschedule both remain genuinely valid RPC
+  // transitions from this status (see request_reschedule_by_admin's own
+  // guard), so those two stay available — only the edit/Approve UI hides.
+  const isAwaitingCustomer = row?.dispatchStatus === "Pending Customer Confirmation"
 
   async function handleApprove() {
     if (!row) return
@@ -179,8 +192,12 @@ export function ApprovalDetailDialog({
     }
   }
 
-  const statusTone: BadgeTone = row?.dispatchStatus === "Draft" ? "warning" : "warning"
-  const statusLabel = row?.dispatchStatus === "Draft" ? t("pendingApprovalStatus") : t("rescheduleRequested")
+  // Same "Pending Approval"/"Approved" labeling as the table row's own
+  // PendingStatusBadge (pending-approvals-panel.tsx) — Draft and Reschedule
+  // Requested read as identical text here too, so the badge in this dialog
+  // never disagrees with the one the admin just clicked "Review" from.
+  const statusTone: BadgeTone = isAwaitingCustomer ? "success" : "warning"
+  const statusLabel = isAwaitingCustomer ? t("approvedStatus") : t("pendingApprovalStatus")
 
   return (
     <>
@@ -196,20 +213,26 @@ export function ApprovalDetailDialog({
                 <Field label={t("orderNoColumn")} value={row.orderNumber || "—"} />
                 <Field label={t("jobTypeColumn")} value={t(row.moduleKey)} />
                 <Field label={t("customerColumn")} value={row.customerName || "—"} />
-                <div>
-                  <Label htmlFor="approval-scheduled-date" className="text-xs font-medium text-muted-foreground">
-                    {t("requestedDateLabel")}
-                  </Label>
-                  <Input
-                    id="approval-scheduled-date"
-                    type="date"
-                    className="mt-0.5 h-8"
-                    value={dateValue}
-                    onChange={(e) => setDateValue(e.target.value)}
-                  />
-                </div>
+                {isAwaitingCustomer ? (
+                  <Field label={t("requestedDateLabel")} value={formatDate(dateValue)} />
+                ) : (
+                  <div>
+                    <Label htmlFor="approval-scheduled-date" className="text-xs font-medium text-muted-foreground">
+                      {t("requestedDateLabel")}
+                    </Label>
+                    <Input
+                      id="approval-scheduled-date"
+                      type="date"
+                      className="mt-0.5 h-8"
+                      value={dateValue}
+                      onChange={(e) => setDateValue(e.target.value)}
+                    />
+                  </div>
+                )}
                 <Field label={t("requestedTimeLabel")} value={row.requestedTime || "—"} />
-                {row.servicemanField !== undefined ? (
+                {isAwaitingCustomer ? (
+                  <Field label={t("technicianColumn")} value={servicemanValue || t("notAssigned")} />
+                ) : (
                   <div>
                     <Label htmlFor="approval-technician" className="text-xs font-medium text-muted-foreground">
                       {t("technicianColumn")}
@@ -239,17 +262,14 @@ export function ApprovalDetailDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                ) : (
-                  <Field
-                    label={t("technicianColumn")}
-                    value={row.technician ? formatTechnicians(row.technician, row.technician2) : t("notAssigned")}
-                  />
                 )}
                 <Field label={t("routeColumn")} value={row.routeSequence != null ? String(row.routeSequence) : t("notAssigned")} />
                 <Field label={t("requestDateTimeLabel")} value={formatDateTime(row.createdAt)} />
               </div>
 
-              {row.planNote !== undefined ? (
+              {row.planNote !== undefined && isAwaitingCustomer ? (
+                <Field label={t("notesLabel")} value={noteValue || "—"} />
+              ) : row.planNote !== undefined ? (
                 <div className="space-y-1">
                   <Label htmlFor="approval-notes" className="text-xs font-medium text-muted-foreground">
                     {t("notesLabel")}
@@ -262,27 +282,47 @@ export function ApprovalDetailDialog({
               <Field label={t("remarksLabel")} value={row.remarks || "—"} />
               {row.rescheduleReason && <Field label={t("rescheduleReasonLabel")} value={row.rescheduleReason} />}
 
-              {row.filterDetails && (
+              {row.filterDetails && isAwaitingCustomer ? (
                 <div className="space-y-1.5 rounded-md border p-3">
                   <p className="text-xs font-medium text-muted-foreground">{t("filterDetailsLabel")}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      value={filterTypeValue}
-                      onChange={(e) => setFilterTypeValue(e.target.value)}
-                      placeholder={tFields("filter")}
-                      className="h-8"
-                    />
-                    <Input
-                      value={productNoValue}
-                      onChange={(e) => setProductNoValue(e.target.value)}
-                      placeholder={tFields("productNo")}
-                      className="h-8"
-                    />
-                    <Input value={scValue} onChange={(e) => setScValue(e.target.value)} placeholder={tFields("sc")} className="h-8" />
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <span>{filterTypeValue || "—"}</span>
+                    <span>{productNoValue || "—"}</span>
+                    <span>{scValue || "—"}</span>
                   </div>
                 </div>
+              ) : (
+                row.filterDetails && (
+                  <div className="space-y-1.5 rounded-md border p-3">
+                    <p className="text-xs font-medium text-muted-foreground">{t("filterDetailsLabel")}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        value={filterTypeValue}
+                        onChange={(e) => setFilterTypeValue(e.target.value)}
+                        placeholder={tFields("filter")}
+                        className="h-8"
+                      />
+                      <Input
+                        value={productNoValue}
+                        onChange={(e) => setProductNoValue(e.target.value)}
+                        placeholder={tFields("productNo")}
+                        className="h-8"
+                      />
+                      <Input value={scValue} onChange={(e) => setScValue(e.target.value)} placeholder={tFields("sc")} className="h-8" />
+                    </div>
+                  </div>
+                )
               )}
-              {row.collectionDetails && (
+              {row.collectionDetails && isAwaitingCustomer ? (
+                <div className="space-y-1.5 rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground">{t("collectionDetailsLabel")}</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <span>{amountValue || "—"}</span>
+                    <span>{ctValue || "—"}</span>
+                  </div>
+                </div>
+              ) : (
+                row.collectionDetails && (
                 <div className="space-y-1.5 rounded-md border p-3">
                   <p className="text-xs font-medium text-muted-foreground">{t("collectionDetailsLabel")}</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -296,6 +336,7 @@ export function ApprovalDetailDialog({
                     <Input value={ctValue} onChange={(e) => setCtValue(e.target.value)} placeholder={tFields("ct")} className="h-8" />
                   </div>
                 </div>
+                )
               )}
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{t("statusColumn")}</p>
@@ -322,6 +363,7 @@ export function ApprovalDetailDialog({
               {row.dispatchStatus === "Reschedule Requested" && (
                 <p className="text-xs text-muted-foreground">{t("approveWillScheduleNow")}</p>
               )}
+              {isAwaitingCustomer && <p className="text-xs text-muted-foreground">{t("awaitingCustomerResponse")}</p>}
             </div>
           )}
           {isAdmin && (
@@ -330,19 +372,21 @@ export function ApprovalDetailDialog({
                 <Button type="button" variant="outline" className="text-danger hover:text-danger" disabled={busy} onClick={() => setRejectOpen(true)}>
                   {t("reject")}
                 </Button>
-                {row?.dispatchStatus === "Draft" && (
+                {(row?.dispatchStatus === "Draft" || isAwaitingCustomer) && (
                   <Button type="button" variant="outline" disabled={busy} onClick={() => setRescheduleOpen(true)}>
                     {t("requestReschedule")}
                   </Button>
                 )}
               </div>
-              <Button
-                type="button"
-                disabled={busy || (row?.dispatchStatus === "Draft" && !notifyEmail.trim())}
-                onClick={handleApprove}
-              >
-                {busy ? tCommon("saving") : row?.dispatchStatus === "Draft" ? t("approveAndSendConfirmation") : t("approveAndSchedule")}
-              </Button>
+              {!isAwaitingCustomer && (
+                <Button
+                  type="button"
+                  disabled={busy || (row?.dispatchStatus === "Draft" && !notifyEmail.trim())}
+                  onClick={handleApprove}
+                >
+                  {busy ? tCommon("saving") : row?.dispatchStatus === "Draft" ? t("approveAndSendConfirmation") : t("approveAndSchedule")}
+                </Button>
+              )}
             </DialogFooter>
           )}
         </DialogContent>

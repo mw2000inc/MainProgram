@@ -261,6 +261,12 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       preD: c.pre_d ?? undefined,
       accD: c.acc_d ?? undefined,
       note: c.note ?? undefined,
+      // get_portal_profile() doesn't select this column for collections —
+      // it's an internal assignment detail, not something the read-only
+      // customer-facing portal needs to show. Present only to satisfy
+      // CollectionPlan's shape (PortalCollection reuses it so this page can
+      // render with the same admin column definitions).
+      serviceman: "",
       createdAt: c.created_at,
     })),
     repairs: row.repairs.map((r) => ({

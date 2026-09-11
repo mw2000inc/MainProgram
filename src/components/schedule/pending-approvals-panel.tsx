@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
-import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
+import { StatusBadge } from "@/components/shared/status-badge"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
@@ -26,7 +26,7 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
-import type { Customer, SaleListEntry, ScheduleJob } from "@/lib/types"
+import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
 
 // The 4 job-type tabs (plus "all"), in the same fixed order used everywhere
@@ -41,16 +41,25 @@ const TYPE_TABS: { value: DispatchEntityType; moduleKey: PendingApprovalRow["mod
   { value: "repair_plans", moduleKey: "repairModule", tabLabelKey: "repairTabLabel" },
 ]
 
-// One row per dispatch item genuinely awaiting admin attention — Draft
-// (never yet approved) or Reschedule Requested (customer-declined-with-a-
-// new-date, OR an admin's own request_reschedule_by_admin — both land on
-// this same dispatch_status, see that migration's own comment on why no
-// second status was invented for the admin-initiated case). Confirmed and
-// Rejected rows never appear here — this is deliberately the same
-// dispatch_status this app already tracks, just a second, more focused
-// surface for it than DispatchApprovalQueue's own Dashboard panel (which
-// stays completely unchanged — this doesn't replace it, admins can use
-// either).
+// One row per dispatch item not yet fully locked in (Confirmed) or dead
+// (Rejected) — three dispatch_status values on purpose, matching the
+// Status filter's three real buckets:
+// - Draft (never yet approved) and Reschedule Requested (customer-
+//   declined-with-a-new-date, OR an admin's own request_reschedule_by_admin
+//   — both land on this same dispatch_status, see that migration's own
+//   comment on why no second status was invented for the admin-initiated
+//   case) both genuinely need an ADMIN decision — the "Pending Approval"
+//   filter bucket.
+// - Pending Customer Confirmation has already been reviewed and sent —
+//   it's now waiting on the CUSTOMER, not the admin — the "Approved" filter
+//   bucket. Still shown here (rather than hidden entirely) so an admin can
+//   see what's outstanding and reject it if something changes, but
+//   ApprovalDetailDialog deliberately doesn't offer to re-send it.
+// Confirmed and Rejected rows never appear here — this is deliberately the
+// same dispatch_status this app already tracks, just a second, more
+// focused surface for it than DispatchApprovalQueue's own Dashboard panel
+// (which stays completely unchanged — this doesn't replace it, admins can
+// use either).
 export interface PendingApprovalRow {
   entityType: DispatchEntityType
   entityId: string
@@ -61,7 +70,7 @@ export interface PendingApprovalRow {
   customerEmail?: string
   scheduledDate: string
   requestedTime?: string
-  dispatchStatus: "Draft" | "Reschedule Requested"
+  dispatchStatus: "Draft" | "Pending Customer Confirmation" | "Reschedule Requested"
   technician?: string
   technician2?: string
   routeSequence?: number
@@ -81,15 +90,30 @@ export interface PendingApprovalRow {
   // issuedDate) — `scheduledDate` above is already preD-or-this collapsed;
   // this is kept separately so an edit form can show/compare both.
   baseDate: string
-  // Plan-level technician column — only filter_change_plans (serviceman)
-  // and repair_plans (th) have one; install_plans/collections have none
-  // (their technician only exists on schedule_jobs, post-confirmation).
+  // Plan-level technician column — filter_change_plans (serviceman),
+  // repair_plans (th), and, since the 20260914000000 migration,
+  // collections/install_plans (serviceman) all have one now. Always
+  // present in practice; still optional on the type since it's populated
+  // per-module in buildRows() below rather than guaranteed by a shared base
+  // type.
   servicemanField?: string
   // The plan's own `note` column directly (filter_change_plans/
   // install_plans/collections have it; repair_plans doesn't).
   planNote?: string
   filterDetails?: { filterType: string; productNo: string; sc: string }
   collectionDetails?: { amount: number; ct: string }
+}
+
+// The three dispatch_status values this panel surfaces at all — see
+// PendingApprovalRow's own comment for what each means/which filter bucket
+// it belongs to. A type guard (not a plain array + .includes()) because
+// TypeScript doesn't narrow a variable's type from an .includes() check —
+// every caller below relies on this actually narrowing DispatchStatus |
+// undefined down to PendingApprovalRow's own tighter union.
+function isVisibleDispatchStatus(
+  status: DispatchStatus | undefined
+): status is PendingApprovalRow["dispatchStatus"] {
+  return status === "Draft" || status === "Pending Customer Confirmation" || status === "Reschedule Requested"
 }
 
 function findCustomer(
@@ -130,7 +154,7 @@ function buildRows(
   }
 
   for (const p of filterChangePlans ?? []) {
-    if (p.dispatchStatus !== "Draft" && p.dispatchStatus !== "Reschedule Requested") continue
+    if (!isVisibleDispatchStatus(p.dispatchStatus)) continue
     const customer = findCustomer(customers, saleListEntries, { customerId: p.customerId, orderNumber: p.orderNumber })
     rows.push(
       withJob(p.scheduleJobId, {
@@ -155,7 +179,7 @@ function buildRows(
     )
   }
   for (const p of installPlans ?? []) {
-    if (p.dispatchStatus !== "Draft" && p.dispatchStatus !== "Reschedule Requested") continue
+    if (!isVisibleDispatchStatus(p.dispatchStatus)) continue
     const customer = findCustomer(customers, saleListEntries, { orderNumber: p.orderNo })
     rows.push(
       withJob(p.scheduleJobId, {
@@ -173,12 +197,13 @@ function buildRows(
         notes: p.note,
         rescheduleReason: p.rescheduleReason,
         createdAt: p.createdAt,
+        servicemanField: p.serviceman,
         planNote: p.note,
       })
     )
   }
   for (const c of collections ?? []) {
-    if (c.dispatchStatus !== "Draft" && c.dispatchStatus !== "Reschedule Requested") continue
+    if (!isVisibleDispatchStatus(c.dispatchStatus)) continue
     const customer = findCustomer(customers, saleListEntries, { customerId: c.customerId, orderNumber: c.orderNo })
     rows.push(
       withJob(c.scheduleJobId, {
@@ -196,13 +221,14 @@ function buildRows(
         notes: c.note,
         rescheduleReason: c.rescheduleReason,
         createdAt: c.createdAt,
+        servicemanField: c.serviceman,
         planNote: c.note,
         collectionDetails: { amount: c.amount, ct: c.ct },
       })
     )
   }
   for (const r of repairPlans ?? []) {
-    if (r.dispatchStatus !== "Draft" && r.dispatchStatus !== "Reschedule Requested") continue
+    if (!isVisibleDispatchStatus(r.dispatchStatus)) continue
     const customer = findCustomer(customers, saleListEntries, { orderNumber: r.orderNo })
     rows.push(
       withJob(r.scheduleJobId, {
@@ -249,11 +275,17 @@ export function usePendingApprovalRows(): { rows: PendingApprovalRow[]; isPendin
   return { rows, isPending: p1 || p2 || p3 || p4 || p5 || p6 || p7 }
 }
 
-function PendingStatusBadge({ status }: { status: "Draft" | "Reschedule Requested" }) {
+// Draft and Reschedule Requested both read as the same "Pending Approval"
+// text here — both genuinely need an admin decision (see
+// PendingApprovalRow's own comment), and the filter dropdown right above
+// this table already groups them into that same single bucket, so the
+// badge text and the filter option it corresponds to never disagree.
+function PendingStatusBadge({ status }: { status: PendingApprovalRow["dispatchStatus"] }) {
   const { t } = useTranslation("dispatch")
-  const tone: BadgeTone = status === "Draft" ? "warning" : "warning"
-  const label = status === "Draft" ? t("pendingApprovalStatus") : t("rescheduleRequested")
-  return <StatusBadge tone={tone} label={label} />
+  if (status === "Pending Customer Confirmation") {
+    return <StatusBadge tone="success" label={t("approvedStatus")} />
+  }
+  return <StatusBadge tone="warning" label={t("pendingApprovalStatus")} />
 }
 
 // A row's own unique key across all 4 modules — entityId alone isn't
@@ -264,7 +296,17 @@ function rowKey(row: PendingApprovalRow): string {
   return `${row.entityType}:${row.entityId}`
 }
 
-type StatusFilter = "all" | "Draft" | "Reschedule Requested"
+// "pendingApproval" covers both Draft and Reschedule Requested — both
+// genuinely need an ADMIN decision, matching this panel's own "which rows
+// need my attention" framing (see PendingApprovalRow's comment) — it isn't
+// a 1:1 mapping onto a single dispatch_status the way "approved" is.
+type StatusFilter = "all" | "pendingApproval" | "approved"
+
+function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filter: StatusFilter): boolean {
+  if (filter === "all") return true
+  if (filter === "approved") return status === "Pending Customer Confirmation"
+  return status === "Draft" || status === "Reschedule Requested"
+}
 
 export function PendingApprovalsPanel({
   historyDefaultDate,
@@ -309,7 +351,7 @@ export function PendingApprovalsPanel({
   const visibleRows = React.useMemo(
     () =>
       rows.filter(
-        (r) => (activeTab === "all" || r.entityType === activeTab) && (statusFilter === "all" || r.dispatchStatus === statusFilter)
+        (r) => (activeTab === "all" || r.entityType === activeTab) && matchesStatusFilter(r.dispatchStatus, statusFilter)
       ),
     [rows, activeTab, statusFilter]
   )
@@ -429,8 +471,8 @@ export function PendingApprovalsPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                <SelectItem value="Draft">{t("pendingApprovalStatus")}</SelectItem>
-                <SelectItem value="Reschedule Requested">{t("rescheduleRequested")}</SelectItem>
+                <SelectItem value="pendingApproval">{t("pendingApprovalStatus")}</SelectItem>
+                <SelectItem value="approved">{t("approvedStatus")}</SelectItem>
               </SelectContent>
             </Select>
             {isAdmin && (

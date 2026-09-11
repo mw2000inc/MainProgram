@@ -152,8 +152,10 @@ export function CollectionsFormDialog({
       await updateCollection.mutateAsync({ id: entry.id, input })
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
-      // see the dispatch_confirmation_workflow migration.
-      await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft" })
+      // see the dispatch_confirmation_workflow migration. serviceman starts
+      // unassigned — the admin picks one from the Pending Approvals dialog's
+      // own Technician dropdown before approving, same as every other module.
+      await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft", serviceman: "" })
     }
     onOpenChange(false)
   }

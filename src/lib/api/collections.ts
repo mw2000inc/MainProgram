@@ -13,6 +13,7 @@ type Row = {
   pre_d: string | null
   acc_d: string | null
   note: string | null
+  serviceman: string
   created_at: string
   customer_id: string | null
   schedule_job_id: string | null
@@ -46,6 +47,7 @@ function fromRow(row: Row): CollectionPlan {
     preD: row.pre_d ?? undefined,
     accD: row.acc_d ?? undefined,
     note: row.note ?? undefined,
+    serviceman: row.serviceman,
     createdAt: row.created_at,
     customerId: row.customer_id ?? undefined,
     scheduleJobId: row.schedule_job_id ?? undefined,
@@ -79,6 +81,7 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
   if (input.preD !== undefined) row.pre_d = input.preD || null
   if (input.accD !== undefined) row.acc_d = input.accD || null
   if (input.note !== undefined) row.note = input.note || null
+  if (input.serviceman !== undefined) row.serviceman = input.serviceman
   if (input.filterChangeRequired !== undefined) row.filter_change_required = input.filterChangeRequired
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row

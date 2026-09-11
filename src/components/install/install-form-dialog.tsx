@@ -179,8 +179,10 @@ export function InstallFormDialog({
       await updatePlan.mutateAsync({ id: plan.id, input })
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
-      // see the dispatch_confirmation_workflow migration.
-      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+      // see the dispatch_confirmation_workflow migration. serviceman starts
+      // unassigned — the admin picks one from the Pending Approvals dialog's
+      // own Technician dropdown before approving, same as every other module.
+      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft", serviceman: "" })
 
       // This order has no existing customer/sale-list-entry match — one
       // form, three records: also create the Member and Sale List entry,
