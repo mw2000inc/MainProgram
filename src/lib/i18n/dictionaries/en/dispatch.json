@@ -71,6 +71,8 @@
   "requestDateTimeLabel": "Request Date/Time",
   "notesLabel": "Notes",
   "remarksLabel": "Remarks",
+  "filterDetailsLabel": "Filter Details",
+  "collectionDetailsLabel": "Collection Details",
   "rescheduleReasonLabel": "Reschedule Reason",
   "approveAndSchedule": "Approve & Schedule",
   "reject": "Reject",

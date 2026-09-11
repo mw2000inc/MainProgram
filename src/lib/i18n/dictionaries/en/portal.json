@@ -3,6 +3,7 @@
   "profileNotFoundTitle": "We couldn't find this profile",
   "profileNotFoundDescription": "The QR code may be invalid or the record no longer exists.",
   "readOnlyNotice": "This is a read-only view of your account. Only MW2000 staff can make changes — contact us below if anything needs updating.",
+  "pendingConfirmationBanner": "You have an upcoming {module} on {date} awaiting your confirmation — please check your email for the confirmation link.",
   "memberInformation": "Member Information",
   "accountContactPerson": "Account Contact Person",
   "na": "N/A",

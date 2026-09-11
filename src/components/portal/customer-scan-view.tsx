@@ -49,6 +49,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const { t } = useTranslation("portal")
   const { t: tFields } = useTranslation("fields")
   const { t: tMember } = useTranslation("member")
+  const { t: tDispatch } = useTranslation("dispatch")
   const { locale, setLocale } = usePreAuthLocale()
   const { data: profile, isPending } = usePortalProfile(customerId)
   const customer = profile?.customer
@@ -177,6 +178,20 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
             <p className="text-xs text-muted-foreground">{t("readOnlyNotice")}</p>
           </CardContent>
         </Card>
+
+        {profile?.pendingConfirmation && (
+          <Card className="border-amber-500/40 bg-amber-500/10">
+            <CardContent className="flex items-start gap-3 py-4">
+              <ClipboardCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                {t("pendingConfirmationBanner", {
+                  module: tDispatch(profile.pendingConfirmation.module),
+                  date: formatDate(profile.pendingConfirmation.scheduledDate),
+                })}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

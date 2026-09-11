@@ -71,6 +71,8 @@
   "requestDateTimeLabel": "요청 일시",
   "notesLabel": "비고",
   "remarksLabel": "특이사항",
+  "filterDetailsLabel": "필터 상세정보",
+  "collectionDetailsLabel": "수거 상세정보",
   "rescheduleReasonLabel": "일정 변경 사유",
   "approveAndSchedule": "승인 및 예약",
   "reject": "거부",

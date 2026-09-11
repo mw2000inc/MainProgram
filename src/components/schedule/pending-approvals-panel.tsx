@@ -69,6 +69,27 @@ export interface PendingApprovalRow {
   remarks?: string
   rescheduleReason?: string
   createdAt: string
+  // The fields below carry each module's own raw, editable columns — added
+  // so ApprovalDetailDialog can let an admin edit technician/date/notes/
+  // details before approving, without a second query: every plan array is
+  // already loaded here. Deliberately distinct from `technician`/`notes`
+  // above, which are display-only and partly job-sourced (see withJob) —
+  // editing needs the plan's OWN column, not a linked schedule_jobs value
+  // that usually doesn't exist yet for a still-Draft row.
+  //
+  // The plan's own un-overridden date (planDate/inputDate/collectionDate/
+  // issuedDate) — `scheduledDate` above is already preD-or-this collapsed;
+  // this is kept separately so an edit form can show/compare both.
+  baseDate: string
+  // Plan-level technician column — only filter_change_plans (serviceman)
+  // and repair_plans (th) have one; install_plans/collections have none
+  // (their technician only exists on schedule_jobs, post-confirmation).
+  servicemanField?: string
+  // The plan's own `note` column directly (filter_change_plans/
+  // install_plans/collections have it; repair_plans doesn't).
+  planNote?: string
+  filterDetails?: { filterType: string; productNo: string; sc: string }
+  collectionDetails?: { amount: number; ct: string }
 }
 
 function findCustomer(
@@ -121,11 +142,15 @@ function buildRows(
         customerName: customer?.fullName,
         customerEmail: p.notifyEmail ?? customer?.email,
         scheduledDate: p.preD || p.planDate,
+        baseDate: p.planDate,
         requestedTime: p.requestedTime,
         dispatchStatus: p.dispatchStatus,
         notes: p.note,
         rescheduleReason: p.rescheduleReason,
         createdAt: p.createdAt,
+        servicemanField: p.serviceman,
+        planNote: p.note,
+        filterDetails: { filterType: p.filterType, productNo: p.productNo, sc: p.sc },
       })
     )
   }
@@ -142,11 +167,13 @@ function buildRows(
         customerName: customer?.fullName ?? p.name,
         customerEmail: p.notifyEmail ?? customer?.email,
         scheduledDate: p.preInstalledDate || p.inputDate,
+        baseDate: p.inputDate,
         requestedTime: p.requestedTime,
         dispatchStatus: p.dispatchStatus,
         notes: p.note,
         rescheduleReason: p.rescheduleReason,
         createdAt: p.createdAt,
+        planNote: p.note,
       })
     )
   }
@@ -163,11 +190,14 @@ function buildRows(
         customerName: customer?.fullName,
         customerEmail: c.notifyEmail ?? customer?.email,
         scheduledDate: c.preD || c.collectionDate,
+        baseDate: c.collectionDate,
         requestedTime: c.requestedTime,
         dispatchStatus: c.dispatchStatus,
         notes: c.note,
         rescheduleReason: c.rescheduleReason,
         createdAt: c.createdAt,
+        planNote: c.note,
+        collectionDetails: { amount: c.amount, ct: c.ct },
       })
     )
   }
@@ -184,10 +214,12 @@ function buildRows(
         customerName: customer?.fullName,
         customerEmail: r.notifyEmail ?? customer?.email,
         scheduledDate: r.preD || r.issuedDate,
+        baseDate: r.issuedDate,
         requestedTime: r.requestedTime,
         dispatchStatus: r.dispatchStatus,
         rescheduleReason: r.rescheduleReason,
         createdAt: r.createdAt,
+        servicemanField: r.th,
       })
     )
   }

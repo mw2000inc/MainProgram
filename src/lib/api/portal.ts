@@ -54,6 +54,15 @@ export interface PortalSettings {
   monitoringIntervals: Record<string, number>
 }
 
+// Informational only — never carries the actual confirmation_token (this
+// RPC is public/no-auth and its link is meant to be permanent, unlike the
+// short-lived, single-use token that's only ever emailed to the customer).
+// The real Confirm/Reschedule action stays on /confirm/[token].
+export interface PortalPendingConfirmation {
+  module: "filterChangeModule" | "installationModule" | "collectionModule" | "repairModule"
+  scheduledDate: string
+}
+
 export interface PortalProfile {
   customer: PortalCustomer
   sales: PortalSale[]
@@ -62,6 +71,7 @@ export interface PortalProfile {
   filterChanges: PortalFilterChange[]
   collections: PortalCollection[]
   repairs: PortalRepair[]
+  pendingConfirmation: PortalPendingConfirmation | null
   settings: PortalSettings | null
 }
 
@@ -155,6 +165,10 @@ type RpcRow = {
     unit_in_out: string
     created_at: string
   }[]
+  pendingConfirmation: {
+    module: "filterChangeModule" | "installationModule" | "collectionModule" | "repairModule"
+    scheduled_date: string
+  } | null
   settings: {
     company_name: string
     address: string
@@ -265,6 +279,9 @@ export async function getPortalProfile(customerId: string): Promise<PortalProfil
       unitInOut: r.unit_in_out,
       createdAt: r.created_at,
     })),
+    pendingConfirmation: row.pendingConfirmation
+      ? { module: row.pendingConfirmation.module, scheduledDate: row.pendingConfirmation.scheduled_date }
+      : null,
     settings: row.settings
       ? {
           companyName: row.settings.company_name,

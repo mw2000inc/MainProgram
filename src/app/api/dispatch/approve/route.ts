@@ -76,9 +76,10 @@ export async function POST(request: Request) {
   const { out_token: token, out_scheduled_date: scheduledDate } = row
 
   const admin = createAdminClient()
-  const [{ data: settingsRow }, address] = await Promise.all([
+  const [{ data: settingsRow }, address, technician] = await Promise.all([
     admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle(),
     getEntityAddress(admin, entityType, entityId),
+    getEntityTechnician(admin, entityType, entityId),
   ])
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]
@@ -86,8 +87,20 @@ export async function POST(request: Request) {
   const confirmUrl = `${appBaseUrl(request)}/confirm/${token}`
 
   // notifyEmail is guaranteed present — validated required above, now that
-  // it's the only channel.
-  const { subject, html, text } = buildEmailContent({ companyName, moduleLabel, actionPhrase, scheduledDate: scheduledDate ?? "", address, confirmUrl })
+  // it's the only channel. scheduledDate/technician are read fresh by the
+  // RPC/helper above, AFTER whatever edits the approval dialog just saved
+  // (see approval-detail-dialog.tsx's saveEditedFields, which always runs
+  // before this route is ever called) — so this always reflects the real,
+  // just-confirmed schedule, not stale pre-edit values.
+  const { subject, html, text } = buildEmailContent({
+    companyName,
+    moduleLabel,
+    actionPhrase,
+    scheduledDate: scheduledDate ?? "",
+    address,
+    technician,
+    confirmUrl,
+  })
   const sendResult = await sendEmail(notifyEmail, subject, html, text)
   const result: { email: ChannelResult } = { email: sendResult }
   await admin.from("dispatch_notifications").insert({
@@ -130,6 +143,28 @@ async function getEntityAddress(
   return null
 }
 
+// Only filter_change_plans (serviceman) and repair_plans (th) carry a
+// plan-level technician column — install_plans/collections have none; any
+// technician for those only exists on schedule_jobs, which doesn't get
+// created until AFTER the customer actually confirms (see
+// auto_create_schedule_job_on_confirm), so there's genuinely nothing to
+// report here yet for those two modules at approval time.
+async function getEntityTechnician(
+  admin: ReturnType<typeof createAdminClient>,
+  entityType: DispatchEntityType,
+  entityId: string
+): Promise<string | null> {
+  if (entityType === "filter_change_plans") {
+    const { data } = await admin.from("filter_change_plans").select("serviceman").eq("id", entityId).maybeSingle()
+    return (data as { serviceman: string | null } | null)?.serviceman || null
+  }
+  if (entityType === "repair_plans") {
+    const { data } = await admin.from("repair_plans").select("th").eq("id", entityId).maybeSingle()
+    return (data as { th: string | null } | null)?.th || null
+  }
+  return null
+}
+
 // Warmer, more conversational copy (confirmed wording) — points at the
 // button to confirm or reschedule rather than asking for a reply (SMS used
 // to ask for a reply as the natural action on a phone; that channel was
@@ -140,6 +175,7 @@ function buildEmailContent({
   actionPhrase,
   scheduledDate,
   address,
+  technician,
   confirmUrl,
 }: {
   companyName: string
@@ -147,16 +183,21 @@ function buildEmailContent({
   actionPhrase: string
   scheduledDate: string
   address: string | null
+  technician: string | null
   confirmUrl: string
 }): { subject: string; html: string; text: string } {
   const subject = `${companyName}: Your ${moduleLabel} is scheduled for ${scheduledDate}`
   const addressLine = address ? `<p style="margin:0 0 16px;color:#475569;">Location: ${escapeHtml(address)}</p>` : ""
+  const technicianLine = technician
+    ? `<p style="margin:0 0 16px;color:#475569;">Assigned Technician: ${escapeHtml(technician)}</p>`
+    : ""
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;">
       <h2 style="margin:0 0 16px;color:#0f172a;">${escapeHtml(companyName)}</h2>
       <p style="margin:0 0 16px;color:#0f172a;">Hello Sir/Ma'am, good day! 😊 We hope you're doing well!</p>
       <p style="margin:0 0 16px;color:#0f172a;">This is a friendly reminder from <strong>${escapeHtml(companyName)}</strong> that we have ${escapeHtml(actionPhrase)} scheduled for <strong>${escapeHtml(scheduledDate)}</strong>.</p>
       ${addressLine}
+      ${technicianLine}
       <p style="margin:0 0 24px;color:#475569;">We'd be happy to assist you with the service — please use the button below to confirm if this date works for you, or let us know if you'd like to reschedule.</p>
       <a href="${confirmUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Confirm or Reschedule</a>
       <p style="margin:24px 0 8px;color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${confirmUrl}</p>
@@ -168,9 +209,10 @@ function buildEmailContent({
     "",
     `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}.`,
   ]
-  // Only the address line is conditional — the blank lines around it are
-  // deliberate paragraph breaks, not filler to strip.
+  // Address/technician lines are conditional — the blank lines around them
+  // are deliberate paragraph breaks, not filler to strip.
   if (address) textLines.push(`Location: ${address}`)
+  if (technician) textLines.push(`Assigned Technician: ${technician}`)
   textLines.push(
     "",
     "We'd be happy to assist you with the service. Please use this link to confirm if this date works for you, or let us know if you'd like to reschedule:",
