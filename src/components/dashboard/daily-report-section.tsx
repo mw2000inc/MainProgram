@@ -58,7 +58,6 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { differenceInCalendarDays, parseISO } from "date-fns"
 import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
@@ -170,40 +169,6 @@ function defaultWidthClassName(id: PanelId, isGrid: boolean, isAdmin: boolean): 
 function isDailyReportEligible(status: DispatchStatus | undefined): boolean {
   return status !== "Reschedule Requested" && status !== "Rejected"
 }
-
-// Matches AppSheet's own Filter Change Plan / Collection Plan views: those
-// show Pending/overdue tasks up to and including the selected date, not a
-// strict same-day match — a task due a few days before the selected date
-// that's still sitting there un-actioned belongs on today's list exactly as
-// much as one due today does. A task due exactly on the selected date still
-// shows even if it's already been marked Completed (e.g. done earlier that
-// same day) — only the backlog side (dates before the selected one) drops
-// once completed, so finished work doesn't pile up in the daily view
-// forever. Anything after the selected date stays hidden either way.
-//
-// maxOverdueDays optionally bounds how far back the overdue side reaches —
-// added after live data showed Pending collections as old as April 2025
-// otherwise piling into every single day's view indefinitely (a year and a
-// half of un-actioned backlog is no longer "today's work," it's a separate
-// cleanup problem). undefined keeps the original unbounded behavior, still
-// used by Filter Change — Collections is the one that had a real backlog
-// problem, so it's the only caller passing a window for now.
-function isDueOrOverdue(effectiveDate: string, status: string, selectedDate: string, maxOverdueDays?: number): boolean {
-  if (effectiveDate === selectedDate) return true
-  if (effectiveDate > selectedDate || status === "Completed") return false
-  if (maxOverdueDays === undefined) return true
-  return differenceInCalendarDays(parseISO(selectedDate), parseISO(effectiveDate)) <= maxOverdueDays
-}
-
-// Tightened from an initial 60 down to 30 — 60 still let items nearly two
-// months stale (e.g. an Aug 4 item still showing on Sep 11) read as "active
-// overdue work," which is too loose for a daily operations view. 30 days
-// still covers a full month of genuine backlog without the multi-year
-// backlog a fully unbounded window let through (confirmed live: Pending
-// collections dated back to April 2025, Pending filter-change plans back to
-// November 2025). Shared by both panels so the two stay consistent rather
-// than drifting into two different ideas of "still relevant."
-const OVERDUE_WINDOW_DAYS = 30
 
 // Renders nothing for a 'Confirmed' (or legacy-undefined) row — those are
 // the ones actually locked in for the day and don't need calling out. A
@@ -592,18 +557,15 @@ export function DailyReportSection() {
   //
   // isDailyReportEligible() also gates every one of these — see its own
   // comment for why (dispatch_confirmation_workflow migration).
-  // Filter Change and Collection (below) intentionally diverge from the
-  // strict same-day match Install/Repair still use — matched to how
-  // AppSheet's own equivalent views actually behave: Pending/overdue tasks
-  // up to and including the selected date, not just tasks landing exactly
-  // on it (see isDueOrOverdue above).
+  //
+  // Strict same-day match on all four modules — mirrors AppSheet's own
+  // daily behavior exactly: only what's actually scheduled for the selected
+  // date belongs on this view. (Briefly tried showing Pending/overdue
+  // backlog up to the selected date too, per an earlier read of AppSheet's
+  // behavior; reverted since the real intent is a clean single-day list,
+  // not a rolling backlog.)
   const dayFilterChangePlans = React.useMemo(
-    () =>
-      filterChangePlans.filter(
-        (p) =>
-          isDueOrOverdue(p.preD || p.planDate, p.status, reportDate, OVERDUE_WINDOW_DAYS) &&
-          isDailyReportEligible(p.dispatchStatus)
-      ),
+    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [filterChangePlans, reportDate]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
@@ -619,12 +581,7 @@ export function DailyReportSection() {
     [repairPlans, reportDate]
   )
   const dayCollectionPlans = React.useMemo(
-    () =>
-      collectionPlans.filter(
-        (p) =>
-          isDueOrOverdue(p.preD || p.collectionDate, p.status, reportDate, OVERDUE_WINDOW_DAYS) &&
-          isDailyReportEligible(p.dispatchStatus)
-      ),
+    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
     [collectionPlans, reportDate]
   )
   // Filtered by the movement's own `date` (its as-of day — defaults to the
