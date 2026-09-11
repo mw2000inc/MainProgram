@@ -62,9 +62,35 @@ export default function CustomersPage() {
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
 
+  // Same customer<->order matching relatedSaleRows below already uses
+  // (customerId when the sale list entry has one, else falling back to a
+  // literal orderNumber match) — computed for every customer up front here
+  // so the Member List's own search (see CustomerRow.relatedOrderNumbers)
+  // can find a member by any of their orders' own "001-####" numbers, not
+  // just their customers.order_number ("SK001-####"). Reported as broken
+  // for customers.order_number, but that one was already searchable (it's
+  // a plain field on the row DataTable's generic search already scans) —
+  // this was the actual gap, confirmed against real data before assuming
+  // which field needed fixing.
+  const relatedOrderNumbersByCustomerId = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const customer of realCustomers) {
+      const orders = saleListEntries
+        .filter((e) => (e.customerId ? e.customerId === customer.id : e.orderNumber === customer.orderNumber))
+        .map((e) => e.orderNumber.trim())
+      if (orders.length > 0) map.set(customer.id, orders)
+    }
+    return map
+  }, [realCustomers, saleListEntries])
+
   const rows: CustomerRow[] = React.useMemo(
-    () => realCustomers.map((c) => ({ ...c, contractStatus: getContractStatus(c.contractEnd) })),
-    [realCustomers]
+    () =>
+      realCustomers.map((c) => ({
+        ...c,
+        contractStatus: getContractStatus(c.contractEnd),
+        relatedOrderNumbers: (relatedOrderNumbersByCustomerId.get(c.id) ?? []).join(" "),
+      })),
+    [realCustomers, relatedOrderNumbersByCustomerId]
   )
 
   const years = React.useMemo(

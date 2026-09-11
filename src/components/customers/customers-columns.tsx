@@ -14,7 +14,17 @@ import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Customer, ContractStatus } from "@/lib/types"
 
-export type CustomerRow = Customer & { contractStatus: ContractStatus }
+export type CustomerRow = Customer & {
+  contractStatus: ContractStatus
+  // Every sale_list_entries.order_number belonging to this customer (see
+  // customers/page.tsx's own matching logic), space-joined — never
+  // rendered as a column, it exists purely so DataTable's own generic
+  // Object.values() search (see data-table.tsx) can find a member by any
+  // one of their specific orders' own "001-####" order numbers, not just
+  // customers.order_number itself (the "SK001-####" contract-era number,
+  // already searchable since it's a plain field on this same object).
+  relatedOrderNumbers: string
+}
 
 function RowActionsCell({
   customer,
