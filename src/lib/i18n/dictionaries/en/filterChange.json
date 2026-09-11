@@ -12,5 +12,13 @@
   "noPlansFound": "No filter change plans found.",
   "deleteTitle": "Delete this filter change plan?",
   "deleteDescription": "This will permanently remove this filter change record.",
-  "noPlansForDate": "No filter change plans for this date."
+  "noPlansForDate": "No filter change plans for this date.",
+  "recognizedArea": "Recognized area: {area}",
+  "suggestTechnician": "Suggest the best technician based on nearby jobs",
+  "outsideUsualCoverage": "Outside usual coverage",
+  "autoSuggestTechnicians": "Auto-suggest technicians",
+  "autoSuggestConfirmTitle": "Auto-suggest technicians for {count} plan(s)?",
+  "autoSuggestConfirmDescription": "Assigns the nearest available technician to every plan in this month's view that has no technician yet, clustering nearby jobs together. You can still edit any individual assignment afterward.",
+  "noUnassignedPlans": "Every plan in this view already has a technician assigned.",
+  "suggestedInstead": "Clustering would suggest {technician} instead —"
 }

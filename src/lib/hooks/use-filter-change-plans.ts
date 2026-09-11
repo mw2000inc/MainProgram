@@ -47,3 +47,25 @@ export function useDeleteFilterChangePlans() {
     onError: () => toast.error(t("failedToRemove")),
   })
 }
+
+// Read-only — the caller (filter-change-form-dialog) applies the result to
+// the form field itself; no cache to invalidate since nothing was written.
+export function useSuggestTechnician() {
+  return useMutation({
+    mutationFn: (planId: string) => api.suggestTechnician(planId),
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useBulkSuggestTechnicians() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (planIds: string[]) => api.suggestTechniciansBulk(planIds),
+    onSuccess: (summary) => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      const coverageNote = summary.flaggedOutsideCoverage > 0 ? `, ${summary.flaggedOutsideCoverage} outside usual coverage` : ""
+      toast.success(`Assigned ${summary.assigned} plan(s)${coverageNote}${summary.skipped > 0 ? `, ${summary.skipped} skipped` : ""}`)
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}

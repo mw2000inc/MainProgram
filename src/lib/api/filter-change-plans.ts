@@ -119,3 +119,39 @@ export async function deleteFilterChangePlans(ids: string[]): Promise<void> {
   const { error } = await supabase.from("filter_change_plans").delete().in("id", ids)
   if (error) throw error
 }
+
+export interface TechnicianSuggestion {
+  technician: string
+  distanceKm: number | null
+  nearbyCount: number
+  explanation: string
+  outsideCoverage: boolean
+}
+
+export interface BulkSuggestSummary {
+  assigned: number
+  skipped: number
+  flaggedOutsideCoverage: number
+}
+
+export async function suggestTechnician(planId: string): Promise<TechnicianSuggestion> {
+  const res = await fetch("/api/filter-change-plans/suggest-technician", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ planId }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to suggest a technician")
+  return data as TechnicianSuggestion
+}
+
+export async function suggestTechniciansBulk(planIds: string[]): Promise<BulkSuggestSummary> {
+  const res = await fetch("/api/filter-change-plans/suggest-technician-bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ planIds }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to auto-assign technicians")
+  return data as BulkSuggestSummary
+}

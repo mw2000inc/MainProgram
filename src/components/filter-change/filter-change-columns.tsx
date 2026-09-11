@@ -10,8 +10,23 @@ import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { TECHNICIANS } from "@/lib/constants"
+import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+
+// The plain address string, plus a best-effort recognized-area label
+// underneath (see city-label.ts) — the closest thing this table has to a
+// "location at a glance" column, since filter_change_plans has no
+// structured city field of its own.
+function AddressCell({ address }: { address: string }) {
+  const city = extractCityLabel(address)
+  return (
+    <div>
+      <div>{address || "—"}</div>
+      {city && <div className="text-xs text-muted-foreground">{city}</div>}
+    </div>
+  )
+}
 
 function NoteCell({ plan }: { plan: FilterChangePlan }) {
   if (!plan.note) return <span className="text-muted-foreground">—</span>
@@ -260,7 +275,11 @@ export function getFilterChangeFullColumns({
     { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
     { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
-    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
+    {
+      accessorKey: "address",
+      header: () => <ColumnHeader tKey="address" ns="fields" />,
+      cell: ({ row }) => <AddressCell address={row.original.address} />,
+    },
     {
       accessorKey: "planDate",
       header: () => <ColumnHeader tKey="planD" ns="fields" />,

@@ -4,6 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { Sparkles } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import {
   Form,
   FormControl,
@@ -23,12 +25,17 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { useCreateFilterChangePlan, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import {
+  useCreateFilterChangePlan,
+  useUpdateFilterChangePlan,
+  useSuggestTechnician,
+} from "@/lib/hooks/use-filter-change-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { extractCityLabel } from "@/lib/geo/city-label"
 import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
 
@@ -106,6 +113,8 @@ export function FilterChangeFormDialog({
   const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
   const updatePlan = useUpdateFilterChangePlan()
+  const suggestTechnician = useSuggestTechnician()
+  const suggestion = suggestTechnician.data ?? null
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("filterChange")
@@ -120,6 +129,7 @@ export function FilterChangeFormDialog({
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
+    suggestTechnician.reset()
     // Same lookup the blur handler runs below — opening this dialog already
     // pointed at a real order (e.g. from that order's own detail page)
     // fills the rest in immediately, without needing the admin to click
@@ -127,6 +137,16 @@ export function FilterChangeFormDialog({
     if (!plan && defaultOrderNumber) handleOrderNumberBlur(defaultOrderNumber)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNumber, plan])
+
+  // Fills serviceman with the nearest-technician pick (see
+  // filter-change-suggest.ts) — never submitted automatically, the admin
+  // still reviews/overrides it and clicks Save like any other edit.
+  async function handleSuggest() {
+    if (!plan) return
+    const result = await suggestTechnician.mutateAsync(plan.id).catch(() => null)
+    if (!result) return
+    form.setValue("serviceman", result.technician, { shouldDirty: true })
+  }
 
   // Looks up the typed order number against the customers table (one row
   // per order — see customer-lookup.ts) the moment the admin tabs off the
@@ -251,15 +271,19 @@ export function FilterChangeFormDialog({
               <FormField
                 control={form.control}
                 name="address"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>{tFields("address")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("serviceAddress")} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const cityLabel = extractCityLabel(field.value)
+                  return (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>{tFields("address")}</FormLabel>
+                      <FormControl>
+                        <Input placeholder={t("serviceAddress")} {...field} />
+                      </FormControl>
+                      {cityLabel && <p className="text-xs text-muted-foreground">{t("recognizedArea", { area: cityLabel })}</p>}
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
               />
               <FormField
                 control={form.control}
@@ -319,9 +343,34 @@ export function FilterChangeFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tFields("serviceman")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("technicianName")} {...field} />
-                    </FormControl>
+                    <div className="flex gap-1.5">
+                      <FormControl>
+                        <Input placeholder={t("technicianName")} {...field} />
+                      </FormControl>
+                      {isEdit && plan?.customerId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          title={t("suggestTechnician")}
+                          disabled={suggestTechnician.isPending}
+                          onClick={handleSuggest}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {suggestion && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">{suggestion.explanation}</p>
+                        {suggestion.outsideCoverage && (
+                          <Badge variant="outline" className="text-amber-600 border-amber-600/40">
+                            {t("outsideUsualCoverage")}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

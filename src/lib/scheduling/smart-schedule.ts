@@ -41,12 +41,12 @@ export type ScheduleJobTypeDb = "installation" | "filter_change" | "repair" | "c
 
 export type LocationSource = "customer_cached" | "customer_geocoded" | "install_geocoded" | "repair_via_customer" | "unavailable"
 
-interface ResolvedLocation {
+export interface ResolvedLocation {
   point: GeoPoint | null
   source: LocationSource
 }
 
-function haversineKm(a: GeoPoint, b: GeoPoint): number {
+export function haversineKm(a: GeoPoint, b: GeoPoint): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180
   const R = 6371
   const dLat = toRad(b.lat - a.lat)
@@ -62,7 +62,10 @@ function haversineKm(a: GeoPoint, b: GeoPoint): number {
 // see updateCustomerCoordinates in src/lib/api/customers.ts) if it isn't
 // cached yet. Shared by the filter_change/collection path and, once a
 // repair has been traced back to a customer, the repair path too.
-async function resolveViaCustomer(
+// Exported so filter-change-suggest.ts's clustering can resolve a
+// customer's point the exact same way (cached -> geocode -> cache back)
+// instead of a second copy of this logic.
+export async function resolveViaCustomer(
   admin: SupabaseClient,
   customerId: string,
   sourceIfCached: LocationSource,
