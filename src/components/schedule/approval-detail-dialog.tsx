@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { PendingApprovalRow } from "@/components/schedule/pending-approvals-panel"
@@ -28,6 +29,7 @@ import { useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { TECHNICIANS } from "@/lib/constants"
 import { formatDateTime } from "@/lib/utils"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -38,6 +40,18 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     </div>
   )
 }
+
+// Radix Select forbids an empty-string item value, so "Not Assigned" needs
+// its own sentinel — mapped back to "" (the plan's own serviceman/th
+// columns are `not null default ''`, never a real NULL) on save. Same
+// pattern schedule-form-dialog.tsx's own optional-technician Selects
+// already use. "N/A" (the roster's own placeholder, used elsewhere for
+// scoring/scheduling purposes — see smart-schedule.ts) is deliberately
+// excluded from this list in favor of this explicit option, so this
+// plan-level field's "nobody assigned yet" state is never confused with
+// that separate roster concept.
+const TECHNICIAN_NONE_SENTINEL = "__none__"
+const TECHNICIAN_OPTIONS: string[] = TECHNICIANS.filter((t) => t !== "N/A")
 
 // The single-item Review flow for the Schedule page's Pending Approvals
 // tab — Approve & Schedule / Reject / Request Reschedule, exactly the three
@@ -200,13 +214,30 @@ export function ApprovalDetailDialog({
                     <Label htmlFor="approval-technician" className="text-xs font-medium text-muted-foreground">
                       {t("technicianColumn")}
                     </Label>
-                    <Input
-                      id="approval-technician"
-                      className="mt-0.5 h-8"
-                      value={servicemanValue}
-                      onChange={(e) => setServicemanValue(e.target.value)}
-                      placeholder={t("notAssigned")}
-                    />
+                    <Select
+                      value={servicemanValue || TECHNICIAN_NONE_SENTINEL}
+                      onValueChange={(v) => setServicemanValue(v === TECHNICIAN_NONE_SENTINEL ? "" : v)}
+                    >
+                      <SelectTrigger id="approval-technician" className="mt-0.5 h-8 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={TECHNICIAN_NONE_SENTINEL}>{t("notAssigned")}</SelectItem>
+                        {/* A value already on the record that isn't one of the
+                            known roster names (e.g. typed in before this was a
+                            dropdown, or someone no longer on the roster) still
+                            gets its own option — never silently hidden just
+                            because it doesn't match the current TECHNICIANS list. */}
+                        {servicemanValue && !TECHNICIAN_OPTIONS.includes(servicemanValue) && (
+                          <SelectItem value={servicemanValue}>{servicemanValue}</SelectItem>
+                        )}
+                        {TECHNICIAN_OPTIONS.map((tech) => (
+                          <SelectItem key={tech} value={tech}>
+                            {tech}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 ) : (
                   <Field
