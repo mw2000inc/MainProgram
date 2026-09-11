@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { MonitoringViewStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
 import { usePortalProfile } from "@/lib/hooks/use-portal"
-import { getFilterChangeColumns } from "@/components/filter-change/filter-change-columns"
+import { getFilterChangeCustomerPortalColumns } from "@/components/filter-change/filter-change-columns"
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
 import { getSaleListSummaryColumns, type SaleListRow } from "@/components/sale-list/sale-list-columns"
@@ -102,7 +102,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     }
   }, [orderParam, saleListRows])
 
-  const filterChangeColumns = React.useMemo(() => getFilterChangeColumns(), [])
+  const filterChangeColumns = React.useMemo(() => getFilterChangeCustomerPortalColumns(), [])
   const collectionsColumns = React.useMemo(() => getCollectionsColumns(), [])
   const repairColumns = React.useMemo(() => getRepairColumns(), [])
   const saleListColumns = React.useMemo(() => getSaleListSummaryColumns(), [])

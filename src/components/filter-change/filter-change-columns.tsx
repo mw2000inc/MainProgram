@@ -103,6 +103,47 @@ export function getFilterChangeColumns({
   ]
 }
 
+// Effective scheduled date for a plan: preD (the real, admin-confirmed
+// service date) when set, falling back to planDate (the auto-generated
+// recurring slot) — same precedence the customer portal's own "Next
+// Scheduled Filter Change" summary already uses (see customer-scan-view.tsx),
+// kept in sync here so the table and that summary never disagree about what
+// counts as "the" date for a given plan.
+function scheduledDate(plan: FilterChangePlan): string {
+  return plan.preD ?? plan.planDate
+}
+
+// Customer-facing variant of getFilterChangeColumns() above — Member
+// Account# dropped (redundant: the portal is already scoped to one member's
+// own record) in favor of a Scheduled Date column, so this stays a 4-column
+// table that fits the same width budget without needing horizontal scroll
+// on mobile. Read-only: no onStatusChange, matching every other portal
+// table (collections/repairs) never letting a customer edit their own
+// record.
+export function getFilterChangeCustomerPortalColumns(): ColumnDef<FilterChangePlan, unknown>[] {
+  return [
+    {
+      accessorKey: "orderNumber",
+      header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
+      cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
+    },
+    {
+      accessorKey: "filterType",
+      header: () => <ColumnHeader tKey="filter" ns="fields" />,
+    },
+    {
+      id: "scheduledDate",
+      header: () => <ColumnHeader tKey="scheduledDate" ns="fields" />,
+      cell: ({ row }) => formatDate(scheduledDate(row.original)),
+    },
+    {
+      accessorKey: "status",
+      header: () => <ColumnHeader tKey="status" ns="fields" />,
+      cell: ({ row }) => <PlanStatusBadge status={row.original.status} />,
+    },
+  ]
+}
+
 interface FilterChangeDailyReportColumnParams {
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
   onFieldChange?: (plan: FilterChangePlan, patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman">>) => void
