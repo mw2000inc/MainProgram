@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 import type { FilterChangePlan } from "@/lib/types"
 
 type Row = {
@@ -93,9 +94,10 @@ function toRow(input: Partial<Omit<FilterChangePlan, "id" | "createdAt">>) {
 }
 
 export async function listFilterChangePlans(): Promise<FilterChangePlan[]> {
-  const { data, error } = await supabase.from("filter_change_plans").select("*").order("plan_date", { ascending: true })
-  if (error) throw error
-  return (data as Row[]).map(fromRow)
+  const data = await fetchAllRows<Row>((from, to) =>
+    supabase.from("filter_change_plans").select("*").order("plan_date", { ascending: true }).range(from, to)
+  )
+  return data.map(fromRow)
 }
 
 export async function createFilterChangePlan(input: Omit<FilterChangePlan, "id" | "createdAt">): Promise<FilterChangePlan> {

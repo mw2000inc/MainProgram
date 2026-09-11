@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 import type { CollectionPlan } from "@/lib/types"
 
 type Row = {
@@ -84,9 +85,10 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
 }
 
 export async function listCollections(): Promise<CollectionPlan[]> {
-  const { data, error } = await supabase.from("collections").select("*").order("collection_date", { ascending: true })
-  if (error) throw error
-  return (data as Row[]).map(fromRow)
+  const data = await fetchAllRows<Row>((from, to) =>
+    supabase.from("collections").select("*").order("collection_date", { ascending: true }).range(from, to)
+  )
+  return data.map(fromRow)
 }
 
 export async function createCollection(input: Omit<CollectionPlan, "id" | "createdAt">): Promise<CollectionPlan> {
