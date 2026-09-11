@@ -195,14 +195,15 @@ function isDueOrOverdue(effectiveDate: string, status: string, selectedDate: str
   return differenceInCalendarDays(parseISO(selectedDate), parseISO(effectiveDate)) <= maxOverdueDays
 }
 
-// Upper end of the "30-60 days" range this was scoped to — still a wide
-// enough net that a genuinely-still-relevant month-old Pending task doesn't
-// disappear, without dragging in the multi-year backlog a fully unbounded
-// window did (confirmed live: Pending collections dated back to April 2025,
-// Pending filter-change plans back to November 2025). Shared by both panels
-// so the two stay consistent rather than drifting into two different ideas
-// of "still relevant."
-const OVERDUE_WINDOW_DAYS = 60
+// Tightened from an initial 60 down to 30 — 60 still let items nearly two
+// months stale (e.g. an Aug 4 item still showing on Sep 11) read as "active
+// overdue work," which is too loose for a daily operations view. 30 days
+// still covers a full month of genuine backlog without the multi-year
+// backlog a fully unbounded window let through (confirmed live: Pending
+// collections dated back to April 2025, Pending filter-change plans back to
+// November 2025). Shared by both panels so the two stay consistent rather
+// than drifting into two different ideas of "still relevant."
+const OVERDUE_WINDOW_DAYS = 30
 
 // Renders nothing for a 'Confirmed' (or legacy-undefined) row — those are
 // the ones actually locked in for the day and don't need calling out. A
