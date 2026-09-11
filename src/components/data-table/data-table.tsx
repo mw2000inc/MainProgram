@@ -38,6 +38,13 @@ interface DataTableProps<TData> {
   searchPlaceholder?: string
   toolbar?: React.ReactNode
   onFilteredRowsChange?: (rows: TData[]) => void
+  // Raw text currently typed into the search box — separate from
+  // onFilteredRowsChange because an empty query and a query that happens to
+  // match every row both produce a full-length filtered array; callers that
+  // need to tell "no search active" apart from "search matched everything"
+  // (e.g. the Member List's map panel deciding whether to re-focus on a top
+  // match or fall back to its default view) need the raw string itself.
+  onSearchChange?: (value: string) => void
   emptyMessage?: string
   pageSize?: number
   onRowClick?: (row: TData) => void
@@ -65,6 +72,7 @@ export function DataTable<TData>({
   searchPlaceholder,
   toolbar,
   onFilteredRowsChange,
+  onSearchChange,
   emptyMessage,
   pageSize = 10,
   onRowClick,
@@ -126,7 +134,10 @@ export function DataTable<TData>({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
+            onChange={(e) => {
+              setGlobalFilter(e.target.value)
+              onSearchChange?.(e.target.value)
+            }}
             placeholder={searchPlaceholder ?? t("searchPlaceholder")}
             className="pl-8"
           />

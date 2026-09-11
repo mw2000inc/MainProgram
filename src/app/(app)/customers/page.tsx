@@ -59,6 +59,7 @@ export default function CustomersPage() {
   // that was never drilled into via the split-view panel.
   const [directionsTarget, setDirectionsTarget] = React.useState<Customer | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<CustomerRow[]>([])
+  const [searchQuery, setSearchQuery] = React.useState("")
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
 
@@ -109,6 +110,15 @@ export default function CustomersPage() {
   }, [rows, statusFilter, monthYear])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
+
+  // Only set while the search box actually has text — filteredRows alone
+  // can't tell "no search" apart from "search matched every row", and the
+  // Map panel needs to fall back to its normal default view (not just stay
+  // wherever the last search left it) once the box is cleared.
+  const topSearchMatch = React.useMemo(
+    () => (searchQuery.trim() ? (filteredRows[0] ?? null) : null),
+    [searchQuery, filteredRows]
+  )
 
   // The selected member's own sale list entries — scoped fresh whenever the
   // selected member changes, so drilling into an order for one member never
@@ -234,6 +244,7 @@ export default function CustomersPage() {
                   data={scopedRows}
                   searchPlaceholder={t("searchPlaceholder")}
                   onFilteredRowsChange={setFilteredRows}
+                  onSearchChange={setSearchQuery}
                   emptyMessage={t("noMembersFound")}
                   onRowClick={(row) => selection.open(row)}
                   toolbar={
@@ -262,7 +273,11 @@ export default function CustomersPage() {
                 />
               </CardContent>
             </Card>
-            <MemberMapPanel customers={scopedRows} onOpenDirections={setDirectionsTarget} />
+            <MemberMapPanel
+              customers={scopedRows}
+              focusCustomer={topSearchMatch}
+              onOpenDirections={setDirectionsTarget}
+            />
           </div>
         </>
       ) : orderSelection.selected ? (

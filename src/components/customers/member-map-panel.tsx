@@ -68,9 +68,14 @@ function buildPopupContent(
 // member list, via the same Nominatim proxy.
 export function MemberMapPanel({
   customers,
+  focusCustomer,
   onOpenDirections,
 }: {
   customers: Customer[]
+  // The Member List's own search box's top match, or null/undefined when no
+  // search is active — panning follows this independently of `customers`
+  // (which stays the full unfiltered list so every pin keeps showing).
+  focusCustomer?: Customer | null
   onOpenDirections?: (customer: Customer) => void
 }) {
   const mapDivRef = React.useRef<HTMLDivElement>(null)
@@ -78,6 +83,10 @@ export function MemberMapPanel({
   const leafletRef = React.useRef<typeof L | null>(null)
   const markersRef = React.useRef<L.Marker[]>([])
   const searchMarkerRef = React.useRef<L.Marker | null>(null)
+  // The last fitBounds() computed from all plotted pins — restored when a
+  // search is cleared so the map goes back to exactly what it showed before
+  // (rather than a fixed center that ignores the actual member locations).
+  const defaultBoundsRef = React.useRef<L.LatLngBounds | null>(null)
   const [ready, setReady] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [searching, setSearching] = React.useState(false)
@@ -146,7 +155,10 @@ export function MemberMapPanel({
         plotted++
       }
 
-      if (!cancelled && plotted > 0) map!.fitBounds(bounds, { padding: [48, 48] })
+      if (!cancelled && plotted > 0) {
+        defaultBoundsRef.current = bounds
+        map!.fitBounds(bounds, { padding: [48, 48] })
+      }
     }
 
     plotPins()
@@ -155,6 +167,25 @@ export function MemberMapPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, customers])
+
+  // Pan/zoom to the search box's top match. Only cached coordinates are
+  // used — customers without a cached lat/lon yet are already being
+  // geocoded (and cached) by the plotPins effect above on a throttled
+  // ~1/second schedule to respect Nominatim's usage policy; firing a second,
+  // untangled geocode here on every keystroke would race that and risk
+  // tripping the rate limit, so an as-yet-ungeocoded top match is simply
+  // left as-is (map stays wherever it was) rather than jumping anywhere.
+  React.useEffect(() => {
+    if (!ready) return
+    const map = mapRef.current
+    if (!map) return
+
+    if (focusCustomer && typeof focusCustomer.latitude === "number" && typeof focusCustomer.longitude === "number") {
+      map.setView([focusCustomer.latitude, focusCustomer.longitude], 15)
+    } else if (!focusCustomer && defaultBoundsRef.current?.isValid()) {
+      map.fitBounds(defaultBoundsRef.current, { padding: [48, 48] })
+    }
+  }, [ready, focusCustomer])
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
