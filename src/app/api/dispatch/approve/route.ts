@@ -197,7 +197,7 @@ function buildEmailContent({
   const addressLine = address ? `<p style="margin:0 0 16px;color:#475569;">Location: ${escapeHtml(address)}</p>` : ""
   const { html: scheduleSummaryHtml, textLines: scheduleSummaryTextLines } = buildScheduleSummary({
     scheduledDate,
-    requestedTime,
+    scheduledTime: requestedTime,
     technician,
   })
   const html = `

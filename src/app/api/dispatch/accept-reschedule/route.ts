@@ -191,7 +191,7 @@ function buildEmailContent({
   const subject = `${companyName}: Your rescheduled ${moduleLabel} is now confirmed — ${when}`
   const { html: scheduleSummaryHtml, textLines: scheduleSummaryTextLines } = buildScheduleSummary({
     scheduledDate,
-    requestedTime,
+    scheduledTime: requestedTime,
     technician,
   })
   const buttonHtml = confirmUrl

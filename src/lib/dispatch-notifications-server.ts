@@ -136,16 +136,20 @@ export function formatScheduleWhen(date: string, time?: string | null): string {
 // these templates already follows.
 export function buildScheduleSummary({
   scheduledDate,
-  requestedTime,
+  scheduledTime,
   technician,
 }: {
   scheduledDate: string | null
-  requestedTime?: string | null
+  // "HH:MM" time-of-day for this row, whatever its source — the customer's
+  // own reschedule-request time (approve/accept-reschedule) or a job's real
+  // scheduled_time (the reminder cron, which has no "requested" concept at
+  // all). Named generically here since this block doesn't care which.
+  scheduledTime?: string | null
   technician: string | null
 }): { html: string; textLines: string[] } {
   const rows: Array<{ label: string; value: string }> = []
   if (scheduledDate) rows.push({ label: "Scheduled Date", value: formatUsDate(scheduledDate) })
-  if (requestedTime) rows.push({ label: "Scheduled Time", value: formatTimeLabel(requestedTime) })
+  if (scheduledTime) rows.push({ label: "Scheduled Time", value: formatTimeLabel(scheduledTime) })
   if (technician) rows.push({ label: "Assigned Technician", value: technician })
 
   if (rows.length === 0) return { html: "", textLines: [] }
@@ -164,13 +168,19 @@ export function buildScheduleSummary({
   return { html, textLines }
 }
 
+// The one known-real production host — used both as appBaseUrl()'s own
+// fallback below and directly by anything with no incoming Request to read
+// an origin from at all (the schedule-reminders cron job runs on a timer,
+// not in response to a customer/admin hitting a route).
+export const PRODUCTION_BASE_URL = "https://mainprogram-neon.vercel.app"
+
 // Prefers the request's own origin (matches whatever host actually served
 // this request — correct on any Vercel preview deploy too, not just
 // production) and only falls back to the known production URL if that
 // header is ever missing.
 export function appBaseUrl(request: Request): string {
   const origin = request.headers.get("origin") ?? new URL(request.url).origin
-  return origin || "https://mainprogram-neon.vercel.app"
+  return origin || PRODUCTION_BASE_URL
 }
 
 // Resend (https://resend.com) — RESEND_API_KEY + RESEND_FROM_EMAIL

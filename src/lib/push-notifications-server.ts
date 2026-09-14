@@ -36,17 +36,21 @@ interface SubscriptionRow {
 // /api/dispatch/approve/route.ts. Silently does nothing if VAPID keys
 // aren't configured (mirrors sendEmail()'s own "skipped_no_provider"
 // reasoning) rather than logging noisy errors for an intentionally-unset
-// local/dev environment.
-export async function sendPushToCustomer(admin: SupabaseClient, customerId: string, payload: PushPayload): Promise<void> {
+// local/dev environment. Returns how many subscriptions were actually
+// attempted (0 if VAPID isn't configured or the customer has none) — not a
+// delivery guarantee, just enough for a caller like the schedule-reminders
+// cron to tell "we had somewhere to send this" from "we had nothing at
+// all," the same way sendEmail()'s ChannelResult already does for email.
+export async function sendPushToCustomer(admin: SupabaseClient, customerId: string, payload: PushPayload): Promise<number> {
   ensureVapidConfigured()
-  if (!vapidConfigured) return
+  if (!vapidConfigured) return 0
 
   const { data } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("customer_id", customerId)
   const subscriptions = (data ?? []) as SubscriptionRow[]
-  if (subscriptions.length === 0) return
+  if (subscriptions.length === 0) return 0
 
   const body = JSON.stringify(payload)
   await Promise.all(
@@ -69,4 +73,5 @@ export async function sendPushToCustomer(admin: SupabaseClient, customerId: stri
       }
     })
   )
+  return subscriptions.length
 }

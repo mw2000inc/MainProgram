@@ -5,6 +5,7 @@ import { runExtendCollectionSchedule } from "./jobs/extend-collection-schedule"
 import { runExtendFilterChangeSchedule } from "./jobs/extend-filter-change-schedule"
 import { runGenerateFilterChangeJobs } from "./jobs/generate-filter-change-jobs"
 import { runFilterChangeInventoryDeduction } from "./jobs/filter-change-inventory-deduction"
+import { runSendScheduleReminders } from "./jobs/send-schedule-reminders"
 
 // One entry per automated background task in this app — the single place
 // that maps an AutomationId to what it actually does. Every existing cron
@@ -41,6 +42,13 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
     description: "Deducts stock for completed filter-change jobs using the older single-product-per-job fields. Retired from the daily cron; kept for manual use only.",
     defaultEnabled: AUTOMATION_DEFAULTS.filterChangeInventoryDeduction,
     run: runFilterChangeInventoryDeduction,
+  },
+  sendScheduleReminders: {
+    id: "sendScheduleReminders",
+    label: "Send 2-Day Schedule Reminders",
+    description: "Emails and pushes a reminder to customers with a Confirmed Filter Change or Collection scheduled exactly 2 days out.",
+    defaultEnabled: AUTOMATION_DEFAULTS.sendScheduleReminders,
+    run: runSendScheduleReminders,
   },
 }
 
