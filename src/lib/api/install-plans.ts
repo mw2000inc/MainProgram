@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 import type { InstallPlan } from "@/lib/types"
 
 type Row = {
@@ -93,10 +94,20 @@ function toRow(input: Partial<Omit<InstallPlan, "id" | "createdAt">>) {
   return row
 }
 
+// Paginates via fetchAllRows rather than a single un-ranged select() — see
+// that helper's own comment for why: PostgREST silently caps an un-ranged
+// select() at 1000 rows on this project, already confirmed to have
+// actually truncated filter_change_plans in production once it grew past
+// that. install_plans hasn't hit that size yet, but nothing stops it from
+// eventually doing so the same way, and a silently-truncated list here
+// would show up as an undercounted Installation total on the Pending
+// Dispatch Approval / Daily Report Approvals Approval Summary — the same
+// failure mode, just not yet triggered.
 export async function listInstallPlans(): Promise<InstallPlan[]> {
-  const { data, error } = await supabase.from("install_plans").select("*").order("input_date", { ascending: true })
-  if (error) throw error
-  return (data as Row[]).map(fromRow)
+  const data = await fetchAllRows<Row>((from, to) =>
+    supabase.from("install_plans").select("*").order("input_date", { ascending: true }).range(from, to)
+  )
+  return data.map(fromRow)
 }
 
 export async function createInstallPlan(input: Omit<InstallPlan, "id" | "createdAt">): Promise<InstallPlan> {
