@@ -28,7 +28,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate, safeFormat, twoDaysFromNowIso } from "@/lib/utils"
+import { cn, formatDate, safeFormat, tomorrowIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
@@ -145,17 +145,25 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
 const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
 // Additive date lens on top of the Draft/Reschedule Requested status split
-// below — "twoDaysOut" narrows both lists (and, since Approve All/the
-// full-screen view both read from those same filtered lists, the bulk
-// action and full-screen mode too) to whatever's due exactly 2 days out,
-// the same lookahead window /api/cron/send-schedule-reminders reminds
-// customers on. Own small type here rather than importing
-// pending-approvals-panel.tsx's — same "keep these two panel files
-// independent" precedent DISPATCH_STATUS_KEYS above already follows.
-type DateRangeFilter = "all" | "twoDaysOut"
+// below — "oneDayOut"/"twoDaysOut" narrow both lists (and, since Approve
+// All/the full-screen view both read from those same filtered lists, the
+// bulk action and full-screen mode too) to whatever's due tomorrow or
+// exactly 2 days out — the latter the same lookahead window
+// /api/cron/send-schedule-reminders reminds customers on. Own small type
+// here rather than importing pending-approvals-panel.tsx's — same "keep
+// these two panel files independent" precedent DISPATCH_STATUS_KEYS above
+// already follows.
+type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
 
-function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter, twoDaysOutDate: string): boolean {
-  return filter === "all" || scheduledDate === twoDaysOutDate
+function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
+  if (filter === "oneDayOut") return tomorrowIso()
+  if (filter === "twoDaysOut") return twoDaysFromNowIso()
+  return null
+}
+
+function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
+  const target = resolveDateRangeFilterTarget(filter)
+  return target === null || scheduledDate === target
 }
 
 // Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
@@ -301,23 +309,25 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     return list
   }, [filterChangePlans, installPlans, collections, repairPlans, customers, saleListEntries])
 
-  const items = React.useMemo(() => {
-    const twoDaysOutDate = twoDaysFromNowIso()
-    return allRows
-      .filter((r) => r.dispatchStatus === "Draft" && matchesDateRangeFilter(r.scheduledDate, dateRangeFilter, twoDaysOutDate))
-      .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
-  }, [allRows, dateRangeFilter])
+  const items = React.useMemo(
+    () =>
+      allRows
+        .filter((r) => r.dispatchStatus === "Draft" && matchesDateRangeFilter(r.scheduledDate, dateRangeFilter))
+        .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
+    [allRows, dateRangeFilter]
+  )
   // A decline with no alternate date has nothing for Accept to do — the
   // admin's only path there is editing Pre D directly (see the
   // reset_dispatch_on_pre_d_edit trigger's own extension to cover this
   // status). Still shown here for visibility, just without an Accept
   // button.
-  const rescheduleRequests = React.useMemo(() => {
-    const twoDaysOutDate = twoDaysFromNowIso()
-    return allRows
-      .filter((r) => r.dispatchStatus === "Reschedule Requested" && matchesDateRangeFilter(r.scheduledDate, dateRangeFilter, twoDaysOutDate))
-      .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
-  }, [allRows, dateRangeFilter])
+  const rescheduleRequests = React.useMemo(
+    () =>
+      allRows
+        .filter((r) => r.dispatchStatus === "Reschedule Requested" && matchesDateRangeFilter(r.scheduledDate, dateRangeFilter))
+        .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
+    [allRows, dateRangeFilter]
+  )
 
   function emailFor(item: DispatchRow) {
     return emailDrafts[item.entityId] ?? item.email ?? ""
@@ -484,6 +494,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
+                    <SelectItem value="oneDayOut">{t("oneDayOutFilter")}</SelectItem>
                     <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
                   </SelectContent>
                 </Select>

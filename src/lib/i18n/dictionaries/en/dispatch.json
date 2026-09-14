@@ -97,6 +97,7 @@
   "totalPendingApprovals": "Total Pending Approvals",
   "allStatuses": "All Status",
   "allDatesFilter": "All Dates",
+  "oneDayOutFilter": "Due Tomorrow",
   "twoDaysOutFilter": "Due in 2 Days",
   "approveAndSendConfirmation": "Approve & Send Confirmation",
   "pendingApprovalsButton": "Daily Report Approvals",

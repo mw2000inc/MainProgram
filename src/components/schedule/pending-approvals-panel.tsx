@@ -27,7 +27,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, twoDaysFromNowIso } from "@/lib/utils"
+import { formatDate, tomorrowIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
@@ -312,17 +312,26 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 }
 
 // Additive, independent of statusFilter above — an admin can combine "only
-// items due in 2 days" with any status bucket (e.g. "which of the ones due
-// in 2 days are still unapproved"). "twoDaysOut" mirrors the exact lookahead
-// window /api/cron/send-schedule-reminders reminds customers on, so staff
-// can see/approve the same items that reminder is about to go out for. Kept
-// as a plain "all" vs. one fixed target date rather than a full date-range
-// picker — this is meant as a quick, purpose-built lens, not a general
-// report filter (that's what Daily Report's own date picker is for).
-export type DateRangeFilter = "all" | "twoDaysOut"
+// items due tomorrow/in 2 days" with any status bucket (e.g. "which of the
+// ones due in 2 days are still unapproved"). "twoDaysOut" mirrors the exact
+// lookahead window /api/cron/send-schedule-reminders reminds customers on,
+// so staff can see/approve the same items that reminder is about to go out
+// for; "oneDayOut" is the equivalent one day earlier, for whatever's due
+// the very next day. Kept as "all" vs. one of two fixed target dates rather
+// than a full date-range picker — this is meant as a quick, purpose-built
+// lens, not a general report filter (that's what Daily Report's own date
+// picker is for).
+export type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
 
-function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter, twoDaysOutDate: string): boolean {
-  return filter === "all" || scheduledDate === twoDaysOutDate
+function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
+  if (filter === "oneDayOut") return tomorrowIso()
+  if (filter === "twoDaysOut") return twoDaysFromNowIso()
+  return null
+}
+
+function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
+  const target = resolveDateRangeFilterTarget(filter)
+  return target === null || scheduledDate === target
 }
 
 export function PendingApprovalsPanel({
@@ -367,15 +376,16 @@ export function PendingApprovalsPanel({
     return counts
   }, [rows])
 
-  const visibleRows = React.useMemo(() => {
-    const twoDaysOutDate = twoDaysFromNowIso()
-    return rows.filter(
-      (r) =>
-        (activeTab === "all" || r.entityType === activeTab) &&
-        matchesStatusFilter(r.dispatchStatus, statusFilter) &&
-        matchesDateRangeFilter(r.scheduledDate, dateRangeFilter, twoDaysOutDate)
-    )
-  }, [rows, activeTab, statusFilter, dateRangeFilter])
+  const visibleRows = React.useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          (activeTab === "all" || r.entityType === activeTab) &&
+          matchesStatusFilter(r.dispatchStatus, statusFilter) &&
+          matchesDateRangeFilter(r.scheduledDate, dateRangeFilter)
+      ),
+    [rows, activeTab, statusFilter, dateRangeFilter]
+  )
 
   const stopNumberByJobId = React.useMemo(
     () => computeStopNumbers(rows.filter((r) => r.routeSequence != null).map((r) => ({ id: r.entityId, technician: r.technician ?? "", scheduledDate: r.scheduledDate, routeSequence: r.routeSequence }))),
@@ -498,6 +508,7 @@ export function PendingApprovalsPanel({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
+              <SelectItem value="oneDayOut">{t("oneDayOutFilter")}</SelectItem>
               <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
             </SelectContent>
           </Select>
