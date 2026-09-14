@@ -28,7 +28,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate, safeFormat, twoDaysFromNowIso } from "@/lib/utils"
+import { cn, formatDate, safeFormat, tomorrowIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
@@ -145,14 +145,27 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
 const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
 // Additive date lens on top of the Draft/Reschedule Requested status split
-// below — "twoDaysOut" narrows both lists (and, since Approve All/the
-// full-screen view both read from those same filtered lists, the bulk
-// action and full-screen mode too) to whatever's due exactly 2 days out,
-// the same lookahead window /api/cron/send-schedule-reminders reminds
-// customers on. Own small type here rather than importing
-// pending-approvals-panel.tsx's — same "keep these two panel files
-// independent" precedent DISPATCH_STATUS_KEYS above already follows.
-export type DateRangeFilter = "all" | "twoDaysOut"
+// below — "oneDayOut"/"twoDaysOut" narrow both lists (and, since Approve
+// All/the full-screen view both read from those same filtered lists, the
+// bulk action and full-screen mode too) to whatever's due tomorrow or
+// exactly 2 days out — the latter the same lookahead window
+// /api/cron/send-schedule-reminders reminds customers on. Own small type
+// here rather than importing pending-approvals-panel.tsx's — same "keep
+// these two panel files independent" precedent DISPATCH_STATUS_KEYS above
+// already follows.
+export type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
+
+// null for "all" — the one place either filter value resolves to an actual
+// calendar date, so items/rescheduleRequests below and the header's own
+// badge-count math (daily-report-section.tsx, which imports this directly
+// rather than keeping its own copy — it's the shared parent of this
+// component, not a second independent panel) can never disagree about what
+// "oneDayOut"/"twoDaysOut" means.
+export function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
+  if (filter === "oneDayOut") return tomorrowIso()
+  if (filter === "twoDaysOut") return twoDaysFromNowIso()
+  return null
+}
 
 // Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
 // its own small copy here rather than a shared import, to avoid a
@@ -315,9 +328,9 @@ export function DispatchApprovalQueue({
   }, [filterChangePlans, installPlans, collections, repairPlans, customers, saleListEntries])
 
   const items = React.useMemo(() => {
-    const twoDaysOutDate = twoDaysFromNowIso()
+    const targetDate = resolveDateRangeFilterTarget(dateRangeFilter)
     return allRows
-      .filter((r) => r.dispatchStatus === "Draft" && (dateRangeFilter === "all" || r.scheduledDate === twoDaysOutDate))
+      .filter((r) => r.dispatchStatus === "Draft" && (targetDate === null || r.scheduledDate === targetDate))
       .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
   }, [allRows, dateRangeFilter])
   // A decline with no alternate date has nothing for Accept to do — the
@@ -326,9 +339,9 @@ export function DispatchApprovalQueue({
   // status). Still shown here for visibility, just without an Accept
   // button.
   const rescheduleRequests = React.useMemo(() => {
-    const twoDaysOutDate = twoDaysFromNowIso()
+    const targetDate = resolveDateRangeFilterTarget(dateRangeFilter)
     return allRows
-      .filter((r) => r.dispatchStatus === "Reschedule Requested" && (dateRangeFilter === "all" || r.scheduledDate === twoDaysOutDate))
+      .filter((r) => r.dispatchStatus === "Reschedule Requested" && (targetDate === null || r.scheduledDate === targetDate))
       .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
   }, [allRows, dateRangeFilter])
 
@@ -497,6 +510,7 @@ export function DispatchApprovalQueue({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
+                    <SelectItem value="oneDayOut">{t("oneDayOutFilter")}</SelectItem>
                     <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
                   </SelectContent>
                 </Select>
