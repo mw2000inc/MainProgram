@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
@@ -224,6 +225,13 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     conflicts: DispatchRow[]
   } | null>(null)
   const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  // Gates handleApproveAll behind an explicit "yes, send these" — Approve
+  // All used to fire the instant it was clicked; a misclick sent real
+  // emails to every Draft item currently in view with no way back. Purely
+  // a confirmation gate: it never touches which items get approved (still
+  // `items`, matching the active date filter same as the button's own
+  // count) or how (handleApproveAll below is completely unchanged).
+  const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
   const [bulkApproving, setBulkApproving] = React.useState(false)
   const [bulkSummary, setBulkSummary] = React.useState<{
     approved: DispatchRow[]
@@ -513,7 +521,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     size="sm"
                     className="h-7 gap-1.5 font-normal"
                     disabled={bulkApproving || approve.isPending}
-                    onClick={handleApproveAll}
+                    onClick={() => setConfirmBulkApproveOpen(true)}
                   >
                     <CheckCheck className="h-3.5 w-3.5" /> {bulkApproving ? t("approving") : t("approveAllCount", { count: items.length })}
                   </Button>
@@ -697,6 +705,19 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       </Dialog>
 
       <DispatchHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
+
+      <ConfirmDialog
+        open={confirmBulkApproveOpen}
+        onOpenChange={setConfirmBulkApproveOpen}
+        title={t("confirmBulkApproveTitle")}
+        description={t("confirmBulkApproveDescription", { count: items.length })}
+        confirmLabel={t("confirmAndSend")}
+        destructive={false}
+        onConfirm={() => {
+          setConfirmBulkApproveOpen(false)
+          handleApproveAll()
+        }}
+      />
     </>
   )
 }
