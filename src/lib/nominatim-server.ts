@@ -2,6 +2,8 @@
 // not imported by any client component, since the whole point of routing
 // through our own API is to set a custom User-Agent (Nominatim's usage
 // policy requires one; browsers refuse to let client code set it at all).
+import { extractCityLabel } from "@/lib/geo/city-label"
+
 const USER_AGENT = "MW2000-ERP/1.0 (internal water-purification ERP; contact: marketing@mw2000inc.com)"
 
 export interface GeoPoint {
@@ -21,10 +23,23 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Appends an explicit ", Philippines" to the query text itself, on top of
+// the structured `countrycodes=ph` filter already set below — belt and
+// suspenders: countrycodes alone already confirmed (live-tested) sufficient
+// to resolve a bare candidate like "Rodriguez Rizal" correctly, but the
+// literal country text in the query itself gives Nominatim's free-text
+// parser one more explicit anchor for the very short, ambiguous candidates
+// this fallback chain tries last. Skipped when the text already ends with
+// it (some real addresses already end in "... Metro Manila" or spell out
+// "Philippines" themselves) so a query never doubles up on it.
+function withCountrySuffix(query: string): string {
+  return /philippines\s*$/i.test(query) ? query : `${query}, Philippines`
+}
+
 async function geocodeOnce(query: string): Promise<GeoPoint | null> {
   const url = new URL("https://nominatim.openstreetmap.org/search")
   url.searchParams.set("format", "json")
-  url.searchParams.set("q", query)
+  url.searchParams.set("q", withCountrySuffix(query))
   url.searchParams.set("limit", "1")
   // Every address this app ever geocodes (office or a member's) is in the
   // Philippines — without this, a short/generic fallback query (e.g. just
@@ -49,8 +64,13 @@ async function geocodeOnce(query: string): Promise<GeoPoint | null> {
 // Northgate Cyberzone Alabang Muntinlupa" — Axis Tower One itself may well
 // be mapped, but not down to a specific floor). Chainable ("7th Flr, Unit
 // 5, ..."), so this strips repeatedly until nothing more matches.
+//
+// b\d+\s*,?\s*l\d+ covers the bare "B10 L2" block/lot shorthand seen in real
+// customer addresses (distinct from the already-covered "Blk 4 Lot 2" —
+// confirmed live this doesn't already match: the "blk"/"lot" alternative
+// above requires those literal words, not the bare letter+digit form).
 const LEADING_UNIT_PATTERN =
-  /^(?:\d+(?:st|nd|rd|th)(?:\s*&\s*\d+(?:st|nd|rd|th))?\s+(?:flr\.?|floor)|unit\s+\S+|suite\s+\S+|rm\.?\s+\S+|room\s+\S+|blk\.?\s*\S+(?:\s+lot\.?\s*\S+)?|bldg\.?\s+\S+|building\s+\S+)\s*[,.]?\s*/i
+  /^(?:\d+(?:st|nd|rd|th)(?:\s*&\s*\d+(?:st|nd|rd|th))?\s+(?:flr\.?|floor)|unit\s+\S+|suite\s+\S+|rm\.?\s+\S+|room\s+\S+|blk\.?\s*\S+(?:\s+lot\.?\s*\S+)?|b\d+\s*,?\s*l\d+|bldg\.?\s+\S+|building\s+\S+)\s*[,.]?\s*/i
 
 function stripLeadingUnitFragments(address: string): string {
   let result = address.trim()
@@ -175,5 +195,26 @@ export async function geocodeWithFallback(address: string): Promise<GeoPoint | n
       return result
     }
   }
+
+  // Last resort: every candidate above tried to resolve the address at some
+  // real precision (street/building down to barangay/area) and failed —
+  // rather than leaving this address with no marker at all, fall back to
+  // just its recognizable city/municipality (reusing the same matcher the
+  // Filter Change page's "recognized area" label already uses, see
+  // city-label.ts) so the map still shows an approximate point instead of
+  // nothing. Confirmed live this is a real, reachable case: a genuine
+  // customer address exhausted every candidate above with zero matches, but
+  // "Quezon City" alone resolved immediately. Deliberately not cached under
+  // the exact input `address` key the way a real match is above — a
+  // city-level guess should stay a last-resort fallback recomputed fresh
+  // each time, not something that quietly hardens into a stable answer
+  // future lookups no longer question the way a real geocode result is
+  // trusted to.
+  const cityLabel = extractCityLabel(address)
+  if (cityLabel) {
+    if (bounded.length > 0) await sleep(1100)
+    return geocodeOnce(cityLabel)
+  }
+
   return null
 }
