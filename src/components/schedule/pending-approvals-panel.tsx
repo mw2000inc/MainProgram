@@ -488,6 +488,8 @@ export function PendingApprovalsPanel({
           data={visibleRows}
           searchPlaceholder={t("searchPendingApprovals")}
           emptyMessage={t("noPendingApprovals")}
+          scrollContainerClassName="max-h-[60vh]"
+          stickyHeader
         />
       </CardContent>
 

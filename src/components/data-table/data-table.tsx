@@ -64,6 +64,21 @@ interface DataTableProps<TData> {
   // happens to be. Every other call site leaves this unset and gets the
   // plain w-full table as before.
   tableClassName?: string
+  // Extra classes merged onto the OUTER scrolling wrapper (the one with
+  // `overflow-y-auto` — see that div's own comment below for why it's a
+  // separate element from tableContainerClassName's target). Every other
+  // call site leaves this unset, so overflow-y-auto stays inert exactly as
+  // before (no bounded height to actually clip/scroll against) — this is
+  // how a caller opts a specific table into a real, fixed-height scrolling
+  // body (e.g. `"max-h-[60vh]"`) without changing that behavior anywhere
+  // else in the app.
+  scrollContainerClassName?: string
+  // Pins the header row in place while the body scrolls past it —
+  // deliberately opt-in (not unconditional) even though `position: sticky`
+  // is a no-op without a bounded scroll height, since every other caller
+  // leaving this unset should render byte-for-byte as it did before this
+  // was added, not depend on that no-op behavior actually holding.
+  stickyHeader?: boolean
 }
 
 export function DataTable<TData>({
@@ -79,6 +94,8 @@ export function DataTable<TData>({
   getRowClassName,
   tableContainerClassName,
   tableClassName,
+  scrollContainerClassName,
+  stickyHeader,
 }: DataTableProps<TData>) {
   const { t } = useTranslation("dataTable")
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -155,9 +172,9 @@ export function DataTable<TData>({
           tableContainerClassName (e.g. scrollbar-always-visible) landing
           here instead of the inner div would never actually render,
           exactly the bug this now avoids. */}
-      <div className="min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto">
+      <div className={cn("min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto", scrollContainerClassName)}>
         <Table className={tableClassName} containerClassName={tableContainerClassName}>
-          <TableHeader>
+          <TableHeader className={cn(stickyHeader && "sticky top-0 z-10 bg-card")}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
