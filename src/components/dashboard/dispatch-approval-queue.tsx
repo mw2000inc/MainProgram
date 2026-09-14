@@ -23,9 +23,11 @@ import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { DispatchHistoryDialog } from "@/components/dashboard/dispatch-history-dialog"
+import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
+import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, safeFormat } from "@/lib/utils"
+import { cn, formatDate, safeFormat } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
@@ -183,6 +185,13 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const acceptReschedule = useAcceptRequestedReschedule()
   const updateCustomer = useUpdateCustomer()
   const [historyOpen, setHistoryOpen] = React.useState(false)
+  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
+  // Never reopen already full-screen from a previous session — this
+  // component stays mounted across open/close (only `open` toggles
+  // visibility), so without this the state would otherwise just persist.
+  React.useEffect(() => {
+    if (!open) exitFullScreen()
+  }, [open, exitFullScreen])
 
   const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
   const [lastResult, setLastResult] = React.useState<{ confirmUrl: string; email?: DispatchChannelResult } | null>(null)
@@ -420,11 +429,36 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          // The plain (unprefixed) max-w-none alone isn't enough to
+          // actually go full-width above the sm: breakpoint — cn()'s
+          // tailwind-merge only dedupes classes within the same variant,
+          // so it leaves the sm:max-w-2xl below untouched at that size
+          // (confirmed by literally running twMerge() against these exact
+          // two class strings before settling on this fix). sm:max-w-none
+          // is what actually clears it.
+          className={cn(
+            isFullScreen
+              ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
+              : "sm:max-w-2xl max-h-[85vh]",
+            "overflow-y-auto"
+          )}
+          // Radix's own Escape-to-close would otherwise close the whole
+          // dialog while full-screen — intercept it here so Escape exits
+          // full-screen first instead (matches the Minimize2 button's own
+          // behavior), same as stock-movement-approval-queue.tsx.
+          onEscapeKeyDown={(e) => {
+            if (isFullScreen) {
+              e.preventDefault()
+              exitFullScreen()
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-6">
               <span>{t("title")}</span>
               <div className="flex items-center gap-2">
+                <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
                 <Button
                   variant="ghost"
                   size="sm"

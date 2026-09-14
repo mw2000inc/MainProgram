@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { History } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,8 @@ import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { computeStopNumbers, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { ApprovalDetailDialog } from "@/components/schedule/approval-detail-dialog"
 import { PendingApprovalsHistoryDialog } from "@/components/schedule/pending-approvals-history-dialog"
+import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
+import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate } from "@/lib/utils"
@@ -325,6 +328,7 @@ export function PendingApprovalsPanel({
   const { rows, isPending } = usePendingApprovalRows()
   const [reviewing, setReviewing] = React.useState<PendingApprovalRow | undefined>(undefined)
   const [historyOpen, setHistoryOpen] = React.useState(false)
+  const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
   // Purely a visual selection column (per-viewer, not persisted) — no bulk
@@ -447,52 +451,62 @@ export function PendingApprovalsPanel({
     )
   }
 
-  return (
-    <Card>
-      <CardContent className="pt-6 space-y-4">
-        <ApprovalSummary countsByType={countsByType} />
+  // Shared between the normal (in-Card) and full-screen (portaled overlay)
+  // render below — same toolbar/table content either way, only the wrapper
+  // and the table's own scroll height differ. scrollContainerClassName's
+  // full-screen value is a rough estimate (accounting for the overlay's own
+  // p-6 padding, ApprovalSummary, and this toolbar row) rather than a
+  // measured pixel value — same level of approximation max-h-[60vh] above
+  // it already uses for the normal case.
+  const toolbarAndTable = (
+    <>
+      <ApprovalSummary countsByType={countsByType} />
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "all" | DispatchEntityType)}>
-            <TabsList>
-              <TabsTrigger value="all">{t("allTabLabel", { count: String(rows.length) })}</TabsTrigger>
-              {TYPE_TABS.map(({ value, tabLabelKey }) => (
-                <TabsTrigger key={value} value={value}>
-                  {t(tabLabelKey, { count: String(countsByType[value]) })}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "all" | DispatchEntityType)}>
+          <TabsList>
+            <TabsTrigger value="all">{t("allTabLabel", { count: String(rows.length) })}</TabsTrigger>
+            {TYPE_TABS.map(({ value, tabLabelKey }) => (
+              <TabsTrigger key={value} value={value}>
+                {t(tabLabelKey, { count: String(countsByType[value]) })}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-          <div className="flex items-center gap-2">
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                <SelectItem value="pendingApproval">{t("pendingApprovalStatus")}</SelectItem>
-                <SelectItem value="approved">{t("approvedStatus")}</SelectItem>
-              </SelectContent>
-            </Select>
-            {isAdmin && (
-              <Button type="button" size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setHistoryOpen(true)}>
-                <History className="h-3.5 w-3.5" /> {t("historyButton")}
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allStatuses")}</SelectItem>
+              <SelectItem value="pendingApproval">{t("pendingApprovalStatus")}</SelectItem>
+              <SelectItem value="approved">{t("approvedStatus")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
+          {isAdmin && (
+            <Button type="button" size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setHistoryOpen(true)}>
+              <History className="h-3.5 w-3.5" /> {t("historyButton")}
+            </Button>
+          )}
         </div>
+      </div>
 
-        <DataTable
-          columns={columns}
-          data={visibleRows}
-          searchPlaceholder={t("searchPendingApprovals")}
-          emptyMessage={t("noPendingApprovals")}
-          scrollContainerClassName="max-h-[60vh]"
-          stickyHeader
-        />
-      </CardContent>
+      <DataTable
+        columns={columns}
+        data={visibleRows}
+        searchPlaceholder={t("searchPendingApprovals")}
+        emptyMessage={t("noPendingApprovals")}
+        scrollContainerClassName={isFullScreen ? "max-h-[calc(100vh-16rem)]" : "max-h-[60vh]"}
+        stickyHeader
+      />
+    </>
+  )
 
+  const dialogs = (
+    <>
       <ApprovalDetailDialog key={reviewing?.entityId ?? "none"} row={reviewing} onOpenChange={(open) => !open && setReviewing(undefined)} />
       {isAdmin && (
         <PendingApprovalsHistoryDialog
@@ -502,6 +516,38 @@ export function PendingApprovalsPanel({
           defaultDate={historyDefaultDate}
         />
       )}
+    </>
+  )
+
+  // Rendered via a portal straight to <body> rather than in place — this
+  // component is sometimes nested inside a Radix DialogContent
+  // (PendingApprovalsDialog below), which applies its own CSS transform for
+  // centering; `position: fixed` on a descendant of a transformed ancestor
+  // is positioned relative to THAT ancestor's box, not the real viewport,
+  // per the CSS spec — a portal is what already lets Radix's own Dialog/
+  // Popover escape that same trap, so the same fix applies here. Known,
+  // accepted limitation in that nested case: Radix's own Escape-to-close
+  // and this component's Escape-to-exit-fullscreen (see
+  // use-fullscreen-toggle.ts) both listen independently, so Escape may
+  // close the wrapping dialog too rather than only exiting full-screen —
+  // the Minimize2 button always works correctly either way since it's a
+  // direct click handler, not reliant on winning that race.
+  if (isFullScreen && typeof document !== "undefined") {
+    return (
+      <>
+        {createPortal(
+          <div className="fixed inset-0 z-50 bg-background p-6 overflow-hidden flex flex-col gap-4">{toolbarAndTable}</div>,
+          document.body
+        )}
+        {dialogs}
+      </>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6 space-y-4">{toolbarAndTable}</CardContent>
+      {dialogs}
     </Card>
   )
 }
