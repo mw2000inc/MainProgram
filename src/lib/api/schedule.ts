@@ -6,6 +6,7 @@ type ScheduleJobRow = {
   id: string
   job_type: ScheduleJobType
   technician: string
+  vehicle: string
   technician_2: string | null
   customer_id: string | null
   order_no: string | null
@@ -32,6 +33,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     id: row.id,
     jobType: row.job_type,
     technician: row.technician,
+    vehicle: row.vehicle,
     technician2: row.technician_2 ?? undefined,
     customerId: row.customer_id ?? undefined,
     orderNo: row.order_no ?? undefined,
@@ -58,6 +60,7 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
   const row: Record<string, unknown> = {}
   if (input.jobType !== undefined) row.job_type = input.jobType
   if (input.technician !== undefined) row.technician = input.technician
+  if (input.vehicle !== undefined) row.vehicle = input.vehicle
   if (input.technician2 !== undefined) row.technician_2 = input.technician2 || null
   if (input.customerId !== undefined) row.customer_id = input.customerId || null
   if (input.orderNo !== undefined) row.order_no = input.orderNo || null

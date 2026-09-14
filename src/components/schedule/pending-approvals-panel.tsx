@@ -12,10 +12,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
-import { useInstallPlans } from "@/lib/hooks/use-install-plans"
-import { useCollections } from "@/lib/hooks/use-collections"
-import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
+import { useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
@@ -359,6 +360,33 @@ export function PendingApprovalsPanel({
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const { rows, isPending } = usePendingApprovalRows()
+  const updateFilterChangePlan = useUpdateFilterChangePlan()
+  const updateInstallPlan = useUpdateInstallPlan()
+  const updateCollection = useUpdateCollection()
+  const updateRepairPlan = useUpdateRepairPlan()
+  // Inline edit from the table's own Scheduled Date column — a narrower,
+  // single-field version of ApprovalDetailDialog's own saveEditedFields
+  // (that one saves a whole form's worth of edits together right before an
+  // approve/accept call; this fires immediately on pick, with no approval
+  // action attached). Each mutation's own onSuccess invalidates that
+  // module's react-query cache, so `rows` (and therefore visibleRows,
+  // countsByType, and the header's own badge counts) recompute
+  // automatically against the new date — no separate refresh needed here
+  // for the Date Range filter to immediately reflect the change.
+  const updateScheduledDate = React.useCallback(
+    (row: PendingApprovalRow, date: string) => {
+      if (row.entityType === "filter_change_plans") {
+        updateFilterChangePlan.mutate({ id: row.entityId, input: { preD: date } })
+      } else if (row.entityType === "install_plans") {
+        updateInstallPlan.mutate({ id: row.entityId, input: { preInstalledDate: date } })
+      } else if (row.entityType === "collections") {
+        updateCollection.mutate({ id: row.entityId, input: { preD: date } })
+      } else if (row.entityType === "repair_plans") {
+        updateRepairPlan.mutate({ id: row.entityId, input: { preD: date } })
+      }
+    },
+    [updateFilterChangePlan, updateInstallPlan, updateCollection, updateRepairPlan]
+  )
   const [reviewing, setReviewing] = React.useState<PendingApprovalRow | undefined>(undefined)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
@@ -448,7 +476,24 @@ export function PendingApprovalsPanel({
           />
         ),
       },
-      { accessorKey: "scheduledDate", header: t("dateColumn"), cell: ({ row }) => formatDate(row.original.scheduledDate) },
+      {
+        accessorKey: "scheduledDate",
+        header: t("dateColumn"),
+        // Admin-only, matching every other mutating action in this panel
+        // (Approve/Reject/Reschedule inside ApprovalDetailDialog are all
+        // gated the same way) — a technician sees the same plain read-only
+        // date the whole table showed before this column became editable.
+        cell: ({ row }) =>
+          isAdmin ? (
+            <DailyReportDateButton
+              value={row.original.scheduledDate}
+              onChange={(date) => updateScheduledDate(row.original, date)}
+              className="h-7 px-2 text-xs"
+            />
+          ) : (
+            formatDate(row.original.scheduledDate)
+          ),
+      },
       { accessorKey: "moduleKey", header: t("jobTypeColumn"), cell: ({ row }) => t(row.original.moduleKey) },
       { accessorKey: "orderNumber", header: t("orderNoColumn"), cell: ({ row }) => row.original.orderNumber || "—" },
       { accessorKey: "customerName", header: t("customerColumn"), cell: ({ row }) => row.original.customerName || "—" },
@@ -476,7 +521,7 @@ export function PendingApprovalsPanel({
         ),
       },
     ],
-    [t, tCommon, stopNumberByJobId, selected, allVisibleSelected, toggleAllVisible, toggleRow]
+    [t, tCommon, isAdmin, stopNumberByJobId, selected, allVisibleSelected, toggleAllVisible, toggleRow, updateScheduledDate]
   )
 
   if (isPending) {

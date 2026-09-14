@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { TECHNICIANS } from "@/lib/constants"
+import { TECHNICIANS, VEHICLE_TYPES } from "@/lib/constants"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
@@ -70,6 +70,11 @@ function createSchema(
   return z.object({
     jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, t("selectJobType")),
     technician: z.string().min(1, t("selectTechnician")),
+    // Transport method for this job — optional, same as most fields here
+    // beyond the core job/technician/date. Plain text under the hood (see
+    // VEHICLE_TYPES in constants.ts), so this schema never restricts it to
+    // just the preset list.
+    vehicle: z.string().optional(),
     // Optional second technician — most jobs only need the one above; this is
     // only for jobs that genuinely need two people (e.g. pull-out + install).
     technician2: z.string().optional(),
@@ -113,6 +118,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
     return {
       jobType: job.jobType,
       technician: job.technician,
+      vehicle: job.vehicle || "",
       technician2: job.technician2 ?? NONE_SENTINEL,
       orderNo: job.orderNo ?? "",
       // Editing keeps the job's own existing date exactly as-is — even one
@@ -132,6 +138,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
   return {
     jobType: "other",
     technician: "",
+    vehicle: "",
     technician2: NONE_SENTINEL,
     orderNo: "",
     // A brand-new job must land on tomorrow or later regardless of which
@@ -199,6 +206,12 @@ export function ScheduleFormDialog({
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
+      // Same "" (not undefined) reasoning as technicianUserId below — the
+      // form's own defaultValues always sets this to a real string, but the
+      // schema itself leaves it optional (it's genuinely fine to submit
+      // blank), so this coerces the type back to what ScheduleJob expects
+      // without changing any actual runtime value.
+      vehicle: values.vehicle ?? "",
       technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
       // "" (not undefined) so toRow's `!== undefined` check still fires and
       // actually clears technician_user_id in the DB when an edit sets this
@@ -247,6 +260,12 @@ export function ScheduleFormDialog({
     if (!isEdit) return
     const input = {
       ...values,
+      // Same "" (not undefined) reasoning as technicianUserId below — the
+      // form's own defaultValues always sets this to a real string, but the
+      // schema itself leaves it optional (it's genuinely fine to submit
+      // blank), so this coerces the type back to what ScheduleJob expects
+      // without changing any actual runtime value.
+      vehicle: values.vehicle ?? "",
       technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
       technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
       technician2UserId:
@@ -325,6 +344,44 @@ export function ScheduleFormDialog({
                           {tech}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="vehicle"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("vehicleOptional")}</FormLabel>
+                  <Select
+                    value={field.value || NONE_SENTINEL}
+                    onValueChange={(v) => field.onChange(v === NONE_SENTINEL ? "" : v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t("selectVehicle")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
+                      {VEHICLE_TYPES.map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {v}
+                        </SelectItem>
+                      ))}
+                      {/* A value already on the record that isn't one of the
+                          known presets (e.g. a specific plate typed in some
+                          other way) still gets its own option — same
+                          pattern the Technician Select in
+                          approval-detail-dialog.tsx already uses for an
+                          unlisted roster name, so an existing custom value
+                          is never silently hidden. */}
+                      {field.value && !(VEHICLE_TYPES as readonly string[]).includes(field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

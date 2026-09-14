@@ -369,6 +369,13 @@ export interface ScheduleJob {
   id: string
   jobType: ScheduleJobType
   technician: string
+  // Transport method for this job — "Motorcycle"/"Car"/"Van"/"Truck" (see
+  // VEHICLE_TYPES in constants.ts for the form's own quick-select list) or
+  // a specific plate/unit typed in directly. Plain string, always present
+  // (defaults to '' — "unassigned" — same not-null-default-empty
+  // convention as technician/serviceman elsewhere in this schema), not an
+  // enum, so it never rejects a value that isn't one of the presets.
+  vehicle: string
   // Optional second technician for jobs that need two people (e.g. a
   // pull-out + install combo) — most jobs leave this unset.
   //

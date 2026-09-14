@@ -42,6 +42,7 @@ export const SCHEDULE_EXPORT_COLUMNS = [
   { header: "Date", key: "scheduledDate" },
   { header: "Job Type", key: "jobType" },
   { header: "Technician", key: "technician" },
+  { header: "Vehicle", key: "vehicle" },
   { header: "Order No", key: "orderNo" },
   { header: "Status", key: "status" },
   { header: "Notes", key: "notes" },
@@ -126,6 +127,14 @@ function DeleteCell({ job, onDelete }: { job: ScheduleJob; onDelete: (job: Sched
   )
 }
 
+// Same badge treatment as RouteStopCell right next to it — a plain "—" for
+// an unset vehicle (the not-null-default-'' column reads as an empty
+// string, never null) rather than showing an empty badge.
+function VehicleCell({ vehicle }: { vehicle: string }) {
+  if (!vehicle) return <span className="text-muted-foreground">—</span>
+  return <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{vehicle}</span>
+}
+
 function RouteStopCell({ job, stopNumberByJobId }: { job: ScheduleJob; stopNumberByJobId: Map<string, number> }) {
   const { t } = useTranslation("schedule")
   const n = stopNumberByJobId.get(job.id)
@@ -166,6 +175,11 @@ export function getScheduleColumns({
       accessorKey: "technician",
       header: () => <ColumnHeader tKey="technician" ns="schedule" />,
       cell: ({ row }) => <TechnicianCell technician={row.original.technician} technician2={row.original.technician2} />,
+    },
+    {
+      accessorKey: "vehicle",
+      header: () => <ColumnHeader tKey="vehicle" ns="schedule" />,
+      cell: ({ row }) => <VehicleCell vehicle={row.original.vehicle} />,
     },
     ...(stopNumberByJobId
       ? [

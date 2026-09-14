@@ -14,6 +14,13 @@ export const TECHNICIANS = [
   "N/A",
 ] as const
 
+// Generic transport categories for a schedule_jobs row's own `vehicle`
+// column — plain text under the hood (not a DB enum), so a specific plate
+// or unit ("ABC-1234") typed in some other way still displays fine; this
+// is only the quick-select list the Schedule form's own dropdown offers,
+// same relationship TECHNICIANS above has to that free-text column.
+export const VEHICLE_TYPES = ["Motorcycle", "Car", "Van", "Truck"] as const
+
 export const PRODUCT_CATEGORIES = [
   "Purifiers",
   "Filters",
