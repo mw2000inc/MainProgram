@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks, CalendarClock } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -40,7 +40,7 @@ import {
   COLLECTIONS_EXPORT_COLUMNS,
 } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
-import { DispatchApprovalQueue, resolveDateRangeFilterTarget, type DateRangeFilter } from "@/components/dashboard/dispatch-approval-queue"
+import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-queue"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
@@ -401,34 +401,19 @@ export function DailyReportSection() {
   // regardless (see isPanelEnabled above).
   const { data: stockMovements = [], isPending: pInventory } = useStockMovementRows()
 
-  // The header's global "1 Day Out"/"2 Days Out" toggles (see the buttons
-  // rendered near DailyReportDateButton below) — lifted here, rather than
-  // kept local to either dialog, so one piece of state drives all three
-  // things the ask called for: whichever button's own active/highlighted
-  // look, the badge counts below, and (passed straight through as each
-  // dialog's own controlled dateRangeFilter prop) the actual row filtering
-  // inside Dispatch Approval and Daily Report Approvals once opened.
-  // Deliberately does NOT touch pendingStockMovementCount/Inventory
-  // Approval — stock movements have no scheduled date to filter by.
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
-
   // Admin-only Pending Dispatch Approval queue (see the
   // dispatch_confirmation_workflow migration) — counts every Draft item
   // across all four modules so the header button can show how many are
-  // waiting without opening the dialog first. When the "1 Day Out"/"2 Days
-  // Out" toggle is active, narrows to just that one scheduled date, same
-  // coalesce (preD-or-base-date) every other dispatch flow already applies.
+  // waiting without opening the dialog first.
   const [dispatchQueueOpen, setDispatchQueueOpen] = React.useState(false)
   const draftDispatchCount = React.useMemo(() => {
-    const targetDate = resolveDateRangeFilterTarget(dateRangeFilter)
-    const matchesDateFilter = (date: string) => targetDate === null || date === targetDate
     return (
-      filterChangePlans.filter((p) => p.dispatchStatus === "Draft" && matchesDateFilter(p.preD || p.planDate)).length +
-      installPlans.filter((p) => p.dispatchStatus === "Draft" && matchesDateFilter(p.preInstalledDate || p.inputDate)).length +
-      repairPlans.filter((p) => p.dispatchStatus === "Draft" && matchesDateFilter(p.preD || p.issuedDate)).length +
-      collectionPlans.filter((p) => p.dispatchStatus === "Draft" && matchesDateFilter(p.preD || p.collectionDate)).length
+      filterChangePlans.filter((p) => p.dispatchStatus === "Draft").length +
+      installPlans.filter((p) => p.dispatchStatus === "Draft").length +
+      repairPlans.filter((p) => p.dispatchStatus === "Draft").length +
+      collectionPlans.filter((p) => p.dispatchStatus === "Draft").length
     )
-  }, [filterChangePlans, installPlans, repairPlans, collectionPlans, dateRangeFilter])
+  }, [filterChangePlans, installPlans, repairPlans, collectionPlans])
 
   // Same idea, for pending stock movement approvals (see
   // StockMovementApprovalQueue's own comment) — reuses the same
@@ -447,7 +432,7 @@ export function DailyReportSection() {
   // reschedule inside that dialog settles, with no explicit refetch needed
   // on close.
   const [pendingApprovalsQueueOpen, setPendingApprovalsQueueOpen] = React.useState(false)
-  const pendingApprovalsCount = usePendingApprovalsCount(resolveDateRangeFilterTarget(dateRangeFilter) ?? undefined)
+  const pendingApprovalsCount = usePendingApprovalsCount()
 
   const deleteFilterChangePlans = useDeleteFilterChangePlans()
   const deleteInstallPlans = useDeleteInstallPlans()
@@ -776,26 +761,6 @@ export function DailyReportSection() {
           <>
             <Button
               type="button"
-              variant={dateRangeFilter === "oneDayOut" ? "default" : "outline"}
-              size="sm"
-              className="gap-1.5"
-              aria-pressed={dateRangeFilter === "oneDayOut"}
-              onClick={() => setDateRangeFilter((prev) => (prev === "oneDayOut" ? "all" : "oneDayOut"))}
-            >
-              <CalendarClock className="h-3.5 w-3.5" /> {tDispatch("oneDayOutToggle")}
-            </Button>
-            <Button
-              type="button"
-              variant={dateRangeFilter === "twoDaysOut" ? "default" : "outline"}
-              size="sm"
-              className="gap-1.5"
-              aria-pressed={dateRangeFilter === "twoDaysOut"}
-              onClick={() => setDateRangeFilter((prev) => (prev === "twoDaysOut" ? "all" : "twoDaysOut"))}
-            >
-              <CalendarClock className="h-3.5 w-3.5" /> {tDispatch("twoDaysOutToggle")}
-            </Button>
-            <Button
-              type="button"
               size="sm"
               variant={draftDispatchCount > 0 ? "default" : "outline"}
               className="gap-1.5"
@@ -804,12 +769,7 @@ export function DailyReportSection() {
               <ClipboardCheck className="h-3.5 w-3.5" />
               {tDispatch("title")}{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
             </Button>
-            <DispatchApprovalQueue
-              open={dispatchQueueOpen}
-              onOpenChange={setDispatchQueueOpen}
-              dateRangeFilter={dateRangeFilter}
-              onDateRangeFilterChange={setDateRangeFilter}
-            />
+            <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
             <Button
               type="button"
               size="sm"
@@ -835,8 +795,6 @@ export function DailyReportSection() {
               open={pendingApprovalsQueueOpen}
               onOpenChange={setPendingApprovalsQueueOpen}
               historyDefaultDate={reportDate}
-              dateRangeFilter={dateRangeFilter}
-              onDateRangeFilterChange={setDateRangeFilter}
             />
           </>
         )}
