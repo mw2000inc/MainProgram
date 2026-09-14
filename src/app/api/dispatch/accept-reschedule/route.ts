@@ -9,8 +9,12 @@ import {
   escapeHtml,
   appBaseUrl,
   sendEmail,
+  getEntityTechnician,
+  formatScheduleWhen,
+  buildScheduleSummary,
 } from "@/lib/dispatch-notifications-server"
 import { autoAssignScheduleJob, fetchScheduleContext } from "@/lib/scheduling/smart-schedule"
+import { sendPushToCustomer } from "@/lib/push-notifications-server"
 
 export const dynamic = "force-dynamic"
 
@@ -97,7 +101,10 @@ export async function POST(request: Request) {
       }).catch(() => {})
     }
   }
-  const { data: settingsRow } = await admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle()
+  const [{ data: settingsRow }, technician] = await Promise.all([
+    admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle(),
+    getEntityTechnician(admin, entityType, entityId),
+  ])
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]
   const actionPhrase = MODULE_ACTION_PHRASES[entityType]
@@ -125,6 +132,7 @@ export async function POST(request: Request) {
       actionPhrase,
       scheduledDate: scheduledDate ?? "",
       requestedTime,
+      technician,
       confirmUrl,
     })
     const sendResult = await sendEmail(notifyEmail, subject, html, text)
@@ -140,6 +148,25 @@ export async function POST(request: Request) {
     })
   }
 
+  // Web Push, scoped to filter-change plans only — same reasoning and
+  // scoping as /api/dispatch/approve/route.ts's own push send (the only
+  // module with a customer_id link reliable enough to resolve a
+  // subscription against). Best-effort: sendPushToCustomer never throws,
+  // so a push failure can never affect the response this route already
+  // committed to sending.
+  if (entityType === "filter_change_plans" && scheduledDate) {
+    const { data: plan } = await admin.from("filter_change_plans").select("customer_id").eq("id", entityId).maybeSingle()
+    const customerId = (plan as { customer_id: string | null } | null)?.customer_id
+    if (customerId) {
+      const when = formatScheduleWhen(scheduledDate, requestedTime)
+      await sendPushToCustomer(admin, customerId, {
+        title: `${companyName}: Filter Change Confirmed for ${when}`,
+        body: "Your rescheduled visit is confirmed — tap for details.",
+        url: `/scan/${customerId}`,
+      })
+    }
+  }
+
   return NextResponse.json(result)
 }
 
@@ -149,6 +176,7 @@ function buildEmailContent({
   actionPhrase,
   scheduledDate,
   requestedTime,
+  technician,
   confirmUrl,
 }: {
   companyName: string
@@ -156,10 +184,16 @@ function buildEmailContent({
   actionPhrase: string
   scheduledDate: string
   requestedTime: string | null
+  technician: string | null
   confirmUrl: string | undefined
 }): { subject: string; html: string; text: string } {
-  const when = requestedTime ? `${scheduledDate} at ${requestedTime}` : scheduledDate
+  const when = formatScheduleWhen(scheduledDate, requestedTime)
   const subject = `${companyName}: Your rescheduled ${moduleLabel} is now confirmed — ${when}`
+  const { html: scheduleSummaryHtml, textLines: scheduleSummaryTextLines } = buildScheduleSummary({
+    scheduledDate,
+    requestedTime,
+    technician,
+  })
   const buttonHtml = confirmUrl
     ? `<a href="${confirmUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">View Confirmation</a><p style="margin:24px 0 0;color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${confirmUrl}</p>`
     : ""
@@ -167,7 +201,8 @@ function buildEmailContent({
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;">
       <h2 style="margin:0 0 16px;color:#0f172a;">${escapeHtml(companyName)}</h2>
       <p style="margin:0 0 16px;color:#0f172a;">Hello Sir/Ma'am, good day! 😊 We hope you're doing well!</p>
-      <p style="margin:0 0 24px;color:#0f172a;">Great news — <strong>${escapeHtml(companyName)}</strong> has confirmed your requested reschedule for ${escapeHtml(actionPhrase)}: now set for <strong>${escapeHtml(when)}</strong>.</p>
+      <p style="margin:0 0 16px;color:#0f172a;">Great news — <strong>${escapeHtml(companyName)}</strong> has confirmed your requested reschedule for ${escapeHtml(actionPhrase)}: now set for <strong>${escapeHtml(when)}</strong>.</p>
+      ${scheduleSummaryHtml}
       ${buttonHtml}
       <p style="margin:24px 0 0;color:#0f172a;">Thank you for choosing ${escapeHtml(companyName)}! We look forward to serving you. Have a wonderful day! 😊</p>
     </div>
@@ -177,6 +212,7 @@ function buildEmailContent({
     "",
     `Great news — ${companyName} has confirmed your requested reschedule for ${actionPhrase}: now set for ${when}.`,
   ]
+  if (scheduleSummaryTextLines.length > 0) textLines.push("", ...scheduleSummaryTextLines)
   if (confirmUrl) textLines.push("", `View your confirmation here: ${confirmUrl}`)
   textLines.push("", `Thank you for choosing ${companyName}! We look forward to serving you. Have a wonderful day! 😊`)
   return { subject, html, text: textLines.join("\n") }

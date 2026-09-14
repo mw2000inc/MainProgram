@@ -9,6 +9,10 @@ import {
   escapeHtml,
   appBaseUrl,
   sendEmail,
+  getEntityTechnician,
+  getEntityRequestedTime,
+  formatScheduleWhen,
+  buildScheduleSummary,
 } from "@/lib/dispatch-notifications-server"
 import { sendPushToCustomer } from "@/lib/push-notifications-server"
 
@@ -77,10 +81,11 @@ export async function POST(request: Request) {
   const { out_token: token, out_scheduled_date: scheduledDate } = row
 
   const admin = createAdminClient()
-  const [{ data: settingsRow }, address, technician] = await Promise.all([
+  const [{ data: settingsRow }, address, technician, requestedTime] = await Promise.all([
     admin.from("company_settings").select("company_name").eq("id", 1).maybeSingle(),
     getEntityAddress(admin, entityType, entityId),
     getEntityTechnician(admin, entityType, entityId),
+    getEntityRequestedTime(admin, entityType, entityId),
   ])
   const companyName = settingsRow?.company_name || "MW2000"
   const moduleLabel = MODULE_LABELS[entityType]
@@ -98,6 +103,7 @@ export async function POST(request: Request) {
     moduleLabel,
     actionPhrase,
     scheduledDate: scheduledDate ?? "",
+    requestedTime,
     address,
     technician,
     confirmUrl,
@@ -125,9 +131,10 @@ export async function POST(request: Request) {
     const { data: plan } = await admin.from("filter_change_plans").select("customer_id").eq("id", entityId).maybeSingle()
     const customerId = (plan as { customer_id: string | null } | null)?.customer_id
     if (customerId) {
+      const when = scheduledDate ? formatScheduleWhen(scheduledDate, requestedTime) : ""
       await sendPushToCustomer(admin, customerId, {
-        title: `${companyName}: Filter Change Scheduled`,
-        body: `Your filter change is scheduled for ${scheduledDate ?? ""} — confirm or reschedule via the link we emailed you.`,
+        title: `${companyName}: Filter Change Scheduled${when ? ` for ${when}` : ""}`,
+        body: "Please confirm or reschedule via the link we emailed you.",
         url: `/scan/${customerId}`,
       })
     }
@@ -163,24 +170,6 @@ async function getEntityAddress(
   return null
 }
 
-// All four dispatch tables now carry a plan-level technician column
-// (filter_change_plans/collections/install_plans: serviceman, added by the
-// 20260914000000 migration; repair_plans: th, from the original
-// AppSheet-parity migration) — this can genuinely report one for any of
-// them now, not just Filter Change/Repair as before that migration.
-async function getEntityTechnician(
-  admin: ReturnType<typeof createAdminClient>,
-  entityType: DispatchEntityType,
-  entityId: string
-): Promise<string | null> {
-  if (entityType === "repair_plans") {
-    const { data } = await admin.from("repair_plans").select("th").eq("id", entityId).maybeSingle()
-    return (data as { th: string | null } | null)?.th || null
-  }
-  const { data } = await admin.from(entityType).select("serviceman").eq("id", entityId).maybeSingle()
-  return (data as { serviceman: string | null } | null)?.serviceman || null
-}
-
 // Warmer, more conversational copy (confirmed wording) — points at the
 // button to confirm or reschedule rather than asking for a reply (SMS used
 // to ask for a reply as the natural action on a phone; that channel was
@@ -190,6 +179,7 @@ function buildEmailContent({
   moduleLabel,
   actionPhrase,
   scheduledDate,
+  requestedTime,
   address,
   technician,
   confirmUrl,
@@ -198,22 +188,25 @@ function buildEmailContent({
   moduleLabel: string
   actionPhrase: string
   scheduledDate: string
+  requestedTime: string | null
   address: string | null
   technician: string | null
   confirmUrl: string
 }): { subject: string; html: string; text: string } {
   const subject = `${companyName}: Your ${moduleLabel} is scheduled for ${scheduledDate}`
   const addressLine = address ? `<p style="margin:0 0 16px;color:#475569;">Location: ${escapeHtml(address)}</p>` : ""
-  const technicianLine = technician
-    ? `<p style="margin:0 0 16px;color:#475569;">Assigned Technician: ${escapeHtml(technician)}</p>`
-    : ""
+  const { html: scheduleSummaryHtml, textLines: scheduleSummaryTextLines } = buildScheduleSummary({
+    scheduledDate,
+    requestedTime,
+    technician,
+  })
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;">
       <h2 style="margin:0 0 16px;color:#0f172a;">${escapeHtml(companyName)}</h2>
       <p style="margin:0 0 16px;color:#0f172a;">Hello Sir/Ma'am, good day! 😊 We hope you're doing well!</p>
       <p style="margin:0 0 16px;color:#0f172a;">This is a friendly reminder from <strong>${escapeHtml(companyName)}</strong> that we have ${escapeHtml(actionPhrase)} scheduled for <strong>${escapeHtml(scheduledDate)}</strong>.</p>
+      ${scheduleSummaryHtml}
       ${addressLine}
-      ${technicianLine}
       <p style="margin:0 0 24px;color:#475569;">We'd be happy to assist you with the service — please use the button below to confirm if this date works for you, or let us know if you'd like to reschedule.</p>
       <a href="${confirmUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Confirm or Reschedule</a>
       <p style="margin:24px 0 8px;color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${confirmUrl}</p>
@@ -225,10 +218,10 @@ function buildEmailContent({
     "",
     `This is a friendly reminder from ${companyName} that we have ${actionPhrase} scheduled for ${scheduledDate}.`,
   ]
-  // Address/technician lines are conditional — the blank lines around them
-  // are deliberate paragraph breaks, not filler to strip.
+  // The schedule-summary/address lines are conditional — the blank lines
+  // around them are deliberate paragraph breaks, not filler to strip.
+  if (scheduleSummaryTextLines.length > 0) textLines.push("", ...scheduleSummaryTextLines)
   if (address) textLines.push(`Location: ${address}`)
-  if (technician) textLines.push(`Assigned Technician: ${technician}`)
   textLines.push(
     "",
     "We'd be happy to assist you with the service. Please use this link to confirm if this date works for you, or let us know if you'd like to reschedule:",
