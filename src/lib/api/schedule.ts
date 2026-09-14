@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 type ScheduleJobRow = {
@@ -73,13 +74,20 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
   return row
 }
 
+// Paginates via fetchAllRows rather than a single un-ranged select() — see
+// that helper's own comment for why: PostgREST silently caps an un-ranged
+// select() at 1000 rows on this project, already confirmed to have
+// actually truncated filter_change_plans in production once it grew past
+// that. schedule_jobs hasn't hit that size yet, but every plan-row's own
+// technician/route-sequence/notes lookup (withJob() in
+// pending-approvals-panel.tsx, and the Schedule page's own agenda) joins
+// against this list in memory — a silent truncation here wouldn't error,
+// it would just make some real jobs' technician assignments disappear.
 export async function listScheduleJobs(): Promise<ScheduleJob[]> {
-  const { data, error } = await supabase
-    .from("schedule_jobs")
-    .select("*")
-    .order("scheduled_date", { ascending: true })
-  if (error) throw error
-  return (data as ScheduleJobRow[]).map(fromRow)
+  const data = await fetchAllRows<ScheduleJobRow>((from, to) =>
+    supabase.from("schedule_jobs").select("*").order("scheduled_date", { ascending: true }).range(from, to)
+  )
+  return data.map(fromRow)
 }
 
 export async function createScheduleJob(input: Omit<ScheduleJob, "id" | "createdAt">): Promise<ScheduleJob> {

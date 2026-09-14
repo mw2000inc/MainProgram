@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 import type { Customer } from "@/lib/types"
 
 type CustomerRow = {
@@ -83,10 +84,21 @@ function toRow(input: Partial<Omit<Customer, "id" | "createdAt">>) {
   return row
 }
 
+// Paginates via fetchAllRows rather than a single un-ranged select() — see
+// that helper's own comment for why: PostgREST silently caps an un-ranged
+// select() at 1000 rows on this project, already confirmed to have
+// actually truncated filter_change_plans in production once it grew past
+// that. customers hasn't hit that size yet, but every findCustomer()/
+// findCustomerByOrderNumber() lookup across the app (Member List, Approval
+// Summary customer names, dispatch conflict detection, etc.) depends on
+// this list being genuinely complete — a silent truncation here wouldn't
+// error, it would just make some real customers invisible to those
+// lookups.
 export async function listCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false })
-  if (error) throw error
-  return (data as CustomerRow[]).map(fromRow)
+  const data = await fetchAllRows<CustomerRow>((from, to) =>
+    supabase.from("customers").select("*").order("created_at", { ascending: false }).range(from, to)
+  )
+  return data.map(fromRow)
 }
 
 export async function getCustomer(id: string): Promise<Customer | undefined> {
