@@ -611,7 +611,19 @@ export function PendingApprovalsDialog({
   const { t } = useTranslation("dispatch")
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-4xl max-h-[85vh] overflow-y-auto"
+        // A misclick on the backdrop (or, via Radix's own "interact
+        // outside" detection, opening the Status/Date Range Selects below
+        // — their dropdowns portal outside this DialogContent's own DOM
+        // subtree, and the panel's own full-screen mode portals straight
+        // to document.body for the same reason its own comment gives —
+        // Radix otherwise treats either as an outside interaction) used to
+        // silently close this whole dialog. Same guard approval-detail-
+        // dialog.tsx and DispatchApprovalQueue's own main dialog already
+        // use — only an explicit Close (X) or Escape may dismiss this.
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
           <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>

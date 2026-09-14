@@ -127,119 +127,23 @@ function findCustomer(
   return undefined
 }
 
-// Same customer, by whichever identifying signal both sides actually
-// have — checked in priority order (only falls through to the next signal
-// when the higher one is missing on either side, not when it's present
-// but different) since customerId/orderNumber are structural identity and
-// far more reliable than an email string match.
-function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: string; email?: string }): boolean {
-  if (a.customerId && b.customerId) return a.customerId === b.customerId
-  if (a.orderNumber && b.orderNumber) return a.orderNumber === b.orderNumber
-  if (a.email && b.email && a.email.trim().toLowerCase() === b.email.trim().toLowerCase()) return true
-  return false
-}
-
-// Reschedule Requested is included too — a customer already mid-
-// negotiation on one item (declined a date, possibly proposed another) is
-// exactly the kind of "existing schedule" this check exists to surface
-// before a second notification goes out for something else.
-const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
-
-// Additive date lens on top of the Draft/Reschedule Requested status split
-// below — "oneDayOut"/"twoDaysOut" narrow both lists (and, since Approve
-// All/the full-screen view both read from those same filtered lists, the
-// bulk action and full-screen mode too) to whatever's due tomorrow or
-// exactly 2 days out — the latter the same lookahead window
-// /api/cron/send-schedule-reminders reminds customers on. Own small type
-// here rather than importing pending-approvals-panel.tsx's — same "keep
-// these two panel files independent" precedent DISPATCH_STATUS_KEYS above
-// already follows.
-type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
-
-function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
-  if (filter === "oneDayOut") return tomorrowIso()
-  if (filter === "twoDaysOut") return twoDaysFromNowIso()
-  return null
-}
-
-function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
-  const target = resolveDateRangeFilterTarget(filter)
-  return target === null || scheduledDate === target
-}
-
-// Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
-// its own small copy here rather than a shared import, to avoid a
-// cross-import between these two otherwise-independent panel files.
-const DISPATCH_STATUS_KEYS: Record<string, string> = {
-  Draft: "draft",
-  "Pending Customer Confirmation": "pendingCustomerConfirmation",
-  Confirmed: "confirmed",
-  "Reschedule Requested": "rescheduleRequested",
-}
-
-// Admin approval queue for newly-scheduled Filter Change/Installation/
-// Collection/Repair dispatches (see the dispatch_confirmation_workflow and
-// dispatch_dual_channel_notifications migrations) — only rows created via
-// each module's own "Add" form start here at dispatchStatus='Draft';
-// auto-generated recurring-schedule/C/T-completion rows skip this queue
-// entirely (see the migration's own comment for why). Approving here
-// sends a real email (Resend) to whichever address is filled in — email
-// is required. SMS (textbee) was fully removed as a notification channel;
-// see dispatch-notifications-server.ts's own note.
-//
-// Before actually sending, Approve first checks whether the same customer
-// already has another Confirmed/Pending/Draft item anywhere across all
-// four modules (a second notification going out before they've answered
-// the first, an accidental duplicate schedule, or a duplicate Draft an
-// admin didn't realize already existed) — client-side only, since this is
-// an internal admin tool and every module's full list is already loaded
-// here anyway. Finding nothing lets Approve send immediately, exactly as
-// before; finding something opens a confirmation dialog listing what was
-// found, and only proceeds on an explicit "Send Anyway".
-export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { t, locale } = useTranslation("dispatch")
-  const { t: tCommon } = useTranslation("common")
+// One row-building function, used both by DispatchApprovalQueue itself and
+// by useDispatchApprovalCount below — previously the header's own "Pending
+// Dispatch Approval (X)" badge (daily-report-section.tsx) computed a
+// second, independent Draft-only tally straight from the four plan
+// queries, which silently drifted from what this dialog actually contains
+// (Draft AND Reschedule Requested, across its two sections below) the
+// moment a Reschedule Requested item existed. Not exported — only
+// consumed within this file.
+function useDispatchApprovalRows(): DispatchRow[] {
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: installPlans = [] } = useInstallPlans()
   const { data: collections = [] } = useCollections()
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
-  const approve = useApproveDispatchItem()
-  const acceptReschedule = useAcceptRequestedReschedule()
-  const updateCustomer = useUpdateCustomer()
-  const [historyOpen, setHistoryOpen] = React.useState(false)
-  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
-  // Never reopen already full-screen from a previous session — this
-  // component stays mounted across open/close (only `open` toggles
-  // visibility), so without this the state would otherwise just persist.
-  React.useEffect(() => {
-    if (!open) exitFullScreen()
-  }, [open, exitFullScreen])
 
-  const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
-  const [lastResult, setLastResult] = React.useState<{ confirmUrl: string; email?: DispatchChannelResult } | null>(null)
-  const [pendingApproval, setPendingApproval] = React.useState<{
-    item: DispatchRow
-    notifyEmail: string
-    conflicts: DispatchRow[]
-  } | null>(null)
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
-  // Gates handleApproveAll behind an explicit "yes, send these" — Approve
-  // All used to fire the instant it was clicked; a misclick sent real
-  // emails to every Draft item currently in view with no way back. Purely
-  // a confirmation gate: it never touches which items get approved (still
-  // `items`, matching the active date filter same as the button's own
-  // count) or how (handleApproveAll below is completely unchanged).
-  const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
-  const [bulkApproving, setBulkApproving] = React.useState(false)
-  const [bulkSummary, setBulkSummary] = React.useState<{
-    approved: DispatchRow[]
-    skippedNoContact: DispatchRow[]
-    skippedConflict: { item: DispatchRow; conflicts: DispatchRow[] }[]
-  } | null>(null)
-
-  const allRows: DispatchRow[] = React.useMemo(() => {
+  return React.useMemo(() => {
     const list: DispatchRow[] = []
     for (const p of filterChangePlans) {
       const customer = findCustomer(customers, saleListEntries, { customerId: p.customerId, orderNumber: p.orderNumber })
@@ -316,6 +220,129 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     }
     return list
   }, [filterChangePlans, installPlans, collections, repairPlans, customers, saleListEntries])
+}
+
+// The header's own "Pending Dispatch Approval (X)" badge
+// (daily-report-section.tsx) — Draft AND Reschedule Requested, matching
+// exactly what this dialog itself shows across its two sections (items +
+// rescheduleRequests below), off the exact same useDispatchApprovalRows()
+// data those derive from. Reuses the same react-query cache the dialog
+// itself reads, so this costs no extra network call whether or not the
+// dialog has ever been opened, and the badge updates live the moment an
+// approve/reject/accept-reschedule inside that dialog settles.
+export function useDispatchApprovalCount(): number {
+  const rows = useDispatchApprovalRows()
+  return rows.filter((r) => r.dispatchStatus === "Draft" || r.dispatchStatus === "Reschedule Requested").length
+}
+
+// Same customer, by whichever identifying signal both sides actually
+// have — checked in priority order (only falls through to the next signal
+// when the higher one is missing on either side, not when it's present
+// but different) since customerId/orderNumber are structural identity and
+// far more reliable than an email string match.
+function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: string; email?: string }): boolean {
+  if (a.customerId && b.customerId) return a.customerId === b.customerId
+  if (a.orderNumber && b.orderNumber) return a.orderNumber === b.orderNumber
+  if (a.email && b.email && a.email.trim().toLowerCase() === b.email.trim().toLowerCase()) return true
+  return false
+}
+
+// Reschedule Requested is included too — a customer already mid-
+// negotiation on one item (declined a date, possibly proposed another) is
+// exactly the kind of "existing schedule" this check exists to surface
+// before a second notification goes out for something else.
+const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
+
+// Additive date lens on top of the Draft/Reschedule Requested status split
+// below — "oneDayOut"/"twoDaysOut" narrow both lists (and, since Approve
+// All/the full-screen view both read from those same filtered lists, the
+// bulk action and full-screen mode too) to whatever's due tomorrow or
+// exactly 2 days out — the latter the same lookahead window
+// /api/cron/send-schedule-reminders reminds customers on. Own small type
+// here rather than importing pending-approvals-panel.tsx's — same "keep
+// these two panel files independent" precedent DISPATCH_STATUS_KEYS above
+// already follows.
+type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
+
+function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
+  if (filter === "oneDayOut") return tomorrowIso()
+  if (filter === "twoDaysOut") return twoDaysFromNowIso()
+  return null
+}
+
+function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
+  const target = resolveDateRangeFilterTarget(filter)
+  return target === null || scheduledDate === target
+}
+
+// Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
+// its own small copy here rather than a shared import, to avoid a
+// cross-import between these two otherwise-independent panel files.
+const DISPATCH_STATUS_KEYS: Record<string, string> = {
+  Draft: "draft",
+  "Pending Customer Confirmation": "pendingCustomerConfirmation",
+  Confirmed: "confirmed",
+  "Reschedule Requested": "rescheduleRequested",
+}
+
+// Admin approval queue for newly-scheduled Filter Change/Installation/
+// Collection/Repair dispatches (see the dispatch_confirmation_workflow and
+// dispatch_dual_channel_notifications migrations) — only rows created via
+// each module's own "Add" form start here at dispatchStatus='Draft';
+// auto-generated recurring-schedule/C/T-completion rows skip this queue
+// entirely (see the migration's own comment for why). Approving here
+// sends a real email (Resend) to whichever address is filled in — email
+// is required. SMS (textbee) was fully removed as a notification channel;
+// see dispatch-notifications-server.ts's own note.
+//
+// Before actually sending, Approve first checks whether the same customer
+// already has another Confirmed/Pending/Draft item anywhere across all
+// four modules (a second notification going out before they've answered
+// the first, an accidental duplicate schedule, or a duplicate Draft an
+// admin didn't realize already existed) — client-side only, since this is
+// an internal admin tool and every module's full list is already loaded
+// here anyway. Finding nothing lets Approve send immediately, exactly as
+// before; finding something opens a confirmation dialog listing what was
+// found, and only proceeds on an explicit "Send Anyway".
+export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t, locale } = useTranslation("dispatch")
+  const { t: tCommon } = useTranslation("common")
+  const { data: customers = [] } = useCustomers()
+  const approve = useApproveDispatchItem()
+  const acceptReschedule = useAcceptRequestedReschedule()
+  const updateCustomer = useUpdateCustomer()
+  const [historyOpen, setHistoryOpen] = React.useState(false)
+  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
+  // Never reopen already full-screen from a previous session — this
+  // component stays mounted across open/close (only `open` toggles
+  // visibility), so without this the state would otherwise just persist.
+  React.useEffect(() => {
+    if (!open) exitFullScreen()
+  }, [open, exitFullScreen])
+
+  const [emailDrafts, setEmailDrafts] = React.useState<Record<string, string>>({})
+  const [lastResult, setLastResult] = React.useState<{ confirmUrl: string; email?: DispatchChannelResult } | null>(null)
+  const [pendingApproval, setPendingApproval] = React.useState<{
+    item: DispatchRow
+    notifyEmail: string
+    conflicts: DispatchRow[]
+  } | null>(null)
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  // Gates handleApproveAll behind an explicit "yes, send these" — Approve
+  // All used to fire the instant it was clicked; a misclick sent real
+  // emails to every Draft item currently in view with no way back. Purely
+  // a confirmation gate: it never touches which items get approved (still
+  // `items`, matching the active date filter same as the button's own
+  // count) or how (handleApproveAll below is completely unchanged).
+  const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
+  const [bulkApproving, setBulkApproving] = React.useState(false)
+  const [bulkSummary, setBulkSummary] = React.useState<{
+    approved: DispatchRow[]
+    skippedNoContact: DispatchRow[]
+    skippedConflict: { item: DispatchRow; conflicts: DispatchRow[] }[]
+  } | null>(null)
+
+  const allRows = useDispatchApprovalRows()
 
   const items = React.useMemo(
     () =>
@@ -491,6 +518,15 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
               exitFullScreen()
             }
           }}
+          // A misclick on the backdrop (or, via Radix's own "interact
+          // outside" detection, opening the Date Range Select above —
+          // its dropdown portals outside this DialogContent's own DOM
+          // subtree, which Radix otherwise treats as an outside
+          // interaction) used to silently close this entire queue,
+          // discarding every email draft typed in below with no undo.
+          // Same guard approval-detail-dialog.tsx already uses — only an
+          // explicit Close (X) or Escape (handled above) may dismiss this.
+          onInteractOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-6">

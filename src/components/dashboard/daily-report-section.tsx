@@ -40,7 +40,7 @@ import {
   COLLECTIONS_EXPORT_COLUMNS,
 } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
-import { DispatchApprovalQueue } from "@/components/dashboard/dispatch-approval-queue"
+import { DispatchApprovalQueue, useDispatchApprovalCount } from "@/components/dashboard/dispatch-approval-queue"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
@@ -402,18 +402,17 @@ export function DailyReportSection() {
   const { data: stockMovements = [], isPending: pInventory } = useStockMovementRows()
 
   // Admin-only Pending Dispatch Approval queue (see the
-  // dispatch_confirmation_workflow migration) — counts every Draft item
-  // across all four modules so the header button can show how many are
-  // waiting without opening the dialog first.
+  // dispatch_confirmation_workflow migration) — useDispatchApprovalCount
+  // reads off the exact same row-building logic (useDispatchApprovalRows,
+  // in dispatch-approval-queue.tsx) that the dialog's own items/
+  // rescheduleRequests derive from, so this button's badge can never drift
+  // from what the dialog actually shows once opened. Previously computed
+  // as a second, independent Draft-only tally directly from the four plan
+  // queries below — that silently undercounted the moment a Reschedule
+  // Requested item existed (the dialog's own "Reschedule Requests" section
+  // counts those too, this badge didn't).
   const [dispatchQueueOpen, setDispatchQueueOpen] = React.useState(false)
-  const draftDispatchCount = React.useMemo(() => {
-    return (
-      filterChangePlans.filter((p) => p.dispatchStatus === "Draft").length +
-      installPlans.filter((p) => p.dispatchStatus === "Draft").length +
-      repairPlans.filter((p) => p.dispatchStatus === "Draft").length +
-      collectionPlans.filter((p) => p.dispatchStatus === "Draft").length
-    )
-  }, [filterChangePlans, installPlans, repairPlans, collectionPlans])
+  const dispatchApprovalCount = useDispatchApprovalCount()
 
   // Same idea, for pending stock movement approvals (see
   // StockMovementApprovalQueue's own comment) — reuses the same
@@ -762,12 +761,12 @@ export function DailyReportSection() {
             <Button
               type="button"
               size="sm"
-              variant={draftDispatchCount > 0 ? "default" : "outline"}
+              variant={dispatchApprovalCount > 0 ? "default" : "outline"}
               className="gap-1.5"
               onClick={() => setDispatchQueueOpen(true)}
             >
               <ClipboardCheck className="h-3.5 w-3.5" />
-              {tDispatch("title")}{draftDispatchCount > 0 ? ` (${draftDispatchCount})` : ""}
+              {tDispatch("title")}{dispatchApprovalCount > 0 ? ` (${dispatchApprovalCount})` : ""}
             </Button>
             <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
             <Button
