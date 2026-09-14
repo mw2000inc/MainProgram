@@ -10,6 +10,7 @@ import {
   appBaseUrl,
   sendEmail,
 } from "@/lib/dispatch-notifications-server"
+import { sendPushToCustomer } from "@/lib/push-notifications-server"
 
 export const dynamic = "force-dynamic"
 
@@ -113,6 +114,25 @@ export async function POST(request: Request) {
     created_by: caller.id,
   })
 
+  // Web Push, scoped to filter-change plans only for now — the only module
+  // with a customer_id link reliable enough to resolve a subscription
+  // against here, and the one real trigger this feature was built for (see
+  // push-opt-in-banner.tsx's own comment on "technician arrival" having no
+  // tracking mechanism to hook into yet). Best-effort: sendPushToCustomer
+  // never throws, so a push failure (or VAPID simply not being configured)
+  // can never affect the response this route already committed to sending.
+  if (entityType === "filter_change_plans") {
+    const { data: plan } = await admin.from("filter_change_plans").select("customer_id").eq("id", entityId).maybeSingle()
+    const customerId = (plan as { customer_id: string | null } | null)?.customer_id
+    if (customerId) {
+      await sendPushToCustomer(admin, customerId, {
+        title: `${companyName}: Filter Change Scheduled`,
+        body: `Your filter change is scheduled for ${scheduledDate ?? ""} — confirm or reschedule via the link we emailed you.`,
+        url: `/scan/${customerId}`,
+      })
+    }
+  }
+
   return NextResponse.json({ token, confirmUrl, ...result })
 }
 
@@ -143,26 +163,22 @@ async function getEntityAddress(
   return null
 }
 
-// Only filter_change_plans (serviceman) and repair_plans (th) carry a
-// plan-level technician column — install_plans/collections have none; any
-// technician for those only exists on schedule_jobs, which doesn't get
-// created until AFTER the customer actually confirms (see
-// auto_create_schedule_job_on_confirm), so there's genuinely nothing to
-// report here yet for those two modules at approval time.
+// All four dispatch tables now carry a plan-level technician column
+// (filter_change_plans/collections/install_plans: serviceman, added by the
+// 20260914000000 migration; repair_plans: th, from the original
+// AppSheet-parity migration) — this can genuinely report one for any of
+// them now, not just Filter Change/Repair as before that migration.
 async function getEntityTechnician(
   admin: ReturnType<typeof createAdminClient>,
   entityType: DispatchEntityType,
   entityId: string
 ): Promise<string | null> {
-  if (entityType === "filter_change_plans") {
-    const { data } = await admin.from("filter_change_plans").select("serviceman").eq("id", entityId).maybeSingle()
-    return (data as { serviceman: string | null } | null)?.serviceman || null
-  }
   if (entityType === "repair_plans") {
     const { data } = await admin.from("repair_plans").select("th").eq("id", entityId).maybeSingle()
     return (data as { th: string | null } | null)?.th || null
   }
-  return null
+  const { data } = await admin.from(entityType).select("serviceman").eq("id", entityId).maybeSingle()
+  return (data as { serviceman: string | null } | null)?.serviceman || null
 }
 
 // Warmer, more conversational copy (confirmed wording) — points at the

@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { MonitoringViewStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
 import { usePortalProfile } from "@/lib/hooks/use-portal"
+import { PushOptInBanner } from "@/components/portal/push-opt-in-banner"
 import { getFilterChangeCustomerPortalColumns } from "@/components/filter-change/filter-change-columns"
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
@@ -178,6 +179,8 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
             <p className="text-xs text-muted-foreground">{t("readOnlyNotice")}</p>
           </CardContent>
         </Card>
+
+        <PushOptInBanner customerId={customerId} />
 
         {profile?.pendingConfirmation && (
           <Card className="border-amber-500/40 bg-amber-500/10">
