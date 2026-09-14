@@ -180,7 +180,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
           </CardContent>
         </Card>
 
-        <PushOptInBanner customerId={customerId} />
+        <PushOptInBanner customerId={customerId} initialEmail={customer.email} />
 
         {profile?.pendingConfirmation && (
           <Card className="border-amber-500/40 bg-amber-500/10">

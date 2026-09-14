@@ -15,3 +15,15 @@ export async function savePushSubscription(
   })
   if (error) throw error
 }
+
+// Same anonymous, customer_id-scoped write pattern as savePushSubscription
+// above — updates customers.email, the same column every future admin
+// approval email already falls back to (see PendingApprovalRow's own
+// customerEmail field: `p.notifyEmail ?? customer?.email`).
+export async function updateCustomerNotificationEmail(customerId: string, email: string): Promise<void> {
+  const { error } = await supabase.rpc("update_customer_notification_email", {
+    p_customer_id: customerId,
+    p_email: email,
+  })
+  if (error) throw error
+}
