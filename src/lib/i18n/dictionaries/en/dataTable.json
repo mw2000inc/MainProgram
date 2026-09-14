@@ -4,5 +4,6 @@
   "noRecordsFound": "No records found.",
   "showingRange": "Showing {start}-{end} of {total}",
   "rowsPerPage": "Rows per page",
-  "pageOfTotal": "Page {page} of {totalPages}"
+  "pageOfTotal": "Page {page} of {totalPages}",
+  "allRows": "All"
 }

@@ -4,5 +4,6 @@
   "noRecordsFound": "기록을 찾을 수 없습니다.",
   "showingRange": "전체 {total}개 중 {start}-{end}",
   "rowsPerPage": "페이지당 행 수",
-  "pageOfTotal": "{page} / {totalPages} 페이지"
+  "pageOfTotal": "{page} / {totalPages} 페이지",
+  "allRows": "전체"
 }

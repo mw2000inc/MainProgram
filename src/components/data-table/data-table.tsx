@@ -32,6 +32,18 @@ import {
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 
+// Sentinel pageSize meaning "show every row on one page" — Number.
+// MAX_SAFE_INTEGER rather than data.length itself so this stays a stable,
+// content-independent value: TanStack's own pageCount math
+// (ceil(rowCount / pageSize)) always comes out to a single page for any
+// real dataset this app renders, with no need to know or recompute the
+// actual row count up front. Exported so a caller that wants to force
+// "show everything, no rows-per-page control needed" can pass this
+// explicitly instead of guessing a large-enough number (the inventory
+// drilldown table and DashboardPlanPanel's own compact view already did
+// exactly that with Math.max(rowCount, 1) before this existed).
+export const DATA_TABLE_SHOW_ALL_PAGE_SIZE = Number.MAX_SAFE_INTEGER
+
 interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[]
   data: TData[]
@@ -89,7 +101,13 @@ export function DataTable<TData>({
   onFilteredRowsChange,
   onSearchChange,
   emptyMessage,
-  pageSize = 10,
+  // Defaults to showing every row on one page rather than an arbitrary 10
+  // — an admin opening any list (Pending Approvals, Member List, Schedule,
+  // Inventory, ...) sees the full dataset immediately, no manual "rows per
+  // page" bump needed first. A caller that still wants real pagination
+  // (rare — none currently do) passes its own smaller pageSize, unaffected
+  // by this default.
+  pageSize = DATA_TABLE_SHOW_ALL_PAGE_SIZE,
   onRowClick,
   getRowClassName,
   tableContainerClassName,
@@ -237,20 +255,22 @@ export function DataTable<TData>({
           <div className="flex items-center gap-2">
             <span>{t("rowsPerPage")}</span>
             <Select
-              value={String(currentPageSize)}
-              onValueChange={(v) => table.setPageSize(Number(v))}
+              value={currentPageSize === DATA_TABLE_SHOW_ALL_PAGE_SIZE ? "all" : String(currentPageSize)}
+              onValueChange={(v) => table.setPageSize(v === "all" ? DATA_TABLE_SHOW_ALL_PAGE_SIZE : Number(v))}
             >
-              <SelectTrigger className="h-8 w-16">
+              <SelectTrigger className="h-8 w-18">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {Array.from(new Set([10, 20, 50, 100, currentPageSize]))
+                  .filter((size) => size !== DATA_TABLE_SHOW_ALL_PAGE_SIZE)
                   .sort((a, b) => a - b)
                   .map((size) => (
                     <SelectItem key={size} value={String(size)}>
                       {size}
                     </SelectItem>
                   ))}
+                <SelectItem value="all">{t("allRows")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
