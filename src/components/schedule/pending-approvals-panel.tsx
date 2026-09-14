@@ -336,6 +336,7 @@ function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter):
 
 export function PendingApprovalsPanel({
   historyDefaultDate,
+  renderedInDialog,
 }: {
   // Forwarded to PendingApprovalsHistoryDialog's own initial date — the
   // Daily Report's own selected report date, when this panel is opened
@@ -343,6 +344,15 @@ export function PendingApprovalsPanel({
   // Schedule page's own Pending Approvals tab, which has no report date of
   // its own; the history dialog falls back to today in that case.
   historyDefaultDate?: string
+  // True only when PendingApprovalsDialog renders this — that dialog's own
+  // DialogContent is already a single bounded overflow-y-auto region (see
+  // its own comment), so the table below must NOT also bound/scroll
+  // itself in that case, or the two nest into a double scrollbar (an outer
+  // one for the dialog, an inner one for the table, both visible at once).
+  // Left false on the Schedule page's standalone tab, which has no
+  // wrapping dialog to defer scrolling to — that case keeps its own
+  // bounded, independently-scrolling table exactly as before.
+  renderedInDialog?: boolean
 } = {}) {
   const { t } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
@@ -478,13 +488,25 @@ export function PendingApprovalsPanel({
     )
   }
 
-  // Shared between the normal (in-Card) and full-screen (portaled overlay)
-  // render below — same toolbar/table content either way, only the wrapper
-  // and the table's own scroll height differ. scrollContainerClassName's
-  // full-screen value is a rough estimate (accounting for the overlay's own
-  // p-6 padding, ApprovalSummary, and this toolbar row) rather than a
-  // measured pixel value — same level of approximation max-h-[60vh] above
-  // it already uses for the normal case.
+  // Shared between the normal (in-Card), renderedInDialog, and full-screen
+  // (portaled overlay) render below — same toolbar/table content in every
+  // case, only which element actually owns the scrollbar differs. Both
+  // isFullScreen and renderedInDialog defer to an ancestor that's already
+  // its own single overflow-y-auto region (the portaled full-screen div
+  // itself below, or PendingApprovalsDialog's own DialogContent) —
+  // bounding the table too, in either case, would nest a second scrollbar
+  // inside the first (both visible, both scrolling the same content —
+  // confirmed exactly this way before this fix). "overflow-y-visible"
+  // cancels DataTable's own hardcoded overflow-y-auto via tailwind-merge's
+  // usual same-utility-group override (see cn()'s deduping — same
+  // mechanism the Full-Screen toggle's own sm:max-w-none fix already
+  // relies on), leaving overflow-x-auto for wide columns intact and
+  // letting the table grow to its natural content height. Only the
+  // Schedule page's standalone tab (neither full-screen nor in a dialog,
+  // so nothing else nearby scrolls it) keeps its own bounded, independently
+  // scrolling max-h-[60vh] box.
+  const tableScrollClassName = isFullScreen || renderedInDialog ? "overflow-y-visible" : "max-h-[60vh]"
+
   const toolbarAndTable = (
     <>
       <ApprovalSummary countsByType={countsByType} />
@@ -536,7 +558,7 @@ export function PendingApprovalsPanel({
         data={visibleRows}
         searchPlaceholder={t("searchPendingApprovals")}
         emptyMessage={t("noPendingApprovals")}
-        scrollContainerClassName={isFullScreen ? "max-h-[calc(100vh-16rem)]" : "max-h-[60vh]"}
+        scrollContainerClassName={tableScrollClassName}
         stickyHeader
       />
     </>
@@ -569,11 +591,32 @@ export function PendingApprovalsPanel({
   // close the wrapping dialog too rather than only exiting full-screen —
   // the Minimize2 button always works correctly either way since it's a
   // direct click handler, not reliant on winning that race.
+  //
+  // pointer-events-auto + z-60 are load-bearing, not decorative, when
+  // this is nested inside PendingApprovalsDialog: Radix's own DialogContent
+  // (@radix-ui/react-dialog's DialogContentModal) sets
+  // disableOutsidePointerEvents={context.open} on its DismissableLayer,
+  // which — confirmed directly in @radix-ui/react-dismissable-layer's own
+  // source — sets `document.body.style.pointerEvents = "none"` for as long
+  // as that Dialog stays open, then explicitly re-enables it only on its
+  // OWN Content node. This plain div, portaled straight to <body> as a
+  // sibling of that Content node rather than a descendant of it, would
+  // otherwise silently inherit that "none" — every click, row selection,
+  // and scrollbar drag/wheel event on it would do nothing, with no visual
+  // sign anything was wrong. z-60 (above every z-50 elsewhere in this
+  // app, including Radix's own Dialog overlay/content) is the same fix
+  // applied to stacking instead of pointer handling, so this never depends
+  // on DOM-insertion-order tie-breaking to paint on top. overflow-y-auto
+  // replaces the previous overflow-hidden here (see tableScrollClassName
+  // above) so this div itself is the one scrolling region, not a second
+  // one nested inside DataTable's own wrapper.
   if (isFullScreen && typeof document !== "undefined") {
     return (
       <>
         {createPortal(
-          <div className="fixed inset-0 z-50 bg-background p-6 overflow-hidden flex flex-col gap-4">{toolbarAndTable}</div>,
+          <div className="pointer-events-auto fixed inset-0 z-60 flex flex-col gap-4 overflow-y-auto bg-background p-6">
+            {toolbarAndTable}
+          </div>,
           document.body
         )}
         {dialogs}
@@ -582,7 +625,18 @@ export function PendingApprovalsPanel({
   }
 
   return (
-    <Card>
+    // Card's own base class includes overflow-hidden (for its rounded
+    // corners) — CSS position:sticky treats ANY non-visible overflow as a
+    // potential containing block, so left as-is here it'd stop the table
+    // header's sticky positioning from ever reaching PendingApprovalsDialog's
+    // own overflow-y-auto further up (the actual intended scrolling
+    // ancestor once renderedInDialog stops the table bounding itself —
+    // see tableScrollClassName above), silently breaking "sticky" into a
+    // no-op. Only relevant in that one case: the standalone Schedule-page
+    // tab's own table wrapper is already the nearest scrolling ancestor
+    // (max-h-[60vh]), so Card's overflow-hidden never gets reached there
+    // either way.
+    <Card className={renderedInDialog ? "overflow-visible" : undefined}>
       <CardContent className="pt-6 space-y-4">{toolbarAndTable}</CardContent>
       {dialogs}
     </Card>
@@ -612,7 +666,12 @@ export function PendingApprovalsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-4xl max-h-[85vh] overflow-y-auto"
+        // max-h-[80vh] + overflow-y-auto here is the ONE vertical scroll
+        // boundary for this whole dialog — PendingApprovalsPanel's own
+        // table is told not to bound/scroll itself too (renderedInDialog
+        // below), specifically so this doesn't nest into a second,
+        // independent scrollbar inside the first.
+        className="sm:max-w-4xl max-h-[80vh] overflow-y-auto"
         // A misclick on the backdrop (or, via Radix's own "interact
         // outside" detection, opening the Status/Date Range Selects below
         // — their dropdowns portal outside this DialogContent's own DOM
@@ -628,7 +687,7 @@ export function PendingApprovalsDialog({
           <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
           <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
         </DialogHeader>
-        <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} />
+        <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} renderedInDialog />
       </DialogContent>
     </Dialog>
   )

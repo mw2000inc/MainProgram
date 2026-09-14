@@ -505,7 +505,13 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           className={cn(
             isFullScreen
               ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
-              : "sm:max-w-2xl max-h-[85vh]",
+              // The one and only vertical scroll boundary for this dialog
+              // — this queue has no nested DataTable/scroll box of its own
+              // (items/rescheduleRequests render as a plain list, not a
+              // table), so there's nothing else here that could nest a
+              // second scrollbar the way PendingApprovalsDialog's own
+              // DataTable used to.
+              : "sm:max-w-2xl max-h-[80vh]",
             "overflow-y-auto"
           )}
           // Radix's own Escape-to-close would otherwise close the whole
