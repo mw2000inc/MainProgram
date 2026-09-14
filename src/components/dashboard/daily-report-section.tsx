@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -58,7 +58,7 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { todayIso } from "@/lib/utils"
+import { todayIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 
 // Every panel this section can render. "date" used to be one of these (a
@@ -757,6 +757,15 @@ export function DailyReportSection() {
           </>
         )}
         <DailyReportDateButton value={reportDate} onChange={setReportDate} className={isAdmin ? "ml-auto" : undefined} />
+        <Button
+          type="button"
+          variant={reportDate === twoDaysFromNowIso() ? "default" : "outline"}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setReportDate(twoDaysFromNowIso())}
+        >
+          <CalendarClock className="h-3.5 w-3.5" /> {tDispatch("twoDaysOutQuickJump")}
+        </Button>
         {isAdmin && (
           <>
             <Button

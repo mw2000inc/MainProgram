@@ -45,6 +45,16 @@ export function tomorrowIso(): string {
   return format(addDays(new Date(), 1), "yyyy-MM-dd")
 }
 
+// Same local-timezone reasoning again, two days forward — the same
+// lookahead window /api/cron/send-schedule-reminders reminds customers on
+// (see send-schedule-reminders.ts), used here so admin queue filters (the
+// Pending Approvals panel's Date Range filter, the Daily Report's "2 Days
+// Out" quick-jump) can let staff preview the same items that reminder is
+// about to go out for.
+export function twoDaysFromNowIso(): string {
+  return format(addDays(new Date(), 2), "yyyy-MM-dd")
+}
+
 // Rolls a date forward in 3-month increments so it always reflects the next quarterly checkpoint.
 // Compares by calendar day (not exact timestamp) so "today" itself counts as reached, not before.
 export function getNextQuarterlyDate(anchorDate: string, today: Date = new Date()): Date {

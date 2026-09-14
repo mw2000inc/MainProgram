@@ -27,7 +27,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate } from "@/lib/utils"
+import { formatDate, twoDaysFromNowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
@@ -311,6 +311,20 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
   return status === "Draft" || status === "Reschedule Requested"
 }
 
+// Additive, independent of statusFilter above — an admin can combine "only
+// items due in 2 days" with any status bucket (e.g. "which of the ones due
+// in 2 days are still unapproved"). "twoDaysOut" mirrors the exact lookahead
+// window /api/cron/send-schedule-reminders reminds customers on, so staff
+// can see/approve the same items that reminder is about to go out for. Kept
+// as a plain "all" vs. one fixed target date rather than a full date-range
+// picker — this is meant as a quick, purpose-built lens, not a general
+// report filter (that's what Daily Report's own date picker is for).
+type DateRangeFilter = "all" | "twoDaysOut"
+
+function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter, twoDaysOutDate: string): boolean {
+  return filter === "all" || scheduledDate === twoDaysOutDate
+}
+
 export function PendingApprovalsPanel({
   historyDefaultDate,
 }: {
@@ -331,6 +345,7 @@ export function PendingApprovalsPanel({
   const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
   // Purely a visual selection column (per-viewer, not persisted) — no bulk
   // action is wired to it yet, since none of the existing hooks this panel
   // reuses (useApproveDispatchItem etc.) support a batched call; each row's
@@ -352,13 +367,15 @@ export function PendingApprovalsPanel({
     return counts
   }, [rows])
 
-  const visibleRows = React.useMemo(
-    () =>
-      rows.filter(
-        (r) => (activeTab === "all" || r.entityType === activeTab) && matchesStatusFilter(r.dispatchStatus, statusFilter)
-      ),
-    [rows, activeTab, statusFilter]
-  )
+  const visibleRows = React.useMemo(() => {
+    const twoDaysOutDate = twoDaysFromNowIso()
+    return rows.filter(
+      (r) =>
+        (activeTab === "all" || r.entityType === activeTab) &&
+        matchesStatusFilter(r.dispatchStatus, statusFilter) &&
+        matchesDateRangeFilter(r.scheduledDate, dateRangeFilter, twoDaysOutDate)
+    )
+  }, [rows, activeTab, statusFilter, dateRangeFilter])
 
   const stopNumberByJobId = React.useMemo(
     () => computeStopNumbers(rows.filter((r) => r.routeSequence != null).map((r) => ({ id: r.entityId, technician: r.technician ?? "", scheduledDate: r.scheduledDate, routeSequence: r.routeSequence }))),
@@ -475,6 +492,15 @@ export function PendingApprovalsPanel({
         </Tabs>
 
         <div className="flex items-center gap-2">
+          <Select value={dateRangeFilter} onValueChange={(v) => setDateRangeFilter(v as DateRangeFilter)}>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
+              <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue />
