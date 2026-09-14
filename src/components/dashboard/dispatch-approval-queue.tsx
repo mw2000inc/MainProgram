@@ -152,7 +152,7 @@ const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Conf
 // customers on. Own small type here rather than importing
 // pending-approvals-panel.tsx's — same "keep these two panel files
 // independent" precedent DISPATCH_STATUS_KEYS above already follows.
-type DateRangeFilter = "all" | "twoDaysOut"
+export type DateRangeFilter = "all" | "twoDaysOut"
 
 // Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
 // its own small copy here rather than a shared import, to avoid a
@@ -183,7 +183,22 @@ const DISPATCH_STATUS_KEYS: Record<string, string> = {
 // here anyway. Finding nothing lets Approve send immediately, exactly as
 // before; finding something opens a confirmation dialog listing what was
 // found, and only proceeds on an explicit "Send Anyway".
-export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function DispatchApprovalQueue({
+  open,
+  onOpenChange,
+  dateRangeFilter: dateRangeFilterProp,
+  onDateRangeFilterChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  // Standard controlled/uncontrolled pair — daily-report-section.tsx's own
+  // header "2 Days Out" toggle drives this (its only real caller today), so
+  // the header button and this dialog's own Date Range Select can never
+  // disagree. Falls back to internalDateRangeFilter below if ever opened
+  // without a caller supplying these.
+  dateRangeFilter?: DateRangeFilter
+  onDateRangeFilterChange?: (filter: DateRangeFilter) => void
+}) {
   const { t, locale } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
   const { data: filterChangePlans = [] } = useFilterChangePlans()
@@ -211,7 +226,9 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     notifyEmail: string
     conflicts: DispatchRow[]
   } | null>(null)
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  const [internalDateRangeFilter, setInternalDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  const dateRangeFilter = dateRangeFilterProp ?? internalDateRangeFilter
+  const setDateRangeFilter = onDateRangeFilterChange ?? setInternalDateRangeFilter
   const [bulkApproving, setBulkApproving] = React.useState(false)
   const [bulkSummary, setBulkSummary] = React.useState<{
     approved: DispatchRow[]

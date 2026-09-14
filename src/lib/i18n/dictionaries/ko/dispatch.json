@@ -98,7 +98,7 @@
   "allStatuses": "전체 상태",
   "allDatesFilter": "전체 날짜",
   "twoDaysOutFilter": "2일 이내 예정",
-  "twoDaysOutQuickJump": "2일 후",
+  "twoDaysOutToggle": "2일 후",
   "approveAndSendConfirmation": "승인 및 확인 요청 발송",
   "pendingApprovalsButton": "일일 보고서 승인",
   "pendingApprovalsDialogTitle": "일일 보고서 승인",

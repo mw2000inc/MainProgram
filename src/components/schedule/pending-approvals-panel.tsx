@@ -319,7 +319,7 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 // as a plain "all" vs. one fixed target date rather than a full date-range
 // picker — this is meant as a quick, purpose-built lens, not a general
 // report filter (that's what Daily Report's own date picker is for).
-type DateRangeFilter = "all" | "twoDaysOut"
+export type DateRangeFilter = "all" | "twoDaysOut"
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter, twoDaysOutDate: string): boolean {
   return filter === "all" || scheduledDate === twoDaysOutDate
@@ -327,6 +327,8 @@ function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter, 
 
 export function PendingApprovalsPanel({
   historyDefaultDate,
+  dateRangeFilter: dateRangeFilterProp,
+  onDateRangeFilterChange,
 }: {
   // Forwarded to PendingApprovalsHistoryDialog's own initial date — the
   // Daily Report's own selected report date, when this panel is opened
@@ -334,6 +336,15 @@ export function PendingApprovalsPanel({
   // Schedule page's own Pending Approvals tab, which has no report date of
   // its own; the history dialog falls back to today in that case.
   historyDefaultDate?: string
+  // Standard controlled/uncontrolled pair: when provided (opened via
+  // PendingApprovalsDialog from the Daily Report header, whose own "2 Days
+  // Out" toggle drives this), the Date Range Select below reflects and
+  // writes back to that same lifted state, so the header toggle and this
+  // panel's own dropdown can never disagree. Left undefined on the Schedule
+  // page's standalone tab, which has no header toggle to sync with — falls
+  // back to managing the filter itself via internalDateRangeFilter below.
+  dateRangeFilter?: DateRangeFilter
+  onDateRangeFilterChange?: (filter: DateRangeFilter) => void
 } = {}) {
   const { t } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
@@ -345,7 +356,9 @@ export function PendingApprovalsPanel({
   const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  const [internalDateRangeFilter, setInternalDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  const dateRangeFilter = dateRangeFilterProp ?? internalDateRangeFilter
+  const setDateRangeFilter = onDateRangeFilterChange ?? setInternalDateRangeFilter
   // Purely a visual selection column (per-viewer, not persisted) — no bulk
   // action is wired to it yet, since none of the existing hooks this panel
   // reuses (useApproveDispatchItem etc.) support a batched call; each row's
@@ -591,11 +604,15 @@ export function PendingApprovalsDialog({
   open,
   onOpenChange,
   historyDefaultDate,
+  dateRangeFilter,
+  onDateRangeFilterChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Forwarded straight to PendingApprovalsPanel — see its own comment.
+  // Forwarded straight to PendingApprovalsPanel — see each one's own comment.
   historyDefaultDate?: string
+  dateRangeFilter?: DateRangeFilter
+  onDateRangeFilterChange?: (filter: DateRangeFilter) => void
 }) {
   const { t } = useTranslation("dispatch")
   return (
@@ -605,7 +622,11 @@ export function PendingApprovalsDialog({
           <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
           <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
         </DialogHeader>
-        <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} />
+        <PendingApprovalsPanel
+          historyDefaultDate={historyDefaultDate}
+          dateRangeFilter={dateRangeFilter}
+          onDateRangeFilterChange={onDateRangeFilterChange}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -639,8 +660,13 @@ function ApprovalSummary({ countsByType }: { countsByType: Record<DispatchEntity
 // Purely the count for the tab label — a separate light hook (rather than
 // requiring every consumer to pull the full row list) since the Schedule
 // page's tab trigger needs only the number, computed from the exact same
-// underlying queries/cache.
-export function usePendingApprovalsCount(): number {
+// underlying queries/cache. targetDate narrows to just that one scheduled
+// date (the Daily Report header's "2 Days Out" toggle passes
+// twoDaysFromNowIso() here so its "Daily Report Approvals" badge shows the
+// same filtered total the dialog itself would); omitted, it's the full
+// unfiltered count, same as before this parameter existed.
+export function usePendingApprovalsCount(targetDate?: string): number {
   const { rows } = usePendingApprovalRows()
-  return rows.length
+  if (!targetDate) return rows.length
+  return rows.filter((r) => r.scheduledDate === targetDate).length
 }

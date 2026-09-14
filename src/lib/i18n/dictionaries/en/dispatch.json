@@ -98,7 +98,7 @@
   "allStatuses": "All Status",
   "allDatesFilter": "All Dates",
   "twoDaysOutFilter": "Due in 2 Days",
-  "twoDaysOutQuickJump": "2 Days Out",
+  "twoDaysOutToggle": "2 Days Out",
   "approveAndSendConfirmation": "Approve & Send Confirmation",
   "pendingApprovalsButton": "Daily Report Approvals",
   "pendingApprovalsDialogTitle": "Daily Report Approvals",
