@@ -198,6 +198,11 @@ export interface Product {
   outStock: number
   balance: number
   brandNew: number
+  // Same Stock Balances family as above — not to be confused with
+  // inventory-columns.tsx's own ProductRow.secondHandReadyQuantity/
+  // secondHandRepairQuantity, which are separately derived from
+  // stock_movements. This is a plain, form-editable count.
+  secondHand: number
   dateAdded: string
   lastUpdated: string
 }

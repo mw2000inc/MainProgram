@@ -18,6 +18,7 @@ type ProductRow = {
   out_stock: number
   balance: number
   brand_new: number
+  second_hand: number
   date_added: string
   last_updated: string
 }
@@ -40,6 +41,7 @@ function productFromRow(row: ProductRow): Product {
     outStock: row.out_stock,
     balance: row.balance,
     brandNew: row.brand_new,
+    secondHand: row.second_hand,
     dateAdded: row.date_added,
     lastUpdated: row.last_updated,
   }
@@ -62,6 +64,7 @@ function productToRow(input: Partial<Omit<Product, "id" | "dateAdded" | "lastUpd
   if (input.outStock !== undefined) row.out_stock = input.outStock
   if (input.balance !== undefined) row.balance = input.balance
   if (input.brandNew !== undefined) row.brand_new = input.brandNew
+  if (input.secondHand !== undefined) row.second_hand = input.secondHand
   return row
 }
 

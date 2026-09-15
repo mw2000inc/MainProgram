@@ -64,6 +64,7 @@ function createSchema(
     outStock: z.number().int().min(0),
     balance: z.number().int().min(0),
     brandNew: z.number().int().min(0),
+    secondHand: z.number().int().min(0),
   })
 }
 
@@ -80,6 +81,7 @@ function defaultValues(product?: Product): FormValues {
     outStock: product?.outStock ?? 0,
     balance: product?.balance ?? 0,
     brandNew: product?.brandNew ?? 0,
+    secondHand: product?.secondHand ?? 0,
   }
 }
 
@@ -211,6 +213,7 @@ export function ProductFormDialog({
               {numberField("outStock", t("outStock"))}
               {numberField("balance", t("balance"))}
               {numberField("brandNew", t("brandNew"))}
+              {numberField("secondHand", t("secondHand"))}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
