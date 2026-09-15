@@ -151,7 +151,10 @@ export function useCreateProduct() {
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
       toast.success("Product added successfully")
     },
-    onError: () => toast.error("Failed to add product"),
+    onError: (error: Error) => {
+      console.error("Failed to add product:", error)
+      toast.error(error.message || "Failed to add product")
+    },
   })
 }
 
@@ -166,7 +169,10 @@ export function useUpdateProduct() {
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
       toast.success("Product updated successfully")
     },
-    onError: () => toast.error("Failed to update product"),
+    onError: (error: Error) => {
+      console.error("Failed to update product:", error)
+      toast.error(error.message || "Failed to update product")
+    },
   })
 }
 

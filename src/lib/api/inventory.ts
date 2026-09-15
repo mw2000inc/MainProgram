@@ -5,7 +5,7 @@ type ProductRow = {
   id: string
   name: string
   category: string
-  supplier_id: string
+  supplier_id: string | null
   sku: string
   barcode: string | null
   description: string | null
@@ -27,7 +27,7 @@ function productFromRow(row: ProductRow): Product {
     id: row.id,
     name: row.name,
     category: row.category,
-    supplierId: row.supplier_id,
+    supplierId: row.supplier_id ?? undefined,
     sku: row.sku,
     barcode: row.barcode ?? undefined,
     description: row.description ?? undefined,
@@ -49,7 +49,7 @@ function productToRow(input: Partial<Omit<Product, "id" | "dateAdded" | "lastUpd
   const row: Record<string, unknown> = {}
   if (input.name !== undefined) row.name = input.name
   if (input.category !== undefined) row.category = input.category
-  if (input.supplierId !== undefined) row.supplier_id = input.supplierId
+  if (input.supplierId !== undefined) row.supplier_id = input.supplierId || null
   if (input.sku !== undefined) row.sku = input.sku
   if (input.barcode !== undefined) row.barcode = input.barcode || null
   if (input.description !== undefined) row.description = input.description || null

@@ -4,8 +4,6 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, Controller } from "react-hook-form"
-import { useQueryClient } from "@tanstack/react-query"
-import { Truck } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -18,23 +16,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FormItem } from "@/components/ui/form"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Textarea } from "@/components/ui/textarea"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
-import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
-import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
+import { useCreateProduct, useUpdateProduct } from "@/lib/hooks/use-inventory"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Product } from "@/lib/types"
-
-const ADD_NEW_SUPPLIER = "__add_new_supplier__"
 
 const CATEGORY_OPTIONS: ComboboxOption[] = PRODUCT_CATEGORIES.map((c) => ({ value: c }))
 
@@ -65,7 +52,6 @@ function createSchema(
     // preset options. PRODUCT_CATEGORIES stays the Combobox's quick-pick
     // list, but any typed value is accepted (see the Combobox below).
     category: z.string().min(1, t("selectField", { field: tf("category") })),
-    supplierId: z.string().min(1, t("selectField", { field: tf("supplier") })),
     sku: z.string().min(2, t("requiredField", { field: tf("sku") })),
     description: z.string().optional(),
     // AppSheet's own static Stock Balances columns — see the Product type's
@@ -87,7 +73,6 @@ function defaultValues(product?: Product): FormValues {
   return {
     name: product?.name ?? "",
     category: product?.category ?? PRODUCT_CATEGORIES[0],
-    supplierId: product?.supplierId ?? "",
     sku: product?.sku ?? "",
     description: product?.description ?? "",
     pBalance: product?.pBalance ?? 0,
@@ -107,12 +92,9 @@ export function ProductFormDialog({
   onOpenChange: (open: boolean) => void
   product?: Product
 }) {
-  const queryClient = useQueryClient()
-  const { data: suppliers = [] } = useSuppliers()
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct()
   const isEdit = !!product
-  const [newSupplierOpen, setNewSupplierOpen] = React.useState(false)
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -160,7 +142,6 @@ export function ProductFormDialog({
   )
 
   return (
-    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-2xl max-h-[85vh] overflow-y-auto"
@@ -216,43 +197,6 @@ export function ProductFormDialog({
                   </FormItem>
                 )}
               />
-              <Controller
-                control={form.control}
-                name="supplierId"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label>{tFields("supplier")}</Label>
-                    <Select
-                      value={field.value}
-                      onValueChange={(v) => {
-                        if (v === ADD_NEW_SUPPLIER) {
-                          setNewSupplierOpen(true)
-                          return
-                        }
-                        field.onChange(v)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={tCommon("selectField", { field: tFields("supplier") })}>
-                          {suppliers.find((s) => s.id === field.value)?.name}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ADD_NEW_SUPPLIER} className="text-primary font-medium">
-                          <Truck className="h-4 w-4" /> {t("addNewSupplier")}
-                        </SelectItem>
-                        <SelectSeparator />
-                        {suppliers.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.supplierId && <p className="text-destructive text-sm">{errors.supplierId.message}</p>}
-                  </FormItem>
-                )}
-              />
               <div className="grid gap-2">
                 <Label>{tFields("sku")}</Label>
                 <Input placeholder="SK01" aria-invalid={!!errors.sku} {...form.register("sku")} />
@@ -279,19 +223,5 @@ export function ProductFormDialog({
           </form>
       </DialogContent>
     </Dialog>
-    <SupplierFormDialog
-      open={newSupplierOpen}
-      onOpenChange={setNewSupplierOpen}
-      onCreated={(supplier) => {
-        // Same deferred-setValue trick as the Sale form's inline "Add New Customer":
-        // Radix's hidden native <select> needs its new <option> committed to the DOM
-        // before the controlled value can point at it.
-        queryClient.setQueryData(suppliersKey, (old: typeof suppliers = []) => [supplier, ...old])
-        setTimeout(() => {
-          form.setValue("supplierId", supplier.id, { shouldValidate: true })
-        }, 0)
-      }}
-    />
-    </>
   )
 }

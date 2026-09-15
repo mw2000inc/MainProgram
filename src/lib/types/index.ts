@@ -164,7 +164,11 @@ export interface Product {
   // new ones) are just a plain name with no "/" in it at all.
   name: string
   category: string
-  supplierId: string
+  // Optional — the Add/Edit Product form no longer collects a Supplier (see
+  // product-form-dialog.tsx), so this is null/omitted for every product
+  // created since. supplier_id's own DB column dropped its NOT NULL for the
+  // same reason (20260921000000_products_supplier_optional.sql).
+  supplierId?: string
   sku: string
   barcode?: string
   // AppSheet's own separate "Description" column — distinct from `name`
