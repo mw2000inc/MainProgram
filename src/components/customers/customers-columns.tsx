@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TruncatedCell } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Customer, ContractStatus } from "@/lib/types"
 
@@ -79,6 +80,7 @@ export function getCustomerColumns({
     {
       accessorKey: "memberAccountNumber",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
       cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">{row.original.memberAccountNumber || "—"}</span>
       ),
@@ -90,34 +92,51 @@ export function getCustomerColumns({
       // the direct link to the full page.
       id: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.companyName || row.original.fullName}</span>,
+      meta: { headerClassName: "w-35 max-w-35 truncate", cellClassName: "w-35 max-w-35" },
+      cell: ({ row }) => (
+        <TruncatedCell value={row.original.companyName || row.original.fullName} className="font-medium" />
+      ),
     },
     {
       accessorKey: "fullName",
       header: () => <ColumnHeader tKey="contactPerson" ns="member" />,
-      cell: ({ row }) => row.original.fullName || "—",
+      meta: { headerClassName: "w-30 max-w-30 truncate", cellClassName: "w-30 max-w-30" },
+      cell: ({ row }) => <TruncatedCell value={row.original.fullName} />,
     },
     {
       accessorKey: "contactNumber",
       header: () => <ColumnHeader tKey="contactNumber1MainHeader" ns="member" />,
+      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
       cell: ({ row }) => row.original.contactNumber || "—",
     },
     {
       accessorKey: "contactNumber2",
       header: () => <ColumnHeader tKey="contactNumber2SubHeader" ns="member" />,
+      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
       cell: ({ row }) => row.original.contactNumber2 || "—",
     },
     {
       accessorKey: "address",
       header: () => <ColumnHeader tKey="address" ns="fields" />,
+      meta: { headerClassName: "w-40 max-w-40 truncate", cellClassName: "w-40 max-w-40" },
+      cell: ({ row }) => <TruncatedCell value={row.original.address} />,
     },
     {
+      // No fixed width requested for this one — under table-fixed it just
+      // takes its share of whatever's left after the fixed-width columns
+      // above, but still needs `truncate` so a long address doesn't
+      // visually bleed into the next cell (table-fixed doesn't wrap
+      // overflow into a scrollbar the way table-auto would; without
+      // overflow:hidden it just renders past the cell's own boundary).
       accessorKey: "email",
       header: () => <ColumnHeader tKey="emailAddress1Main" ns="member" />,
+      meta: { headerClassName: "truncate", cellClassName: "truncate" },
+      cell: ({ row }) => <TruncatedCell value={row.original.email} />,
     },
     {
       accessorKey: "tin",
       header: () => <ColumnHeader tKey="tin" ns="member" />,
+      meta: { headerClassName: "truncate", cellClassName: "truncate" },
       cell: ({ row }) => row.original.tin || "—",
     },
     {

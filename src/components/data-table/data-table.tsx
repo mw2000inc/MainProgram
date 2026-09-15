@@ -32,6 +32,22 @@ import {
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 
+// Lets a column definition carry its own header/cell width and padding
+// overrides (e.g. Member List's fixed-width columns — see
+// customers-columns.tsx) without every other column needing to know or
+// care. Additive: a column that never sets `meta` renders exactly as
+// before, since these are read with `?.` everywhere below.
+declare module "@tanstack/react-table" {
+  // Both type params are required here to match TanStack's own ColumnMeta
+  // signature for declaration merging, even though neither is referenced
+  // in the body below.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    headerClassName?: string
+    cellClassName?: string
+  }
+}
+
 // Sentinel pageSize meaning "show every row on one page" — Number.
 // MAX_SAFE_INTEGER rather than data.length itself so this stays a stable,
 // content-independent value: TanStack's own pageCount math
@@ -91,6 +107,13 @@ interface DataTableProps<TData> {
   // leaving this unset should render byte-for-byte as it did before this
   // was added, not depend on that no-op behavior actually holding.
   stickyHeader?: boolean
+  // Merged onto every <TableHead>/<TableCell> in this table instance (in
+  // addition to any per-column meta.headerClassName/cellClassName a column
+  // itself sets) — e.g. tighter uniform padding for a table under strict
+  // fixed-width column constraints. Every other call site leaves these
+  // unset and gets the plain base padding as before.
+  headerCellClassName?: string
+  bodyCellClassName?: string
 }
 
 export function DataTable<TData>({
@@ -114,6 +137,8 @@ export function DataTable<TData>({
   tableClassName,
   scrollContainerClassName,
   stickyHeader,
+  headerCellClassName,
+  bodyCellClassName,
 }: DataTableProps<TData>) {
   const { t } = useTranslation("dataTable")
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -199,7 +224,10 @@ export function DataTable<TData>({
                   const canSort = header.column.getCanSort()
                   const sortDir = header.column.getIsSorted()
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead
+                      key={header.id}
+                      className={cn(headerCellClassName, header.column.columnDef.meta?.headerClassName)}
+                    >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           className="flex items-center gap-1 hover:text-foreground transition-colors"
@@ -226,7 +254,7 @@ export function DataTable<TData>({
           <TableBody>
             {table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-28 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length} className={cn("h-28 text-center text-muted-foreground", bodyCellClassName)}>
                   {emptyMessage ?? t("noRecordsFound")}
                 </TableCell>
               </TableRow>
@@ -238,7 +266,12 @@ export function DataTable<TData>({
                   onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    <TableCell
+                      key={cell.id}
+                      className={cn(bodyCellClassName, cell.column.columnDef.meta?.cellClassName)}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))

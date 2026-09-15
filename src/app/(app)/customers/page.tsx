@@ -236,48 +236,67 @@ export default function CustomersPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-            <Card>
-              <CardContent className="pt-6">
-                <DataTable
-                  columns={columns}
-                  data={scopedRows}
-                  searchPlaceholder={t("searchPlaceholder")}
-                  onFilteredRowsChange={setFilteredRows}
-                  onSearchChange={setSearchQuery}
-                  emptyMessage={t("noMembersFound")}
-                  onRowClick={(row) => selection.open(row)}
-                  toolbar={
-                    <>
-                      <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                        <SelectTrigger className="h-9 w-[150px]">
-                          <SelectValue placeholder={t("contractStatus")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
-                          <SelectItem value="active">{tStatus("active")}</SelectItem>
-                          <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
-                          <SelectItem value="expired">{tStatus("expired")}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                      <ExportButtons
-                        title="Member List"
-                        subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                        fileName="members"
-                        columns={exportColumns}
-                        rows={filteredRows}
-                      />
-                    </>
-                  }
-                />
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-6">
+            {/* Full-width banner above the table, rather than the old
+                side-by-side split — a fixed, shorter height (see
+                member-map-panel.tsx) keeps it a clean map overview instead
+                of dominating the page the way a 600px-tall map matched to
+                the table's own height used to. */}
             <MemberMapPanel
               customers={scopedRows}
               focusCustomer={topSearchMatch}
               onOpenDirections={setDirectionsTarget}
             />
+            <Card>
+              <CardContent className="pt-6">
+                {/* table-fixed + each column's own fixed width (see
+                    customers-columns.tsx's meta) means the table's total
+                    width is always the sum of its columns' assigned
+                    widths, never content-driven — so overflow-x-hidden
+                    here is a hard guarantee, not just a fallback: there is
+                    nothing left for a horizontal scrollbar to ever need to
+                    show, at any row count or screen width. */}
+                <div className="max-w-full overflow-x-hidden">
+                  <DataTable
+                    columns={columns}
+                    data={scopedRows}
+                    searchPlaceholder={t("searchPlaceholder")}
+                    onFilteredRowsChange={setFilteredRows}
+                    onSearchChange={setSearchQuery}
+                    emptyMessage={t("noMembersFound")}
+                    onRowClick={(row) => selection.open(row)}
+                    tableClassName="table-fixed w-full"
+                    tableContainerClassName="overflow-x-hidden"
+                    scrollContainerClassName="overflow-x-hidden"
+                    headerCellClassName="px-2 py-1.5"
+                    bodyCellClassName="px-2 py-1.5"
+                    toolbar={
+                      <>
+                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                          <SelectTrigger className="h-9 w-[150px]">
+                            <SelectValue placeholder={t("contractStatus")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
+                            <SelectItem value="active">{tStatus("active")}</SelectItem>
+                            <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
+                            <SelectItem value="expired">{tStatus("expired")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+                        <ExportButtons
+                          title="Member List"
+                          subtitle={`Generated ${formatDate(new Date().toISOString())}`}
+                          fileName="members"
+                          columns={exportColumns}
+                          rows={filteredRows}
+                        />
+                      </>
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </>
       ) : orderSelection.selected ? (
