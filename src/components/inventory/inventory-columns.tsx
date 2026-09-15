@@ -13,10 +13,14 @@ export type ProductRow = Product & {
   secondHandReadyQuantity: number
   secondHandRepairQuantity: number
   demoQuantity: number
-  // Derived, not stored, and computed as of the page's selected Date (defaults to
-  // today): P_Balance = Balance minus that date's net movement (opening balance
-  // for that day); In Stock/Out Stock = movement on that date only; Balance =
-  // running total as of end of that date. See the Inventory page's conditionTotals.
+  // Computed as of the page's selected Date (defaults to today) whenever the
+  // product has at least one stock_movements row: P_Balance = Balance minus
+  // that date's net movement (opening balance for that day); In Stock/Out
+  // Stock = movement on that date only; Balance = running total as of end
+  // of that date. See the Inventory page's conditionTotals. A product with
+  // no movement history at all (nothing in the ledger to compute from) uses
+  // its own stored p.pBalance/inStock/outStock/balance instead of a
+  // computed-from-nothing 0 — see that page's rows builder.
   pBalance: number
   inStockOnDate: number
   outStockOnDate: number
@@ -52,6 +56,11 @@ export function getInventoryColumns({
       cell: ({ row }) => <span className="font-medium">{row.original.balance}</span>,
     },
     { accessorKey: "brandNewQuantity", header: () => <ColumnHeader tKey="brandNew" ns="inventory" /> },
+    // Unlike the columns above, this one is never derived from the movement
+    // ledger — it's always the static value stored directly on the product
+    // record (see the Product type's own comment), the same way AppSheet's
+    // own Stock Balances screen has it.
+    { accessorKey: "secondHand", header: () => <ColumnHeader tKey="secondHand" ns="inventory" /> },
     { accessorKey: "secondHandReadyQuantity", header: () => <ColumnHeader tKey="secondHandReadyShort" ns="inventory" /> },
     { accessorKey: "secondHandRepairQuantity", header: () => <ColumnHeader tKey="secondHandRepairShort" ns="inventory" /> },
     { accessorKey: "demoQuantity", header: () => <ColumnHeader tKey="demo" ns="inventory" /> },

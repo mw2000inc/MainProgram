@@ -134,7 +134,20 @@ function InventoryContent() {
   const rows: ProductRow[] = React.useMemo(
     () =>
       products.map((p) => {
-        const totals = conditionTotals.get(p.id) ?? {
+        // A product with zero rows in the stock movement ledger (e.g. one
+        // just created via Add Product, whose static Stock Balances came
+        // straight from AppSheet and were never touched by a movement) has
+        // no real history to reconstruct an "as of the selected date" figure
+        // from — conditionTotals.get would silently return the zeroed
+        // default below and every column would show 0 even though the
+        // product record itself holds real numbers. Fall back to those
+        // stored values instead in exactly that case. A product that DOES
+        // have movement history but simply had none on this specific date
+        // is a different, correct case (0 in/out that day) and keeps using
+        // the computed figures as before.
+        const totals = conditionTotals.get(p.id)
+        const hasMovementHistory = totals !== undefined
+        const resolvedTotals = totals ?? {
           secondHandReadyAsOf: 0,
           secondHandRepairAsOf: 0,
           demoAsOf: 0,
@@ -142,20 +155,22 @@ function InventoryContent() {
           inOnDate: 0,
           outOnDate: 0,
         }
-        const brandNewAsOf = p.stockQuantity - totals.netRegularAfter
-        const balance = brandNewAsOf + totals.secondHandReadyAsOf + totals.secondHandRepairAsOf + totals.demoAsOf
+        const brandNewAsOf = p.stockQuantity - resolvedTotals.netRegularAfter
+        const balance =
+          brandNewAsOf + resolvedTotals.secondHandReadyAsOf + resolvedTotals.secondHandRepairAsOf + resolvedTotals.demoAsOf
+        const pBalance = balance - (resolvedTotals.inOnDate - resolvedTotals.outOnDate)
         return {
           ...p,
           stockStatus: getStockStatus(p.stockQuantity, p.minStockLevel),
           supplierName: suppliers.find((s) => s.id === p.supplierId)?.name ?? "Unknown",
-          brandNewQuantity: brandNewAsOf,
-          secondHandReadyQuantity: totals.secondHandReadyAsOf,
-          secondHandRepairQuantity: totals.secondHandRepairAsOf,
-          demoQuantity: totals.demoAsOf,
-          inStockOnDate: totals.inOnDate,
-          outStockOnDate: totals.outOnDate,
-          balance,
-          pBalance: balance - (totals.inOnDate - totals.outOnDate),
+          brandNewQuantity: hasMovementHistory ? brandNewAsOf : p.brandNew,
+          secondHandReadyQuantity: resolvedTotals.secondHandReadyAsOf,
+          secondHandRepairQuantity: resolvedTotals.secondHandRepairAsOf,
+          demoQuantity: resolvedTotals.demoAsOf,
+          inStockOnDate: hasMovementHistory ? resolvedTotals.inOnDate : p.inStock,
+          outStockOnDate: hasMovementHistory ? resolvedTotals.outOnDate : p.outStock,
+          balance: hasMovementHistory ? balance : p.balance,
+          pBalance: hasMovementHistory ? pBalance : p.pBalance,
         }
       }),
     [products, suppliers, conditionTotals]
@@ -197,6 +212,7 @@ function InventoryContent() {
     { header: "Out Stock", key: "outStockOnDate" },
     { header: "Balance", key: "balance" },
     { header: "Brand New", key: "brandNewQuantity" },
+    { header: "2nd Hand", key: "secondHand" },
     { header: "2nd hand (ready)", key: "secondHandReadyQuantity" },
     { header: "2nd hand (need repair)", key: "secondHandRepairQuantity" },
     { header: "Demo", key: "demoQuantity" },
