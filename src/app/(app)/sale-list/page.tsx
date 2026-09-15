@@ -10,7 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
-import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
+import {
+  DetailField,
+  DetailPanel,
+  DetailSectionHeading,
+  SplitViewLayout,
+  useSplitViewSelection,
+} from "@/components/data-table/split-view"
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
 import { OrderRelatedSection } from "@/components/sale-list/order-related-section"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
@@ -129,6 +135,14 @@ export default function SaleListPage() {
     () => (selected?.cpSystemId ? cpSystems.find((s) => s.id === selected.cpSystemId) : undefined),
     [cpSystems, selected]
   )
+  // Account# and Member Name are shown as two separate detail fields (see
+  // the DetailPanel below) — accountLabel on the row itself stays a single
+  // combined string since that's still the right shape for a compact table
+  // column/CSV export.
+  const selectedCustomer = React.useMemo(
+    () => (selected ? customers.find((c) => c.id === selected.customerId) : undefined),
+    [customers, selected]
+  )
 
   if (isPending) {
     return (
@@ -178,14 +192,16 @@ export default function SaleListPage() {
           list={
             <Card>
               <CardContent className="pt-6">
-                <DataTable
-                  columns={narrowColumns}
-                  data={rows}
-                  searchPlaceholder={t("searchPlaceholder")}
-                  emptyMessage={t("noEntriesFound")}
-                  getRowClassName={getSaleListRowClassName}
-                  onRowClick={(row) => selection.open(row)}
-                />
+                <div className="max-w-full overflow-x-auto">
+                  <DataTable
+                    columns={narrowColumns}
+                    data={rows}
+                    searchPlaceholder={t("searchPlaceholder")}
+                    emptyMessage={t("noEntriesFound")}
+                    getRowClassName={getSaleListRowClassName}
+                    onRowClick={(row) => selection.open(row)}
+                  />
+                </div>
               </CardContent>
             </Card>
           }
@@ -254,14 +270,31 @@ export default function SaleListPage() {
                 </>
               }
             >
+              <DetailSectionHeading>{t("orderAndInstallationSection")}</DetailSectionHeading>
               <DetailField label={tFields("orderNumber")} value={selected.orderNumber} />
               <DetailField
                 label={tFields("installedDate")}
                 value={selected.installedDate ? formatDate(selected.installedDate) : undefined}
               />
-              <DetailField label={tFields("account")} value={selected.accountLabel} />
+              <DetailField label={tFields("status")} value={<StatusCell status={selected.status} />} />
+              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
+
+              <DetailSectionHeading>{t("customerDetailsSection")}</DetailSectionHeading>
+              <DetailField label={tFields("memberAccount")} value={selectedCustomer?.memberAccountNumber} />
+              <DetailField label={tFields("name")} value={selectedCustomer?.companyName || selectedCustomer?.fullName} />
+              <DetailField label={tFields("contactNumber")} value={selectedCustomer?.contactNumber} />
+              <DetailField label={tFields("address")} value={selectedCustomer?.address} className="sm:col-span-2" />
+
+              <DetailSectionHeading>{t("productAndSalesSection")}</DetailSectionHeading>
               <DetailField label={tFields("productNo")} value={selected.productNo} />
               <DetailField label={tFields("sc")} value={selected.sc} />
+              <DetailField label={tFields("cf")} value={selected.cf} />
+              <DetailField label={tFields("ct")} value={selected.ct} />
+
+              <DetailSectionHeading>{t("contractDetailsSection")}</DetailSectionHeading>
+              <DetailField label={tFields("cpY1Y2")} value={selected.cpY1Y2} />
+              <DetailField label={tFields("cpStart")} value={selected.cpStart ? formatDate(selected.cpStart) : undefined} />
+              <DetailField label={tFields("cpEnd")} value={selected.cpEnd ? formatDate(selected.cpEnd) : undefined} />
               <DetailField
                 label={t("cpSystem")}
                 value={
@@ -272,27 +305,28 @@ export default function SaleListPage() {
                   )
                 }
               />
-              <DetailField label={tFields("cf")} value={selected.cf} />
-              <DetailField label={tFields("ct")} value={selected.ct} />
-              <DetailField label={tFields("cpY1Y2")} value={selected.cpY1Y2} />
-              <DetailField label={tFields("cpStart")} value={selected.cpStart ? formatDate(selected.cpStart) : undefined} />
-              <DetailField label={tFields("cpEnd")} value={selected.cpEnd ? formatDate(selected.cpEnd) : undefined} />
-              <DetailField label={tFields("status")} value={<StatusCell status={selected.status} />} />
-              <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
             </DetailPanel>
           }
         />
       ) : (
         <Card>
           <CardContent className="pt-6">
-            <DataTable
-              columns={tableColumns}
-              data={rows}
-              searchPlaceholder={t("fullSearchPlaceholder")}
-              emptyMessage={t("noEntriesFound")}
-              getRowClassName={getSaleListRowClassName}
-              onRowClick={(row) => selection.open(row)}
-            />
+            {/* Keeps any width expansion (e.g. every row rendered at once
+                with "Rows per page: All") isolated to a scrollbar inside
+                this card, instead of the table pushing the page itself
+                wider — DataTable's own <Table> already scrolls internally,
+                but this outer bound makes that containment explicit and
+                guarantees it holds regardless of ancestor layout. */}
+            <div className="max-w-full overflow-x-auto">
+              <DataTable
+                columns={tableColumns}
+                data={rows}
+                searchPlaceholder={t("fullSearchPlaceholder")}
+                emptyMessage={t("noEntriesFound")}
+                getRowClassName={getSaleListRowClassName}
+                onRowClick={(row) => selection.open(row)}
+              />
+            </div>
           </CardContent>
         </Card>
       )}

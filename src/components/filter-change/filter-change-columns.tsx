@@ -8,6 +8,7 @@ import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { TECHNICIANS } from "@/lib/constants"
 import { extractCityLabel } from "@/lib/geo/city-label"
@@ -17,12 +18,14 @@ import type { FilterChangePlan } from "@/lib/types"
 // The plain address string, plus a best-effort recognized-area label
 // underneath (see city-label.ts) — the closest thing this table has to a
 // "location at a glance" column, since filter_change_plans has no
-// structured city field of its own.
+// structured city field of its own. Only the address line itself is
+// truncated (the same free-text-with-no-length-limit problem every other
+// wide column here has) — the recognized-area label is always short.
 function AddressCell({ address }: { address: string }) {
   const city = extractCityLabel(address)
   return (
     <div>
-      <div>{address || "—"}</div>
+      <TruncatedCell value={address} />
       {city && <div className="text-xs text-muted-foreground">{city}</div>}
     </div>
   )
@@ -31,13 +34,15 @@ function AddressCell({ address }: { address: string }) {
 function NoteCell({ plan }: { plan: FilterChangePlan }) {
   if (!plan.note) return <span className="text-muted-foreground">—</span>
   return (
-    <TranslatableText
-      entityType="filter_change_plans"
-      entityId={plan.id}
-      fieldName="note"
-      text={plan.note}
-      className="text-muted-foreground"
-    />
+    <TruncatedContainer text={plan.note}>
+      <TranslatableText
+        entityType="filter_change_plans"
+        entityId={plan.id}
+        fieldName="note"
+        text={plan.note}
+        className="truncate text-muted-foreground"
+      />
+    </TruncatedContainer>
   )
 }
 
@@ -90,6 +95,7 @@ export function getFilterChangeColumns({
     {
       accessorKey: "memberAccount",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.memberAccount} />,
     },
     {
       accessorKey: "filterType",
@@ -313,7 +319,11 @@ export function getFilterChangeFullColumns({
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
-    { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    {
+      accessorKey: "memberAccount",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.memberAccount} />,
+    },
     { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
     {
@@ -336,7 +346,11 @@ export function getFilterChangeFullColumns({
       header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
-    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
+    {
+      accessorKey: "productNo",
+      header: () => <ColumnHeader tKey="productNo" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.productNo} />,
+    },
     { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
     {
       accessorKey: "source",

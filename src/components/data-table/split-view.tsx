@@ -33,6 +33,25 @@ export function DetailField({
   )
 }
 
+// An optional grouping label for a DetailPanel's field grid — e.g. "Order &
+// Installation" above its Order Number/Status/Note fields. Spans every
+// column of the grid it sits in (DetailPanel's own grid-cols-1 sm:grid-
+// cols-2) so it always reads as a full-width heading rather than one cell.
+// Purely additive: existing DetailPanel callers that never render one keep
+// their current flat, unsectioned layout exactly as before.
+export function DetailSectionHeading({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <h3
+      className={cn(
+        "col-span-full text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-2 first:mt-0",
+        className
+      )}
+    >
+      {children}
+    </h3>
+  )
+}
+
 // Tracks which row (by id) is open in the panel, and steps to the previous/
 // next row within whatever `rows` currently holds — pass the list's
 // currently-visible (post search/filter) rows, not necessarily the full

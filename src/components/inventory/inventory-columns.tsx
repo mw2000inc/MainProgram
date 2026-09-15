@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { ChevronRight, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ColumnHeader } from "@/components/shared/column-header"
+import { TruncatedCell } from "@/components/shared/truncated-cell"
 import type { Product, StockStatus } from "@/lib/types"
 
 export type ProductRow = Product & {
@@ -44,7 +45,7 @@ export function getInventoryColumns({
     {
       accessorKey: "name",
       header: () => <ColumnHeader tKey="description" ns="inventory" />,
-      cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
+      cell: ({ row }) => <TruncatedCell value={row.original.name} className="font-medium" />,
     },
     { accessorKey: "category", header: () => <ColumnHeader tKey="category" ns="fields" /> },
     { accessorKey: "pBalance", header: () => <ColumnHeader tKey="pBalance" ns="inventory" /> },

@@ -18,5 +18,9 @@
   "viewFullMemberProfile": "View Full Member Profile",
   "noMemberLinked": "No member linked",
   "noMemberLinkedDescription": "No member is linked to this order — link one by editing this entry from the Sale List page.",
-  "cpSystem": "CP System"
+  "cpSystem": "CP System",
+  "orderAndInstallationSection": "Order & Installation",
+  "customerDetailsSection": "Customer Details",
+  "productAndSalesSection": "Product & Sales",
+  "contractDetailsSection": "Contract Details"
 }

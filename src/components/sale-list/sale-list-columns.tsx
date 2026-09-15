@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { SaleListEntry } from "@/lib/types"
@@ -15,13 +16,15 @@ export type SaleListRow = SaleListEntry & { accountLabel: string }
 function NoteCell({ entry }: { entry: SaleListRow }) {
   if (!entry.note) return <span className="text-muted-foreground">—</span>
   return (
-    <TranslatableText
-      entityType="sale_list_entries"
-      entityId={entry.id}
-      fieldName="note"
-      text={entry.note}
-      className="text-muted-foreground"
-    />
+    <TruncatedContainer text={entry.note}>
+      <TranslatableText
+        entityType="sale_list_entries"
+        entityId={entry.id}
+        fieldName="note"
+        text={entry.note}
+        className="truncate text-muted-foreground"
+      />
+    </TruncatedContainer>
   )
 }
 
@@ -191,10 +194,18 @@ export function getSaleListColumns({
     {
       accessorKey: "accountLabel",
       header: () => <ColumnHeader tKey="account" ns="fields" />,
-      cell: ({ row }) => row.original.accountLabel || "—",
+      cell: ({ row }) => <TruncatedCell value={row.original.accountLabel} />,
     },
-    { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
-    { accessorKey: "sc", header: () => <ColumnHeader tKey="sc" ns="fields" /> },
+    {
+      accessorKey: "productNo",
+      header: () => <ColumnHeader tKey="productNo" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.productNo} />,
+    },
+    {
+      accessorKey: "sc",
+      header: () => <ColumnHeader tKey="sc" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.sc} />,
+    },
     { accessorKey: "cf", header: () => <ColumnHeader tKey="cf" ns="fields" /> },
     { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
     { accessorKey: "cpY1Y2", header: () => <ColumnHeader tKey="cpY1Y2" ns="fields" /> },

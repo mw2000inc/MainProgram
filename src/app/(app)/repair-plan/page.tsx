@@ -95,14 +95,19 @@ function RepairPlanPageContent() {
         list={
           <Card>
             <CardContent className="pt-6">
-              <DataTable
-                columns={columns}
-                data={plans}
-                searchPlaceholder={t("searchPlaceholder")}
-                emptyMessage={t("noPlansFound")}
-                onFilteredRowsChange={setFilteredRows}
-                onRowClick={(row) => selection.open(row)}
-              />
+              {/* Isolates any width expansion (e.g. every row rendered at
+                  once with "Rows per page: All") to a scrollbar inside this
+                  card instead of the table pushing the page itself wider. */}
+              <div className="max-w-full overflow-x-auto">
+                <DataTable
+                  columns={columns}
+                  data={plans}
+                  searchPlaceholder={t("searchPlaceholder")}
+                  emptyMessage={t("noPlansFound")}
+                  onFilteredRowsChange={setFilteredRows}
+                  onRowClick={(row) => selection.open(row)}
+                />
+              </div>
             </CardContent>
           </Card>
         }

@@ -7,6 +7,7 @@ import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
@@ -15,20 +16,30 @@ export const REPAIR_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as co
 function ProblemCell({ plan }: { plan: RepairPlan }) {
   if (!plan.problem) return <span className="text-muted-foreground">—</span>
   return (
-    <TranslatableText entityType="repair_plans" entityId={plan.id} fieldName="problem" text={plan.problem} className="text-muted-foreground" />
+    <TruncatedContainer text={plan.problem}>
+      <TranslatableText
+        entityType="repair_plans"
+        entityId={plan.id}
+        fieldName="problem"
+        text={plan.problem}
+        className="truncate text-muted-foreground"
+      />
+    </TruncatedContainer>
   )
 }
 
 function SolutionStatusCell({ plan }: { plan: RepairPlan }) {
   if (!plan.solutionStatus) return <span className="text-muted-foreground">—</span>
   return (
-    <TranslatableText
-      entityType="repair_plans"
-      entityId={plan.id}
-      fieldName="solution_status"
-      text={plan.solutionStatus}
-      className="text-muted-foreground"
-    />
+    <TruncatedContainer text={plan.solutionStatus}>
+      <TranslatableText
+        entityType="repair_plans"
+        entityId={plan.id}
+        fieldName="solution_status"
+        text={plan.solutionStatus}
+        className="truncate text-muted-foreground"
+      />
+    </TruncatedContainer>
   )
 }
 
@@ -54,7 +65,7 @@ export function getRepairColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.accountName}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
     { accessorKey: "unitInOut", header: () => <ColumnHeader tKey="unitInOut" ns="fields" /> },
@@ -118,7 +129,7 @@ export function getRepairFullColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.accountName}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
     { accessorKey: "unitInOut", header: () => <ColumnHeader tKey="unitInOut" ns="fields" /> },

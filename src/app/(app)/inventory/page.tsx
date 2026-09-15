@@ -268,50 +268,55 @@ function InventoryContent() {
 
         <Card>
           <CardContent className="pt-6">
-            <DataTable
-              columns={columns}
-              data={scopedRows}
-              searchPlaceholder={t("searchByNameSkuBarcode")}
-              onFilteredRowsChange={setFilteredRows}
-              emptyMessage={t("noProductsFound")}
-              onRowClick={
-                canEdit
-                  ? (p) => {
-                      setEditing(p)
-                      setFormOpen(true)
-                    }
-                  : undefined
-              }
-              toolbar={
-                <>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="h-9 w-[150px]">
-                      <SelectValue placeholder={tFields("category")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("allCategories")}</SelectItem>
-                      {PRODUCT_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                    <SelectTrigger className="h-9 w-[150px]">
-                      <SelectValue placeholder={t("stockStatusFilter")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
-                      <SelectItem value="in-stock">{tStatus("inStock")}</SelectItem>
-                      <SelectItem value="low-stock">{tStatus("lowStock")}</SelectItem>
-                      <SelectItem value="out-of-stock">{tStatus("outOfStock")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                </>
-              }
-            />
+            {/* Isolates any width expansion (e.g. every row rendered at
+                once with "Rows per page: All") to a scrollbar inside this
+                card instead of the table pushing the page itself wider. */}
+            <div className="max-w-full overflow-x-auto">
+              <DataTable
+                columns={columns}
+                data={scopedRows}
+                searchPlaceholder={t("searchByNameSkuBarcode")}
+                onFilteredRowsChange={setFilteredRows}
+                emptyMessage={t("noProductsFound")}
+                onRowClick={
+                  canEdit
+                    ? (p) => {
+                        setEditing(p)
+                        setFormOpen(true)
+                      }
+                    : undefined
+                }
+                toolbar={
+                  <>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="h-9 w-[150px]">
+                        <SelectValue placeholder={tFields("category")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("allCategories")}</SelectItem>
+                        {PRODUCT_CATEGORIES.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                      <SelectTrigger className="h-9 w-[150px]">
+                        <SelectValue placeholder={t("stockStatusFilter")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
+                        <SelectItem value="in-stock">{tStatus("inStock")}</SelectItem>
+                        <SelectItem value="low-stock">{tStatus("lowStock")}</SelectItem>
+                        <SelectItem value="out-of-stock">{tStatus("outOfStock")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+                  </>
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       </div>

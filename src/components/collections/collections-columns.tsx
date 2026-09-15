@@ -8,6 +8,7 @@ import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineCurrencyCell, InlineTextCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { TruncatedCell } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
@@ -107,7 +108,11 @@ export function getCollectionsColumns({
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
     },
-    { accessorKey: "accountName", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    {
+      accessorKey: "accountName",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+    },
     {
       accessorKey: "amount",
       header: () => <ColumnHeader tKey="amount" ns="fields" />,
@@ -132,7 +137,7 @@ export function getCollectionsColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.note} className="text-muted-foreground" />,
     },
     {
       accessorKey: "filterChangeRequired",
@@ -284,7 +289,11 @@ export function getCollectionsFullColumns({
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
     },
-    { accessorKey: "accountName", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    {
+      accessorKey: "accountName",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+    },
     {
       accessorKey: "amount",
       header: () => <ColumnHeader tKey="amount" ns="fields" />,
@@ -323,7 +332,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.note || "—"}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.note} className="text-muted-foreground" />,
     },
     {
       accessorKey: "filterChangeRequired",

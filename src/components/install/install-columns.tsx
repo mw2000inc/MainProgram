@@ -8,6 +8,7 @@ import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
+import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
 import type { InstallPlan } from "@/lib/types"
@@ -17,7 +18,15 @@ export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as c
 function NoteCell({ plan }: { plan: InstallPlan }) {
   if (!plan.note) return <span className="text-muted-foreground">—</span>
   return (
-    <TranslatableText entityType="install_plans" entityId={plan.id} fieldName="note" text={plan.note} className="text-muted-foreground" />
+    <TruncatedContainer text={plan.note}>
+      <TranslatableText
+        entityType="install_plans"
+        entityId={plan.id}
+        fieldName="note"
+        text={plan.note}
+        className="truncate text-muted-foreground"
+      />
+    </TruncatedContainer>
   )
 }
 
@@ -50,13 +59,21 @@ export function getInstallColumns({
     {
       accessorKey: "name",
       header: () => <ColumnHeader tKey="name" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.name} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
-    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
+    {
+      accessorKey: "address",
+      header: () => <ColumnHeader tKey="address" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.address} />,
+    },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
     { accessorKey: "inOut", header: () => <ColumnHeader tKey="inOrOut" ns="fields" /> },
-    { accessorKey: "model", header: () => <ColumnHeader tKey="model" ns="fields" /> },
+    {
+      accessorKey: "model",
+      header: () => <ColumnHeader tKey="model" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.model} />,
+    },
     {
       accessorKey: "unitPrice",
       header: () => <ColumnHeader tKey="unitPrice" ns="fields" />,
@@ -125,13 +142,21 @@ export function getInstallFullColumns({
     {
       accessorKey: "name",
       header: () => <ColumnHeader tKey="name" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      cell: ({ row }) => <TruncatedCell value={row.original.name} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
-    { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
+    {
+      accessorKey: "address",
+      header: () => <ColumnHeader tKey="address" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.address} />,
+    },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
     { accessorKey: "inOut", header: () => <ColumnHeader tKey="inOrOut" ns="fields" /> },
-    { accessorKey: "model", header: () => <ColumnHeader tKey="model" ns="fields" /> },
+    {
+      accessorKey: "model",
+      header: () => <ColumnHeader tKey="model" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.model} />,
+    },
     {
       accessorKey: "unitPrice",
       header: () => <ColumnHeader tKey="unitPrice" ns="fields" />,
