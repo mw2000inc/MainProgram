@@ -6,6 +6,8 @@
   "productName": "제품명",
   "addNewSupplier": "새 공급업체 추가",
   "barcodeOptional": "바코드 (선택 사항)",
+  "descriptionOptional": "설명 (선택 사항)",
+  "itemAutoParseHint": "팁: \"[SKU] / [설명]\" 형식으로 입력하면 아래 SKU와 설명이 자동으로 채워집니다.",
   "addProduct": "제품 추가",
   "addSupplierTitle": "공급업체 추가",
   "addSupplierDescription": "제품을 공급받을 새 공급업체를 등록합니다.",

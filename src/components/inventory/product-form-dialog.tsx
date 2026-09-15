@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import { Textarea } from "@/components/ui/textarea"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
 import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
@@ -36,17 +37,39 @@ import type { Product } from "@/lib/types"
 
 const ADD_NEW_SUPPLIER = "__add_new_supplier__"
 
+// AppSheet's own Item column is often (not always) a combined
+// "[SKU] / [Description]" string — e.g. "011 / MW) Pre-Sediment" splits
+// into SKU "011" and Description "MW) Pre-Sediment". Splits on the FIRST
+// slash only (non-greedy first group), tolerant of the space padding
+// either side of it actually being optional. Returns null for a plain
+// name with no "/" at all — most existing/new items aren't required to
+// follow this convention, so callers only auto-fill when this actually
+// matches rather than forcing every Item value through it.
+function parseItemString(item: string): { sku: string; description: string } | null {
+  const match = item.match(/^(.+?)\s*\/\s*(.+)$/)
+  if (!match) return null
+  return { sku: match[1].trim(), description: match[2].trim() }
+}
+
 function createSchema(
   t: (key: string, params?: Record<string, string>) => string,
   ti: (key: string) => string,
   tf: (key: string) => string
 ) {
   return z.object({
-    name: z.string().min(2, t("requiredField", { field: ti("productName") })),
-    category: z.enum(PRODUCT_CATEGORIES),
+    name: z.string().min(2, t("requiredField", { field: ti("item") })),
+    // Plain non-empty string rather than z.enum(PRODUCT_CATEGORIES) — the
+    // category column itself has never been a DB enum, and AppSheet's own
+    // category values (e.g. "MW") aren't guaranteed to be one of this
+    // form's own preset options. PRODUCT_CATEGORIES stays the Select's
+    // quick-pick list; an existing/imported value outside it still gets
+    // its own option (see the Select below) rather than failing
+    // validation or getting silently reset.
+    category: z.string().min(1, t("selectField", { field: tf("category") })),
     supplierId: z.string().min(1, t("selectField", { field: tf("supplier") })),
     sku: z.string().min(2, t("requiredField", { field: tf("sku") })),
     barcode: z.string().optional(),
+    description: z.string().optional(),
     stockQuantity: z.number().int().min(0),
     minStockLevel: z.number().int().min(0),
     // Kept as strings, not z.number(), like every other money field —
@@ -62,10 +85,11 @@ type FormValues = z.infer<ReturnType<typeof createSchema>>
 function defaultValues(product?: Product): FormValues {
   return {
     name: product?.name ?? "",
-    category: (product?.category as FormValues["category"]) ?? PRODUCT_CATEGORIES[0],
+    category: product?.category ?? PRODUCT_CATEGORIES[0],
     supplierId: product?.supplierId ?? "",
     sku: product?.sku ?? "",
     barcode: product?.barcode ?? "",
+    description: product?.description ?? "",
     stockQuantity: product?.stockQuantity ?? 0,
     minStockLevel: product?.minStockLevel ?? 10,
     purchasePrice: String(product?.purchasePrice ?? 0),
@@ -172,8 +196,26 @@ export function ProductFormDialog({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2 sm:col-span-2">
-                <Label>{t("productName")}</Label>
-                <Input placeholder="5-Stage RO Filter System" aria-invalid={!!errors.name} {...form.register("name")} />
+                <Label>{t("item")}</Label>
+                <Input
+                  placeholder="011 / MW) Pre-Sediment"
+                  aria-invalid={!!errors.name}
+                  {...form.register("name", {
+                    // Auto-fills SKU/Description the moment a "[SKU] /
+                    // [Description]" value is entered here — only when
+                    // both are still blank, so this never clobbers
+                    // something already typed in independently (e.g. an
+                    // edit where SKU/Description were set separately from
+                    // the Item name).
+                    onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+                      const parsed = parseItemString(e.target.value)
+                      if (!parsed) return
+                      if (!form.getValues("sku")) form.setValue("sku", parsed.sku, { shouldValidate: true })
+                      if (!form.getValues("description")) form.setValue("description", parsed.description)
+                    },
+                  })}
+                />
+                <p className="text-xs text-muted-foreground">{t("itemAutoParseHint")}</p>
                 {errors.name && <p className="text-destructive text-sm">{errors.name.message}</p>}
               </div>
               <Controller
@@ -192,8 +234,19 @@ export function ProductFormDialog({
                             {c}
                           </SelectItem>
                         ))}
+                        {/* An existing/imported category outside this
+                            preset list (e.g. AppSheet's own "MW") still
+                            gets its own option, same pattern the
+                            Technician/Vehicle Selects elsewhere in this
+                            app already use for an unlisted value — never
+                            silently hidden or reset just because it isn't
+                            one of the 3 quick-pick options. */}
+                        {field.value && !(PRODUCT_CATEGORIES as readonly string[]).includes(field.value) && (
+                          <SelectItem value={field.value}>{field.value}</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
+                    {errors.category && <p className="text-destructive text-sm">{errors.category.message}</p>}
                   </FormItem>
                 )}
               />
@@ -242,6 +295,10 @@ export function ProductFormDialog({
               <div className="grid gap-2">
                 <Label>{t("barcodeOptional")}</Label>
                 <Input placeholder="4801234567893" {...form.register("barcode")} />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>{t("descriptionOptional")}</Label>
+                <Textarea rows={2} placeholder="MW) Pre-Sediment" {...form.register("description")} />
               </div>
               {numberField("stockQuantity", tFields("stockQuantity"))}
               {numberField("minStockLevel", tFields("minStockLevel"))}

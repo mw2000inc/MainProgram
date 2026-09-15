@@ -8,6 +8,7 @@ type ProductRow = {
   supplier_id: string
   sku: string
   barcode: string | null
+  description: string | null
   stock_quantity: number
   min_stock_level: number
   purchase_price: number
@@ -24,6 +25,7 @@ function productFromRow(row: ProductRow): Product {
     supplierId: row.supplier_id,
     sku: row.sku,
     barcode: row.barcode ?? undefined,
+    description: row.description ?? undefined,
     stockQuantity: row.stock_quantity,
     minStockLevel: row.min_stock_level,
     purchasePrice: Number(row.purchase_price),
@@ -40,6 +42,7 @@ function productToRow(input: Partial<Omit<Product, "id" | "dateAdded" | "lastUpd
   if (input.supplierId !== undefined) row.supplier_id = input.supplierId
   if (input.sku !== undefined) row.sku = input.sku
   if (input.barcode !== undefined) row.barcode = input.barcode || null
+  if (input.description !== undefined) row.description = input.description || null
   if (input.stockQuantity !== undefined) row.stock_quantity = input.stockQuantity
   if (input.minStockLevel !== undefined) row.min_stock_level = input.minStockLevel
   if (input.purchasePrice !== undefined) row.purchase_price = input.purchasePrice

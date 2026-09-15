@@ -155,11 +155,28 @@ export type StockStatus = "in-stock" | "low-stock" | "out-of-stock"
 
 export interface Product {
   id: string
+  // The AppSheet "Item" column — the full catalog display name. Often
+  // (not always) follows a "[SKU] / [Description]" convention there (e.g.
+  // "011 / MW) Pre-Sediment"), which the Add Product form's own Item field
+  // uses to auto-fill sku/description below when a value in exactly that
+  // shape is entered — see parseItemString in product-form-dialog.tsx. Not
+  // enforced at the type or DB level, since plenty of existing rows (and
+  // new ones) are just a plain name with no "/" in it at all.
   name: string
   category: string
   supplierId: string
   sku: string
   barcode?: string
+  // AppSheet's own separate "Description" column — distinct from `name`
+  // (the combined Item string) even though the two often overlap once a
+  // name has been auto-split; kept as its own field so a description can
+  // still be edited independently of the Item field afterward. NOT the
+  // same thing as inventory-columns.tsx's own ProductRow.pBalance/
+  // inStockOnDate/outStockOnDate/balance/brandNewQuantity — those are
+  // derived, date-scoped values computed live from stock_movements (see
+  // that file's own comment), never stored on the product itself; nothing
+  // here duplicates or conflicts with them.
+  description?: string
   stockQuantity: number
   minStockLevel: number
   purchasePrice: number
