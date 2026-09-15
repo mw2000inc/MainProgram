@@ -29,7 +29,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate, safeFormat, tomorrowIso, twoDaysFromNowIso } from "@/lib/utils"
+import { cn, formatDate, safeFormat, todayIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
@@ -254,25 +254,25 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
 const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
 // Additive date lens on top of the Draft/Reschedule Requested status split
-// below — "oneDayOut"/"twoDaysOut" narrow both lists (and, since Approve
-// All/the full-screen view both read from those same filtered lists, the
-// bulk action and full-screen mode too) to whatever's due tomorrow or
-// exactly 2 days out — the latter the same lookahead window
-// /api/cron/send-schedule-reminders reminds customers on. Own small type
-// here rather than importing pending-approvals-panel.tsx's — same "keep
-// these two panel files independent" precedent DISPATCH_STATUS_KEYS above
-// already follows.
-type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
-
-function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
-  if (filter === "oneDayOut") return tomorrowIso()
-  if (filter === "twoDaysOut") return twoDaysFromNowIso()
-  return null
-}
+// below — "next2Days" (the DEFAULT, see its own useState below) narrows
+// both lists (and, since Approve All/the full-screen view both read from
+// those same filtered lists, the bulk action and full-screen mode too) to
+// a rolling window: today through today+2 inclusive (3 calendar days) —
+// keeps this queue's default view scoped to what's actually dispatchable
+// soon, not the entire backlog. "overdue" isolates anything before today
+// as its own bucket (a stale Draft from months ago is a different problem
+// than one due tomorrow); "all" is the full, unfiltered history. Own small
+// type here rather than importing pending-approvals-panel.tsx's — same
+// "keep these two panel files independent" precedent DISPATCH_STATUS_KEYS
+// above already follows (that panel's own DateRangeFilter mirrors this
+// exact same next2Days/all/overdue shape, just as a separate copy).
+type DateRangeFilter = "all" | "next2Days" | "overdue"
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
-  const target = resolveDateRangeFilterTarget(filter)
-  return target === null || scheduledDate === target
+  if (filter === "all") return true
+  const today = todayIso()
+  if (filter === "overdue") return scheduledDate < today
+  return scheduledDate >= today && scheduledDate <= twoDaysFromNowIso()
 }
 
 // Same mapping as DispatchStatusCell in daily-report-section.tsx — kept as
@@ -327,7 +327,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
     notifyEmail: string
     conflicts: DispatchRow[]
   } | null>(null)
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  // Defaults to the near-term dispatch window rather than every Draft/
+  // Reschedule Requested item ever created — same reasoning and default as
+  // pending-approvals-panel.tsx's own DateRangeFilter. "all"/"overdue" stay
+  // one click away via the Select below.
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("next2Days")
   // Gates handleApproveAll behind an explicit "yes, send these" — Approve
   // All used to fire the instant it was clicked; a misclick sent real
   // emails to every Draft item currently in view with no way back. Purely
@@ -543,9 +547,9 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="next2Days">{t("next2DaysFilter")}</SelectItem>
                     <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
-                    <SelectItem value="oneDayOut">{t("oneDayOutFilter")}</SelectItem>
-                    <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
+                    <SelectItem value="overdue">{t("overdueFilter")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />

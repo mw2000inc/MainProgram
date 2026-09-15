@@ -28,7 +28,7 @@ import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-bu
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, tomorrowIso, twoDaysFromNowIso } from "@/lib/utils"
+import { formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
@@ -313,26 +313,23 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 }
 
 // Additive, independent of statusFilter above — an admin can combine "only
-// items due tomorrow/in 2 days" with any status bucket (e.g. "which of the
-// ones due in 2 days are still unapproved"). "twoDaysOut" mirrors the exact
-// lookahead window /api/cron/send-schedule-reminders reminds customers on,
-// so staff can see/approve the same items that reminder is about to go out
-// for; "oneDayOut" is the equivalent one day earlier, for whatever's due
-// the very next day. Kept as "all" vs. one of two fixed target dates rather
-// than a full date-range picker — this is meant as a quick, purpose-built
-// lens, not a general report filter (that's what Daily Report's own date
-// picker is for).
-export type DateRangeFilter = "all" | "oneDayOut" | "twoDaysOut"
-
-function resolveDateRangeFilterTarget(filter: DateRangeFilter): string | null {
-  if (filter === "oneDayOut") return tomorrowIso()
-  if (filter === "twoDaysOut") return twoDaysFromNowIso()
-  return null
-}
+// items due in the next 2 days" with any status bucket (e.g. "which of the
+// upcoming ones are still unapproved"). "next2Days" is the DEFAULT (see its
+// own useState below) — a rolling window (today through today+2 inclusive,
+// 3 calendar days) meant to keep this queue's default view scoped to the
+// near-term dispatch horizon rather than every pending item ever created,
+// including "overdue" (anything before today) as its own explicit bucket
+// rather than lumping it into "all" — a stale Draft from months ago reads
+// very differently from one due tomorrow, and an admin should be able to
+// isolate exactly that backlog. "all" remains available for the full,
+// unfiltered history.
+export type DateRangeFilter = "all" | "next2Days" | "overdue"
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
-  const target = resolveDateRangeFilterTarget(filter)
-  return target === null || scheduledDate === target
+  if (filter === "all") return true
+  const today = todayIso()
+  if (filter === "overdue") return scheduledDate < today
+  return scheduledDate >= today && scheduledDate <= twoDaysFromNowIso()
 }
 
 export function PendingApprovalsPanel({
@@ -392,17 +389,30 @@ export function PendingApprovalsPanel({
   const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  // Defaults to the near-term dispatch window rather than every pending
+  // item ever created — an admin opening this queue cold should see what's
+  // actually due soon, not scroll past months of backlog first. Still just
+  // as switchable as before (see the Select below); "all"/"overdue" are one
+  // click away.
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("next2Days")
   // Purely a visual selection column (per-viewer, not persisted) — no bulk
   // action is wired to it yet, since none of the existing hooks this panel
   // reuses (useApproveDispatchItem etc.) support a batched call; each row's
   // own Review action stays the real way to act on it, same as before.
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
 
-  // Counts are always computed off the full, unfiltered row set — so the
-  // tab labels and the Approval Summary cards report the same numbers
-  // regardless of which tab or status filter is currently applied. Only the
-  // table's own visible rows (below) actually narrow with those filters.
+  // Scoped to the active date filter (but NOT activeTab/statusFilter — see
+  // visibleRows below for those) so the tab labels and the Approval
+  // Summary cards genuinely reflect "what's in the current dispatch
+  // window," matching whatever the Date Range Select is set to, rather
+  // than a grand total across all time that never moves regardless of that
+  // selection. Tab/status filters still only narrow the table's own visible
+  // rows further, same as before.
+  const dateFilteredRows = React.useMemo(
+    () => rows.filter((r) => matchesDateRangeFilter(r.scheduledDate, dateRangeFilter)),
+    [rows, dateRangeFilter]
+  )
+
   const countsByType = React.useMemo(() => {
     const counts: Record<DispatchEntityType, number> = {
       filter_change_plans: 0,
@@ -410,19 +420,16 @@ export function PendingApprovalsPanel({
       collections: 0,
       repair_plans: 0,
     }
-    for (const r of rows) counts[r.entityType]++
+    for (const r of dateFilteredRows) counts[r.entityType]++
     return counts
-  }, [rows])
+  }, [dateFilteredRows])
 
   const visibleRows = React.useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          (activeTab === "all" || r.entityType === activeTab) &&
-          matchesStatusFilter(r.dispatchStatus, statusFilter) &&
-          matchesDateRangeFilter(r.scheduledDate, dateRangeFilter)
+      dateFilteredRows.filter(
+        (r) => (activeTab === "all" || r.entityType === activeTab) && matchesStatusFilter(r.dispatchStatus, statusFilter)
       ),
-    [rows, activeTab, statusFilter, dateRangeFilter]
+    [dateFilteredRows, activeTab, statusFilter]
   )
 
   const stopNumberByJobId = React.useMemo(
@@ -559,7 +566,7 @@ export function PendingApprovalsPanel({
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "all" | DispatchEntityType)}>
           <TabsList>
-            <TabsTrigger value="all">{t("allTabLabel", { count: String(rows.length) })}</TabsTrigger>
+            <TabsTrigger value="all">{t("allTabLabel", { count: String(dateFilteredRows.length) })}</TabsTrigger>
             {TYPE_TABS.map(({ value, tabLabelKey }) => (
               <TabsTrigger key={value} value={value}>
                 {t(tabLabelKey, { count: String(countsByType[value]) })}
@@ -574,9 +581,9 @@ export function PendingApprovalsPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="next2Days">{t("next2DaysFilter")}</SelectItem>
               <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
-              <SelectItem value="oneDayOut">{t("oneDayOutFilter")}</SelectItem>
-              <SelectItem value="twoDaysOut">{t("twoDaysOutFilter")}</SelectItem>
+              <SelectItem value="overdue">{t("overdueFilter")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
