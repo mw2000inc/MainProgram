@@ -5,9 +5,11 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
+import { InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { TECHNICIANS } from "@/lib/constants"
 import type { InstallPlan } from "@/lib/types"
 
 export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
@@ -35,8 +37,14 @@ function StatusCell({ plan, onStatusChange }: { plan: InstallPlan; onStatusChang
 // focused (all still captured on Add / available via export where applicable).
 export function getInstallColumns({
   onStatusChange,
+  onFieldChange,
 }: {
   onStatusChange?: (plan: InstallPlan, status: string) => void
+  // Admin-only, same on/off convention onStatusChange already uses —
+  // undefined (non-admin) falls the serviceman cell below back to plain
+  // read-only text. Only serviceman for now; widen this Pick if another
+  // field here ever needs the same inline-edit treatment.
+  onFieldChange?: (plan: InstallPlan, patch: Partial<Pick<InstallPlan, "serviceman">>) => void
 } = {}): ColumnDef<InstallPlan, unknown>[] {
   return [
     {
@@ -73,6 +81,26 @@ export function getInstallColumns({
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell plan={row.original} />,
+    },
+    // Inline-editable, same TECHNICIANS-roster Select Filter Change's own
+    // Daily Report serviceman column uses — this field previously had no
+    // table anywhere it could even be set outside the Pending Approvals
+    // edit dialog, despite existing on install_plans since the
+    // 20260914000000 migration.
+    {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-37.5">{plan.serviceman || "—"}</span>
+        return (
+          <InlineSelectCell
+            value={plan.serviceman}
+            options={TECHNICIANS}
+            onCommit={(next) => onFieldChange(plan, { serviceman: next })}
+          />
+        )
+      },
     },
     {
       accessorKey: "status",
@@ -135,6 +163,11 @@ export function getInstallFullColumns({
       cell: ({ row }) => <NoteCell plan={row.original} />,
     },
     {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => row.original.serviceman || "—",
+    },
+    {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
@@ -175,5 +208,6 @@ export const INSTALL_EXPORT_COLUMNS = [
   { header: "Installed Date", key: "installedDate" },
   { header: "Note", key: "note" },
   { header: "Model(dp)", key: "modelDp" },
+  { header: "Serviceman", key: "serviceman" },
   { header: "Status", key: "status" },
 ]

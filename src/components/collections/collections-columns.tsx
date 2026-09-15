@@ -5,11 +5,12 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineCurrencyCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineCurrencyCell, InlineTextCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { TECHNICIANS } from "@/lib/constants"
 import type { CollectionPlan } from "@/lib/types"
 
 // Kept as "Collected" rather than the other three modules' "Completed" —
@@ -138,6 +139,19 @@ export function getCollectionsColumns({
       header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
+    // Added alongside Filter Change's own serviceman column for parity —
+    // this field has existed on collections since the 20260914000000
+    // migration but was never actually surfaced in any table (only ever
+    // settable through the Pending Approvals edit dialog). Plain read-only
+    // here, matching every other call site of this base column set (Sale
+    // List, Member detail, the customer portal scan view) — same
+    // read-only/inline split Filter Change's own serviceman column makes
+    // between its plain and Daily-Report-only variants.
+    {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => row.original.serviceman || "—",
+    },
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
@@ -161,7 +175,7 @@ export function getCollectionsDailyReportColumns({
   onFieldChange,
 }: {
   onStatusChange?: (entry: CollectionPlan, status: string) => void
-  onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note">>) => void
+  onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note" | "serviceman">>) => void
 } = {}): ColumnDef<CollectionPlan, unknown>[] {
   return [
     {
@@ -215,6 +229,25 @@ export function getCollectionsDailyReportColumns({
       accessorKey: "filterChangeRequired",
       header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
+    },
+    // Inline-editable, same TECHNICIANS-roster Select Filter Change's own
+    // Daily Report serviceman column already uses — this field previously
+    // had no table anywhere it could even be set outside the Pending
+    // Approvals edit dialog.
+    {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-37.5">{entry.serviceman || "—"}</span>
+        return (
+          <InlineSelectCell
+            value={entry.serviceman}
+            options={TECHNICIANS}
+            onCommit={(next) => onFieldChange(entry, { serviceman: next })}
+          />
+        )
+      },
     },
     {
       accessorKey: "status",
@@ -303,6 +336,11 @@ export function getCollectionsFullColumns({
       cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => row.original.serviceman || "—",
+    },
+    {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell entry={row.original} onStatusChange={onStatusChange} />,
@@ -342,5 +380,6 @@ export const COLLECTIONS_EXPORT_COLUMNS = [
   { header: "Acc D", key: "accD" },
   { header: "Note", key: "note" },
   { header: "Source", key: "source" },
+  { header: "Serviceman", key: "serviceman" },
   { header: "Status", key: "status" },
 ]

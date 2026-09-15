@@ -93,7 +93,13 @@ export function getRepairColumns({
 }
 
 // Full column set for the standalone /repair-plan list page — every field,
-// unlike the trimmed dashboard-panel view above.
+// unlike the trimmed dashboard-panel view above. issuedDate/partNo are the
+// two fields that comment actually promises but this set previously
+// omitted (they existed only in REPAIR_EXPORT_COLUMNS) — added here now so
+// this page genuinely shows every field, matching how Filter Change/
+// Collection/Installation's own "full" pages each show at least one field
+// beyond their Daily Report compact view (productNo/source/note, source,
+// and deliveryInstallationFee respectively).
 export function getRepairFullColumns({
   canDelete,
   onDelete,
@@ -104,6 +110,11 @@ export function getRepairFullColumns({
   onStatusChange?: (plan: RepairPlan, status: string) => void
 }): ColumnDef<RepairPlan, unknown>[] {
   return [
+    {
+      accessorKey: "issuedDate",
+      header: () => <ColumnHeader tKey="issuedDate" ns="fields" />,
+      cell: ({ row }) => formatDate(row.original.issuedDate),
+    },
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
@@ -137,6 +148,11 @@ export function getRepairFullColumns({
       cell: ({ row }) => formatCurrency(row.original.amt),
     },
     { accessorKey: "th", header: () => <ColumnHeader tKey="th" ns="fields" /> },
+    {
+      accessorKey: "partNo",
+      header: () => <ColumnHeader tKey="partNo" ns="fields" />,
+      cell: ({ row }) => row.original.partNo || "—",
+    },
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,

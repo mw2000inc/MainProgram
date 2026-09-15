@@ -500,6 +500,7 @@ export function DailyReportSection() {
         filterColumnsByVisibility(
           getInstallColumns({
             onStatusChange: isAdmin ? (plan, status) => updateInstallPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+            onFieldChange: isAdmin ? (plan, patch) => updateInstallPlan.mutate({ id: plan.id, input: patch }) : undefined,
           }),
           visibleFieldsFor("installation")
         )
