@@ -30,17 +30,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { findCustomerByOrderNumber, findExistingMemberMatch, type MemberMatchField } from "@/lib/customer-lookup"
 import { newMemberDefaults } from "@/lib/customer-defaults"
 import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
+
+// Preset suggestions offered below the Model field — still a real text
+// input (see the Combobox below), so a custom/unlisted unit name is always
+// typable and never rejected.
+const MODEL_OPTIONS: ComboboxOption[] = DISPENSER_TYPES.map((dt) => ({ value: dt }))
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   const money = moneySchema(t)
@@ -166,6 +172,52 @@ export function InstallFormDialog({
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
+  // Same add-only autofill as handleOrderNoBlur above, but keyed off Name /
+  // Member Account# / Contact # instead of Order No. — reuses
+  // findExistingMemberMatch (the same exact-match lookup the Add Member form
+  // uses to detect "this is probably already an existing member"), searching
+  // only on whichever one field just lost focus so a half-typed value in
+  // another field can't cause a false match. Fills every other field this
+  // form has that also lives on the Customer record, including the unit
+  // Model (from the customer's own dispenserType) — the closest thing to a
+  // "standard unit" this app tracks per customer — but only ever into fields
+  // still empty, exactly like handleOrderNoBlur.
+  function handleCustomerLookupBlur(source: MemberMatchField, value: string) {
+    if (isEdit) return
+    if (!value.trim()) return
+    const match = findExistingMemberMatch(customers, {
+      fullName: source === "name" ? value : undefined,
+      companyName: source === "name" ? value : undefined,
+      contactNumber: source === "contactNumber" ? value : undefined,
+      memberAccountNumber: source === "memberAccountNumber" ? value : undefined,
+    })
+    if (!match) return
+    const customer = match.customer
+    let filled = false
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("name").trim()) {
+      form.setValue("name", name)
+      filled = true
+    }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.memberAccountNumber && !(form.getValues("memberAccountNumber") ?? "").trim()) {
+      form.setValue("memberAccountNumber", customer.memberAccountNumber)
+      filled = true
+    }
+    if (customer.dispenserType && !form.getValues("model").trim()) {
+      form.setValue("model", customer.dispenserType)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
+  }
+
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
@@ -254,7 +306,14 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("name")}</FormLabel>
                     <FormControl>
-                      <Input placeholder={t("customerOrBusinessName")} {...field} />
+                      <Input
+                        placeholder={t("customerOrBusinessName")}
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleCustomerLookupBlur("name", e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -280,7 +339,14 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("contactNumber")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="09171234567" {...field} />
+                      <Input
+                        placeholder="09171234567"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleCustomerLookupBlur("contactNumber", e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -292,20 +358,17 @@ export function InstallFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tFields("model")}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t("selectField", { field: tFields("model") })} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DISPENSER_TYPES.map((dt) => (
-                          <SelectItem key={dt} value={dt}>
-                            {dt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      {/* Free-text combobox, not a strict Select — a custom
+                          unit/model name is always typable, with
+                          DISPENSER_TYPES offered as suggestions below it. */}
+                      <Combobox
+                        value={field.value}
+                        onChange={field.onChange}
+                        options={MODEL_OPTIONS}
+                        placeholder={t("selectField", { field: tFields("model") })}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -440,7 +503,14 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("memberAccount")}</FormLabel>
                     <FormControl>
-                      <Input placeholder={t("memberAccountNumberHint")} {...field} />
+                      <Input
+                        placeholder={t("memberAccountNumberHint")}
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleCustomerLookupBlur("memberAccountNumber", e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

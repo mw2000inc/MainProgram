@@ -32,7 +32,7 @@ import {
 } from "@/lib/hooks/use-filter-change-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
@@ -176,6 +176,29 @@ export function FilterChangeFormDialog({
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
+  // Same add-only autofill as handleOrderNumberBlur above, keyed off Member
+  // Account# instead — that field doubles as a free-text name/account entry
+  // here (see its own placeholder), so typing an existing customer's name
+  // directly (without an Order Number) still resolves their contact/address
+  // via the same exact-match lookup the Add Member form uses.
+  function handleMemberAccountBlur(value: string) {
+    if (isEdit) return
+    if (!value.trim()) return
+    const match = findExistingMemberMatch(customers, { fullName: value, companyName: value })
+    if (!match) return
+    const customer = match.customer
+    let filled = false
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
+  }
+
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
@@ -236,7 +259,14 @@ export function FilterChangeFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("memberAccount")}</FormLabel>
                     <FormControl>
-                      <Input placeholder={t("accountOrCompanyName")} {...field} />
+                      <Input
+                        placeholder={t("accountOrCompanyName")}
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleMemberAccountBlur(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
