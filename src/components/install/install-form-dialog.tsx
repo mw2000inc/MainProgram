@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { DISPENSER_TYPES } from "@/lib/constants"
+import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
@@ -43,10 +43,19 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { InstallPlan } from "@/lib/types"
 
-// Preset suggestions offered below the Model field — still a real text
+// Preset suggestions offered below Model and Model(dp) — still a real text
 // input (see the Combobox below), so a custom/unlisted unit name is always
-// typable and never rejected.
-const MODEL_OPTIONS: ComboboxOption[] = DISPENSER_TYPES.map((dt) => ({ value: dt }))
+// typable and never rejected. Drawn from the same legacy product catalog
+// the Sale List form's own Product# combobox already uses (see that file),
+// rather than DISPENSER_TYPES — that list was 100% "SK2 ..." variants,
+// explicitly excluded here (and defensively filtered again below in case a
+// future catalog addition reintroduces one) since SK2 units are no longer
+// offered as a preset. A plan already saved with "SK2 White" etc. still
+// displays and remains editable — the Combobox never rejects a value just
+// because it isn't in this list.
+const MODEL_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
+  g.items.map((item) => ({ value: formatProductOption(item.code, item.name), group: g.group }))
+).filter((opt) => !opt.value.toUpperCase().includes("SK2"))
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   const money = moneySchema(t)
@@ -361,7 +370,7 @@ export function InstallFormDialog({
                     <FormControl>
                       {/* Free-text combobox, not a strict Select — a custom
                           unit/model name is always typable, with
-                          DISPENSER_TYPES offered as suggestions below it. */}
+                          MODEL_OPTIONS offered as suggestions below it. */}
                       <Combobox
                         value={field.value}
                         onChange={field.onChange}
@@ -457,21 +466,12 @@ export function InstallFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tFields("modelDp")}</FormLabel>
-                    <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">—</SelectItem>
-                        {DISPENSER_TYPES.map((dt) => (
-                          <SelectItem key={dt} value={dt}>
-                            {dt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      {/* Free-text combobox like Model above — clearing it is
+                          just erasing the text, so no "none" sentinel is
+                          needed the way the old Select required. */}
+                      <Combobox value={field.value ?? ""} onChange={field.onChange} options={MODEL_OPTIONS} placeholder="—" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
