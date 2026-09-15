@@ -26,16 +26,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CurrencyInput } from "@/components/shared/currency-input"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Textarea } from "@/components/ui/textarea"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import { useCreateProduct, useUpdateProduct, useSuppliers, suppliersKey } from "@/lib/hooks/use-inventory"
 import { SupplierFormDialog } from "@/components/inventory/supplier-form-dialog"
-import { moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { Product } from "@/lib/types"
 
 const ADD_NEW_SUPPLIER = "__add_new_supplier__"
+
+const CATEGORY_OPTIONS: ComboboxOption[] = PRODUCT_CATEGORIES.map((c) => ({ value: c }))
 
 // AppSheet's own Item column is often (not always) a combined
 // "[SKU] / [Description]" string — e.g. "011 / MW) Pre-Sediment" splits
@@ -58,25 +59,25 @@ function createSchema(
 ) {
   return z.object({
     name: z.string().min(2, t("requiredField", { field: ti("item") })),
-    // Plain non-empty string rather than z.enum(PRODUCT_CATEGORIES) — the
-    // category column itself has never been a DB enum, and AppSheet's own
-    // category values (e.g. "MW") aren't guaranteed to be one of this
-    // form's own preset options. PRODUCT_CATEGORIES stays the Select's
-    // quick-pick list; an existing/imported value outside it still gets
-    // its own option (see the Select below) rather than failing
-    // validation or getting silently reset.
+    // Plain non-empty string, not z.enum(PRODUCT_CATEGORIES) — the category
+    // column itself has never been a DB enum, and AppSheet's own category
+    // values (e.g. "MW") aren't guaranteed to be one of this form's own
+    // preset options. PRODUCT_CATEGORIES stays the Combobox's quick-pick
+    // list, but any typed value is accepted (see the Combobox below).
     category: z.string().min(1, t("selectField", { field: tf("category") })),
     supplierId: z.string().min(1, t("selectField", { field: tf("supplier") })),
     sku: z.string().min(2, t("requiredField", { field: tf("sku") })),
-    barcode: z.string().optional(),
     description: z.string().optional(),
-    stockQuantity: z.number().int().min(0),
-    minStockLevel: z.number().int().min(0),
-    // Kept as strings, not z.number(), like every other money field —
-    // CurrencyInput (see its own comment) needs a plain editable string to
-    // format on blur; converted to a real number only in onSubmit below.
-    purchasePrice: moneySchema(t),
-    sellingPrice: moneySchema(t),
+    // AppSheet's own static Stock Balances columns — see the Product type's
+    // own comment on why these are separate from stock_quantity/
+    // min_stock_level (real, trigger-maintained operational fields no
+    // longer collected by this form) and from the /inventory list page's
+    // own live-computed pBalance/inStockOnDate/outStockOnDate/balance.
+    pBalance: z.number().int().min(0),
+    inStock: z.number().int().min(0),
+    outStock: z.number().int().min(0),
+    balance: z.number().int().min(0),
+    brandNew: z.number().int().min(0),
   })
 }
 
@@ -88,12 +89,12 @@ function defaultValues(product?: Product): FormValues {
     category: product?.category ?? PRODUCT_CATEGORIES[0],
     supplierId: product?.supplierId ?? "",
     sku: product?.sku ?? "",
-    barcode: product?.barcode ?? "",
     description: product?.description ?? "",
-    stockQuantity: product?.stockQuantity ?? 0,
-    minStockLevel: product?.minStockLevel ?? 10,
-    purchasePrice: String(product?.purchasePrice ?? 0),
-    sellingPrice: String(product?.sellingPrice ?? 0),
+    pBalance: product?.pBalance ?? 0,
+    inStock: product?.inStock ?? 0,
+    outStock: product?.outStock ?? 0,
+    balance: product?.balance ?? 0,
+    brandNew: product?.brandNew ?? 0,
   }
 }
 
@@ -128,15 +129,10 @@ export function ProductFormDialog({
   }, [open, product])
 
   async function onSubmit(values: FormValues) {
-    const input = {
-      ...values,
-      purchasePrice: Number(values.purchasePrice),
-      sellingPrice: Number(values.sellingPrice),
-    }
     if (isEdit) {
-      await updateProduct.mutateAsync({ id: product.id, input })
+      await updateProduct.mutateAsync({ id: product.id, input: values })
     } else {
-      await createProduct.mutateAsync(input)
+      await createProduct.mutateAsync(values)
     }
     onOpenChange(false)
   }
@@ -161,25 +157,6 @@ export function ProductFormDialog({
       />
       {errors[name] && <p className="text-destructive text-sm">{errors[name]?.message as string}</p>}
     </div>
-  )
-
-  // purchasePrice/sellingPrice are the one pair here that needs a
-  // Controller binding rather than the plain register() above — CurrencyInput
-  // has to be a controlled component (it swaps between the raw and
-  // "₱X,XXX.XX"-formatted string depending on focus), unlike the two plain
-  // integer counts numberField handles above.
-  const moneyField = (name: "purchasePrice" | "sellingPrice", label: string) => (
-    <Controller
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <div className="grid gap-2">
-          <Label>{label}</Label>
-          <CurrencyInput {...field} aria-invalid={!!errors[name]} />
-          {errors[name] && <p className="text-destructive text-sm">{errors[name]?.message as string}</p>}
-        </div>
-      )}
-    />
   )
 
   return (
@@ -224,28 +201,17 @@ export function ProductFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <Label>{tFields("category")}</Label>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={tCommon("selectField", { field: tFields("category") })} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRODUCT_CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                        {/* An existing/imported category outside this
-                            preset list (e.g. AppSheet's own "MW") still
-                            gets its own option, same pattern the
-                            Technician/Vehicle Selects elsewhere in this
-                            app already use for an unlisted value — never
-                            silently hidden or reset just because it isn't
-                            one of the 3 quick-pick options. */}
-                        {field.value && !(PRODUCT_CATEGORIES as readonly string[]).includes(field.value) && (
-                          <SelectItem value={field.value}>{field.value}</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    {/* Free-text combobox, not a strict Select — AppSheet's own
+                        category values (e.g. "MW") are typed, not chosen from a
+                        fixed enum. PRODUCT_CATEGORIES is still offered as a
+                        below-anchored quick-pick list, but any typed value is
+                        accepted as-is. */}
+                    <Combobox
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={CATEGORY_OPTIONS}
+                      placeholder={tCommon("selectField", { field: tFields("category") })}
+                    />
                     {errors.category && <p className="text-destructive text-sm">{errors.category.message}</p>}
                   </FormItem>
                 )}
@@ -292,18 +258,15 @@ export function ProductFormDialog({
                 <Input placeholder="SK01" aria-invalid={!!errors.sku} {...form.register("sku")} />
                 {errors.sku && <p className="text-destructive text-sm">{errors.sku.message}</p>}
               </div>
-              <div className="grid gap-2">
-                <Label>{t("barcodeOptional")}</Label>
-                <Input placeholder="4801234567893" {...form.register("barcode")} />
-              </div>
               <div className="grid gap-2 sm:col-span-2">
                 <Label>{t("descriptionOptional")}</Label>
                 <Textarea rows={2} placeholder="MW) Pre-Sediment" {...form.register("description")} />
               </div>
-              {numberField("stockQuantity", tFields("stockQuantity"))}
-              {numberField("minStockLevel", tFields("minStockLevel"))}
-              {moneyField("purchasePrice", tFields("purchasePrice"))}
-              {moneyField("sellingPrice", tFields("sellingPrice"))}
+              {numberField("pBalance", t("pBalance"))}
+              {numberField("inStock", t("inStock"))}
+              {numberField("outStock", t("outStock"))}
+              {numberField("balance", t("balance"))}
+              {numberField("brandNew", t("brandNew"))}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

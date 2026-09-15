@@ -13,6 +13,11 @@ type ProductRow = {
   min_stock_level: number
   purchase_price: number
   selling_price: number
+  p_balance: number
+  in_stock: number
+  out_stock: number
+  balance: number
+  brand_new: number
   date_added: string
   last_updated: string
 }
@@ -30,6 +35,11 @@ function productFromRow(row: ProductRow): Product {
     minStockLevel: row.min_stock_level,
     purchasePrice: Number(row.purchase_price),
     sellingPrice: Number(row.selling_price),
+    pBalance: row.p_balance,
+    inStock: row.in_stock,
+    outStock: row.out_stock,
+    balance: row.balance,
+    brandNew: row.brand_new,
     dateAdded: row.date_added,
     lastUpdated: row.last_updated,
   }
@@ -47,6 +57,11 @@ function productToRow(input: Partial<Omit<Product, "id" | "dateAdded" | "lastUpd
   if (input.minStockLevel !== undefined) row.min_stock_level = input.minStockLevel
   if (input.purchasePrice !== undefined) row.purchase_price = input.purchasePrice
   if (input.sellingPrice !== undefined) row.selling_price = input.sellingPrice
+  if (input.pBalance !== undefined) row.p_balance = input.pBalance
+  if (input.inStock !== undefined) row.in_stock = input.inStock
+  if (input.outStock !== undefined) row.out_stock = input.outStock
+  if (input.balance !== undefined) row.balance = input.balance
+  if (input.brandNew !== undefined) row.brand_new = input.brandNew
   return row
 }
 
@@ -56,7 +71,18 @@ export async function listProducts(): Promise<Product[]> {
   return (data as ProductRow[]).map(productFromRow)
 }
 
-export async function createProduct(input: Omit<Product, "id" | "dateAdded" | "lastUpdated">): Promise<Product> {
+// stockQuantity/minStockLevel/purchasePrice/sellingPrice are optional here —
+// the Add Product form no longer collects them (see product-form-dialog's
+// own comment); a new product's row falls back to the DB's own `not null
+// default 0`, and stockQuantity is kept in sync afterward by stock
+// movements exactly like every other product.
+export type ProductCreateInput = Omit<
+  Product,
+  "id" | "dateAdded" | "lastUpdated" | "stockQuantity" | "minStockLevel" | "purchasePrice" | "sellingPrice"
+> &
+  Partial<Pick<Product, "stockQuantity" | "minStockLevel" | "purchasePrice" | "sellingPrice">>
+
+export async function createProduct(input: ProductCreateInput): Promise<Product> {
   const { data, error } = await supabase.from("products").insert(productToRow(input)).select().single()
   if (error) throw error
   return productFromRow(data as ProductRow)

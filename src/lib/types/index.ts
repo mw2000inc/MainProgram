@@ -181,6 +181,19 @@ export interface Product {
   minStockLevel: number
   purchasePrice: number
   sellingPrice: number
+  // AppSheet's own static "Stock Balances" columns (P_Balance/In Stock/Out
+  // Stock/Balance/Brand New) — real, form-editable per-product numbers, not
+  // to be confused with inventory-columns.tsx's ProductRow.pBalance/
+  // inStockOnDate/outStockOnDate/balance/brandNewQuantity, which are derived
+  // live from stock_movements for a selected date on the /inventory list
+  // page. That page's own row-builder spreads this Product first and only
+  // then assigns its computed pBalance/balance on top, so these stored
+  // values are always overridden there and never leak into that feature.
+  pBalance: number
+  inStock: number
+  outStock: number
+  balance: number
+  brandNew: number
   dateAdded: string
   lastUpdated: string
 }

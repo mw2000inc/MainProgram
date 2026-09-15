@@ -4,8 +4,8 @@ import { isValid, parseISO } from "date-fns"
 // Shared by every Add/Edit form with a currency/payment amount field —
 // deduplicates what used to be four near-identical z.string().refine(...)
 // validators, copy-pasted with the same logic each time (Repair's amt,
-// Install's unitPrice/cpPrice/deliveryInstallationFee, Collections' amount,
-// Inventory's purchasePrice/sellingPrice). Value is kept as a plain string
+// Install's unitPrice/cpPrice/deliveryInstallationFee, Collections' amount).
+// Value is kept as a plain string
 // in form state rather than z.number() — CurrencyInput (see
 // components/shared/currency-input.tsx) needs a plain editable string to
 // format on blur, and every one of these forms already converts to a real

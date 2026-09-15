@@ -145,7 +145,7 @@ export function useStockMovementRows() {
 export function useCreateProduct() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<Product, "id" | "dateAdded" | "lastUpdated">) => api.createProduct(input),
+    mutationFn: (input: api.ProductCreateInput) => api.createProduct(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
