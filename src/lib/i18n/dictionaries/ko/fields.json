@@ -63,5 +63,9 @@
   "cpStart": "CP 시작일",
   "cpEnd": "CP 종료일",
   "account": "계정#",
-  "accountMember": "계정# (회원)"
+  "accountMember": "계정# (회원)",
+  "paymentMode": "결제 방식",
+  "receiptNo": "영수증 번호",
+  "salesPerson": "영업 담당자",
+  "via": "경로"
 }

@@ -8,6 +8,7 @@ type Row = {
   account_name: string
   order_no: string
   status: string
+  address: string | null
   problem: string
   solution_status: string | null
   pre_d: string | null
@@ -16,6 +17,19 @@ type Row = {
   part_no: string | null
   amt: number
   unit_in_out: string
+  contact_number: string | null
+  in_out: string | null
+  model: string | null
+  unit_price: number | null
+  cp_price: number | null
+  delivery_installation_fee: number | null
+  payment_mode: string | null
+  receipt_no: string | null
+  pre_installed_date: string | null
+  installed_date: string | null
+  sales_person: string | null
+  via: string | null
+  note: string | null
   created_at: string
   dispatch_status: string | null
   notify_contact: string | null
@@ -39,6 +53,7 @@ function fromRow(row: Row): RepairPlan {
     accountName: row.account_name,
     orderNo: row.order_no,
     status: row.status,
+    address: row.address ?? undefined,
     problem: row.problem,
     solutionStatus: row.solution_status ?? undefined,
     preD: row.pre_d ?? undefined,
@@ -47,6 +62,19 @@ function fromRow(row: Row): RepairPlan {
     partNo: row.part_no ?? undefined,
     amt: row.amt,
     unitInOut: row.unit_in_out,
+    contactNumber: row.contact_number ?? undefined,
+    inOut: row.in_out ?? undefined,
+    model: row.model ?? undefined,
+    unitPrice: row.unit_price ?? undefined,
+    cpPrice: row.cp_price ?? undefined,
+    deliveryInstallationFee: row.delivery_installation_fee ?? undefined,
+    paymentMode: row.payment_mode ?? undefined,
+    receiptNo: row.receipt_no ?? undefined,
+    preInstalledDate: row.pre_installed_date ?? undefined,
+    installedDate: row.installed_date ?? undefined,
+    salesPerson: row.sales_person ?? undefined,
+    via: row.via ?? undefined,
+    note: row.note ?? undefined,
     createdAt: row.created_at,
     dispatchStatus: (row.dispatch_status as RepairPlan["dispatchStatus"]) ?? undefined,
     notifyContact: row.notify_contact ?? undefined,
@@ -70,6 +98,7 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.accountName !== undefined) row.account_name = input.accountName
   if (input.orderNo !== undefined) row.order_no = input.orderNo
   if (input.status !== undefined) row.status = input.status
+  if (input.address !== undefined) row.address = input.address || null
   if (input.problem !== undefined) row.problem = input.problem
   if (input.solutionStatus !== undefined) row.solution_status = input.solutionStatus || null
   if (input.preD !== undefined) row.pre_d = input.preD || null
@@ -78,6 +107,19 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.partNo !== undefined) row.part_no = input.partNo || null
   if (input.amt !== undefined) row.amt = input.amt
   if (input.unitInOut !== undefined) row.unit_in_out = input.unitInOut
+  if (input.contactNumber !== undefined) row.contact_number = input.contactNumber || null
+  if (input.inOut !== undefined) row.in_out = input.inOut || null
+  if (input.model !== undefined) row.model = input.model || null
+  if (input.unitPrice !== undefined) row.unit_price = input.unitPrice
+  if (input.cpPrice !== undefined) row.cp_price = input.cpPrice
+  if (input.deliveryInstallationFee !== undefined) row.delivery_installation_fee = input.deliveryInstallationFee
+  if (input.paymentMode !== undefined) row.payment_mode = input.paymentMode || null
+  if (input.receiptNo !== undefined) row.receipt_no = input.receiptNo || null
+  if (input.preInstalledDate !== undefined) row.pre_installed_date = input.preInstalledDate || null
+  if (input.installedDate !== undefined) row.installed_date = input.installedDate || null
+  if (input.salesPerson !== undefined) row.sales_person = input.salesPerson || null
+  if (input.via !== undefined) row.via = input.via || null
+  if (input.note !== undefined) row.note = input.note || null
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row
 }

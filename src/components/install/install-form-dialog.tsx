@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
+import { PRODUCT_CATALOG, PAYMENT_METHODS, formatProductOption } from "@/lib/constants"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
@@ -74,6 +74,12 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     modelDp: z.string().optional(),
     orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
     inOut: z.string().min(1),
+    // AppSheet's own SalesSchedule form fields — genuinely new, not tracked
+    // anywhere else on this record before (20260923000000 migration).
+    paymentMode: z.string().optional(),
+    receiptNo: z.string().optional(),
+    salesPerson: z.string().optional(),
+    via: z.string().optional(),
     // Transient — never saved onto the install_plans row itself (it has no
     // such column). Only used, on add, as the new Customer's own
     // memberAccountNumber when this order turns out to have no existing
@@ -102,6 +108,10 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
       modelDp: plan.modelDp ?? "",
       orderNo: plan.orderNo,
       inOut: plan.inOut,
+      paymentMode: plan.paymentMode ?? "",
+      receiptNo: plan.receiptNo ?? "",
+      salesPerson: plan.salesPerson ?? "",
+      via: plan.via ?? "",
       memberAccountNumber: "",
     }
   }
@@ -120,6 +130,10 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
     modelDp: "",
     orderNo: "",
     inOut: "IN",
+    paymentMode: "",
+    receiptNo: "",
+    salesPerson: "",
+    via: "",
     memberAccountNumber: "",
   }
 }
@@ -295,6 +309,14 @@ export function InstallFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Field order below matches AppSheet's own SalesSchedule form
+                  layout exactly: Input Date, Order No, Name, Address,
+                  Contact #, In or Out, Model, Unit price, C/P price,
+                  Delivery & Installation Fee, Payment Mode, Receipt #, Pre
+                  Installed Date, Installed Date, Sales Person, Via, Note,
+                  Model(dp). Member Account# at the very end is this app's
+                  own addition (see its own comment below), not part of that
+                  external layout. */}
               <FormField
                 control={form.control}
                 name="inputDate"
@@ -303,6 +325,26 @@ export function InstallFormDialog({
                     <FormLabel>{tFields("inputDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="orderNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("orderNo")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="001-0001"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleOrderNoBlur(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -357,6 +399,37 @@ export function InstallFormDialog({
                         }}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="inOut"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("inOrOut")}</FormLabel>
+                    {/* Segmented IN/OUT toggle instead of a Select — only two
+                        mutually exclusive options, so a pair of joined
+                        buttons reads faster than opening a dropdown. */}
+                    <div className="flex w-fit">
+                      <Button
+                        type="button"
+                        variant={field.value === "IN" ? "default" : "outline"}
+                        className="rounded-r-none"
+                        onClick={() => field.onChange("IN")}
+                      >
+                        IN
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={field.value === "OUT" ? "default" : "outline"}
+                        className="-ml-px rounded-l-none"
+                        onClick={() => field.onChange("OUT")}
+                      >
+                        OUT
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -423,6 +496,44 @@ export function InstallFormDialog({
               />
               <FormField
                 control={form.control}
+                name="paymentMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("paymentMode")}</FormLabel>
+                    <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        {PAYMENT_METHODS.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="receiptNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("receiptNo")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="preInstalledDate"
                 render={({ field }) => (
                   <FormItem>
@@ -442,6 +553,32 @@ export function InstallFormDialog({
                     <FormLabel>{tFields("installedDate")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="salesPerson"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("salesPerson")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="via"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("via")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -476,26 +613,10 @@ export function InstallFormDialog({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="orderNo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tFields("orderNo")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="001-0001"
-                        {...field}
-                        onBlur={(e) => {
-                          field.onBlur()
-                          handleOrderNoBlur(e.target.value)
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Not part of AppSheet's own SalesSchedule layout — this
+                  app's own addition so a brand-new customer (no existing
+                  order match, see onSubmit) can get a real Member Account#
+                  set at creation instead of defaulting to blank. */}
               <FormField
                 control={form.control}
                 name="memberAccountNumber"
@@ -512,27 +633,6 @@ export function InstallFormDialog({
                         }}
                       />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="inOut"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tFields("inOrOut")}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="IN">IN</SelectItem>
-                        <SelectItem value="OUT">OUT</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

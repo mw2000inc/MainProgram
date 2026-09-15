@@ -19,6 +19,10 @@ type Row = {
   note: string | null
   model_dp: string | null
   in_out: string
+  payment_mode: string | null
+  receipt_no: string | null
+  sales_person: string | null
+  via: string | null
   serviceman: string
   created_at: string
   dispatch_status: string | null
@@ -54,6 +58,10 @@ function fromRow(row: Row): InstallPlan {
     note: row.note ?? undefined,
     modelDp: row.model_dp ?? undefined,
     inOut: row.in_out,
+    paymentMode: row.payment_mode ?? undefined,
+    receiptNo: row.receipt_no ?? undefined,
+    salesPerson: row.sales_person ?? undefined,
+    via: row.via ?? undefined,
     serviceman: row.serviceman,
     createdAt: row.created_at,
     dispatchStatus: (row.dispatch_status as InstallPlan["dispatchStatus"]) ?? undefined,
@@ -89,6 +97,10 @@ function toRow(input: Partial<Omit<InstallPlan, "id" | "createdAt">>) {
   if (input.note !== undefined) row.note = input.note || null
   if (input.modelDp !== undefined) row.model_dp = input.modelDp || null
   if (input.inOut !== undefined) row.in_out = input.inOut
+  if (input.paymentMode !== undefined) row.payment_mode = input.paymentMode || null
+  if (input.receiptNo !== undefined) row.receipt_no = input.receiptNo || null
+  if (input.salesPerson !== undefined) row.sales_person = input.salesPerson || null
+  if (input.via !== undefined) row.via = input.via || null
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row

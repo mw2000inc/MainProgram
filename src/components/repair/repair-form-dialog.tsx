@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Form,
   FormControl,
@@ -29,16 +30,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { TECHNICIANS } from "@/lib/constants"
+import { TECHNICIANS, PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { RepairPlan } from "@/lib/types"
+
+// Same non-SK2 catalog suggestions install-form-dialog.tsx's own Model /
+// Model(dp) comboboxes use — see that file's own comment on why DISPENSER_TYPES
+// (100% "SK2 ..." variants) was dropped in favor of this.
+const MODEL_OPTIONS: ComboboxOption[] = PRODUCT_CATALOG.flatMap((g) =>
+  g.items.map((item) => ({ value: formatProductOption(item.code, item.name), group: g.group }))
+).filter((opt) => !opt.value.toUpperCase().includes("SK2"))
 
 function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
   return z.object({
@@ -51,6 +60,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     // an order with no customer record at all, so there has to be somewhere
     // for the admin to type a name in that case.
     accountName: z.string().min(1, t("requiredField", { field: tf("accountName") })),
+    address: z.string().optional(),
     problem: z.string().min(1, t("requiredField", { field: tf("problem") })),
     solutionStatus: z.string().optional(),
     preD: dateFieldSchema(t),
@@ -59,6 +69,22 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     partNo: z.string().optional(),
     amt: moneySchema(t),
     unitInOut: z.string().min(1),
+    // AppSheet's own SalesSchedule form fields — see the RepairPlan type's
+    // own comment on why these coexist with the repair-specific fields
+    // above rather than replacing any of them.
+    contactNumber: z.string().optional(),
+    inOut: z.string().optional(),
+    model: z.string().optional(),
+    unitPrice: moneySchema(t),
+    cpPrice: moneySchema(t),
+    deliveryInstallationFee: moneySchema(t),
+    paymentMode: z.string().optional(),
+    receiptNo: z.string().optional(),
+    preInstalledDate: dateFieldSchema(t),
+    installedDate: dateFieldSchema(t),
+    salesPerson: z.string().optional(),
+    via: z.string().optional(),
+    note: z.string().optional(),
   })
 }
 
@@ -70,20 +96,35 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
       issuedDate: plan.issuedDate,
       orderNo: plan.orderNo,
       accountName: plan.accountName,
+      address: plan.address ?? "",
       problem: plan.problem,
       solutionStatus: plan.solutionStatus ?? "",
       preD: plan.preD ?? "",
       accD: plan.accD ?? "",
       th: plan.th,
       partNo: plan.partNo ?? "",
-      amt: String(plan.amt),
+      amt: String(plan.amt ?? 0),
       unitInOut: plan.unitInOut,
+      contactNumber: plan.contactNumber ?? "",
+      inOut: plan.inOut ?? "",
+      model: plan.model ?? "",
+      unitPrice: String(plan.unitPrice ?? 0),
+      cpPrice: String(plan.cpPrice ?? 0),
+      deliveryInstallationFee: String(plan.deliveryInstallationFee ?? 0),
+      paymentMode: plan.paymentMode ?? "",
+      receiptNo: plan.receiptNo ?? "",
+      preInstalledDate: plan.preInstalledDate ?? "",
+      installedDate: plan.installedDate ?? "",
+      salesPerson: plan.salesPerson ?? "",
+      via: plan.via ?? "",
+      note: plan.note ?? "",
     }
   }
   return {
     issuedDate: defaultDate,
     orderNo: defaultOrderNo ?? "",
     accountName: "",
+    address: "",
     problem: "",
     solutionStatus: "",
     preD: "",
@@ -92,6 +133,19 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     partNo: "",
     amt: "0",
     unitInOut: "In",
+    contactNumber: "",
+    inOut: "",
+    model: "",
+    unitPrice: "0",
+    cpPrice: "0",
+    deliveryInstallationFee: "0",
+    paymentMode: "",
+    receiptNo: "",
+    preInstalledDate: "",
+    installedDate: "",
+    salesPerson: "",
+    via: "",
+    note: "",
   }
 }
 
@@ -128,17 +182,81 @@ export function RepairFormDialog({
   })
 
   // See filter-change-form-dialog.tsx's own comment on this same pattern —
-  // fills accountName only if it's still empty, add-only. Repair has no
-  // contact/address columns, so accountName is the only field to fill.
+  // fills only currently-empty fields, add-only, never overwrites anything
+  // already typed.
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
     const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
     if (!customer) return
+    let filled = false
     const name = customer.companyName || customer.fullName
     if (name && !form.getValues("accountName").trim()) {
       form.setValue("accountName", name)
-      toast.success(tCommon("customerInfoFilled"))
+      filled = true
     }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.dispenserType && !(form.getValues("model") ?? "").trim()) {
+      form.setValue("model", customer.dispenserType)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
+  }
+
+  // The reverse direction of handleOrderNoBlur above — typing an existing
+  // customer's Name or Contact # first still resolves Order No., Address,
+  // and Model, instead of only working the one way around. Uses
+  // findExistingMemberMatch (the same exact-match lookup the Add Member
+  // form uses) searching only on whichever one field just lost focus, so a
+  // half-typed value elsewhere can't cause a false match. Order No. itself
+  // comes from that customer's own sale_list_entries row (the real link
+  // between a customer and the "001-####" order numbers typed day to day —
+  // see customer-lookup.ts's own comment on why customers.order_number
+  // isn't that link) — the first one found, since a customer with more than
+  // one order has no single "correct" pick here anyway. Every field is
+  // filled independently and only if still empty.
+  function handleCustomerLookupBlur(source: "name" | "contactNumber", value: string) {
+    if (isEdit) return
+    if (!value.trim()) return
+    const match = findExistingMemberMatch(customers, {
+      fullName: source === "name" ? value : undefined,
+      companyName: source === "name" ? value : undefined,
+      contactNumber: source === "contactNumber" ? value : undefined,
+    })
+    if (!match) return
+    const customer = match.customer
+    let filled = false
+    const name = customer.companyName || customer.fullName
+    if (name && !form.getValues("accountName").trim()) {
+      form.setValue("accountName", name)
+      filled = true
+    }
+    if (!form.getValues("orderNo").trim()) {
+      const entry = saleListEntries.find((e) => e.customerId === customer.id)
+      if (entry) {
+        form.setValue("orderNo", entry.orderNumber)
+        filled = true
+      }
+    }
+    if (customer.address && !(form.getValues("address") ?? "").trim()) {
+      form.setValue("address", customer.address)
+      filled = true
+    }
+    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+      form.setValue("contactNumber", customer.contactNumber)
+      filled = true
+    }
+    if (customer.dispenserType && !(form.getValues("model") ?? "").trim()) {
+      form.setValue("model", customer.dispenserType)
+      filled = true
+    }
+    if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
   React.useEffect(() => {
@@ -158,6 +276,9 @@ export function RepairFormDialog({
     const input = {
       ...values,
       amt: Number(values.amt),
+      unitPrice: Number(values.unitPrice),
+      cpPrice: Number(values.cpPrice),
+      deliveryInstallationFee: Number(values.deliveryInstallationFee),
     }
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input })
@@ -220,7 +341,47 @@ export function RepairFormDialog({
                 <FormItem>
                   <FormLabel>{tFields("accountName")}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t("customerOrBusinessName")} {...field} />
+                    <Input
+                      placeholder={t("customerOrBusinessName")}
+                      {...field}
+                      onBlur={(e) => {
+                        field.onBlur()
+                        handleCustomerLookupBlur("name", e.target.value)
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("address")}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contactNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("contactNumber")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="09171234567"
+                      {...field}
+                      onBlur={(e) => {
+                        field.onBlur()
+                        handleCustomerLookupBlur("contactNumber", e.target.value)
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -322,7 +483,13 @@ export function RepairFormDialog({
                 <FormItem>
                   <FormLabel>{tFields("amt")}</FormLabel>
                   <FormControl>
-                    <CurrencyInput {...field} />
+                    {/* Explicit fallback on top of the {...field} spread —
+                        belt-and-suspenders against field.value ever being
+                        undefined (e.g. an existing row read back before its
+                        new column's migration has run), since
+                        CurrencyInput's own formatForDisplay() calls
+                        value.trim() with no guard of its own. */}
+                    <CurrencyInput {...field} value={field.value ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -345,6 +512,222 @@ export function RepairFormDialog({
                       <SelectItem value="Out">Out</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Below here: the same SalesSchedule-form fields
+                install-form-dialog.tsx has — see the RepairPlan type's own
+                comment on why these coexist with (rather than replace) the
+                repair-specific fields above. */}
+            <FormField
+              control={form.control}
+              name="inOut"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("inOrOut")}</FormLabel>
+                  {/* Segmented IN/OUT toggle, matching
+                      install-form-dialog.tsx's own — distinct from
+                      Unit IN/OUT above (different field, different casing). */}
+                  <div className="flex w-fit">
+                    <Button
+                      type="button"
+                      variant={field.value === "IN" ? "default" : "outline"}
+                      className="rounded-r-none"
+                      onClick={() => field.onChange("IN")}
+                    >
+                      IN
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={field.value === "OUT" ? "default" : "outline"}
+                      className="-ml-px rounded-l-none"
+                      onClick={() => field.onChange("OUT")}
+                    >
+                      OUT
+                    </Button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("model")}</FormLabel>
+                  <FormControl>
+                    {/* Free-text combobox, not a strict Select — a custom
+                        unit/model name is always typable, with
+                        MODEL_OPTIONS offered as suggestions below it. */}
+                    <Combobox
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      options={MODEL_OPTIONS}
+                      placeholder={tCommon("selectField", { field: tFields("model") })}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="unitPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("unitPrice")}</FormLabel>
+                  <FormControl>
+                    {/* Explicit fallback on top of the {...field} spread —
+                        belt-and-suspenders against field.value ever being
+                        undefined (e.g. an existing row read back before its
+                        new column's migration has run), since
+                        CurrencyInput's own formatForDisplay() calls
+                        value.trim() with no guard of its own. */}
+                    <CurrencyInput {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="cpPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("cpPrice")}</FormLabel>
+                  <FormControl>
+                    {/* Explicit fallback on top of the {...field} spread —
+                        belt-and-suspenders against field.value ever being
+                        undefined (e.g. an existing row read back before its
+                        new column's migration has run), since
+                        CurrencyInput's own formatForDisplay() calls
+                        value.trim() with no guard of its own. */}
+                    <CurrencyInput {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="deliveryInstallationFee"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("deliveryInstallationFee")}</FormLabel>
+                  <FormControl>
+                    {/* Explicit fallback on top of the {...field} spread —
+                        belt-and-suspenders against field.value ever being
+                        undefined (e.g. an existing row read back before its
+                        new column's migration has run), since
+                        CurrencyInput's own formatForDisplay() calls
+                        value.trim() with no guard of its own. */}
+                    <CurrencyInput {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="paymentMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("paymentMode")}</FormLabel>
+                  <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="receiptNo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("receiptNo")}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="preInstalledDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("preInstalledDate")}</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="installedDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("installedDate")}</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="salesPerson"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("salesPerson")}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="via"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("via")}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="note"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("note")}</FormLabel>
+                  <FormControl>
+                    <Textarea rows={2} placeholder={tCommon("optionalNotes")} {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -602,6 +602,12 @@ export interface InstallPlan extends DispatchFields {
   note?: string
   modelDp?: string
   inOut: string
+  // AppSheet's own SalesSchedule form fields — genuinely new, not tracked
+  // anywhere else on this record before (20260923000000 migration).
+  paymentMode?: string
+  receiptNo?: string
+  salesPerson?: string
+  via?: string
   // Plan-level technician, matching FilterChangePlan.serviceman — added
   // later than every other column here (20260914000000 migration), so an
   // admin can assign someone before this ever reaches the customer, not
@@ -620,6 +626,9 @@ export interface RepairPlan extends DispatchFields {
   accountName: string
   orderNo: string
   status: string
+  // Genuinely new — this table never had a customer-detail column beyond
+  // Account Name before (20260924000000 migration).
+  address?: string
   problem: string
   solutionStatus?: string
   preD?: string
@@ -628,6 +637,24 @@ export interface RepairPlan extends DispatchFields {
   partNo?: string
   amt: number
   unitInOut: string
+  // AppSheet's own SalesSchedule form fields — the same set install_plans
+  // has, since a repair job can also involve selling/installing a
+  // replacement unit (20260925000000 migration). `inOut` ("IN"/"OUT") is
+  // deliberately distinct from unitInOut above ("In"/"Out") — two separate
+  // fields from two originally-separate AppSheet forms, kept side by side.
+  contactNumber?: string
+  inOut?: string
+  model?: string
+  unitPrice?: number
+  cpPrice?: number
+  deliveryInstallationFee?: number
+  paymentMode?: string
+  receiptNo?: string
+  preInstalledDate?: string
+  installedDate?: string
+  salesPerson?: string
+  via?: string
+  note?: string
   createdAt: string
   // Set once a customer confirms this dispatch (see the
   // auto_create_schedule_job_on_confirm migration) -- links to the

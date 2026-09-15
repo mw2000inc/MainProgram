@@ -63,5 +63,9 @@
   "cpStart": "CP start",
   "cpEnd": "CP end",
   "account": "Account#",
-  "accountMember": "Account# (Member)"
+  "accountMember": "Account# (Member)",
+  "paymentMode": "Payment Mode",
+  "receiptNo": "Receipt #",
+  "salesPerson": "Sales Person",
+  "via": "Via"
 }
