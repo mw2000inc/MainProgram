@@ -39,6 +39,7 @@
   "deliveryInstallationFee": "배송 및 설치비",
   "modelDp": "모델(dp)",
   "inputDate": "입력일",
+  "yearMonthPlan": "연월 계획",
   "issuedDate": "접수일",
   "latestRepairDate": "최근 수리일",
   "partNo": "부품 번호",

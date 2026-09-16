@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Form,
@@ -72,7 +73,12 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     installedDate: dateFieldSchema(t),
     note: z.string().optional(),
     modelDp: z.string().optional(),
-    orderNo: z.string().min(1, t("requiredField", { field: tf("orderNo") })),
+    // No longer required — install_plans.order_no is NOT NULL but has no
+    // default, and the API layer passes this straight through with no ""
+    // -> null conversion (see toRow in install-plans.ts), so an empty
+    // string here satisfies that constraint fine; nothing downstream
+    // assumes a non-blank value.
+    orderNo: z.string().optional(),
     inOut: z.string().min(1),
     // AppSheet's own SalesSchedule form fields — genuinely new, not tracked
     // anywhere else on this record before (20260923000000 migration).
@@ -166,6 +172,15 @@ export function InstallFormDialog({
     defaultValues: defaultValues(defaultDate, plan),
   })
 
+  // Read-only, never submitted — install_plans has no column for this at
+  // all (per the explicit decision on this: purely a display convenience,
+  // not a new stored field). Same plain "YYYY-MM" slice the yearMonth()
+  // helpers on Collection Plan/Filter Change/Sale List's order view already
+  // compute client-side from their own date fields, just shown live in the
+  // form itself instead of used for a sidebar filter.
+  const inputDateValue = form.watch("inputDate")
+  const yearMonthPlan = inputDateValue ? inputDateValue.slice(0, 7) : ""
+
   React.useEffect(() => {
     if (open) form.reset(defaultValues(defaultDate, plan))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,8 +257,16 @@ export function InstallFormDialog({
   }
 
   async function onSubmit(values: FormValues) {
+    // No longer required (see the schema's own comment) but install_plans.
+    // order_no is still NOT NULL at the database level — "" satisfies that
+    // fine, same as address/contactNumber below, just needs to actually be
+    // a string rather than undefined before it reaches anything typed for
+    // a required orderNo (the mutation input, findCustomerByOrderNumber,
+    // the new Sale List entry created below).
+    const orderNo = values.orderNo ?? ""
     const input = {
       ...values,
+      orderNo,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
       unitPrice: Number(values.unitPrice),
@@ -270,7 +293,7 @@ export function InstallFormDialog({
       // level, so they get the exact same "one year from today" default
       // the Add Member form has always silently used for a brand-new
       // member missing this info (see customer-defaults.ts).
-      if (!findCustomerByOrderNumber(customers, saleListEntries, values.orderNo)) {
+      if (!findCustomerByOrderNumber(customers, saleListEntries, orderNo)) {
         const newCustomer = await createCustomer.mutateAsync({
           ...newMemberDefaults(),
           fullName: values.name,
@@ -282,7 +305,7 @@ export function InstallFormDialog({
           email: "",
         })
         await createSaleListEntry.mutateAsync({
-          orderNumber: values.orderNo,
+          orderNumber: orderNo,
           customerId: newCustomer.id,
           installedDate: values.installedDate || undefined,
           productNo: "",
@@ -330,6 +353,12 @@ export function InstallFormDialog({
                   </FormItem>
                 )}
               />
+              {/* Read-only, derived from Input Date above — not a FormField
+                  since there's nothing here to register/validate/submit. */}
+              <div className="space-y-2">
+                <Label>{tFields("yearMonthPlan")}</Label>
+                <Input value={yearMonthPlan} disabled placeholder="YYYY-MM" />
+              </div>
               <FormField
                 control={form.control}
                 name="orderNo"

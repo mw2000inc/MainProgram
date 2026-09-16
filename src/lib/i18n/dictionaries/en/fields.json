@@ -39,6 +39,7 @@
   "deliveryInstallationFee": "Delivery & Installation Fee",
   "modelDp": "Model(dp)",
   "inputDate": "Input Date",
+  "yearMonthPlan": "Year Month Plan",
   "issuedDate": "Issued Date",
   "latestRepairDate": "Latest Repair Date",
   "partNo": "Part No",

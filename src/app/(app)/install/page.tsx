@@ -141,6 +141,7 @@ function InstallPageContent() {
               expanded={selection.expanded}
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
+              fillHeight
             >
               <DetailField label={tFields("inputDate")} value={formatDate(selected.inputDate)} />
               <DetailField label={tFields("orderNo")} value={selected.orderNo} />
