@@ -4,9 +4,9 @@ import * as React from "react"
 import { Maximize2, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -81,12 +81,25 @@ function AddPartDialog({
   const { t: tFields } = useTranslation("fields")
   const { data: products = [] } = useProducts()
   const createPart = useCreateRepairPlanPart()
-  const [productId, setProductId] = React.useState("")
-  const [inOut, setInOut] = React.useState<"IN" | "OUT">("IN")
+  const [partText, setPartText] = React.useState("")
+  const [inOutText, setInOutText] = React.useState("IN")
   const [quantity, setQuantity] = React.useState("1")
 
-  const selectedProduct = products.find((p) => p.id === productId)
-  const canSubmit = !!productId && Number(quantity) > 0
+  // Every field below is a typable Combobox (free text + filtered
+  // suggestions), not a click-only native Select — but productId and
+  // in_out are still real, constrained values underneath (a foreign key
+  // into products, and a DB check(in_out in ('IN','OUT')) respectively),
+  // so submission only ever fires once the typed text resolves to exactly
+  // one of those real values; canSubmit below is what enforces that.
+  const partOptions: ComboboxOption[] = React.useMemo(
+    () => products.map((p) => ({ value: `${p.sku} — ${p.name}` })),
+    [products]
+  )
+  const inOutOptions: ComboboxOption[] = React.useMemo(() => [{ value: "IN" }, { value: "OUT" }], [])
+
+  const selectedProduct = products.find((p) => `${p.sku} — ${p.name}` === partText)
+  const resolvedInOut = inOutText.trim().toUpperCase()
+  const canSubmit = !!selectedProduct && (resolvedInOut === "IN" || resolvedInOut === "OUT") && Number(quantity) > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,22 +110,11 @@ function AddPartDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t("part")}</label>
-            {/* Part No shown alongside the name in every option so a part
-                can be found by its code, not just its (often long)
-                description — matches the table's own Part No/Part split
-                below. */}
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("selectProduct")} />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.sku} — {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Part No shown alongside the name in every suggestion so a
+                part can be found by typing its code, not just its (often
+                long) description — matches the table's own Part No/Part
+                split below. */}
+            <Combobox value={partText} onChange={setPartText} options={partOptions} placeholder={t("selectProduct")} />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{tFields("partNo")}</label>
@@ -124,15 +126,7 @@ function AddPartDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">{t("inOut")}</label>
-              <Select value={inOut} onValueChange={(v) => setInOut(v as "IN" | "OUT")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="IN">IN</SelectItem>
-                  <SelectItem value="OUT">OUT</SelectItem>
-                </SelectContent>
-              </Select>
+              <Combobox value={inOutText} onChange={setInOutText} options={inOutOptions} placeholder="IN / OUT" />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">{tFields("quantity")}</label>
@@ -147,9 +141,10 @@ function AddPartDialog({
           <Button
             disabled={!canSubmit || createPart.isPending}
             onClick={async () => {
+              if (!selectedProduct || (resolvedInOut !== "IN" && resolvedInOut !== "OUT")) return
               await createPart.mutateAsync({
                 repairPlanId,
-                input: { productId, inOut, quantity: Number(quantity) },
+                input: { productId: selectedProduct.id, inOut: resolvedInOut, quantity: Number(quantity) },
               })
               onOpenChange(false)
             }}
