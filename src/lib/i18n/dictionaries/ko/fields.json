@@ -40,6 +40,7 @@
   "modelDp": "모델(dp)",
   "inputDate": "입력일",
   "issuedDate": "접수일",
+  "latestRepairDate": "최근 수리일",
   "partNo": "부품 번호",
   "companyName": "회사명",
   "fullName": "이름",

@@ -40,6 +40,7 @@
   "modelDp": "Model(dp)",
   "inputDate": "Input Date",
   "issuedDate": "Issued Date",
+  "latestRepairDate": "Latest Repair Date",
   "partNo": "Part No",
   "companyName": "Company Name",
   "fullName": "Full Name",

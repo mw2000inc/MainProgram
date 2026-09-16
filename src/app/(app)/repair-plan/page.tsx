@@ -57,7 +57,11 @@ function RepairPlanPageContent() {
   // One row per distinct order_no — repeat visits for the same order
   // (different dates) collapse into a single row here; drilling into one
   // reveals its own list of dates instead of every field inline. Most
-  // recent date first within each group.
+  // recent date first within each group, which is also where latestDate
+  // (MAX(issued_date) for that order — its own sortable column, see
+  // getRepairOrderGroupColumns) comes from: recomputed fresh from `plans`
+  // every time, never a stored value, so a newly added repair immediately
+  // becomes the latest without anything else needing to change.
   const orderGroups = React.useMemo<RepairOrderGroup[]>(() => {
     const map = new Map<string, RepairPlan[]>()
     for (const p of plans) {
@@ -65,12 +69,16 @@ function RepairPlanPageContent() {
       if (list) list.push(p)
       else map.set(p.orderNo, [p])
     }
-    return Array.from(map, ([orderNo, records]) => ({
-      id: orderNo,
-      orderNo,
-      accountName: records[0].accountName,
-      records: [...records].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate)),
-    }))
+    return Array.from(map, ([orderNo, records]) => {
+      const sorted = [...records].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
+      return {
+        id: orderNo,
+        orderNo,
+        accountName: sorted[0].accountName,
+        latestDate: sorted[0].issuedDate,
+        records: sorted,
+      }
+    })
   }, [plans])
 
   const orderSelection = useSplitViewSelection(filteredGroups, initialPlan?.orderNo)
@@ -239,7 +247,6 @@ function RepairPlanPageContent() {
                   <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
                   <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
                   <DetailField label={tFields("th")} value={selected.th} />
-                  <DetailField label={tFields("partNo")} value={selected.partNo} />
                   <DetailField label={tFields("amt")} value={formatCurrency(selected.amt)} />
                   <DetailField label={tFields("status")} value={planStatusLabel(selected.status, tStatus)} />
                 </DetailPanel>

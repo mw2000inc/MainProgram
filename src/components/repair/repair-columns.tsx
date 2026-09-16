@@ -103,22 +103,29 @@ export function getRepairColumns({
 
 // One row per distinct order_no on the standalone /repair-plan list page —
 // `records` is every repair_plans row sharing that order (repeat visits),
-// most recent first. Built by repair-plan/page.tsx, not read from any API
-// directly (repair_plans has no real "order" table of its own to query).
+// most recent first, so records[0].issuedDate is always the latest one;
+// latestDate just names that value so it can be its own real, sortable
+// column property instead of something the cell recomputes on every render.
+// Built by repair-plan/page.tsx, not read from any API directly
+// (repair_plans has no real "order" table of its own to query) — so it's
+// always derived fresh from whatever repair_plans rows currently exist for
+// that order, never a stored value that could drift out of date.
 export interface RepairOrderGroup {
   id: string
   orderNo: string
   accountName: string
+  latestDate: string
   records: RepairPlan[]
 }
 
 // The standalone /repair-plan list page's own columns — deliberately just
-// these two (Order No, Customer Name), one row per distinct order rather
-// than one per repair visit. Clicking a row (via DataTable's own onRowClick,
-// same as every other list page here — no per-cell handler needed since
-// both columns should behave the same way) drills into that order's own
-// list of repair dates instead of opening a single record's detail panel
-// directly; see repair-plan/page.tsx's own openOrderGroup.
+// these three (Order No, Customer Name, Latest Repair Date), one row per
+// distinct order rather than one per repair visit. Clicking a row (via
+// DataTable's own onRowClick, same as every other list page here — no
+// per-cell handler needed since every column should behave the same way)
+// drills into that order's own list of repair dates instead of opening a
+// single record's detail panel directly; see repair-plan/page.tsx's own
+// onRowClick={orderSelection.open}.
 export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknown>[] {
   return [
     {
@@ -130,6 +137,11 @@ export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknow
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+    },
+    {
+      accessorKey: "latestDate",
+      header: () => <ColumnHeader tKey="latestRepairDate" ns="fields" />,
+      cell: ({ row }) => formatDate(row.original.latestDate),
     },
   ]
 }
