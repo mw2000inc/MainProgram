@@ -23,7 +23,13 @@ export function useCreateRepairPlanPart() {
       input,
     }: {
       repairPlanId: string
-      input: { productId: string; inOut: "IN" | "OUT"; quantity: number }
+      input: {
+        productId?: string
+        customPartNo?: string
+        customPartName?: string
+        inOut: "IN" | "OUT"
+        quantity: number
+      }
     }) => api.createRepairPlanPart(repairPlanId, input),
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })

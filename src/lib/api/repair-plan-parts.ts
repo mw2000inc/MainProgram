@@ -4,7 +4,9 @@ import type { RepairPlanPart } from "@/lib/types"
 type Row = {
   id: string
   repair_plan_id: string
-  product_id: string
+  product_id: string | null
+  custom_part_no: string | null
+  custom_part_name: string | null
   in_out: "IN" | "OUT"
   quantity: number
   created_at: string
@@ -15,9 +17,13 @@ function fromRow(row: Row): RepairPlanPart {
   return {
     id: row.id,
     repairPlanId: row.repair_plan_id,
-    productId: row.product_id,
-    productSku: row.products?.sku ?? "",
-    productName: row.products?.name ?? "",
+    productId: row.product_id ?? undefined,
+    // Falls back to the free-typed custom value whenever there's no real
+    // catalog product behind this row (see the
+    // repair_plan_parts_custom_entries migration) — the display columns
+    // don't need to know or care which source it came from.
+    productSku: row.products?.sku ?? row.custom_part_no ?? "",
+    productName: row.products?.name ?? row.custom_part_name ?? "",
     inOut: row.in_out,
     quantity: row.quantity,
     createdAt: row.created_at,
@@ -36,13 +42,23 @@ export async function listRepairPlanParts(repairPlanId: string): Promise<RepairP
 
 export async function createRepairPlanPart(
   repairPlanId: string,
-  input: { productId: string; inOut: "IN" | "OUT"; quantity: number }
+  input: {
+    productId?: string
+    customPartNo?: string
+    customPartName?: string
+    inOut: "IN" | "OUT"
+    quantity: number
+  }
 ): Promise<RepairPlanPart> {
   const { data, error } = await supabase
     .from("repair_plan_parts")
     .insert({
       repair_plan_id: repairPlanId,
-      product_id: input.productId,
+      product_id: input.productId ?? null,
+      // Only ever set alongside a null product_id — a row identified by a
+      // real catalog product doesn't also carry a stale custom value.
+      custom_part_no: input.productId ? null : input.customPartNo ?? null,
+      custom_part_name: input.productId ? null : input.customPartName ?? null,
       in_out: input.inOut,
       quantity: input.quantity,
     })

@@ -670,10 +670,15 @@ export interface RepairPlan extends DispatchFields {
 export interface RepairPlanPart {
   id: string
   repairPlanId: string
-  productId: string
+  // Unset when this row names a part typed free-text at add time instead of
+  // a real catalog product (see the repair_plan_parts_custom_entries
+  // migration) — productSku/productName below are populated either way.
+  productId?: string
   // Denormalized from products at read time (sku/name) purely for display —
   // never stored on this row itself, always joined live so a later catalog
-  // rename shows up on every past repair's parts list too.
+  // rename shows up on every past repair's parts list too. Falls back to
+  // the row's own custom_part_no/custom_part_name when there's no real
+  // product behind it.
   productSku: string
   productName: string
   inOut: "IN" | "OUT"

@@ -87,11 +87,12 @@ function AddPartDialog({
   const [quantity, setQuantity] = React.useState("1")
 
   // Every field below is a typable Combobox (free text + filtered
-  // suggestions), not a click-only native Select — but productId and
-  // in_out are still real, constrained values underneath (a foreign key
-  // into products, and a DB check(in_out in ('IN','OUT')) respectively),
-  // so submission only ever fires once the typed text resolves to exactly
-  // one of those real values; canSubmit below is what enforces that.
+  // suggestions), not a click-only native Select. in_out is still a real,
+  // constrained value underneath (a DB check(in_out in ('IN','OUT'))), so
+  // canSubmit only allows an exact "IN"/"OUT" match there — but Part/Part No
+  // are deliberately NOT required to resolve to a real catalog product: a
+  // part that isn't in the catalog yet can still be logged as a one-off
+  // custom entry (see the repair_plan_parts_custom_entries migration).
   const formatPart = React.useCallback((p: (typeof products)[number]) => `${p.sku} — ${p.name}`, [])
   const partOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: formatPart(p) })), [
     products,
@@ -101,10 +102,12 @@ function AddPartDialog({
   const inOutOptions: ComboboxOption[] = React.useMemo(() => [{ value: "IN" }, { value: "OUT" }], [])
 
   // Part and Part No are two independent, clickable entry points into the
-  // SAME product catalog — picking one auto-fills the other so they can
-  // never drift out of sync, both ultimately resolving to one real
-  // products row (there's no such thing as a Part No without a Part, or
-  // vice versa; repair_plan_parts.product_id is a single FK).
+  // SAME product catalog — picking a real catalog suggestion in either one
+  // auto-fills the other so they can never drift out of sync while they
+  // describe an actual product. Typing something that doesn't match any
+  // catalog entry just leaves them as independent free text instead (a
+  // custom, not-yet-cataloged part) — see canSubmit/the submit handler
+  // below for how that's still addable.
   function handlePartChange(value: string) {
     setPartText(value)
     const match = products.find((p) => formatPart(p) === value)
@@ -118,8 +121,17 @@ function AddPartDialog({
   }
 
   const selectedProduct = products.find((p) => formatPart(p) === partText && p.sku === partNoText)
+  const trimmedPart = partText.trim()
+  const trimmedPartNo = partNoText.trim()
   const resolvedInOut = inOutText.trim().toUpperCase()
-  const canSubmit = !!selectedProduct && (resolvedInOut === "IN" || resolvedInOut === "OUT") && Number(quantity) > 0
+  // Not gated on selectedProduct — a part that isn't in the catalog yet is
+  // still addable, as a one-off custom entry (see the
+  // repair_plan_parts_custom_entries migration), as long as it's actually
+  // named by something (Part or Part No, not necessarily both).
+  const canSubmit =
+    (!!selectedProduct || !!trimmedPart || !!trimmedPartNo) &&
+    (resolvedInOut === "IN" || resolvedInOut === "OUT") &&
+    Number(quantity) > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,10 +179,17 @@ function AddPartDialog({
           <Button
             disabled={!canSubmit || createPart.isPending}
             onClick={async () => {
-              if (!selectedProduct || (resolvedInOut !== "IN" && resolvedInOut !== "OUT")) return
+              if (resolvedInOut !== "IN" && resolvedInOut !== "OUT") return
               await createPart.mutateAsync({
                 repairPlanId,
-                input: { productId: selectedProduct.id, inOut: resolvedInOut, quantity: Number(quantity) },
+                input: selectedProduct
+                  ? { productId: selectedProduct.id, inOut: resolvedInOut, quantity: Number(quantity) }
+                  : {
+                      customPartNo: trimmedPartNo || undefined,
+                      customPartName: trimmedPart || undefined,
+                      inOut: resolvedInOut,
+                      quantity: Number(quantity),
+                    },
               })
               onOpenChange(false)
             }}
