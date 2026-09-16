@@ -211,12 +211,13 @@ export default function CustomersPage() {
   // and detail side by side. The level you came from minimizes into a
   // breadcrumb crumb rather than staying visible.
   return (
-    // h-full (not overflow-hidden) here — the Detail/Order-detail branches
-    // below can carry natural, potentially-tall content that genuinely
-    // needs to overflow and let <main> scroll it normally, same as always;
-    // the list-view branch further down hard-bounds itself the same way
-    // for as long as its content actually fits (see its own comment on the
-    // Card's min-h-120 floor for the one deliberate exception). h-full,
+    // h-full (not overflow-hidden) here — the Order-detail branch below
+    // (MemberOrderDetail) can still carry natural, potentially-tall content
+    // that genuinely needs to overflow and let <main> scroll it normally,
+    // same as always; the Member detail branch and the list-view branch
+    // further down both hard-bound themselves instead (own internal scroll,
+    // see the Member branch's own comment and the table Card's min-h-120
+    // floor for its one deliberate exception). h-full,
     // not a viewport calc like h-[calc(100vh-4rem)] — <main> (see
     // layout.tsx) already applies its own padding around this page's
     // content, which a fixed viewport subtraction doesn't know about and
@@ -364,92 +365,115 @@ export default function CustomersPage() {
           onNavigateToList={selection.close}
         />
       ) : (
-        <>
+        // flex-1 min-h-0 here (unlike the plain Fragment this branch used to
+        // be) is what actually lets the Member detail panel scroll
+        // internally instead of growing past <main> — see the root div's
+        // own comment above for why every OTHER branch on this page still
+        // deliberately doesn't do this. BreadcrumbTrail stays shrink-0
+        // (fixed to its own natural height); the inner flex-1 min-h-0 div
+        // is what hands DetailPanel's own fillHeight h-full a real bounded
+        // height to fill (the same "wrapper gets flex-1/min-h-0, child gets
+        // h-full" chain SplitViewLayout already uses for the Repair Plan/
+        // Collection/etc. detail panels — this branch just isn't inside a
+        // SplitViewLayout, so it's spelled out by hand here instead).
+        <div className="flex flex-1 min-h-0 flex-col gap-4">
           <BreadcrumbTrail
             items={[
               { label: tNav("member"), onClick: selection.close },
               { label: selection.selected.companyName || selection.selected.fullName },
             ]}
           />
-          <DetailPanel
-            title={selection.selected.companyName || selection.selected.fullName}
-            icon={Users}
-            subtitle={selection.selected.memberAccountNumber}
-            onEdit={
-              can("customers:edit")
-                ? () => {
-                    setEditing(selection.selected ?? undefined)
-                    setFormOpen(true)
-                  }
-                : undefined
-            }
-            onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
-            headerActions={
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
-                <Printer className="h-3.5 w-3.5" /> {tCommon("print")}
-              </Button>
-            }
-            onPrev={selection.prev}
-            onNext={selection.next}
-            hasPrev={selection.hasPrev}
-            hasNext={selection.hasNext}
-            expanded={selection.expanded}
-            // Expand goes to the full profile page (QR code, service history,
-            // related sales) instead of a generic fullscreen field dump.
-            onToggleExpand={() => router.push(`/customers/${selection.selected!.id}`)}
-            onClose={selection.close}
-            extra={
-              <MemberRelatedSalesTable
-                customer={selection.selected}
-                rows={relatedSaleRows}
-                can={can}
-                onSelectOrder={orderSelection.open}
+          <div className="flex-1 min-h-0">
+            <DetailPanel
+              fillHeight
+              title={selection.selected.companyName || selection.selected.fullName}
+              icon={Users}
+              subtitle={selection.selected.memberAccountNumber}
+              onEdit={
+                can("customers:edit")
+                  ? () => {
+                      setEditing(selection.selected ?? undefined)
+                      setFormOpen(true)
+                    }
+                  : undefined
+              }
+              onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
+              headerActions={
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
+                  <Printer className="h-3.5 w-3.5" /> {tCommon("print")}
+                </Button>
+              }
+              onPrev={selection.prev}
+              onNext={selection.next}
+              hasPrev={selection.hasPrev}
+              hasNext={selection.hasNext}
+              expanded={selection.expanded}
+              // Expand goes to the full profile page (QR code, service history,
+              // related sales) instead of a generic fullscreen field dump.
+              onToggleExpand={() => router.push(`/customers/${selection.selected!.id}`)}
+              onClose={selection.close}
+              extra={
+                <MemberRelatedSalesTable
+                  customer={selection.selected}
+                  rows={relatedSaleRows}
+                  can={can}
+                  onSelectOrder={orderSelection.open}
+                />
+              }
+            >
+              {/* Matches the AppSheet Member detail view exactly — just these
+                  six fields, single column. The rest (email, TIN, contract
+                  dates, etc.) are unchanged and still editable via Edit; they
+                  just aren't shown in this read-only view. */}
+              <DetailField
+                label={tFields("memberAccount")}
+                value={selection.selected.memberAccountNumber}
+                className="sm:col-span-2"
               />
-            }
-          >
-            {/* Matches the AppSheet Member detail view exactly — just these
-                six fields, single column. The rest (email, TIN, contract
-                dates, etc.) are unchanged and still editable via Edit; they
-                just aren't shown in this read-only view. */}
-            <DetailField
-              label={tFields("memberAccount")}
-              value={selection.selected.memberAccountNumber}
-              className="sm:col-span-2"
-            />
-            <DetailField label={tFields("accountName")} value={selection.selected.companyName} className="sm:col-span-2" />
-            <DetailField
-              label={t("accountContactPerson")}
-              value={selection.selected.fullName}
-              className="sm:col-span-2"
-            />
-            <DetailField
-              label={t("contactNumber1MainHeader")}
-              value={selection.selected.contactNumber}
-              className="sm:col-span-2"
-            />
-            <DetailField
-              label={t("contactNumber2SubHeader")}
-              value={selection.selected.contactNumber2}
-              className="sm:col-span-2"
-            />
-            <div className="sm:col-span-2">
-              <p className="mb-1.5 text-sm text-muted-foreground">{tFields("address")}</p>
-              {selection.selected.address ? (
-                <button
-                  type="button"
-                  onClick={() => setDirectionsTarget(selection.selected ?? undefined)}
-                  title={t("getDirectionsTitle")}
-                  className="inline-flex items-start gap-1.5 text-left text-base font-medium wrap-break-word text-primary hover:underline"
-                >
-                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  {selection.selected.address}
-                </button>
-              ) : (
-                <div className="text-base font-medium">—</div>
-              )}
-            </div>
-          </DetailPanel>
-        </>
+              <DetailField
+                label={tFields("accountName")}
+                value={selection.selected.companyName}
+                className="sm:col-span-2"
+              />
+              <DetailField
+                label={t("accountContactPerson")}
+                value={selection.selected.fullName}
+                className="sm:col-span-2"
+              />
+              <DetailField
+                label={t("contactNumber1MainHeader")}
+                value={selection.selected.contactNumber}
+                className="sm:col-span-2"
+              />
+              <DetailField
+                label={t("contactNumber2SubHeader")}
+                value={selection.selected.contactNumber2}
+                className="sm:col-span-2"
+              />
+              <div className="sm:col-span-2">
+                <p className="mb-1.5 text-sm text-muted-foreground">{tFields("address")}</p>
+                {selection.selected.address ? (
+                  <button
+                    type="button"
+                    onClick={() => setDirectionsTarget(selection.selected ?? undefined)}
+                    title={t("getDirectionsTitle")}
+                    className="inline-flex items-start gap-1.5 text-left text-base font-medium wrap-break-word text-primary hover:underline"
+                  >
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {selection.selected.address}
+                  </button>
+                ) : (
+                  <div className="text-base font-medium">—</div>
+                )}
+              </div>
+              <DetailField
+                label={t("emailAddress1Main")}
+                value={selection.selected.email}
+                className="sm:col-span-2"
+              />
+            </DetailPanel>
+          </div>
+        </div>
       )}
 
       <CustomerFormDialog open={formOpen} onOpenChange={setFormOpen} customer={editing} />

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Bell } from "lucide-react"
+import { Mail } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -141,8 +141,11 @@ export function PushOptInBanner({ customerId, initialEmail }: { customerId: stri
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="flex flex-col gap-3 py-4">
         <div className="flex items-start gap-3">
-          <Bell className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-          <p className="text-sm">{supportsPush ? t("pushOptInPrompt") : t("emailOptInPrompt")}</p>
+          <Mail className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+          <div>
+            <p className="text-sm font-medium">{t("emailConfirmHeading")}</p>
+            <p className="text-sm text-muted-foreground">{t("emailConfirmSubtext")}</p>
+          </div>
         </div>
 
         <div className="space-y-1.5">

@@ -9,8 +9,18 @@ type Row = {
   custom_part_name: string | null
   in_out: "IN" | "OUT"
   quantity: number
+  part_date: string
   created_at: string
   products: { sku: string; name: string } | null
+}
+
+type PartInput = {
+  productId?: string
+  customPartNo?: string
+  customPartName?: string
+  inOut: "IN" | "OUT"
+  quantity: number
+  partDate: string
 }
 
 function fromRow(row: Row): RepairPlanPart {
@@ -26,6 +36,7 @@ function fromRow(row: Row): RepairPlanPart {
     productName: row.products?.name ?? row.custom_part_name ?? "",
     inOut: row.in_out,
     quantity: row.quantity,
+    partDate: row.part_date,
     createdAt: row.created_at,
   }
 }
@@ -40,16 +51,7 @@ export async function listRepairPlanParts(repairPlanId: string): Promise<RepairP
   return (data as Row[]).map(fromRow)
 }
 
-export async function createRepairPlanPart(
-  repairPlanId: string,
-  input: {
-    productId?: string
-    customPartNo?: string
-    customPartName?: string
-    inOut: "IN" | "OUT"
-    quantity: number
-  }
-): Promise<RepairPlanPart> {
+export async function createRepairPlanPart(repairPlanId: string, input: PartInput): Promise<RepairPlanPart> {
   const { data, error } = await supabase
     .from("repair_plan_parts")
     .insert({
@@ -61,7 +63,26 @@ export async function createRepairPlanPart(
       custom_part_name: input.productId ? null : input.customPartName ?? null,
       in_out: input.inOut,
       quantity: input.quantity,
+      part_date: input.partDate,
     })
+    .select("*, products(sku, name)")
+    .single()
+  if (error) throw error
+  return fromRow(data as Row)
+}
+
+export async function updateRepairPlanPart(id: string, input: PartInput): Promise<RepairPlanPart> {
+  const { data, error } = await supabase
+    .from("repair_plan_parts")
+    .update({
+      product_id: input.productId ?? null,
+      custom_part_no: input.productId ? null : input.customPartNo ?? null,
+      custom_part_name: input.productId ? null : input.customPartName ?? null,
+      in_out: input.inOut,
+      quantity: input.quantity,
+      part_date: input.partDate,
+    })
+    .eq("id", id)
     .select("*, products(sku, name)")
     .single()
   if (error) throw error

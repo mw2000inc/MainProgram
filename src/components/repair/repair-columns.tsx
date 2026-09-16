@@ -1,8 +1,6 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
@@ -103,90 +101,52 @@ export function getRepairColumns({
   ]
 }
 
-// Full column set for the standalone /repair-plan list page — every field,
-// unlike the trimmed dashboard-panel view above. issuedDate/partNo are the
-// two fields that comment actually promises but this set previously
-// omitted (they existed only in REPAIR_EXPORT_COLUMNS) — added here now so
-// this page genuinely shows every field, matching how Filter Change/
-// Collection/Installation's own "full" pages each show at least one field
-// beyond their Daily Report compact view (productNo/source/note, source,
-// and deliveryInstallationFee respectively).
-export function getRepairFullColumns({
-  canDelete,
-  onDelete,
-  onStatusChange,
-}: {
-  canDelete: boolean
-  onDelete: (plan: RepairPlan) => void
-  onStatusChange?: (plan: RepairPlan, status: string) => void
-}): ColumnDef<RepairPlan, unknown>[] {
+// One row per distinct order_no on the standalone /repair-plan list page —
+// `records` is every repair_plans row sharing that order (repeat visits),
+// most recent first. Built by repair-plan/page.tsx, not read from any API
+// directly (repair_plans has no real "order" table of its own to query).
+export interface RepairOrderGroup {
+  id: string
+  orderNo: string
+  accountName: string
+  records: RepairPlan[]
+}
+
+// The standalone /repair-plan list page's own columns — deliberately just
+// these two (Order No, Customer Name), one row per distinct order rather
+// than one per repair visit. Clicking a row (via DataTable's own onRowClick,
+// same as every other list page here — no per-cell handler needed since
+// both columns should behave the same way) drills into that order's own
+// list of repair dates instead of opening a single record's detail panel
+// directly; see repair-plan/page.tsx's own openOrderGroup.
+export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknown>[] {
   return [
     {
-      accessorKey: "issuedDate",
-      header: () => <ColumnHeader tKey="issuedDate" ns="fields" />,
-      cell: ({ row }) => formatDate(row.original.issuedDate),
+      accessorKey: "orderNo",
+      header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
+      cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
     },
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.accountName} className="font-medium" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
     },
-    { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
-    { accessorKey: "unitInOut", header: () => <ColumnHeader tKey="unitInOut" ns="fields" /> },
+  ]
+}
+
+// The narrow date-picker list shown once an order is drilled into (see
+// RepairOrderGroup above) — same "single identifying column, row click
+// selects it" shape as getSaleListOrderNumberColumn's own narrow list for
+// MemberOrderDetail. Selecting a date shows that one repair visit's full
+// detail panel (every field) alongside it, unchanged from before this
+// drill-down existed.
+export function getRepairDateColumns(): ColumnDef<RepairPlan, unknown>[] {
+  return [
     {
-      accessorKey: "problem",
-      header: () => <ColumnHeader tKey="problem" ns="fields" />,
-      cell: ({ row }) => <ProblemCell plan={row.original} />,
+      accessorKey: "issuedDate",
+      header: () => <ColumnHeader tKey="issuedDate" ns="fields" />,
+      cell: ({ row }) => <span className="font-medium">{formatDate(row.original.issuedDate)}</span>,
     },
-    {
-      accessorKey: "solutionStatus",
-      header: () => <ColumnHeader tKey="solutionStatus" ns="fields" />,
-      cell: ({ row }) => <SolutionStatusCell plan={row.original} />,
-    },
-    {
-      accessorKey: "preD",
-      header: () => <ColumnHeader tKey="preD" ns="fields" />,
-      cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
-    },
-    {
-      accessorKey: "accD",
-      header: () => <ColumnHeader tKey="accD" ns="fields" />,
-      cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
-    },
-    {
-      accessorKey: "amt",
-      header: () => <ColumnHeader tKey="amt" ns="fields" />,
-      cell: ({ row }) => formatCurrency(row.original.amt),
-    },
-    { accessorKey: "th", header: () => <ColumnHeader tKey="th" ns="fields" /> },
-    {
-      accessorKey: "partNo",
-      header: () => <ColumnHeader tKey="partNo" ns="fields" />,
-      cell: ({ row }) => row.original.partNo || "—",
-    },
-    {
-      accessorKey: "status",
-      header: () => <ColumnHeader tKey="status" ns="fields" />,
-      cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
-    },
-    ...(canDelete
-      ? [
-          {
-            id: "actions",
-            header: "",
-            cell: ({ row }: { row: { original: RepairPlan } }) => (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-danger hover:text-danger"
-                onClick={() => onDelete(row.original)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            ),
-          } satisfies ColumnDef<RepairPlan, unknown>,
-        ]
-      : []),
   ]
 }
 

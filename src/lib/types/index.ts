@@ -683,6 +683,12 @@ export interface RepairPlanPart {
   productName: string
   inOut: "IN" | "OUT"
   quantity: number
+  // User-editable "when this part was actually used" — distinct from
+  // createdAt below (an unspoofable audit timestamp set only by the
+  // set_audit_columns trigger, never directly editable). Defaults to the
+  // repair record's own issued date when a part is added, but can be
+  // changed independently (e.g. logging a part from an earlier visit).
+  partDate: string
   createdAt: string
 }
 

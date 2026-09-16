@@ -196,6 +196,19 @@ export function DetailPanel({
   // One-off header button rendered before Edit (e.g. Member's "QR Code")
   // for pages that need an action beyond the generic Edit/Delete pair.
   headerActions,
+  // Opt-in, off by default. When true, this panel bounds itself to
+  // whatever real height its own ancestor chain gives it (h-full — Card's
+  // own base classes already include flex flex-col overflow-hidden, see
+  // ui/card.tsx) and scrolls its body (the field grid + extra) internally
+  // once that content is taller than the available space, instead of
+  // growing past it and letting <main> scroll the whole page. Only
+  // meaningful for a caller already inside a genuinely height-bounded
+  // ancestor (a fillHeight SplitViewLayout, e.g. repair-plan/page.tsx) —
+  // h-full has nothing real to resolve against otherwise. Every other
+  // existing caller (e.g. Customers' own Detail branch, which deliberately
+  // lets <main> scroll the whole page instead — see that page's own
+  // comment) leaves this unset and renders exactly as before.
+  fillHeight = false,
 }: {
   title: string
   icon?: LucideIcon
@@ -212,11 +225,12 @@ export function DetailPanel({
   children: React.ReactNode
   extra?: React.ReactNode
   headerActions?: React.ReactNode
+  fillHeight?: boolean
 }) {
   const { t } = useTranslation("common")
   return (
-    <Card className={cn(expanded && "min-h-[70vh]")}>
-      <CardHeader className="flex-row items-center justify-between gap-2 border-b">
+    <Card className={cn(expanded && "min-h-[70vh]", fillHeight && "h-full")}>
+      <CardHeader className={cn("flex-row items-center justify-between gap-2 border-b", fillHeight && "shrink-0")}>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             {Icon && <Icon className="h-4 w-4 shrink-0 text-primary" />}
@@ -265,7 +279,7 @@ export function DetailPanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-8 pt-6">
+      <CardContent className={cn("space-y-8 pt-6", fillHeight && "flex-1 min-h-0 overflow-y-auto pr-2")}>
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">{children}</div>
         {extra && <div className="space-y-6">{extra}</div>}
       </CardContent>
