@@ -294,19 +294,43 @@ export function InstallFormDialog({
       // the Add Member form has always silently used for a brand-new
       // member missing this info (see customer-defaults.ts).
       if (!findCustomerByOrderNumber(customers, saleListEntries, orderNo)) {
-        const newCustomer = await createCustomer.mutateAsync({
-          ...newMemberDefaults(),
+        // The order number alone doesn't resolve to an existing customer,
+        // but this can still be a genuinely existing member getting a NEW
+        // install logged under an order this app has no Sale List record
+        // of yet (or none at all, now that Order No. isn't required) —
+        // check the same multi-signal match handleCustomerLookupBlur
+        // already used for live autofill (exact Member Account# match
+        // first, then phone, then exact name) before assuming this is a
+        // brand-new customer. Skipping this check is exactly what caused a
+        // real bug: entering an EXISTING member's own Account# here hit
+        // createCustomer's unique-constraint violation ("This Member
+        // Account# already exists") instead of just linking to that
+        // customer — the blur handler already knew about the match, but
+        // nothing at submit time re-checked it before trying to create a
+        // duplicate.
+        const existingMatch = findExistingMemberMatch(customers, {
+          memberAccountNumber: values.memberAccountNumber,
+          contactNumber: values.contactNumber,
           fullName: values.name,
-          address: values.address ?? "",
-          contactNumber: values.contactNumber ?? "",
-          dispenserType: values.model,
-          installedDate: values.installedDate || undefined,
-          memberAccountNumber: values.memberAccountNumber || "",
-          email: "",
+          companyName: values.name,
         })
+        const customerId = existingMatch
+          ? existingMatch.customer.id
+          : (
+              await createCustomer.mutateAsync({
+                ...newMemberDefaults(),
+                fullName: values.name,
+                address: values.address ?? "",
+                contactNumber: values.contactNumber ?? "",
+                dispenserType: values.model,
+                installedDate: values.installedDate || undefined,
+                memberAccountNumber: values.memberAccountNumber || "",
+                email: "",
+              })
+            ).id
         await createSaleListEntry.mutateAsync({
           orderNumber: orderNo,
-          customerId: newCustomer.id,
+          customerId,
           installedDate: values.installedDate || undefined,
           productNo: "",
           sc: "",
