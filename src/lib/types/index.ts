@@ -662,6 +662,25 @@ export interface RepairPlan extends DispatchFields {
   scheduleJobId?: string
 }
 
+// One row of a repair record's related "Part No" line-items table (AppSheet
+// parity — see the repair_plan_parts migration). Distinct from
+// RepairPlan.partNo above (a single free-text summary field on the repair
+// record itself, kept as-is) — this is the real itemized list, one row per
+// part used on that specific repair visit.
+export interface RepairPlanPart {
+  id: string
+  repairPlanId: string
+  productId: string
+  // Denormalized from products at read time (sku/name) purely for display —
+  // never stored on this row itself, always joined live so a later catalog
+  // rename shows up on every past repair's parts list too.
+  productSku: string
+  productName: string
+  inOut: "IN" | "OUT"
+  quantity: number
+  createdAt: string
+}
+
 export interface CollectionPlan extends DispatchFields {
   id: string
   orderNo: string

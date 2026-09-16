@@ -13,5 +13,12 @@
   "noPlansFound": "수리 계획을 찾을 수 없습니다.",
   "deleteTitle": "이 수리 계획을 삭제하시겠습니까?",
   "deleteDescription": "이 수리 기록이 영구적으로 삭제됩니다.",
-  "noPlansForDate": "이 날짜에 해당하는 수리 계획이 없습니다."
+  "noPlansForDate": "이 날짜에 해당하는 수리 계획이 없습니다.",
+  "part": "부품",
+  "inOut": "입/출고",
+  "addPart": "부품 추가",
+  "selectProduct": "제품 선택",
+  "noPartsFound": "이 수리에 등록된 부품이 없습니다.",
+  "deletePartTitle": "이 부품을 삭제하시겠습니까?",
+  "deletePartDescription": "이 부품 항목이 수리 기록에서 영구적으로 삭제됩니다."
 }

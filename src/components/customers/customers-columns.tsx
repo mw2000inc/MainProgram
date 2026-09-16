@@ -80,7 +80,7 @@ export function getCustomerColumns({
     {
       accessorKey: "memberAccountNumber",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
+      meta: { headerClassName: "w-[150px] max-w-[150px] truncate", cellClassName: "w-[150px] max-w-[150px] truncate" },
       cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">{row.original.memberAccountNumber || "—"}</span>
       ),
@@ -92,7 +92,7 @@ export function getCustomerColumns({
       // the direct link to the full page.
       id: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      meta: { headerClassName: "w-35 max-w-35 truncate", cellClassName: "w-35 max-w-35" },
+      meta: { headerClassName: "w-[220px] max-w-[220px] truncate", cellClassName: "w-[220px] max-w-[220px]" },
       cell: ({ row }) => (
         <TruncatedCell value={row.original.companyName || row.original.fullName} className="font-medium" />
       ),
@@ -100,48 +100,48 @@ export function getCustomerColumns({
     {
       accessorKey: "fullName",
       header: () => <ColumnHeader tKey="contactPerson" ns="member" />,
-      meta: { headerClassName: "w-30 max-w-30 truncate", cellClassName: "w-30 max-w-30" },
+      meta: { headerClassName: "w-[160px] max-w-[160px] truncate", cellClassName: "w-[160px] max-w-[160px]" },
       cell: ({ row }) => <TruncatedCell value={row.original.fullName} />,
     },
     {
       accessorKey: "contactNumber",
       header: () => <ColumnHeader tKey="contactNumber1MainHeader" ns="member" />,
-      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
+      meta: { headerClassName: "w-[130px] max-w-[130px] truncate", cellClassName: "w-[130px] max-w-[130px] truncate" },
       cell: ({ row }) => row.original.contactNumber || "—",
     },
     {
       accessorKey: "contactNumber2",
       header: () => <ColumnHeader tKey="contactNumber2SubHeader" ns="member" />,
-      meta: { headerClassName: "w-27.5 max-w-27.5 truncate", cellClassName: "w-27.5 max-w-27.5 truncate" },
+      meta: { headerClassName: "w-[130px] max-w-[130px] truncate", cellClassName: "w-[130px] max-w-[130px] truncate" },
       cell: ({ row }) => row.original.contactNumber2 || "—",
     },
     {
       accessorKey: "address",
       header: () => <ColumnHeader tKey="address" ns="fields" />,
-      meta: { headerClassName: "w-40 max-w-40 truncate", cellClassName: "w-40 max-w-40" },
+      meta: { headerClassName: "w-[240px] max-w-[240px] truncate", cellClassName: "w-[240px] max-w-[240px]" },
       cell: ({ row }) => <TruncatedCell value={row.original.address} />,
     },
     {
-      // No fixed width requested for this one — under table-fixed it just
-      // takes its share of whatever's left after the fixed-width columns
-      // above, but still needs `truncate` so a long address doesn't
-      // visually bleed into the next cell (table-fixed doesn't wrap
-      // overflow into a scrollbar the way table-auto would; without
-      // overflow:hidden it just renders past the cell's own boundary).
       accessorKey: "email",
       header: () => <ColumnHeader tKey="emailAddress1Main" ns="member" />,
-      meta: { headerClassName: "truncate", cellClassName: "truncate" },
+      meta: { headerClassName: "w-[180px] max-w-[180px] truncate", cellClassName: "w-[180px] max-w-[180px] truncate" },
       cell: ({ row }) => <TruncatedCell value={row.original.email} />,
     },
     {
+      // Shrunk to its minimal required space — a TIN is a short fixed-format
+      // number, not free text, so it never needed the same room as the
+      // columns above (this was previously the unconstrained "whatever's
+      // left" column alongside Email, which left it far wider than its
+      // content ever used).
       accessorKey: "tin",
       header: () => <ColumnHeader tKey="tin" ns="member" />,
-      meta: { headerClassName: "truncate", cellClassName: "truncate" },
+      meta: { headerClassName: "w-[100px] max-w-[100px] truncate", cellClassName: "w-[100px] max-w-[100px] truncate" },
       cell: ({ row }) => row.original.tin || "—",
     },
     {
       id: "actions",
       header: "",
+      meta: { headerClassName: "w-[50px] max-w-[50px]", cellClassName: "w-[50px] max-w-[50px]" },
       cell: ({ row }) => (
         <RowActionsCell customer={row.original} canDelete={canDelete} onEdit={onEdit} onDelete={onDelete} />
       ),

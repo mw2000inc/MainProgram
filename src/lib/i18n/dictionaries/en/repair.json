@@ -13,5 +13,12 @@
   "noPlansFound": "No repair plans found.",
   "deleteTitle": "Delete this repair plan?",
   "deleteDescription": "This will permanently remove this repair record.",
-  "noPlansForDate": "No repair plans for this date."
+  "noPlansForDate": "No repair plans for this date.",
+  "part": "Part",
+  "inOut": "In/Out",
+  "addPart": "Add Part",
+  "selectProduct": "Select product",
+  "noPartsFound": "No parts recorded for this repair.",
+  "deletePartTitle": "Remove this part?",
+  "deletePartDescription": "This will permanently remove this part line item from the repair record."
 }

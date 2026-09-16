@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
+import { RepairPartsSection } from "@/components/repair/repair-parts-section"
 import { getRepairFullColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { useDeleteRepairPlans, useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -141,6 +142,7 @@ function RepairPlanPageContent() {
               expanded={selection.expanded}
               onToggleExpand={() => selection.setExpanded((v) => !v)}
               onClose={selection.close}
+              extra={<RepairPartsSection repairPlanId={selected.id} canEdit={isAdmin} />}
             >
               <DetailField label={tFields("issuedDate")} value={formatDate(selected.issuedDate)} />
               <DetailField label={tFields("orderNo")} value={selected.orderNo} />

@@ -214,14 +214,17 @@ export default function CustomersPage() {
     // h-full (not overflow-hidden) here — the Detail/Order-detail branches
     // below can carry natural, potentially-tall content that genuinely
     // needs to overflow and let <main> scroll it normally, same as always;
-    // only the list-view branch hard-bounds itself via its own
-    // overflow-hidden further down. h-full, not a viewport calc like
-    // h-[calc(100vh-4rem)] — <main> (see layout.tsx) already applies its
-    // own padding around this page's content, which a fixed viewport
-    // subtraction doesn't know about and would silently overshoot by,
-    // exactly the mismatch that let <main>'s own overflow-y-auto still
-    // engage alongside the table's internal scrollbar. h-full always
-    // resolves to <main>'s real, padding-correct available height instead.
+    // the list-view branch further down hard-bounds itself the same way
+    // for as long as its content actually fits (see its own comment on the
+    // Card's min-h-120 floor for the one deliberate exception). h-full,
+    // not a viewport calc like h-[calc(100vh-4rem)] — <main> (see
+    // layout.tsx) already applies its own padding around this page's
+    // content, which a fixed viewport subtraction doesn't know about and
+    // would silently overshoot by, exactly the mismatch that let <main>'s
+    // own overflow-y-auto still engage alongside the table's internal
+    // scrollbar. h-full always resolves to <main>'s real, padding-correct
+    // available height instead — this page never adds its own competing
+    // overflow-y-auto/min-h-screen on top of that single scroll region.
     <div className="flex h-full flex-col gap-6">
       {!selection.selected ? (
         // Everything above the table (heading row, map) is shrink-0 —
@@ -229,7 +232,15 @@ export default function CustomersPage() {
         // flex-1 share is exactly "whatever's left," not an estimate. See
         // data-table.tsx's own comment on why a sticky header needs a real
         // bounded scroll ancestor to actually work.
-        <div className="flex flex-1 min-h-0 flex-col gap-6 overflow-hidden">
+        //
+        // No overflow-hidden here (unlike a plain hard-bound branch) —
+        // the table Card below carries a min-h-120 (480px) floor (~10 rows)
+        // so it's never squeezed thinner than that, and on a viewport short
+        // enough that heading + map + that floor genuinely don't all fit,
+        // this wrapper needs to let the excess overflow upward to <main>
+        // (which already scrolls) rather than silently clipping rows off
+        // the bottom with no way to reach them.
+        <div className="flex flex-1 min-h-0 flex-col gap-6">
           <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
@@ -258,7 +269,7 @@ export default function CustomersPage() {
               height) keeps it a clean map overview instead of dominating
               the page the way a 600px-tall map matched to the table's own
               height used to. */}
-          <div className="h-75 shrink-0">
+          <div className="h-95 w-full shrink-0">
             <MemberMapPanel
               customers={scopedRows}
               focusCustomer={topSearchMatch}
@@ -266,17 +277,36 @@ export default function CustomersPage() {
             />
           </div>
 
-          <Card className="flex-1 min-h-0">
+          {/* min-h-120 (480px) instead of a plain min-h-0 floor —
+              guarantees the table area never gets squeezed below roughly
+              10 visible rows (~480px covers DataTable's own search bar +
+              header + row chrome, see data-table.tsx's TABLE_ROW_HEIGHT)
+              no matter how tall the map above grows or how short the
+              viewport is. Still flex-1 above that floor, so on any screen
+              with room to spare the table keeps claiming "whatever's left"
+              exactly as before — this only ever changes behavior in the
+              genuine squeeze case, where the wrapper above deliberately has
+              no overflow-hidden to clip it, so the excess is left for
+              <main> to scroll instead of silently hiding rows with no way
+              to reach them. */}
+          <Card className="flex-1 min-h-120">
             <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
               {/* table-fixed + each column's own fixed width (see
                   customers-columns.tsx's meta) means the table's total
-                  width is always the sum of its columns' assigned widths,
-                  never content-driven — so overflow-x-hidden here is a
-                  hard guarantee, not just a fallback: there is nothing left
-                  for a horizontal scrollbar to ever need to show, at any
-                  row count or screen width. flex-1 min-h-0 overflow-hidden
-                  is what hands DataTable's own h-full scroll box its exact
-                  bounded height instead of letting it grow to content. */}
+                  width is always the sum of its columns' assigned widths —
+                  1360px, now wider than most viewports since these were
+                  deliberately expanded for readability (Account Name,
+                  Address, etc.) at TIN #'s expense. min-w-[1360px] on the
+                  table itself (not just w-full) is what makes table-fixed
+                  actually honor each column's real pixel width instead of
+                  compressing them all to fit 100% of the container — and
+                  overflow-x-auto below is what turns that overflow into an
+                  inner scrollbar on this card instead of pushing the whole
+                  page wider (matches member-order-detail.tsx's own
+                  min-w-[1000px] w-full + overflow-x-auto pattern). flex-1
+                  min-h-0 overflow-hidden is what hands DataTable's own
+                  h-full scroll box its exact bounded height instead of
+                  letting it grow to content. */}
               <div className="flex-1 min-h-0 overflow-hidden">
                   <DataTable
                     columns={columns}
@@ -286,9 +316,9 @@ export default function CustomersPage() {
                     onSearchChange={setSearchQuery}
                     emptyMessage={t("noMembersFound")}
                     onRowClick={(row) => selection.open(row)}
-                    tableClassName="table-fixed w-full"
-                    tableContainerClassName="overflow-x-hidden"
-                    scrollContainerClassName="overflow-x-hidden"
+                    tableClassName="table-fixed min-w-[1360px] w-full"
+                    tableContainerClassName="overflow-x-auto"
+                    scrollContainerClassName="overflow-x-auto"
                     headerCellClassName="px-2 py-1.5"
                     bodyCellClassName="px-2 py-1.5"
                     toolbar={
