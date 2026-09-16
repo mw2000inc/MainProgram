@@ -154,16 +154,25 @@ export default function SaleListPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <BreadcrumbTrail
-        items={
-          selected
-            ? [{ label: "MW CP" }, { label: "Sales List", onClick: selection.close }, { label: selected.orderNumber }]
-            : [{ label: "MW CP" }, { label: "Sales List" }]
-        }
-      />
+    // h-full (not overflow-hidden) on this shared outer wrapper — the
+    // "selected" branch's Detail Panel below can carry a lot of content
+    // (order fields plus three related-record sub-tables) that genuinely
+    // needs to overflow and let <main> scroll it normally, same as before;
+    // only the plain-table branch (no selection) hard-bounds itself via its
+    // own overflow-hidden further down, rather than this wrapper doing it
+    // for both cases.
+    <div className="flex h-full flex-col gap-6">
+      <div className="shrink-0">
+        <BreadcrumbTrail
+          items={
+            selected
+              ? [{ label: "MW CP" }, { label: "Sales List", onClick: selection.close }, { label: selected.orderNumber }]
+              : [{ label: "MW CP" }, { label: "Sales List" }]
+          }
+        />
+      </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <ClipboardCheck className="h-6 w-6 text-primary" /> {tNav("saleList")}
@@ -189,10 +198,12 @@ export default function SaleListPage() {
           isOpen={selection.isOpen}
           expanded={selection.expanded}
           listWidth="narrow"
+          fillHeight
+          className="flex-1 min-h-0"
           list={
-            <Card>
-              <CardContent className="pt-6">
-                <div className="max-w-full overflow-x-auto">
+            <Card className="flex-1 min-h-0">
+              <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
+                <div className="flex-1 min-h-0 overflow-hidden">
                   <DataTable
                     columns={narrowColumns}
                     data={rows}
@@ -309,15 +320,12 @@ export default function SaleListPage() {
           }
         />
       ) : (
-        <Card>
-          <CardContent className="pt-6">
-            {/* Keeps any width expansion (e.g. every row rendered at once
-                with "Rows per page: All") isolated to a scrollbar inside
-                this card, instead of the table pushing the page itself
-                wider — DataTable's own <Table> already scrolls internally,
-                but this outer bound makes that containment explicit and
-                guarantees it holds regardless of ancestor layout. */}
-            <div className="max-w-full overflow-x-auto">
+        <Card className="flex-1 min-h-0">
+          <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
+            {/* flex-1 min-h-0 overflow-hidden is what hands DataTable's own
+                h-full scroll box its exact bounded height instead of
+                letting it grow to content. */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               <DataTable
                 columns={tableColumns}
                 data={rows}

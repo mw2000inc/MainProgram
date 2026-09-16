@@ -553,10 +553,15 @@ export function PendingApprovalsPanel({
   // usual same-utility-group override (see cn()'s deduping — same
   // mechanism the Full-Screen toggle's own sm:max-w-none fix already
   // relies on), leaving overflow-x-auto for wide columns intact and
-  // letting the table grow to its natural content height. Only the
+  // letting the table grow to its natural content height — still needed
+  // even though DataTable's own scroll box no longer has a default
+  // max-height of its own (h-full only, see that file's own comment): a
+  // fullscreen/dialog ancestor DOES give it a real bounded height to
+  // resolve h-full against, so overflow-y-auto would otherwise still open
+  // a second, nested scroll region inside the dialog's own. Only the
   // Schedule page's standalone tab (neither full-screen nor in a dialog,
-  // so nothing else nearby scrolls it) keeps its own bounded, independently
-  // scrolling max-h-[60vh] box.
+  // so nothing else nearby scrolls it) keeps its own bounded,
+  // independently scrolling max-h-[60vh] box.
   const tableScrollClassName = isFullScreen || renderedInDialog ? "overflow-y-visible" : "max-h-[60vh]"
 
   const toolbarAndTable = (
@@ -611,7 +616,6 @@ export function PendingApprovalsPanel({
         searchPlaceholder={t("searchPendingApprovals")}
         emptyMessage={t("noPendingApprovals")}
         scrollContainerClassName={tableScrollClassName}
-        stickyHeader
       />
     </>
   )

@@ -214,7 +214,10 @@ export function MemberMapPanel({
   }
 
   return (
-    <Card className="flex h-100 w-full flex-col">
+    // h-full, not a fixed height of its own — the page decides how tall
+    // this panel is (see customers/page.tsx's own h-75 wrapper) so the two
+    // can never disagree about the actual height being rendered.
+    <Card className="flex h-full w-full flex-col">
       <CardHeader className="gap-2 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <MapPin className="h-4 w-4 text-primary" /> {t("map")}

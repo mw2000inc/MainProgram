@@ -67,8 +67,14 @@ function InstallPageContent() {
   const selected = selection.selected
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    // h-full so this page's own share of <main> (already the app's one real
+    // scroll region — see layout.tsx) is a real, definite height rather
+    // than "however tall my content happens to be" — everything below that
+    // isn't the table area is shrink-0, so the table's flex-1 share is
+    // exactly "whatever's left," and its own internal scroll (see
+    // data-table.tsx's h-full) is the only thing that ever needs to move.
+    <div className="flex h-full flex-col gap-6 overflow-hidden">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <HardHat className="h-6 w-6 text-primary" /> {tNav("install")}
@@ -92,13 +98,15 @@ function InstallPageContent() {
       <SplitViewLayout
         isOpen={selection.isOpen}
         expanded={selection.expanded}
+        fillHeight
+        className="flex-1 min-h-0"
         list={
-          <Card>
-            <CardContent className="pt-6">
-              {/* Isolates any width expansion (e.g. every row rendered at
-                  once with "Rows per page: All") to a scrollbar inside this
-                  card instead of the table pushing the page itself wider. */}
-              <div className="max-w-full overflow-x-auto">
+          <Card className="flex-1 min-h-0">
+            <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
+              {/* flex-1 min-h-0 overflow-hidden is what hands DataTable's
+                  own h-full scroll box its exact bounded height instead of
+                  letting it grow to content. */}
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <DataTable
                   columns={columns}
                   data={plans}

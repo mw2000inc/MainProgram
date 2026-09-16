@@ -331,11 +331,17 @@ function InAndOutSummaryContent() {
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
+            {/* This div is already the single scroll region for the whole
+                dialog — scrollContainerClassName overrides DataTable's own
+                h-full scroll box (see data-table.tsx's own comment) so it
+                doesn't nest a second, independently-scrolling region
+                inside this one. */}
             <DataTable
               columns={columns}
               data={drilldownRows}
               emptyMessage={t("noMovementsFound")}
               pageSize={Math.max(drilldownRows.length, 1)}
+              scrollContainerClassName="overflow-y-visible"
             />
           </div>
         </DialogContent>

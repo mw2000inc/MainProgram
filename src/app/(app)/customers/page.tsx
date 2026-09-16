@@ -211,10 +211,26 @@ export default function CustomersPage() {
   // and detail side by side. The level you came from minimizes into a
   // breadcrumb crumb rather than staying visible.
   return (
-    <div className="space-y-6">
+    // h-full (not overflow-hidden) here — the Detail/Order-detail branches
+    // below can carry natural, potentially-tall content that genuinely
+    // needs to overflow and let <main> scroll it normally, same as always;
+    // only the list-view branch hard-bounds itself via its own
+    // overflow-hidden further down. h-full, not a viewport calc like
+    // h-[calc(100vh-4rem)] — <main> (see layout.tsx) already applies its
+    // own padding around this page's content, which a fixed viewport
+    // subtraction doesn't know about and would silently overshoot by,
+    // exactly the mismatch that let <main>'s own overflow-y-auto still
+    // engage alongside the table's internal scrollbar. h-full always
+    // resolves to <main>'s real, padding-correct available height instead.
+    <div className="flex h-full flex-col gap-6">
       {!selection.selected ? (
-        <>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        // Everything above the table (heading row, map) is shrink-0 —
+        // fixed to its own natural or assigned height — so the table's
+        // flex-1 share is exactly "whatever's left," not an estimate. See
+        // data-table.tsx's own comment on why a sticky header needs a real
+        // bounded scroll ancestor to actually work.
+        <div className="flex flex-1 min-h-0 flex-col gap-6 overflow-hidden">
+          <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
                 <Users className="h-6 w-6 text-primary" /> {tNav("member")}
@@ -236,27 +252,32 @@ export default function CustomersPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-6">
-            {/* Full-width banner above the table, rather than the old
-                side-by-side split — a fixed, shorter height (see
-                member-map-panel.tsx) keeps it a clean map overview instead
-                of dominating the page the way a 600px-tall map matched to
-                the table's own height used to. */}
+          {/* Full-width banner above the table, rather than the old
+              side-by-side split — a fixed height (see member-map-panel.tsx,
+              now h-full so this wrapper is the one true source of its
+              height) keeps it a clean map overview instead of dominating
+              the page the way a 600px-tall map matched to the table's own
+              height used to. */}
+          <div className="h-75 shrink-0">
             <MemberMapPanel
               customers={scopedRows}
               focusCustomer={topSearchMatch}
               onOpenDirections={setDirectionsTarget}
             />
-            <Card>
-              <CardContent className="pt-6">
-                {/* table-fixed + each column's own fixed width (see
-                    customers-columns.tsx's meta) means the table's total
-                    width is always the sum of its columns' assigned
-                    widths, never content-driven — so overflow-x-hidden
-                    here is a hard guarantee, not just a fallback: there is
-                    nothing left for a horizontal scrollbar to ever need to
-                    show, at any row count or screen width. */}
-                <div className="max-w-full overflow-x-hidden">
+          </div>
+
+          <Card className="flex-1 min-h-0">
+            <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
+              {/* table-fixed + each column's own fixed width (see
+                  customers-columns.tsx's meta) means the table's total
+                  width is always the sum of its columns' assigned widths,
+                  never content-driven — so overflow-x-hidden here is a
+                  hard guarantee, not just a fallback: there is nothing left
+                  for a horizontal scrollbar to ever need to show, at any
+                  row count or screen width. flex-1 min-h-0 overflow-hidden
+                  is what hands DataTable's own h-full scroll box its exact
+                  bounded height instead of letting it grow to content. */}
+              <div className="flex-1 min-h-0 overflow-hidden">
                   <DataTable
                     columns={columns}
                     data={scopedRows}
@@ -294,11 +315,10 @@ export default function CustomersPage() {
                       </>
                     }
                   />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : orderSelection.selected ? (
         <MemberOrderDetail
           customer={selection.selected}

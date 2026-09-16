@@ -120,6 +120,14 @@ export function SplitViewLayout({
   // detail panel takes the remaining space instead, matching AppSheet's own
   // list-is-a-picker layout once a record is drilled into.
   listWidth = "wide",
+  // Opt-in: stretches the list/detail columns to fill className's own
+  // height instead of each sizing to its own content (items-start, the
+  // default) — needed so a table inside `list` can bound its own internal
+  // scroll region (see data-table.tsx's own h-full comment) instead of the
+  // whole page scrolling past it. Off by default so every existing caller
+  // of this shared layout renders exactly as it did before this was added.
+  fillHeight = false,
+  className,
 }: {
   list: React.ReactNode
   detail: React.ReactNode
@@ -127,25 +135,42 @@ export function SplitViewLayout({
   expanded: boolean
   breakpoint?: "lg" | "xl"
   listWidth?: "wide" | "narrow"
+  fillHeight?: boolean
+  className?: string
 }) {
   if (isOpen && expanded) {
-    return <div>{detail}</div>
+    return <div className={className}>{detail}</div>
   }
   const narrow = listWidth === "narrow"
   return (
     <div
       className={cn(
-        "grid grid-cols-1 items-start gap-4",
+        "grid grid-cols-1 gap-4",
+        fillHeight ? "items-stretch" : "items-start",
+        // items-stretch alone does NOT make the list/detail columns fill
+        // this grid's own height — with no explicit row track, a CSS grid
+        // row defaults to grid-template-rows: auto (sized to its content,
+        // exactly like a flex-col child with no flex-grow), so stretch just
+        // matches list/detail to each OTHER's natural height, not to
+        // whatever flex-1/min-h-0 gives this container from its own
+        // parent. grid-rows-[minmax(0,1fr)] is the actual fix: it makes the
+        // (single, implicit) row consume 100% of this grid's own height,
+        // which is what a table inside `list` needs an unbroken chain of
+        // real heights down to (see data-table.tsx's own h-full comment) —
+        // without this, DataTable's h-full silently resolves to nothing no
+        // matter how many ancestors above this grid are correctly bounded.
+        fillHeight && "grid-rows-[minmax(0,1fr)]",
         // Both arbitrary-value classes are written out in full (not built via
         // string interpolation) so Tailwind's static scanner picks them up.
         isOpen && breakpoint === "lg" && !narrow && "lg:grid-cols-[minmax(0,1fr)_400px]",
         isOpen && breakpoint === "lg" && narrow && "lg:grid-cols-[280px_minmax(0,1fr)]",
         isOpen && breakpoint === "xl" && !narrow && "xl:grid-cols-[minmax(0,1fr)_400px]",
-        isOpen && breakpoint === "xl" && narrow && "xl:grid-cols-[280px_minmax(0,1fr)]"
+        isOpen && breakpoint === "xl" && narrow && "xl:grid-cols-[280px_minmax(0,1fr)]",
+        className
       )}
     >
-      <div className="min-w-0">{list}</div>
-      {isOpen && <div className="min-w-0">{detail}</div>}
+      <div className={cn("min-w-0", fillHeight && "flex min-h-0 flex-col")}>{list}</div>
+      {isOpen && <div className={cn("min-w-0", fillHeight && "flex min-h-0 flex-col")}>{detail}</div>}
     </div>
   )
 }

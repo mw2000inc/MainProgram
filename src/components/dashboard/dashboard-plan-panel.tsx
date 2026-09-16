@@ -324,6 +324,16 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         tableContainerClassName={tableContainerClassName}
         tableClassName={isExpanded ? (expandedTableClassName ?? tableClassName) : tableClassName}
         getRowClassName={getRowClassName}
+        // The expanded dialog view's own div (see below, "flex-1 min-h-0
+        // overflow-y-auto") is already the single scroll region for
+        // everything in it — DataTable's own h-full scroll box would
+        // otherwise nest a second, independently-scrolling region inside
+        // it once that div's own bounded height gives h-full something
+        // real to resolve against, exactly the double-scrollbar shape this
+        // app has already fixed once elsewhere. The compact (non-expanded)
+        // case keeps the default — it's the one genuinely relying on
+        // DataTable's own scroll.
+        scrollContainerClassName={isExpanded ? "overflow-y-visible" : undefined}
       />
     </div>
   )

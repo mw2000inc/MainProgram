@@ -78,35 +78,30 @@ interface DataTableProps<TData> {
   onRowClick?: (row: TData) => void
   // Extra className per row (e.g. strikethrough for completed/inactive entries).
   getRowClassName?: (row: TData) => string | undefined
-  // Extra classes merged onto the scrolling table wrapper itself — e.g. the
-  // Daily Report's Filter Change/Collection panels opt into
-  // scrollbar-always-visible (see globals.css) so their wide, inline-
-  // editable column set's horizontal scroll is obvious without a hover/
-  // scroll gesture first. Every other call site leaves this unset and gets
-  // the exact wrapper classes as before.
+  // Extra classes merged onto the one real scroll wrapper (see that div's
+  // own comment below — both this and scrollContainerClassName land on the
+  // SAME element now, ui/table.tsx's own container no longer scrolls at
+  // all) — e.g. the Daily Report's Filter Change/Collection panels opt
+  // into scrollbar-always-visible (see globals.css) so their wide,
+  // inline-editable column set's horizontal scroll is obvious without a
+  // hover/scroll gesture first. Every other call site leaves this unset
+  // and gets the exact wrapper classes as before.
   tableContainerClassName?: string
   // Extra classes merged onto the actual <table> element (not its wrapper)
   // — e.g. an explicit min-w-[...] to guarantee the table itself is wide
-  // enough to force tableContainerClassName's overflow-x-auto to actually
+  // enough to force the scroll wrapper's overflow-x-auto to actually
   // engage, regardless of how narrow any individual cell's own content
   // happens to be. Every other call site leaves this unset and gets the
   // plain w-full table as before.
   tableClassName?: string
-  // Extra classes merged onto the OUTER scrolling wrapper (the one with
-  // `overflow-y-auto` — see that div's own comment below for why it's a
-  // separate element from tableContainerClassName's target). Every other
-  // call site leaves this unset, so overflow-y-auto stays inert exactly as
-  // before (no bounded height to actually clip/scroll against) — this is
-  // how a caller opts a specific table into a real, fixed-height scrolling
-  // body (e.g. `"max-h-[60vh]"`) without changing that behavior anywhere
-  // else in the app.
+  // Extra classes merged onto the same real scroll wrapper as
+  // tableContainerClassName above. Every other call site leaves this
+  // unset, so overflow-y-auto stays inert exactly as before (no bounded
+  // height to actually clip/scroll against) — this is how a caller opts a
+  // specific table into a real, fixed-height scrolling body (e.g.
+  // `"max-h-[60vh]"`) without changing that behavior anywhere else in the
+  // app.
   scrollContainerClassName?: string
-  // Pins the header row in place while the body scrolls past it —
-  // deliberately opt-in (not unconditional) even though `position: sticky`
-  // is a no-op without a bounded scroll height, since every other caller
-  // leaving this unset should render byte-for-byte as it did before this
-  // was added, not depend on that no-op behavior actually holding.
-  stickyHeader?: boolean
   // Merged onto every <TableHead>/<TableCell> in this table instance (in
   // addition to any per-column meta.headerClassName/cellClassName a column
   // itself sets) — e.g. tighter uniform padding for a table under strict
@@ -136,7 +131,6 @@ export function DataTable<TData>({
   tableContainerClassName,
   tableClassName,
   scrollContainerClassName,
-  stickyHeader,
   headerCellClassName,
   bodyCellClassName,
 }: DataTableProps<TData>) {
@@ -205,19 +199,59 @@ export function DataTable<TData>({
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
       </div>
 
-      {/* tableContainerClassName goes to Table's own containerClassName
-          below, not this div — that inner div (data-slot="table-container")
-          is the one whose own overflow-x actually scrolls, since it's the
-          direct parent of <table> itself; this outer div's own overflow-x-
-          auto is inert (its child never grows wider than it — the inner
-          div contains that overflow internally), only overflow-y-auto here
-          ever does anything. A custom scrollbar style passed via
-          tableContainerClassName (e.g. scrollbar-always-visible) landing
-          here instead of the inner div would never actually render,
-          exactly the bug this now avoids. */}
-      <div className={cn("min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto", scrollContainerClassName)}>
-        <Table className={tableClassName} containerClassName={tableContainerClassName}>
-          <TableHeader className={cn(stickyHeader && "sticky top-0 z-10 bg-card")}>
+      {/* This is the ONE real scroll container for the whole table — both
+          tableContainerClassName and scrollContainerClassName land here.
+          ui/table.tsx's own inner container div used to also carry
+          overflow-x-auto, on the theory that it could independently scroll
+          horizontally while this outer div handled vertical scroll — a
+          real headless-browser test proved that wrong: overflow-x: auto
+          and overflow-y: visible cannot coexist on the same element (the
+          browser unconditionally couples the axes), so that inner div was
+          silently becoming its own dead-end vertical scroll container and
+          swallowing position: sticky's binding before it ever reached this
+          div. See ui/table.tsx's own comment for the full story. Now there
+          is exactly one scrolling element between <thead> and the rest of
+          the page, and both axes are handled together right here.
+
+          h-full is what actually makes overflow-y-auto (and, with it,
+          TableHeader's own sticky top-0) do anything — but a percentage
+          height only ever resolves to something real when this div's own
+          parent chain is itself height-bounded all the way up (a caller
+          opting into a real flex-1 min-h-0 wrapper — see customers/
+          page.tsx, and SplitViewLayout's own fillHeight prop for the
+          Collection/Install/Filter Change/Repair/Inventory/Sale List
+          pages). A caller that hasn't been restructured that way simply
+          gets `auto` here — the table grows to its natural height and
+          the ancestor page scrolls it normally instead, exactly as this
+          whole app did before any of this sticky-header work — never
+          broken, just not internally-scrolling. scrollContainerClassName
+          overrides this per caller exactly as before (e.g. the Daily
+          Report's own panels pass "max-h-[60vh]", or inside an
+          already-scrolling fullscreen dialog, "overflow-y-visible
+          max-h-none" — see pending-approvals-panel.tsx's
+          tableScrollClassName and dashboard-plan-panel.tsx/inventory's
+          in-and-out page for the same pattern).
+
+          relative isn't load-bearing for the sticky computation itself
+          (position: sticky binds to the nearest scrolling ancestor
+          regardless of that ancestor's own position value) but pins down
+          this div as the real containing block for anything absolutely
+          positioned inside the table in the future, rather than leaving
+          that implicit.
+
+          w-full is likewise already implied by this being a flex-1 child
+          of a flex-col parent (stretch is the cross-axis default),
+          spelled out here anyway per the same defensive reasoning as
+          relative above. */}
+      <div
+        className={cn(
+          "relative h-full w-full min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto",
+          scrollContainerClassName,
+          tableContainerClassName
+        )}
+      >
+        <Table className={tableClassName}>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
