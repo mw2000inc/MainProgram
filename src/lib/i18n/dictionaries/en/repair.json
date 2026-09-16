@@ -11,6 +11,7 @@
   "pageDescription": "Full list of repair requests and their status.",
   "searchPlaceholder": "Search by account name or order no...",
   "searchPlaceholderDates": "Search dates...",
+  "noMemberAccount": "No Member Account#",
   "noPlansFound": "No repair plans found.",
   "deleteTitle": "Delete this repair plan?",
   "deleteDescription": "This will permanently remove this repair record.",

@@ -20,10 +20,13 @@ import {
   type RepairOrderGroup,
 } from "@/components/repair/repair-columns"
 import { useDeleteRepairPlans, useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
+import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
@@ -38,6 +41,13 @@ function RepairPlanPageContent() {
   const { data: plans = [], isPending } = useRepairPlans()
   const deletePlans = useDeleteRepairPlans()
   const updatePlan = useUpdateRepairPlan()
+  // Resolving a repair record to a real member — repair_plans has no
+  // customer_id of its own, so this reuses the same two lookups the Add/Edit
+  // form's own autofill already relies on (see customer-lookup.ts): the
+  // order_no -> sale_list_entries -> customers bridge first, then an exact
+  // Account Name match against an existing customer's own full/company name.
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
 
   // Deep link from e.g. the Daily Report's Repair Plan panel (?id=<planId>)
   // — drills all the way in to that specific record's own detail panel, not
@@ -54,34 +64,78 @@ function RepairPlanPageContent() {
   // "Expand" dialog) is open, if any.
   const [partsModalRepairId, setPartsModalRepairId] = React.useState<string | null>(null)
 
-  // One row per distinct order_no — repeat visits for the same order
-  // (different dates) collapse into a single row here; drilling into one
-  // reveals its own list of dates instead of every field inline. Most
-  // recent date first within each group, which is also where latestDate
-  // (MAX(issued_date) for that order — its own sortable column, see
-  // getRepairOrderGroupColumns) comes from: recomputed fresh from `plans`
-  // every time, never a stored value, so a newly added repair immediately
-  // becomes the latest without anything else needing to change.
+  // One row per distinct MEMBER (Member Account#) rather than per order_no —
+  // a member with several different order numbers (repeat repairs logged
+  // under separate orders) collapses into one row here, with `records`
+  // spanning every one of those orders.
+  //
+  // Resolution tries the strongest signal first (an actual order ->
+  // sale_list_entries -> customers link), then falls back to an exact
+  // Account Name match against an existing customer — the same two lookups
+  // customer-lookup.ts already provides for the Add/Edit form's own
+  // autofill, not a new matching strategy invented here.
+  //
+  // A record that resolves neither way (no matching order, no matching
+  // name, or a matched customer with no member account number assigned)
+  // falls back to being grouped by its own (trimmed, case-insensitive)
+  // Account Name text instead — so e.g. two same-named walk-in repairs
+  // still collapse together even without a real member match, rather than
+  // silently dropping the record, merging it into an unrelated member, or
+  // leaving it stranded as its own row per order (there's no order_no
+  // column shown here anymore to tell those apart by anyway). See
+  // getRepairOrderGroupColumns' own MemberAccountCell for how the "no real
+  // match" case is displayed.
+  //
+  // Most recent date first within each group, which is also where
+  // latestDate (MAX(issued_date) across the group — its own sortable
+  // column) comes from: recomputed fresh from `plans` every time, never a
+  // stored value, so a newly added repair immediately becomes the latest
+  // without anything else needing to change.
   const orderGroups = React.useMemo<RepairOrderGroup[]>(() => {
-    const map = new Map<string, RepairPlan[]>()
+    const byMember = new Map<string, RepairPlan[]>()
+    const byAccountName = new Map<string, RepairPlan[]>()
     for (const p of plans) {
-      const list = map.get(p.orderNo)
+      const viaOrder = findCustomerByOrderNumber(customers, saleListEntries, p.orderNo)
+      const viaName = viaOrder
+        ? undefined
+        : findExistingMemberMatch(customers, { fullName: p.accountName, companyName: p.accountName })?.customer
+      const memberAccountNumber = (viaOrder ?? viaName)?.memberAccountNumber?.trim()
+      const map = memberAccountNumber ? byMember : byAccountName
+      const key = memberAccountNumber || p.accountName.trim().toLowerCase()
+      const list = map.get(key)
       if (list) list.push(p)
-      else map.set(p.orderNo, [p])
+      else map.set(key, [p])
     }
-    return Array.from(map, ([orderNo, records]) => {
+
+    function toGroup(id: string, memberAccountNumber: string | undefined, records: RepairPlan[]): RepairOrderGroup {
       const sorted = [...records].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
       return {
-        id: orderNo,
-        orderNo,
+        id,
+        memberAccountNumber,
         accountName: sorted[0].accountName,
         latestDate: sorted[0].issuedDate,
         records: sorted,
       }
-    })
-  }, [plans])
+    }
 
-  const orderSelection = useSplitViewSelection(filteredGroups, initialPlan?.orderNo)
+    const linkedGroups = Array.from(byMember, ([memberAccountNumber, records]) =>
+      toGroup(`member:${memberAccountNumber}`, memberAccountNumber, records)
+    )
+    const unlinkedGroups = Array.from(byAccountName, ([accountNameKey, records]) =>
+      toGroup(`name:${accountNameKey}`, undefined, records)
+    )
+    return [...linkedGroups, ...unlinkedGroups]
+  }, [plans, customers, saleListEntries])
+
+  // Whichever group's own `records` actually contains the deep-linked
+  // plan — not recomputed via a separate lookup, so it can never disagree
+  // with however orderGroups itself just resolved that same record.
+  const initialGroupId = React.useMemo(
+    () => (initialPlan ? orderGroups.find((g) => g.records.some((r) => r.id === initialPlan.id))?.id : undefined),
+    [orderGroups, initialPlan]
+  )
+
+  const orderSelection = useSplitViewSelection(filteredGroups, initialGroupId)
   // The specific repair visit (date) shown within the drilled-into order —
   // scoped to that order's own records, not the full plans list, so Prev/
   // Next steps through this order's dates rather than every unrelated
@@ -168,7 +222,11 @@ function RepairPlanPageContent() {
           <BreadcrumbTrail
             items={[
               { label: tNav("repairPlan"), onClick: orderSelection.close },
-              { label: `#${orderSelection.selected.orderNo} — ${orderSelection.selected.accountName}` },
+              {
+                label: orderSelection.selected.memberAccountNumber
+                  ? `${orderSelection.selected.memberAccountNumber} — ${orderSelection.selected.accountName}`
+                  : orderSelection.selected.accountName,
+              },
             ]}
           />
           {/* Level 2 + 3 combined: a narrow list of this order's own repair

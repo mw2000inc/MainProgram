@@ -1,11 +1,13 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
+import { Badge } from "@/components/ui/badge"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { RepairPlan } from "@/lib/types"
 
@@ -101,42 +103,71 @@ export function getRepairColumns({
   ]
 }
 
-// One row per distinct order_no on the standalone /repair-plan list page —
-// `records` is every repair_plans row sharing that order (repeat visits),
-// most recent first, so records[0].issuedDate is always the latest one;
+// One row per distinct customer (Member Account#) on the standalone
+// /repair-plan list page — `records` is every repair_plans row for that
+// member, across every order number they've ever had a repair under, most
+// recent first, so records[0].issuedDate is always the latest one;
 // latestDate just names that value so it can be its own real, sortable
 // column property instead of something the cell recomputes on every render.
-// Built by repair-plan/page.tsx, not read from any API directly
-// (repair_plans has no real "order" table of its own to query) — so it's
-// always derived fresh from whatever repair_plans rows currently exist for
-// that order, never a stored value that could drift out of date.
+//
+// repair_plans has no direct customer_id FK (confirmed by investigation —
+// neither it nor install_plans has ever had one), so the member is resolved
+// the same way the Add/Edit form's own autofill already does: first the
+// order_no -> sale_list_entries.order_number -> customers bridge
+// (customer-lookup.ts's findCustomerByOrderNumber), then — if that finds
+// nothing — an exact Account Name match against an existing customer's own
+// full/company name (findExistingMemberMatch, the same lookup that form's
+// Account Name field already uses for autofill). memberAccountNumber is
+// left undefined when NEITHER resolves (no matching order, no matching
+// name, or a matched customer with no member account number assigned yet)
+// — those records fall back to being grouped by their own (normalized)
+// Account Name text instead of being silently dropped, merged into an
+// unrelated member, or left as separate rows per order; see
+// repair-plan/page.tsx's own orderGroups for exactly how that split works.
+//
+// Built by repair-plan/page.tsx, not read from any API directly (there's no
+// real "order"/"member repair summary" table to query) — always derived
+// fresh from whatever repair_plans/sale_list_entries/customers rows
+// currently exist, never a stored value that could drift out of date.
 export interface RepairOrderGroup {
   id: string
-  orderNo: string
+  memberAccountNumber?: string
   accountName: string
   latestDate: string
   records: RepairPlan[]
 }
 
+function MemberAccountCell({ group }: { group: RepairOrderGroup }) {
+  const { t } = useTranslation("repair")
+  if (group.memberAccountNumber) {
+    return <span className="font-mono text-sm">{group.memberAccountNumber}</span>
+  }
+  return (
+    <Badge variant="outline" className="font-normal text-muted-foreground">
+      {t("noMemberAccount")}
+    </Badge>
+  )
+}
+
 // The standalone /repair-plan list page's own columns — deliberately just
-// these three (Order No, Customer Name, Latest Repair Date), one row per
-// distinct order rather than one per repair visit. Clicking a row (via
-// DataTable's own onRowClick, same as every other list page here — no
-// per-cell handler needed since every column should behave the same way)
-// drills into that order's own list of repair dates instead of opening a
-// single record's detail panel directly; see repair-plan/page.tsx's own
-// onRowClick={orderSelection.open}.
+// these three (Account Name, Member Account#, Latest Repair Date), one row
+// per distinct member rather than one per order or per repair visit.
+// Clicking a row (via DataTable's own onRowClick, same as every other list
+// page here — no per-cell handler needed since every column should behave
+// the same way) drills into that member's own list of repair dates across
+// every order instead of opening a single record's detail panel directly;
+// see repair-plan/page.tsx's own onRowClick={orderSelection.open}.
 export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknown>[] {
   return [
-    {
-      accessorKey: "orderNo",
-      header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.orderNo}</span>,
-    },
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+    },
+    {
+      accessorKey: "memberAccountNumber",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <MemberAccountCell group={row.original} />,
     },
     {
       accessorKey: "latestDate",

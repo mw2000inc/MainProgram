@@ -11,6 +11,7 @@
   "pageDescription": "수리 요청 및 상태의 전체 목록입니다.",
   "searchPlaceholder": "계정 이름 또는 주문 번호로 검색...",
   "searchPlaceholderDates": "날짜 검색...",
+  "noMemberAccount": "회원 계정 번호 없음",
   "noPlansFound": "수리 계획을 찾을 수 없습니다.",
   "deleteTitle": "이 수리 계획을 삭제하시겠습니까?",
   "deleteDescription": "이 수리 기록이 영구적으로 삭제됩니다.",
