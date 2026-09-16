@@ -17,6 +17,7 @@ type Row = {
   part_no: string | null
   amt: number
   unit_in_out: string
+  sc: string | null
   contact_number: string | null
   in_out: string | null
   model: string | null
@@ -62,6 +63,7 @@ function fromRow(row: Row): RepairPlan {
     partNo: row.part_no ?? undefined,
     amt: row.amt,
     unitInOut: row.unit_in_out,
+    sc: row.sc ?? undefined,
     contactNumber: row.contact_number ?? undefined,
     inOut: row.in_out ?? undefined,
     model: row.model ?? undefined,
@@ -107,6 +109,7 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.partNo !== undefined) row.part_no = input.partNo || null
   if (input.amt !== undefined) row.amt = input.amt
   if (input.unitInOut !== undefined) row.unit_in_out = input.unitInOut
+  if (input.sc !== undefined) row.sc = input.sc || null
   if (input.contactNumber !== undefined) row.contact_number = input.contactNumber || null
   if (input.inOut !== undefined) row.in_out = input.inOut || null
   if (input.model !== undefined) row.model = input.model || null

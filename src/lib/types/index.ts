@@ -637,6 +637,10 @@ export interface RepairPlan extends DispatchFields {
   partNo?: string
   amt: number
   unitInOut: string
+  // A directly-entered field, not pulled/joined from sale_list_entries.sc
+  // (a different table's own field of the same name) — see the
+  // repair_plan_sc_field migration (20260929000000).
+  sc?: string
   // AppSheet's own SalesSchedule form fields — the same set install_plans
   // has, since a repair job can also involve selling/installing a
   // replacement unit (20260925000000 migration). `inOut` ("IN"/"OUT") is

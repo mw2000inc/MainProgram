@@ -69,6 +69,9 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     partNo: z.string().optional(),
     amt: moneySchema(t),
     unitInOut: z.string().min(1),
+    // A directly-entered field, not pulled/joined from Sale List's own S/C
+    // field — see the repair_plan_sc_field migration.
+    sc: z.string().optional(),
     // AppSheet's own SalesSchedule form fields — see the RepairPlan type's
     // own comment on why these coexist with the repair-specific fields
     // above rather than replacing any of them.
@@ -105,6 +108,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
       partNo: plan.partNo ?? "",
       amt: String(plan.amt ?? 0),
       unitInOut: plan.unitInOut,
+      sc: plan.sc ?? "",
       contactNumber: plan.contactNumber ?? "",
       inOut: plan.inOut ?? "",
       model: plan.model ?? "",
@@ -133,6 +137,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     partNo: "",
     amt: "0",
     unitInOut: "In",
+    sc: "",
     contactNumber: "",
     inOut: "",
     model: "",
@@ -547,6 +552,19 @@ export function RepairFormDialog({
                       OUT
                     </Button>
                   </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sc"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("sc")}</FormLabel>
+                  <FormControl>
+                    <Input placeholder={t("optional")} {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

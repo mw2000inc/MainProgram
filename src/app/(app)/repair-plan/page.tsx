@@ -241,6 +241,8 @@ function RepairPlanPageContent() {
                   <DetailField label={tFields("issuedDate")} value={formatDate(selected.issuedDate)} />
                   <DetailField label={tFields("orderNo")} value={selected.orderNo} />
                   <DetailField label={tFields("accountName")} value={selected.accountName} />
+                  <DetailField label={tFields("sc")} value={selected.sc} />
+                  <DetailField label={tFields("model")} value={selected.model} />
                   <DetailField label={tFields("unitInOut")} value={selected.unitInOut} />
                   <DetailField label={tFields("problem")} value={selected.problem} className="sm:col-span-2" />
                   <DetailField label={tFields("solutionStatus")} value={selected.solutionStatus} className="sm:col-span-2" />
