@@ -82,6 +82,7 @@ function AddPartDialog({
   const { data: products = [] } = useProducts()
   const createPart = useCreateRepairPlanPart()
   const [partText, setPartText] = React.useState("")
+  const [partNoText, setPartNoText] = React.useState("")
   const [inOutText, setInOutText] = React.useState("IN")
   const [quantity, setQuantity] = React.useState("1")
 
@@ -91,13 +92,32 @@ function AddPartDialog({
   // into products, and a DB check(in_out in ('IN','OUT')) respectively),
   // so submission only ever fires once the typed text resolves to exactly
   // one of those real values; canSubmit below is what enforces that.
-  const partOptions: ComboboxOption[] = React.useMemo(
-    () => products.map((p) => ({ value: `${p.sku} — ${p.name}` })),
-    [products]
-  )
+  const formatPart = React.useCallback((p: (typeof products)[number]) => `${p.sku} — ${p.name}`, [])
+  const partOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: formatPart(p) })), [
+    products,
+    formatPart,
+  ])
+  const partNoOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: p.sku })), [products])
   const inOutOptions: ComboboxOption[] = React.useMemo(() => [{ value: "IN" }, { value: "OUT" }], [])
 
-  const selectedProduct = products.find((p) => `${p.sku} — ${p.name}` === partText)
+  // Part and Part No are two independent, clickable entry points into the
+  // SAME product catalog — picking one auto-fills the other so they can
+  // never drift out of sync, both ultimately resolving to one real
+  // products row (there's no such thing as a Part No without a Part, or
+  // vice versa; repair_plan_parts.product_id is a single FK).
+  function handlePartChange(value: string) {
+    setPartText(value)
+    const match = products.find((p) => formatPart(p) === value)
+    if (match) setPartNoText(match.sku)
+  }
+
+  function handlePartNoChange(value: string) {
+    setPartNoText(value)
+    const match = products.find((p) => p.sku === value)
+    if (match) setPartText(formatPart(match))
+  }
+
+  const selectedProduct = products.find((p) => formatPart(p) === partText && p.sku === partNoText)
   const resolvedInOut = inOutText.trim().toUpperCase()
   const canSubmit = !!selectedProduct && (resolvedInOut === "IN" || resolvedInOut === "OUT") && Number(quantity) > 0
 
@@ -114,14 +134,20 @@ function AddPartDialog({
                 part can be found by typing its code, not just its (often
                 long) description — matches the table's own Part No/Part
                 split below. */}
-            <Combobox value={partText} onChange={setPartText} options={partOptions} placeholder={t("selectProduct")} />
+            <Combobox value={partText} onChange={handlePartChange} options={partOptions} placeholder={t("selectProduct")} />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{tFields("partNo")}</label>
-            {/* Read-only — Part No is the selected product's own sku, not a
-                separately-entered value (repair_plan_parts.product_id is a
-                real FK into the products catalog). */}
-            <Input value={selectedProduct?.sku ?? ""} placeholder={t("selectProduct")} disabled />
+            {/* Independently typable/clickable, same as Part above — picking
+                a suggestion here (or in Part) auto-fills the other field via
+                handlePartNoChange/handlePartChange, so they always describe
+                the same product. */}
+            <Combobox
+              value={partNoText}
+              onChange={handlePartNoChange}
+              options={partNoOptions}
+              placeholder={t("selectProduct")}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
