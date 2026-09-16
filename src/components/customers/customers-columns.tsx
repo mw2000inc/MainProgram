@@ -104,14 +104,21 @@ export function getCustomerColumns({
       cell: ({ row }) => <TruncatedCell value={row.original.fullName} />,
     },
     {
+      // Column header intentionally shorter than the shared
+      // contactNumber1MainHeader/contactNumber2SubHeader/emailAddress1Main
+      // labels below — those are also used by the Member detail panel
+      // (customers/page.tsx) and the customer-facing portal
+      // (customer-scan-view.tsx), which still want the fuller "Contact
+      // Number 1 (Main)" wording, so this table header gets its own,
+      // narrower-column-appropriate key instead of changing the shared one.
       accessorKey: "contactNumber",
-      header: () => <ColumnHeader tKey="contactNumber1MainHeader" ns="member" />,
+      header: () => <ColumnHeader tKey="contact1ColumnHeader" ns="member" />,
       meta: { headerClassName: "w-[130px] max-w-[130px] truncate", cellClassName: "w-[130px] max-w-[130px] truncate" },
       cell: ({ row }) => row.original.contactNumber || "—",
     },
     {
       accessorKey: "contactNumber2",
-      header: () => <ColumnHeader tKey="contactNumber2SubHeader" ns="member" />,
+      header: () => <ColumnHeader tKey="contact2ColumnHeader" ns="member" />,
       meta: { headerClassName: "w-[130px] max-w-[130px] truncate", cellClassName: "w-[130px] max-w-[130px] truncate" },
       cell: ({ row }) => row.original.contactNumber2 || "—",
     },
@@ -123,7 +130,7 @@ export function getCustomerColumns({
     },
     {
       accessorKey: "email",
-      header: () => <ColumnHeader tKey="emailAddress1Main" ns="member" />,
+      header: () => <ColumnHeader tKey="emailColumnHeader" ns="member" />,
       meta: { headerClassName: "w-[180px] max-w-[180px] truncate", cellClassName: "w-[180px] max-w-[180px] truncate" },
       cell: ({ row }) => <TruncatedCell value={row.original.email} />,
     },
