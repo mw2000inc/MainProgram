@@ -14,6 +14,13 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
 import type { CollectionPlan } from "@/lib/types"
 
+// The linked customer's own "SK001-####" order_number, never rendered as a
+// column — exists purely so DataTable's generic search on the standalone
+// /collection-plan list can find an entry by that number too, not just its
+// own "001-####" orderNo (see collection-plan/page.tsx's own row-building
+// comment).
+export type CollectionRow = CollectionPlan & { customerOrderNumber: string }
+
 // Kept as "Collected" rather than the other three modules' "Completed" —
 // this is a payment record, and "Collected" is what the rest of this app
 // (collections-form-dialog's own STATUS_OPTIONS, PlanStatusBadge's tone
@@ -282,8 +289,8 @@ export function getCollectionsFullColumns({
   onDelete: (entry: CollectionPlan) => void
   onEditDate: (entry: CollectionPlan) => void
   onStatusChange?: (entry: CollectionPlan, status: string) => void
-}): ColumnDef<CollectionPlan, unknown>[] {
-  const columns: ColumnDef<CollectionPlan, unknown>[] = [
+}): ColumnDef<CollectionRow, unknown>[] {
+  const columns: ColumnDef<CollectionRow, unknown>[] = [
     {
       accessorKey: "orderNo",
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
@@ -333,6 +340,11 @@ export function getCollectionsFullColumns({
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.note} className="text-muted-foreground" />,
+    },
+    {
+      accessorKey: "paymentType",
+      header: () => <ColumnHeader tKey="paymentType" ns="fields" />,
+      cell: ({ row }) => row.original.paymentType || "—",
     },
     {
       accessorKey: "filterChangeRequired",
@@ -388,6 +400,7 @@ export const COLLECTIONS_EXPORT_COLUMNS = [
   { header: "Pre D", key: "preD" },
   { header: "Acc D", key: "accD" },
   { header: "Note", key: "note" },
+  { header: "Payment Type", key: "paymentType" },
   { header: "Source", key: "source" },
   { header: "Serviceman", key: "serviceman" },
   { header: "Status", key: "status" },

@@ -91,7 +91,7 @@ export default function SaleListPage() {
         const accountLabel = customer
           ? `${customer.memberAccountNumber ? customer.memberAccountNumber + " — " : ""}${customer.companyName || customer.fullName}`
           : ""
-        return { ...e, accountLabel }
+        return { ...e, accountLabel, customerOrderNumber: customer?.orderNumber ?? "" }
       }),
     [entries, customers]
   )

@@ -49,6 +49,8 @@ import enSettings from "@/lib/i18n/dictionaries/en/settings.json"
 import koSettings from "@/lib/i18n/dictionaries/ko/settings.json"
 import enNotifications from "@/lib/i18n/dictionaries/en/notifications.json"
 import koNotifications from "@/lib/i18n/dictionaries/ko/notifications.json"
+import enAllCollection from "@/lib/i18n/dictionaries/en/allCollection.json"
+import koAllCollection from "@/lib/i18n/dictionaries/ko/allCollection.json"
 
 // One namespace file per feature domain (see the phased build plan) — keeps
 // 1,500+ eventual keys organized instead of one giant dictionary.
@@ -76,6 +78,7 @@ export type Namespace =
   | "activity"
   | "settings"
   | "notifications"
+  | "allCollection"
 
 type Dictionary = Record<string, string>
 
@@ -104,6 +107,7 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     activity: enActivity,
     settings: enSettings,
     notifications: enNotifications,
+    allCollection: enAllCollection,
   },
   ko: {
     common: koCommon,
@@ -129,6 +133,7 @@ const DICTIONARIES: Record<Locale, Record<Namespace, Dictionary>> = {
     activity: koActivity,
     settings: koSettings,
     notifications: koNotifications,
+    allCollection: koAllCollection,
   },
 }
 

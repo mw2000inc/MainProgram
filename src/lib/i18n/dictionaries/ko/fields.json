@@ -42,6 +42,7 @@
   "yearMonthPlan": "연월 계획",
   "issuedDate": "접수일",
   "latestRepairDate": "최근 수리일",
+  "latestInstallDate": "최근 설치일",
   "partNo": "부품 번호",
   "companyName": "회사명",
   "fullName": "이름",
@@ -67,6 +68,7 @@
   "account": "계정#",
   "accountMember": "계정# (회원)",
   "paymentMode": "결제 방식",
+  "paymentType": "결제 유형",
   "receiptNo": "영수증 번호",
   "salesPerson": "영업 담당자",
   "via": "경로"

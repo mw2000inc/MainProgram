@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import { wrapSupabaseError } from "@/lib/supabase/errors"
 import type { InstallPlan } from "@/lib/types"
 
 type Row = {
@@ -38,6 +39,9 @@ type Row = {
   rejected_at: string | null
   rejection_reason: string | null
   reschedule_reason: string | null
+  collected: boolean
+  collected_by: string | null
+  collected_at: string | null
 }
 
 function fromRow(row: Row): InstallPlan {
@@ -77,6 +81,9 @@ function fromRow(row: Row): InstallPlan {
     rejectedAt: row.rejected_at ?? undefined,
     rejectionReason: row.rejection_reason ?? undefined,
     rescheduleReason: row.reschedule_reason ?? undefined,
+    collected: row.collected,
+    collectedBy: row.collected_by ?? undefined,
+    collectedAt: row.collected_at ?? undefined,
   }
 }
 
@@ -103,6 +110,9 @@ function toRow(input: Partial<Omit<InstallPlan, "id" | "createdAt">>) {
   if (input.via !== undefined) row.via = input.via || null
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
+  if (input.collected !== undefined) row.collected = input.collected
+  if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null
+  if (input.collectedAt !== undefined) row.collected_at = input.collectedAt || null
   return row
 }
 
@@ -124,22 +134,22 @@ export async function listInstallPlans(): Promise<InstallPlan[]> {
 
 export async function createInstallPlan(input: Omit<InstallPlan, "id" | "createdAt">): Promise<InstallPlan> {
   const { data, error } = await supabase.from("install_plans").insert(toRow(input)).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function updateInstallPlan(id: string, input: Partial<Omit<InstallPlan, "id" | "createdAt">>): Promise<InstallPlan> {
   const { data, error } = await supabase.from("install_plans").update(toRow(input)).eq("id", id).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function deleteInstallPlan(id: string): Promise<void> {
   const { error } = await supabase.from("install_plans").delete().eq("id", id)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }
 
 export async function deleteInstallPlans(ids: string[]): Promise<void> {
   const { error } = await supabase.from("install_plans").delete().in("id", ids)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }

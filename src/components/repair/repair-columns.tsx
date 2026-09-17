@@ -135,6 +135,13 @@ export interface RepairOrderGroup {
   accountName: string
   latestDate: string
   records: RepairPlan[]
+  // Every order number that should find this group by search — each
+  // record's own orderNo plus the linked customer's own order_number when
+  // resolved, space-joined. Never rendered as a column: `records` is an
+  // array of objects, which DataTable's generic Object.values() search
+  // can't see into at all, so without this field order-number search on
+  // this list was completely blind to every repair record.
+  orderNumbers: string
 }
 
 function MemberAccountCell({ group }: { group: RepairOrderGroup }) {

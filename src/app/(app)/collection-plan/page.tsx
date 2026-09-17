@@ -12,12 +12,15 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
-import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS } from "@/components/collections/collections-columns"
+import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS, type CollectionRow } from "@/components/collections/collections-columns"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
+import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 
@@ -34,6 +37,8 @@ function CollectionPlanPageContent() {
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
   const { data: entries = [], isPending } = useCollections()
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const deleteEntries = useDeleteCollections()
   const updateEntry = useUpdateCollection()
 
@@ -46,24 +51,37 @@ function CollectionPlanPageContent() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<CollectionPlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<CollectionPlan | undefined>(undefined)
-  const [filteredRows, setFilteredRows] = React.useState<CollectionPlan[]>(entries)
+  const [filteredRows, setFilteredRows] = React.useState<CollectionRow[]>([])
+
+  // Folds in the linked customer's own "SK001-####" order_number (see
+  // customer-lookup.ts's resolveCustomerForPlan) — this entry's own orderNo
+  // ("001-####") is already searchable directly, this was the missing
+  // direction, same gap the Sep 11 Member List fix closed there.
+  const rows: CollectionRow[] = React.useMemo(
+    () =>
+      entries.map((e) => ({
+        ...e,
+        customerOrderNumber: resolveCustomerForPlan(customers, saleListEntries, e.customerId, e.orderNo)?.orderNumber ?? "",
+      })),
+    [entries, customers, saleListEntries]
+  )
 
   const selection = useSplitViewSelection(filteredRows, initialId)
   useDeepLinkNotFoundToast(initialId, isPending, entries.some((e) => e.id === initialId))
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()
-    for (const e of entries) {
+    for (const e of rows) {
       const ym = yearMonth(e.collectionDate)
       counts.set(ym, (counts.get(ym) ?? 0) + 1)
     }
     return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month))
-  }, [entries])
+  }, [rows])
 
   const scopedEntries = React.useMemo(() => {
-    if (selectedMonth === "all") return entries
-    return entries.filter((e) => yearMonth(e.collectionDate) === selectedMonth)
-  }, [entries, selectedMonth])
+    if (selectedMonth === "all") return rows
+    return rows.filter((e) => yearMonth(e.collectionDate) === selectedMonth)
+  }, [rows, selectedMonth])
 
   const columns = React.useMemo(
     () =>

@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
 import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { NAV_ITEMS } from "@/components/layout/nav-items"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { buildRelatedOrderNumbersByCustomerId } from "@/lib/customer-lookup"
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
@@ -25,7 +27,16 @@ export function CommandPalette() {
   const { t } = useTranslation("nav")
 
   const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { data: products = [] } = useProducts()
+
+  // Same fold as the Member List (see customer-lookup.ts's own comment) —
+  // without this, a customer could only ever be found here by their own
+  // "SK001-####" number, never by any of their orders' "001-####" ones.
+  const relatedOrderNumbersByCustomerId = React.useMemo(
+    () => buildRelatedOrderNumbersByCustomerId(customers, saleListEntries),
+    [customers, saleListEntries]
+  )
 
   const pages = NAV_ITEMS.filter((item) => {
     if (item.adminOnly && user?.role !== "admin") return false
@@ -76,16 +87,23 @@ export function CommandPalette() {
             ))}
           </CommandGroup>
           <CommandGroup heading={t("member")}>
-            {customers.slice(0, 30).map((c) => (
-              <CommandItem key={c.id} value={`member ${c.fullName} ${c.contractNumber} ${c.companyName ?? ""}`} onSelect={() => go(`/customers/${c.id}`)}>
-                <Users className="text-secondary" />
-                <span>{c.companyName || c.fullName}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{c.contractNumber}</span>
-              </CommandItem>
-            ))}
+            {customers.map((c) => {
+              const relatedOrders = relatedOrderNumbersByCustomerId.get(c.id)?.join(" ") ?? ""
+              return (
+                <CommandItem
+                  key={c.id}
+                  value={`member ${c.fullName} ${c.orderNumber} ${c.memberAccountNumber} ${relatedOrders} ${c.companyName ?? ""}`}
+                  onSelect={() => go(`/customers/${c.id}`)}
+                >
+                  <Users className="text-secondary" />
+                  <span>{c.companyName || c.fullName}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{c.orderNumber}</span>
+                </CommandItem>
+              )
+            })}
           </CommandGroup>
           <CommandGroup heading={t("products")}>
-            {products.slice(0, 30).map((p) => (
+            {products.map((p) => (
               <CommandItem key={p.id} value={`product ${p.name} ${p.sku}`} onSelect={() => go(`/inventory`)}>
                 <Package className="text-success" />
                 <span>{p.name}</span>

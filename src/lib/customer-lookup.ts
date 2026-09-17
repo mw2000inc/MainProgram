@@ -35,6 +35,46 @@ export function findCustomerByOrderNumber(
   return customers.find((c) => c.orderNumber.trim() === trimmed)
 }
 
+// Every sale_list_entries.order_number belonging to each customer (matched
+// the same way findCustomerByOrderNumber does: customerId when the sale
+// entry has one, else a literal customers.order_number fallback) — shared
+// by the Member List's own search (see CustomerRow.relatedOrderNumbers) and
+// the global command palette, so a customer can be found by any of their
+// orders' "001-####" numbers, not just their own "SK001-####" one, in both
+// places at once rather than two copies of this logic drifting apart.
+export function buildRelatedOrderNumbersByCustomerId(
+  customers: Customer[],
+  saleListEntries: SaleListEntry[]
+): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const customer of customers) {
+    const orders = saleListEntries
+      .filter((e) => (e.customerId ? e.customerId === customer.id : e.orderNumber === customer.orderNumber))
+      .map((e) => e.orderNumber.trim())
+    if (orders.length > 0) map.set(customer.id, orders)
+  }
+  return map
+}
+
+// The reverse direction of findCustomerByOrderNumber above: given a plan
+// record's own customerId (when its table tracks one directly — Filter
+// Change/Collection/Schedule/Sale List all do) and/or its own order number,
+// resolve back to the customer it belongs to. Trusts an explicit customerId
+// link first, falling back to the same order-number bridge for tables that
+// don't have one at all (InstallPlan has no customer_id column).
+export function resolveCustomerForPlan(
+  customers: Customer[],
+  saleListEntries: SaleListEntry[],
+  customerId: string | undefined,
+  orderNumber: string
+): Customer | undefined {
+  if (customerId) {
+    const direct = customers.find((c) => c.id === customerId)
+    if (direct) return direct
+  }
+  return findCustomerByOrderNumber(customers, saleListEntries, orderNumber)
+}
+
 function normalizePhoneDigits(value: string): string {
   return value.replace(/\D/g, "")
 }

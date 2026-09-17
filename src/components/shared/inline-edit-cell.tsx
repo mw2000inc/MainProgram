@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Input } from "@/components/ui/input"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import {
   Select,
   SelectContent,
@@ -194,6 +195,49 @@ export function InlineSelectCell({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+// Same draft/blur-commit shape as InlineTextCell above, wrapping the shared
+// Combobox instead of a plain Input — for a field that needs "pick from
+// suggestions or type your own" (e.g. Collections' Payment Type) rather
+// than InlineSelectCell's locked list. Combobox itself commits per
+// keystroke via onChange; wrapping it in the same draft state InlineTextCell
+// uses means typing doesn't fire a save on every character, only on blur.
+export function InlineComboboxCell({
+  value,
+  options,
+  placeholder,
+  onCommit,
+  className,
+}: {
+  value: string | undefined
+  options: ComboboxOption[]
+  placeholder?: string
+  onCommit: (next: string) => void
+  className?: string
+}) {
+  // Same "adjust state during render, not in an effect" resync pattern as
+  // InlineTextCell above — see its comment.
+  const [lastSeenValue, setLastSeenValue] = React.useState(value)
+  const [draft, setDraft] = React.useState(value ?? "")
+  if (value !== lastSeenValue) {
+    setLastSeenValue(value)
+    setDraft(value ?? "")
+  }
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="inline-block">
+      <Combobox
+        value={draft}
+        onChange={setDraft}
+        options={options}
+        placeholder={placeholder}
+        className={cn("h-7 w-[150px] text-xs", className)}
+        onBlur={() => {
+          if (draft !== (value ?? "")) onCommit(draft)
+        }}
+      />
     </div>
   )
 }

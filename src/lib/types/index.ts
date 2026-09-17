@@ -618,6 +618,20 @@ export interface InstallPlan extends DispatchFields {
   // auto_create_schedule_job_on_confirm migration) -- links to the
   // Schedule panel entry (schedule_jobs) auto-created/reused for it.
   scheduleJobId?: string
+  // Whether this record's money has actually been collected — separate
+  // from `status` above (that's dispatch/visit status, not a payment
+  // signal — see the all_collection_collected_flag migration). Only ever
+  // set via an explicit admin action in the All Collection view. Optional
+  // here (defaults false at the database level) so nothing on the Add form
+  // needs to set it.
+  collected?: boolean
+  // Who approved it and when (see the collected_audit_fields migration) —
+  // separate from the generic createdBy/updatedBy audit columns, which a
+  // later unrelated edit would silently overwrite. Cleared back to
+  // undefined whenever collected is un-set; only ever written by the All
+  // Collection view's own toggle/reassign actions.
+  collectedBy?: string
+  collectedAt?: string
 }
 
 export interface RepairPlan extends DispatchFields {
@@ -664,6 +678,13 @@ export interface RepairPlan extends DispatchFields {
   // auto_create_schedule_job_on_confirm migration) -- links to the
   // Schedule panel entry (schedule_jobs) auto-created/reused for it.
   scheduleJobId?: string
+  // See InstallPlan.collected's own comment — same field, same purpose,
+  // same all_collection_collected_flag migration.
+  collected?: boolean
+  // See InstallPlan.collectedBy/collectedAt's own comment — same fields,
+  // same purpose, same collected_audit_fields migration.
+  collectedBy?: string
+  collectedAt?: string
 }
 
 // One row of a repair record's related "Part No" line-items table (AppSheet
@@ -736,4 +757,16 @@ export interface CollectionPlan extends DispatchFields {
   // track of which row is which.
   saleListEntryId?: string
   occurrenceIndex?: number
+  // See InstallPlan.collected's own comment — same field, same purpose,
+  // same all_collection_collected_flag migration.
+  collected?: boolean
+  // See InstallPlan.collectedBy/collectedAt's own comment — same fields,
+  // same purpose, same collected_audit_fields migration.
+  collectedBy?: string
+  collectedAt?: string
+  // GCash/Card/Bank/Cash/Check presets, but freely typable (see the
+  // Combobox on the Add/Edit form) — same nullable free-text convention as
+  // InstallPlan/RepairPlan's own paymentMode (collection_payment_type
+  // migration).
+  paymentType?: string
 }

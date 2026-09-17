@@ -12,18 +12,21 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
-import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS } from "@/components/filter-change/filter-change-columns"
+import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS, type FilterChangeRow } from "@/components/filter-change/filter-change-columns"
 import {
   useBulkSuggestTechnicians,
   useDeleteFilterChangePlans,
   useFilterChangePlans,
   useUpdateFilterChangePlan,
 } from "@/lib/hooks/use-filter-change-plans"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
 import { extractCityLabel } from "@/lib/geo/city-label"
+import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { suggestTechnician as fetchSuggestedTechnician, type TechnicianSuggestion } from "@/lib/api/filter-change-plans"
 import type { FilterChangePlan } from "@/lib/types"
@@ -41,6 +44,8 @@ function FilterChangePageContent() {
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
   const { data: plans = [], isPending } = useFilterChangePlans()
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const deletePlans = useDeleteFilterChangePlans()
   const updatePlan = useUpdateFilterChangePlan()
   const bulkSuggest = useBulkSuggestTechnicians()
@@ -55,7 +60,20 @@ function FilterChangePageContent() {
   const [editing, setEditing] = React.useState<FilterChangePlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<FilterChangePlan | undefined>(undefined)
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
-  const [filteredRows, setFilteredRows] = React.useState<FilterChangePlan[]>(plans)
+  const [filteredRows, setFilteredRows] = React.useState<FilterChangeRow[]>([])
+
+  // Folds in the linked customer's own "SK001-####" order_number (see
+  // customer-lookup.ts's resolveCustomerForPlan) — this plan's own
+  // orderNumber ("001-####") is already searchable directly, this was the
+  // missing direction, same gap the Sep 11 Member List fix closed there.
+  const rows: FilterChangeRow[] = React.useMemo(
+    () =>
+      plans.map((p) => ({
+        ...p,
+        customerOrderNumber: resolveCustomerForPlan(customers, saleListEntries, p.customerId, p.orderNumber)?.orderNumber ?? "",
+      })),
+    [plans, customers, saleListEntries]
+  )
   // Cached per plan id so re-selecting the same plan doesn't re-fire the
   // suggestion API — this is a read-only comparison shown in the detail
   // panel ("would clustering suggest someone else?"), never applied
@@ -97,17 +115,17 @@ function FilterChangePageContent() {
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()
-    for (const p of plans) {
+    for (const p of rows) {
       const ym = yearMonth(p.planDate)
       counts.set(ym, (counts.get(ym) ?? 0) + 1)
     }
     return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month))
-  }, [plans])
+  }, [rows])
 
   const scopedPlans = React.useMemo(() => {
-    if (selectedMonth === "all") return plans
-    return plans.filter((p) => yearMonth(p.planDate) === selectedMonth)
-  }, [plans, selectedMonth])
+    if (selectedMonth === "all") return rows
+    return rows.filter((p) => yearMonth(p.planDate) === selectedMonth)
+  }, [rows, selectedMonth])
 
   const unassignedInView = React.useMemo(() => scopedPlans.filter((p) => !p.serviceman.trim()), [scopedPlans])
 

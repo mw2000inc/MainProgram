@@ -26,12 +26,26 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
 import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { formatDate, todayIso } from "@/lib/utils"
 import { TECHNICIANS } from "@/lib/constants"
+import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
+
+// The linked customer's own "SK001-####" order_number, never rendered as a
+// column — exists purely so DataTable's generic search on the Schedule
+// List view can find a job by that number too, not just its own
+// "001-####" orderNo (same gap the Sep 11 Member List fix closed
+// elsewhere). Kept local to this page rather than added to ScheduleRow in
+// schedule-columns.tsx, since getScheduleColumns is also shared by
+// PendingApprovalsPanel/PendingScheduleApprovalPanel, which pass plain
+// ScheduleJob rows — widening its own exported type would break those.
+type ScheduleRow = ScheduleJob & { customerOrderNumber: string }
 
 function ScheduleContent() {
   const { user } = useAuth()
@@ -41,6 +55,8 @@ function ScheduleContent() {
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
   const { data: jobs = [], isPending } = useScheduleJobs()
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const deleteJob = useDeleteScheduleJob()
 
   // Deep link from the Activity Log (?id=<jobId>) — opens that job's detail
@@ -52,7 +68,7 @@ function ScheduleContent() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ScheduleJob | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<ScheduleJob | undefined>(undefined)
-  const [filteredRows, setFilteredRows] = React.useState<ScheduleJob[]>(jobs)
+  const [filteredRows, setFilteredRows] = React.useState<ScheduleRow[]>([])
   const [view, setView] = React.useState<"list" | "table">("list")
   const [tableDate, setTableDate] = React.useState(todayIso)
   const [tab, setTab] = React.useState<"schedule" | "pending" | "pendingSchedule">("schedule")
@@ -63,6 +79,19 @@ function ScheduleContent() {
   // he's only the second technician, same as if he were primary.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
 
+  // Folds in the linked customer's own "SK001-####" order_number (see
+  // customer-lookup.ts's resolveCustomerForPlan) — this job's own orderNo
+  // ("001-####") is already searchable directly, this was the missing
+  // direction, same gap the Sep 11 Member List fix closed there.
+  const jobsWithOrder: ScheduleRow[] = React.useMemo(
+    () =>
+      jobs.map((j) => ({
+        ...j,
+        customerOrderNumber: resolveCustomerForPlan(customers, saleListEntries, j.customerId, j.orderNo ?? "")?.orderNumber ?? "",
+      })),
+    [jobs, customers, saleListEntries]
+  )
+
   const scopedJobs = React.useMemo(() => {
     // The main Schedule tab (List + Table View) shows only active/approved
     // jobs — a manually-created job still awaiting admin approval
@@ -72,7 +101,7 @@ function ScheduleContent() {
     // sessions CAN read pending_approval rows (RLS lets them; a technician
     // can't), so without this filter they'd otherwise show up mixed into
     // the active schedule here.
-    const active = jobs.filter((j) => j.status !== "pending_approval")
+    const active = jobsWithOrder.filter((j) => j.status !== "pending_approval")
     const base = technicianFilter === "all" ? active : active.filter((j) => matchesTechnician(j, technicianFilter))
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
@@ -91,7 +120,7 @@ function ScheduleContent() {
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobs, technicianFilter])
+  }, [jobsWithOrder, technicianFilter])
 
   // Same computation ScheduleAgenda uses (see computeStopNumbers' own
   // comment on why it's shared) — the List view and the Daily Report panel
@@ -118,13 +147,19 @@ function ScheduleContent() {
     [filteredRows]
   )
 
+  // getScheduleColumns is typed against plain ScheduleJob since it's also
+  // shared by PendingApprovalsPanel/PendingScheduleApprovalPanel (see
+  // ScheduleRow's own comment above) — cast here rather than widen that
+  // shared function, since the columns it returns only ever read
+  // ScheduleJob's own fields and every row this page actually hands them is
+  // a real ScheduleRow at runtime regardless.
   const columns = React.useMemo(
     () =>
       getScheduleColumns({
         canDelete: isAdmin,
         onDelete: (job) => setDeleting(job),
         stopNumberByJobId,
-      }),
+      }) as ColumnDef<ScheduleRow, unknown>[],
     [isAdmin, stopNumberByJobId]
   )
 

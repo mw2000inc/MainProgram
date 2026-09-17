@@ -6,10 +6,13 @@
   "customerOrBusinessName": "Customer or business name",
   "installationAddress": "Installation address",
   "pageDescription": "Full list of scheduled and completed installations.",
-  "searchPlaceholder": "Search by name, order no, address...",
+  "searchPlaceholder": "Search by name or order no...",
+  "searchPlaceholderDates": "Search dates...",
+  "noMemberAccount": "No Member Account#",
   "noPlansFound": "No install plans found.",
   "deleteTitle": "Delete this install plan?",
   "deleteDescription": "This will permanently remove this install record.",
   "noPlansForDate": "No installs for this date.",
+  "selectDatePrompt": "Select a date to view its details.",
   "memberAccountNumberHint": "Only used if this order creates a new member"
 }

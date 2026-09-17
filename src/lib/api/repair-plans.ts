@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import { wrapSupabaseError } from "@/lib/supabase/errors"
 import type { RepairPlan } from "@/lib/types"
 
 type Row = {
@@ -45,6 +46,9 @@ type Row = {
   rejected_at: string | null
   rejection_reason: string | null
   reschedule_reason: string | null
+  collected: boolean
+  collected_by: string | null
+  collected_at: string | null
 }
 
 function fromRow(row: Row): RepairPlan {
@@ -91,6 +95,9 @@ function fromRow(row: Row): RepairPlan {
     rejectedAt: row.rejected_at ?? undefined,
     rejectionReason: row.rejection_reason ?? undefined,
     rescheduleReason: row.reschedule_reason ?? undefined,
+    collected: row.collected,
+    collectedBy: row.collected_by ?? undefined,
+    collectedAt: row.collected_at ?? undefined,
   }
 }
 
@@ -124,6 +131,9 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.via !== undefined) row.via = input.via || null
   if (input.note !== undefined) row.note = input.note || null
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
+  if (input.collected !== undefined) row.collected = input.collected
+  if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null
+  if (input.collectedAt !== undefined) row.collected_at = input.collectedAt || null
   return row
 }
 
@@ -145,22 +155,22 @@ export async function listRepairPlans(): Promise<RepairPlan[]> {
 
 export async function createRepairPlan(input: Omit<RepairPlan, "id" | "createdAt">): Promise<RepairPlan> {
   const { data, error } = await supabase.from("repair_plans").insert(toRow(input)).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function updateRepairPlan(id: string, input: Partial<Omit<RepairPlan, "id" | "createdAt">>): Promise<RepairPlan> {
   const { data, error } = await supabase.from("repair_plans").update(toRow(input)).eq("id", id).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function deleteRepairPlan(id: string): Promise<void> {
   const { error } = await supabase.from("repair_plans").delete().eq("id", id)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }
 
 export async function deleteRepairPlans(ids: string[]): Promise<void> {
   const { error } = await supabase.from("repair_plans").delete().in("id", ids)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }

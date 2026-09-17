@@ -31,14 +31,23 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { COLLECTION_PAYMENT_TYPES } from "@/lib/constants"
 import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 import type { CollectionPlan } from "@/lib/types"
+
+// Preset suggestions offered below the field — still a real text input (see
+// the Combobox below), so a custom/unlisted payment type is always typable
+// and never rejected. Same "pick from suggestions or type your own" pattern
+// as Install's Model/Model(dp) fields, not the locked Select Install's own
+// (differently-worded) Payment Mode field uses.
+const PAYMENT_TYPE_OPTIONS: ComboboxOption[] = COLLECTION_PAYMENT_TYPES.map((v) => ({ value: v }))
 
 // This form had no way to actually mark a collection Collected before —
 // status could only ever be read, never changed, from this dialog. Matches
@@ -59,6 +68,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     preD: dateFieldSchema(t),
     accD: dateFieldSchema(t),
     note: z.string().optional(),
+    paymentType: z.string().optional(),
   })
 }
 
@@ -76,6 +86,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
       preD: entry.preD ?? "",
       accD: entry.accD ?? "",
       note: entry.note ?? "",
+      paymentType: entry.paymentType ?? "",
     }
   }
   return {
@@ -88,6 +99,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
     preD: "",
     accD: "",
     note: "",
+    paymentType: "",
   }
 }
 
@@ -297,6 +309,19 @@ export function CollectionsFormDialog({
                     <FormLabel>{tFields("accD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="paymentType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("paymentType")}</FormLabel>
+                    <FormControl>
+                      <Combobox value={field.value ?? ""} onChange={field.onChange} options={PAYMENT_TYPE_OPTIONS} placeholder="—" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

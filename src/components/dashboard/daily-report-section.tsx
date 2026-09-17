@@ -41,6 +41,7 @@ import {
 } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { DispatchApprovalQueue, useDispatchApprovalCount } from "@/components/dashboard/dispatch-approval-queue"
+import { AllCollectionDialog } from "@/components/dashboard/all-collection-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
@@ -260,6 +261,7 @@ export function DailyReportSection() {
   const { t: tInventory } = useTranslation("inventory")
   const { t: tDispatch } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
+  const { t: tAllCollection } = useTranslation("allCollection")
 
   // Same collapse mechanism as a split-view detail panel — the nav rail goes
   // icon-only for as long as this section is mounted (i.e. the Daily Report
@@ -432,6 +434,12 @@ export function DailyReportSection() {
   // on close.
   const [pendingApprovalsQueueOpen, setPendingApprovalsQueueOpen] = React.useState(false)
   const pendingApprovalsCount = usePendingApprovalsCount()
+
+  // All Collection — the cross-module payments view (see
+  // all-collection-dialog.tsx). No count badge: unlike the three queues
+  // above, this isn't an approval backlog to clear, it's a browsable ledger
+  // that always shows every record regardless of collected status.
+  const [allCollectionOpen, setAllCollectionOpen] = React.useState(false)
 
   const deleteFilterChangePlans = useDeleteFilterChangePlans()
   const deleteInstallPlans = useDeleteInstallPlans()
@@ -796,6 +804,17 @@ export function DailyReportSection() {
               onOpenChange={setPendingApprovalsQueueOpen}
               historyDefaultDate={reportDate}
             />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setAllCollectionOpen(true)}
+            >
+              <Banknote className="h-3.5 w-3.5" />
+              {tAllCollection("buttonLabel")}
+            </Button>
+            <AllCollectionDialog open={allCollectionOpen} onOpenChange={setAllCollectionOpen} />
           </>
         )}
       </div>

@@ -15,6 +15,13 @@ import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
 
+// The linked customer's own "SK001-####" order_number, never rendered as a
+// column — exists purely so DataTable's generic search on the standalone
+// /filter-change list can find a plan by that number too, not just this
+// plan's own "001-####" orderNumber (see filter-change/page.tsx's own
+// row-building comment).
+export type FilterChangeRow = FilterChangePlan & { customerOrderNumber: string }
+
 // The plain address string, plus a best-effort recognized-area label
 // underneath (see city-label.ts) — the closest thing this table has to a
 // "location at a glance" column, since filter_change_plans has no
@@ -312,8 +319,8 @@ export function getFilterChangeFullColumns({
   canDelete: boolean
   onDelete: (plan: FilterChangePlan) => void
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
-}): ColumnDef<FilterChangePlan, unknown>[] {
-  const columns: ColumnDef<FilterChangePlan, unknown>[] = [
+}): ColumnDef<FilterChangeRow, unknown>[] {
+  const columns: ColumnDef<FilterChangeRow, unknown>[] = [
     {
       accessorKey: "orderNumber",
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,

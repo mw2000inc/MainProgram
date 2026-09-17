@@ -32,6 +32,13 @@ export const PRODUCT_CATEGORIES = [
 
 export const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Credit Card", "GCash", "Check"] as const
 
+// Collections' own Payment Type presets — deliberately a separate list from
+// PAYMENT_METHODS above (Install's own Payment Mode field): different
+// wording ("Card"/"Bank" vs. "Credit Card"/"Bank Transfer"), different
+// field, offered via a typable Combobox rather than PAYMENT_METHODS' own
+// locked Select, so this isn't the same vocabulary just reused.
+export const COLLECTION_PAYMENT_TYPES = ["GCash", "Card", "Bank", "Cash", "Check"] as const
+
 export const PAYMENT_STATUSES = ["Paid", "Pending", "Overdue", "Partial"] as const
 
 export const STOCK_MOVEMENT_REASONS = ["Restock", "Return", "Damaged", "Adjustment"] as const

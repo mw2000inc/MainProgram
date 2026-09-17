@@ -11,7 +11,17 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { SaleListEntry } from "@/lib/types"
 
-export type SaleListRow = SaleListEntry & { accountLabel: string }
+export type SaleListRow = SaleListEntry & {
+  accountLabel: string
+  // The linked customer's own "SK001-####" order_number, never rendered —
+  // exists purely so DataTable's generic search can find an order by that
+  // number too, not just this entry's own "001-####" orderNumber (see
+  // sale-list/page.tsx's own row-building comment). Optional: this type is
+  // also reused by other pages (Member List's Related Sales table, CP
+  // System, the customer portal) that build their own accountLabel rows
+  // without a search box to fix, so they don't need to populate it.
+  customerOrderNumber?: string
+}
 
 function NoteCell({ entry }: { entry: SaleListRow }) {
   if (!entry.note) return <span className="text-muted-foreground">—</span>

@@ -42,6 +42,7 @@
   "yearMonthPlan": "Year Month Plan",
   "issuedDate": "Issued Date",
   "latestRepairDate": "Latest Repair Date",
+  "latestInstallDate": "Latest Install Date",
   "partNo": "Part No",
   "companyName": "Company Name",
   "fullName": "Full Name",
@@ -67,6 +68,7 @@
   "account": "Account#",
   "accountMember": "Account# (Member)",
   "paymentMode": "Payment Mode",
+  "paymentType": "Payment Type",
   "receiptNo": "Receipt #",
   "salesPerson": "Sales Person",
   "via": "Via"

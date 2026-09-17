@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import { wrapSupabaseError } from "@/lib/supabase/errors"
 import type { CollectionPlan } from "@/lib/types"
 
 type Row = {
@@ -33,6 +34,10 @@ type Row = {
   rejected_at: string | null
   rejection_reason: string | null
   reschedule_reason: string | null
+  collected: boolean
+  collected_by: string | null
+  collected_at: string | null
+  payment_type: string | null
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -67,6 +72,10 @@ function fromRow(row: Row): CollectionPlan {
     rejectedAt: row.rejected_at ?? undefined,
     rejectionReason: row.rejection_reason ?? undefined,
     rescheduleReason: row.reschedule_reason ?? undefined,
+    collected: row.collected,
+    collectedBy: row.collected_by ?? undefined,
+    collectedAt: row.collected_at ?? undefined,
+    paymentType: row.payment_type ?? undefined,
   }
 }
 
@@ -84,6 +93,10 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
   if (input.filterChangeRequired !== undefined) row.filter_change_required = input.filterChangeRequired
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
+  if (input.collected !== undefined) row.collected = input.collected
+  if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null
+  if (input.collectedAt !== undefined) row.collected_at = input.collectedAt || null
+  if (input.paymentType !== undefined) row.payment_type = input.paymentType || null
   return row
 }
 
@@ -96,22 +109,22 @@ export async function listCollections(): Promise<CollectionPlan[]> {
 
 export async function createCollection(input: Omit<CollectionPlan, "id" | "createdAt">): Promise<CollectionPlan> {
   const { data, error } = await supabase.from("collections").insert(toRow(input)).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function updateCollection(id: string, input: Partial<Omit<CollectionPlan, "id" | "createdAt">>): Promise<CollectionPlan> {
   const { data, error } = await supabase.from("collections").update(toRow(input)).eq("id", id).select().single()
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
   return fromRow(data as Row)
 }
 
 export async function deleteCollection(id: string): Promise<void> {
   const { error } = await supabase.from("collections").delete().eq("id", id)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }
 
 export async function deleteCollections(ids: string[]): Promise<void> {
   const { error } = await supabase.from("collections").delete().in("id", ids)
-  if (error) throw error
+  if (error) throw wrapSupabaseError(error)
 }

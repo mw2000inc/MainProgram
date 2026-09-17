@@ -15,3 +15,17 @@ export function authErrorMessage(error: { message: string; status?: number }): s
   }
   return error.message
 }
+
+// Supabase/PostgREST errors (the `error` half of `{ data, error }`) are
+// plain objects, not real Error instances. Thrown as-is — the
+// `if (error) throw error` pattern used across this API layer — they reach
+// the browser as a raw object: Next's error overlay (and anything else
+// that expects a thrown value to have a real .message, like
+// react-query's own error surfacing) calls .toString() on it and gets
+// "[object Object]", hiding the actual Postgres error entirely. This
+// preserves the original error as `.cause` (so `.code`/`.details`/`.hint`
+// are still inspectable in devtools) while giving callers a real,
+// displayable `.message`.
+export function wrapSupabaseError(error: { code?: string; message: string }): Error {
+  return new Error(error.message, { cause: error })
+}

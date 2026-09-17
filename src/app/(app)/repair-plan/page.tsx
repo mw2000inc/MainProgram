@@ -109,12 +109,27 @@ function RepairPlanPageContent() {
 
     function toGroup(id: string, memberAccountNumber: string | undefined, records: RepairPlan[]): RepairOrderGroup {
       const sorted = [...records].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
+      // Every member in this group resolved to the exact same customer (the
+      // map key IS that customer's memberAccountNumber, which is unique —
+      // see customers_member_account_number_unique_idx), so one lookup here
+      // covers the whole group's own "SK001-####" number alongside each
+      // record's own "001-####" orderNo.
+      const linkedCustomer = memberAccountNumber
+        ? customers.find((c) => c.memberAccountNumber.trim() === memberAccountNumber)
+        : undefined
+      const orderNumbers = Array.from(
+        new Set([
+          ...records.map((r) => r.orderNo.trim()).filter(Boolean),
+          ...(linkedCustomer?.orderNumber.trim() ? [linkedCustomer.orderNumber.trim()] : []),
+        ])
+      ).join(" ")
       return {
         id,
         memberAccountNumber,
         accountName: sorted[0].accountName,
         latestDate: sorted[0].issuedDate,
         records: sorted,
+        orderNumbers,
       }
     }
 
