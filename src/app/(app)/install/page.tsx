@@ -315,6 +315,7 @@ function InstallPageContent() {
                   />
                   <DetailField label={tFields("salesPerson")} value={selected.salesPerson} />
                   <DetailField label={tFields("via")} value={selected.via} />
+                  <DetailField label={tFields("serviceman")} value={selected.serviceman} />
                   <DetailField label={tFields("status")} value={planStatusLabel(selected.status, tStatus)} />
                   <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
                 </DetailPanel>

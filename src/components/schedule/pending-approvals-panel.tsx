@@ -24,8 +24,10 @@ import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { computeStopNumbers, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { ApprovalDetailDialog } from "@/components/schedule/approval-detail-dialog"
 import { PendingApprovalsHistoryDialog } from "@/components/schedule/pending-approvals-history-dialog"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
+import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
@@ -300,6 +302,21 @@ function rowKey(row: PendingApprovalRow): string {
   return `${row.entityType}:${row.entityId}`
 }
 
+// Two rows count as "the same technician" only if their full technician +
+// technician2 pair matches, order-independent — a 2-tech job never
+// silently groups with an unrelated 1-tech job assigned to just one of the
+// same two people. Returns undefined for a row with no technician at all:
+// that never counts as a shared value with anything, including another
+// unassigned row — bulk-approving "no one in particular" together isn't the
+// same claim as bulk-approving one technician's actual batch of work (see
+// batchMismatch below).
+function technicianKey(row: PendingApprovalRow): string | undefined {
+  const a = row.technician?.trim() ?? ""
+  const b = row.technician2?.trim() ?? ""
+  if (!a && !b) return undefined
+  return [a, b].sort().join("|")
+}
+
 // "pendingApproval" covers both Draft and Reschedule Requested — both
 // genuinely need an ADMIN decision, matching this panel's own "which rows
 // need my attention" framing (see PendingApprovalRow's comment) — it isn't
@@ -361,6 +378,8 @@ export function PendingApprovalsPanel({
   const updateInstallPlan = useUpdateInstallPlan()
   const updateCollection = useUpdateCollection()
   const updateRepairPlan = useUpdateRepairPlan()
+  const approve = useApproveDispatchItem()
+  const acceptReschedule = useAcceptRequestedReschedule()
   // Inline edit from the table's own Scheduled Date column — a narrower,
   // single-field version of ApprovalDetailDialog's own saveEditedFields
   // (that one saves a whole form's worth of edits together right before an
@@ -395,11 +414,20 @@ export function PendingApprovalsPanel({
   // as switchable as before (see the Select below); "all"/"overdue" are one
   // click away.
   const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("next2Days")
-  // Purely a visual selection column (per-viewer, not persisted) — no bulk
-  // action is wired to it yet, since none of the existing hooks this panel
-  // reuses (useApproveDispatchItem etc.) support a batched call; each row's
-  // own Review action stays the real way to act on it, same as before.
+  // Per-viewer, not persisted. Bulk-approves the checked rows as-is (each
+  // one's own existing customer email/fields — no shared editing step,
+  // deliberately simpler than ApprovalDetailDialog's own per-row edit form,
+  // which can't merge cleanly across rows from different customers/modules
+  // anyway) once they all share one scheduledDate and one technician
+  // assignment — see batchMismatch below for what blocks it otherwise.
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
+  const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
+  const [bulkApproving, setBulkApproving] = React.useState(false)
+  const [bulkSummary, setBulkSummary] = React.useState<{
+    approved: PendingApprovalRow[]
+    skippedNoContact: PendingApprovalRow[]
+    skippedAlreadySent: PendingApprovalRow[]
+  } | null>(null)
 
   // Scoped to the active date filter (but NOT activeTab/statusFilter — see
   // visibleRows below for those) so the tab labels and the Approval
@@ -462,6 +490,81 @@ export function PendingApprovalsPanel({
     },
     [visibleRows]
   )
+
+  // Resolved against the FULL row list, not just visibleRows — a checked
+  // row can fall out of view (tab/status/date-range filter change) without
+  // being deselected, and should still count toward the batch below.
+  const rowByKey = React.useMemo(() => new Map(rows.map((r) => [rowKey(r), r])), [rows])
+  const selectedRows = React.useMemo(
+    () => Array.from(selected, (k) => rowByKey.get(k)).filter((r): r is PendingApprovalRow => !!r),
+    [selected, rowByKey]
+  )
+
+  // What blocks the bulk action, if anything — undefined at 0-1 selected
+  // rows (nothing to mismatch yet). Checked in this order because they're
+  // not mutually exclusive (a selection can span both different dates and
+  // different technicians at once) and the date mismatch is the simpler
+  // fact to fix first.
+  const batchMismatch = React.useMemo<
+    | { kind: "dates"; dates: string[] }
+    | { kind: "unassigned" }
+    | { kind: "technicians"; technicians: string[] }
+    | undefined
+  >(() => {
+    if (selectedRows.length < 2) return undefined
+    const dates = Array.from(new Set(selectedRows.map((r) => r.scheduledDate)))
+    if (dates.length > 1) return { kind: "dates", dates }
+    const techKeys = Array.from(new Set(selectedRows.map(technicianKey)))
+    if (techKeys.includes(undefined)) return { kind: "unassigned" }
+    if (techKeys.length > 1) {
+      const technicians = Array.from(
+        new Set(selectedRows.map((r) => formatTechnicians(r.technician ?? "", r.technician2)))
+      )
+      return { kind: "technicians", technicians }
+    }
+    return undefined
+  }, [selectedRows])
+
+  const canBulkApprove = selectedRows.length > 0 && !batchMismatch
+
+  // Approves every selected row as-is — no shared edit step (see
+  // `selected`'s own comment on why). Reschedule Requested rows go through
+  // acceptReschedule (same branch ApprovalDetailDialog's own handleApprove
+  // uses for that status); Pending Customer Confirmation rows are already
+  // sent and can't be approved again, so they're bucketed as skipped rather
+  // than silently ignored; a Draft row with no email on file is skipped the
+  // same way ApprovalDetailDialog's own disabled-button guard prevents —
+  // there's no shared per-row email input here to fall back to, matching
+  // the "as-is, no editing step" scope. Sequential, not parallel, same as
+  // DispatchApprovalQueue's own Approve All.
+  async function handleBulkApprove() {
+    setBulkApproving(true)
+    setBulkSummary(null)
+    const approved: PendingApprovalRow[] = []
+    const skippedNoContact: PendingApprovalRow[] = []
+    const skippedAlreadySent: PendingApprovalRow[] = []
+    for (const row of selectedRows) {
+      if (row.dispatchStatus === "Pending Customer Confirmation") {
+        skippedAlreadySent.push(row)
+        continue
+      }
+      if (row.dispatchStatus === "Reschedule Requested") {
+        const result = await acceptReschedule.mutateAsync({ entityType: row.entityType, entityId: row.entityId })
+        if (result) approved.push(row)
+        continue
+      }
+      const email = row.customerEmail?.trim()
+      if (!email) {
+        skippedNoContact.push(row)
+        continue
+      }
+      const result = await approve.mutateAsync({ entityType: row.entityType, entityId: row.entityId, notifyEmail: email })
+      if (result) approved.push(row)
+    }
+    setBulkSummary({ approved, skippedNoContact, skippedAlreadySent })
+    setSelected(new Set())
+    setBulkApproving(false)
+  }
 
   const columns: ColumnDef<PendingApprovalRow, unknown>[] = React.useMemo(
     () => [
@@ -610,6 +713,61 @@ export function PendingApprovalsPanel({
         </div>
       </div>
 
+      {isAdmin && bulkSummary && (
+        <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
+          <p className="font-medium">
+            {t("approveAllFinishedSent", { count: String(bulkSummary.approved.length) })}
+            {bulkSummary.skippedAlreadySent.length > 0 &&
+              t("bulkApproveSkippedAlreadySent", { count: String(bulkSummary.skippedAlreadySent.length) })}
+            {bulkSummary.skippedNoContact.length > 0 &&
+              t("skippedNoContactEntered", { count: String(bulkSummary.skippedNoContact.length) })}
+          </p>
+          {bulkSummary.skippedNoContact.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-muted-foreground">{t("skippedNoPhoneOrEmail")}</p>
+              {bulkSummary.skippedNoContact.map((row) => (
+                <p key={rowKey(row)}>
+                  {t(row.moduleKey)} — {row.recordLabel}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isAdmin && selected.size > 0 && (
+        <div className="rounded-md border p-3 space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium">{tCommon("selectedCount", { count: String(selected.size) })}</span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+                {t("clearSelection")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5"
+                disabled={!canBulkApprove || bulkApproving}
+                onClick={() => setConfirmBulkApproveOpen(true)}
+              >
+                {bulkApproving ? t("approving") : t("bulkApproveSelectedCount", { count: String(selectedRows.length) })}
+              </Button>
+            </div>
+          </div>
+          {batchMismatch?.kind === "dates" && (
+            <p className="text-xs text-warning">
+              {t("bulkApproveDifferentDates", { dates: batchMismatch.dates.map((d) => formatDate(d)).join(", ") })}
+            </p>
+          )}
+          {batchMismatch?.kind === "unassigned" && <p className="text-xs text-warning">{t("bulkApproveNeedsTechnician")}</p>}
+          {batchMismatch?.kind === "technicians" && (
+            <p className="text-xs text-warning">
+              {t("bulkApproveDifferentTechnicians", { technicians: batchMismatch.technicians.join(", ") })}
+            </p>
+          )}
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={visibleRows}
@@ -629,6 +787,21 @@ export function PendingApprovalsPanel({
           open={historyOpen}
           onOpenChange={setHistoryOpen}
           defaultDate={historyDefaultDate}
+        />
+      )}
+      {isAdmin && (
+        <ConfirmDialog
+          open={confirmBulkApproveOpen}
+          onOpenChange={setConfirmBulkApproveOpen}
+          title={t("confirmBulkApproveTitle")}
+          description={t("confirmBulkApproveDescription", { count: String(selectedRows.length) })}
+          confirmLabel={t("confirmAndSend")}
+          destructive={false}
+          loading={bulkApproving}
+          onConfirm={async () => {
+            await handleBulkApprove()
+            setConfirmBulkApproveOpen(false)
+          }}
         />
       )}
     </>
