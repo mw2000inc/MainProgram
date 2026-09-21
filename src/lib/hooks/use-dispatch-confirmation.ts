@@ -53,6 +53,32 @@ export function useApproveDispatchItem() {
   })
 }
 
+// Same four-key invalidation as useApproveDispatchItem, minus the
+// notifications key — nothing is sent here, so there's no new
+// dispatch_notifications row to refetch. The success toast reports what was
+// actually changed (the API only touches rows still 'Draft'), not what was
+// requested, so a row that moved on in the meantime shows up as a visible
+// difference instead of silently inflating the count.
+export function useConfirmDispatchItemsWithoutNotifying() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.confirmDispatchItemsWithoutNotifying,
+    onSuccess: (updated, requested) => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: installPlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      const total = Object.values(updated).reduce((sum, n) => sum + n, 0)
+      const skipped = requested.length - total
+      toast.success(
+        `Confirmed ${total} item${total === 1 ? "" : "s"} without notifying customers` +
+          (skipped > 0 ? ` (${skipped} no longer awaiting approval, skipped)` : "")
+      )
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to confirm these items"),
+  })
+}
+
 export function useDispatchConfirmationDetails(token: string | undefined) {
   return useQuery({
     queryKey: ["dispatchConfirmationDetails", token],

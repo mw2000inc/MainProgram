@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
+import { wrapSupabaseError } from "@/lib/supabase/errors"
 import type { DispatchStatus } from "@/lib/types"
 
 export type DispatchEntityType = "filter_change_plans" | "install_plans" | "collections" | "repair_plans"
@@ -83,6 +84,55 @@ export async function approveDispatchItem(input: {
   const data = await response.json()
   if (!response.ok) throw new Error(data?.error ?? "Failed to approve this dispatch item")
   return data
+}
+
+// Admin-only "Confirm without notifying" — Draft straight to Confirmed, no
+// email, no push, no confirmation token/link, no customer round-trip at
+// all. Deliberately does NOT go through approveDispatchItem/its route (that
+// path always ends in a real send, and only ever reaches 'Pending Customer
+// Confirmation'). A plain status update is safe here: the only trigger
+// reacting to dispatch changes fires on pre_d edits, not status edits, and
+// schedule_jobs creation on confirm lives inside the customer-confirm RPCs
+// (respond_to_dispatch_confirmation / accept_requested_reschedule), not a
+// table trigger — so this doesn't spawn Schedule-panel jobs either.
+//
+// Runs under the caller's own session (RLS *_update_admin), so the audit
+// trail attributes it to them — a service-role script would attribute it to
+// nobody. Every update is guarded with .eq("dispatch_status", "Draft"), so
+// a row that already moved (approved, rejected, rescheduled) between the
+// admin opening the dialog and confirming is left alone rather than
+// clobbered; the returned counts are what was ACTUALLY changed, per table.
+// Chunked because .in("id", ...) puts every id in the request URL.
+const CONFIRM_CHUNK_SIZE = 40
+
+export async function confirmDispatchItemsWithoutNotifying(
+  items: { entityType: DispatchEntityType; entityId: string }[]
+): Promise<Record<DispatchEntityType, number>> {
+  const updated: Record<DispatchEntityType, number> = {
+    filter_change_plans: 0,
+    install_plans: 0,
+    collections: 0,
+    repair_plans: 0,
+  }
+  const idsByType = new Map<DispatchEntityType, string[]>()
+  for (const item of items) {
+    const ids = idsByType.get(item.entityType)
+    if (ids) ids.push(item.entityId)
+    else idsByType.set(item.entityType, [item.entityId])
+  }
+  for (const [entityType, ids] of idsByType) {
+    for (let i = 0; i < ids.length; i += CONFIRM_CHUNK_SIZE) {
+      const { data, error } = await supabase
+        .from(entityType)
+        .update({ dispatch_status: "Confirmed" })
+        .in("id", ids.slice(i, i + CONFIRM_CHUNK_SIZE))
+        .eq("dispatch_status", "Draft")
+        .select("id")
+      if (error) throw wrapSupabaseError(error)
+      updated[entityType] += data?.length ?? 0
+    }
+  }
+  return updated
 }
 
 export interface DispatchConfirmationDetails {

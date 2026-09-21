@@ -3,7 +3,7 @@
 import * as React from "react"
 import { parse, parseISO } from "date-fns"
 import { ko } from "date-fns/locale"
-import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock, History } from "lucide-react"
+import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock, History, BellOff } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,11 @@ import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import {
+  useApproveDispatchItem,
+  useAcceptRequestedReschedule,
+  useConfirmDispatchItemsWithoutNotifying,
+} from "@/lib/hooks/use-dispatch-confirmation"
 import { DispatchHistoryDialog } from "@/components/dashboard/dispatch-history-dialog"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
@@ -310,8 +314,10 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   const { data: customers = [] } = useCustomers()
   const approve = useApproveDispatchItem()
   const acceptReschedule = useAcceptRequestedReschedule()
+  const confirmWithoutNotify = useConfirmDispatchItemsWithoutNotifying()
   const updateCustomer = useUpdateCustomer()
   const [historyOpen, setHistoryOpen] = React.useState(false)
+  const [confirmWithoutNotifyOpen, setConfirmWithoutNotifyOpen] = React.useState(false)
   const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   // Never reopen already full-screen from a previous session — this
   // component stays mounted across open/close (only `open` toggles
@@ -367,6 +373,24 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
         .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
     [allRows, dateRangeFilter]
   )
+
+  // Shown in the "Confirm Without Notifying" dialog — the exact per-module
+  // breakdown of what's about to change (so the count can be checked against
+  // what the admin expects before anything is written), plus a separate
+  // warning when any of it is dated today or later: those are the only rows
+  // the automatic 2-day reminder (send-schedule-reminders) could still
+  // email/push a customer about afterward. Past-dated rows can never hit it.
+  const confirmWithoutNotifyDescription = React.useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of items) counts.set(item.moduleLabel, (counts.get(item.moduleLabel) ?? 0) + 1)
+    const breakdown = Array.from(counts, ([label, n]) => `${t(label)} ${n}`).join(" · ")
+    const today = todayIso()
+    const upcoming = items.filter((item) => item.scheduledDate >= today).length
+    return (
+      t("confirmWithoutNotifyDescription", { count: items.length, breakdown }) +
+      (upcoming > 0 ? t("confirmWithoutNotifyUpcomingWarning", { count: upcoming }) : "")
+    )
+  }, [items, t])
 
   function emailFor(item: DispatchRow) {
     return emailDrafts[item.entityId] ?? item.email ?? ""
@@ -566,6 +590,17 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 font-normal"
+                    disabled={bulkApproving || approve.isPending || confirmWithoutNotify.isPending}
+                    onClick={() => setConfirmWithoutNotifyOpen(true)}
+                  >
+                    <BellOff className="h-3.5 w-3.5" /> {t("confirmWithoutNotifyCount", { count: items.length })}
+                  </Button>
+                )}
+                {items.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 font-normal"
                     disabled={bulkApproving || approve.isPending}
                     onClick={() => setConfirmBulkApproveOpen(true)}
                   >
@@ -751,6 +786,28 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       </Dialog>
 
       <DispatchHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
+
+      <ConfirmDialog
+        open={confirmWithoutNotifyOpen}
+        onOpenChange={setConfirmWithoutNotifyOpen}
+        title={t("confirmWithoutNotifyTitle")}
+        description={confirmWithoutNotifyDescription}
+        confirmLabel={t("confirmWithoutNotifyLabel")}
+        destructive={false}
+        loading={confirmWithoutNotify.isPending}
+        onConfirm={async () => {
+          try {
+            await confirmWithoutNotify.mutateAsync(
+              items.map((item) => ({ entityType: item.entityType, entityId: item.entityId }))
+            )
+            setConfirmWithoutNotifyOpen(false)
+          } catch {
+            // useConfirmDispatchItemsWithoutNotifying's own onError already
+            // toasted the real message — just keep the dialog open so the
+            // admin can retry, instead of an unhandled rejection.
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={confirmBulkApproveOpen}
