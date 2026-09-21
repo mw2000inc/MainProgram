@@ -75,6 +75,15 @@ interface DataTableProps<TData> {
   onSearchChange?: (value: string) => void
   emptyMessage?: string
   pageSize?: number
+  // Opt-in — no caller sets this by default. TanStack normally sends the
+  // table back to page 1 whenever `data` changes identity, which includes a
+  // plain refetch after an inline edit: someone editing a cell on page 4
+  // would be bounced to page 1 by their own save. Provide a key and the
+  // current page instead survives data refreshes, returning to page 1 only
+  // when this key changes (the caller's "this is a different result set"
+  // signal, e.g. a month/day filter), when the search text or sorting
+  // changes, or when the page no longer exists (clamped to the last one).
+  pageResetKey?: React.Key
   onRowClick?: (row: TData) => void
   // Extra className per row (e.g. strikethrough for completed/inactive entries).
   getRowClassName?: (row: TData) => string | undefined
@@ -126,6 +135,7 @@ export function DataTable<TData>({
   // (rare — none currently do) passes its own smaller pageSize, unaffected
   // by this default.
   pageSize = DATA_TABLE_SHOW_ALL_PAGE_SIZE,
+  pageResetKey,
   onRowClick,
   getRowClassName,
   tableContainerClassName,
@@ -138,14 +148,30 @@ export function DataTable<TData>({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize })
+  const keepPageOnRefresh = pageResetKey !== undefined
+  const goToFirstPage = () => setPagination((p) => ({ ...p, pageIndex: 0 }))
+
+  // A changed pageResetKey means a different result set — back to page 1.
+  // Adjusted during render (not in an effect) for the same reason
+  // InlineTextCell does it: an effect would paint one frame of the old page
+  // first.
+  const [lastPageResetKey, setLastPageResetKey] = React.useState(pageResetKey)
+  if (pageResetKey !== lastPageResetKey) {
+    setLastPageResetKey(pageResetKey)
+    goToFirstPage()
+  }
 
   const table = useReactTable({
     data,
     columns,
     state: { sorting, globalFilter, pagination },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      setSorting(updater)
+      if (keepPageOnRefresh) goToFirstPage()
+    },
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
+    autoResetPageIndex: !keepPageOnRefresh,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -157,6 +183,17 @@ export function DataTable<TData>({
       )
     },
   })
+
+  // With keepPageOnRefresh the page is no longer auto-reset, so if the data
+  // shrank below the current page (rows edited out of the filter, etc.) snap
+  // to the last page that still exists rather than showing an empty one.
+  const lastPageIndex = Math.max(0, table.getPageCount() - 1)
+  // Clamped inside the updater (not by comparing the value read above) so it
+  // composes with a goToFirstPage() queued earlier in the same render — e.g.
+  // a changed pageResetKey — instead of overriding it with a stale page.
+  if (keepPageOnRefresh && pagination.pageIndex > lastPageIndex) {
+    setPagination((p) => (p.pageIndex > lastPageIndex ? { ...p, pageIndex: lastPageIndex } : p))
+  }
 
   const filteredRows = table.getFilteredRowModel().rows.map((r) => r.original)
   const filteredRowsKey = filteredRows.length + ":" + globalFilter
@@ -190,6 +227,7 @@ export function DataTable<TData>({
             value={globalFilter}
             onChange={(e) => {
               setGlobalFilter(e.target.value)
+              if (keepPageOnRefresh) goToFirstPage()
               onSearchChange?.(e.target.value)
             }}
             placeholder={searchPlaceholder ?? t("searchPlaceholder")}

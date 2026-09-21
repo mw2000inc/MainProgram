@@ -273,15 +273,24 @@ interface CollectionRecordUpdate {
 // so a single shared dispatcher covers the toggle, the reassign dialog, the
 // bulk-approve action, and now inline field edits, with no new mutation/API
 // code.
+//
+// Every function this and the hooks below return has to keep the same
+// identity across renders: they're dependencies of the `columns` useMemo in
+// AllCollectionDialog, and a new function there rebuilds every column
+// definition — which makes TanStack treat every cell as a new component and
+// unmount/remount all of them (measured: every input in the table, ~2s+ per
+// render at 1,000 rows). Only `mutateAsync` is taken from each mutation, not
+// the mutation object itself: useMutation returns a fresh object every render,
+// but its mutateAsync is bound once per mutation observer and stays stable.
 function useCollectionRecordUpdaters() {
-  const updateCollection = useUpdateCollection()
-  const updateInstallPlan = useUpdateInstallPlan()
-  const updateRepairPlan = useUpdateRepairPlan()
+  const { mutateAsync: updateCollection } = useUpdateCollection()
+  const { mutateAsync: updateInstallPlan } = useUpdateInstallPlan()
+  const { mutateAsync: updateRepairPlan } = useUpdateRepairPlan()
   return React.useCallback(
     (row: Pick<AllCollectionRow, "source" | "recordId">, input: CollectionRecordUpdate) => {
-      if (row.source === "collection") return updateCollection.mutateAsync({ id: row.recordId, input })
-      if (row.source === "install") return updateInstallPlan.mutateAsync({ id: row.recordId, input })
-      return updateRepairPlan.mutateAsync({ id: row.recordId, input })
+      if (row.source === "collection") return updateCollection({ id: row.recordId, input })
+      if (row.source === "install") return updateInstallPlan({ id: row.recordId, input })
+      return updateRepairPlan({ id: row.recordId, input })
     },
     [updateCollection, updateInstallPlan, updateRepairPlan]
   )
@@ -293,8 +302,10 @@ function useCollectionRecordUpdaters() {
 // never touches collected/collectedBy/collectedAt.
 function useEditRecordField() {
   const update = useCollectionRecordUpdaters()
-  return (row: AllCollectionRow, field: keyof CollectionRecordUpdate, next: number | string) =>
-    update(row, { [field]: next })
+  return React.useCallback(
+    (row: AllCollectionRow, field: keyof CollectionRecordUpdate, next: number | string) => update(row, { [field]: next }),
+    [update]
+  )
 }
 
 // Checking the Switch stamps the CURRENT admin + now as collectedBy/
@@ -307,13 +318,16 @@ function useEditRecordField() {
 function useToggleCollected() {
   const update = useCollectionRecordUpdaters()
   const { user } = useAuth()
-  return (row: AllCollectionRow, next: boolean) => {
-    update(row, {
-      collected: next,
-      collectedBy: next ? user?.id : "",
-      collectedAt: next ? new Date().toISOString() : "",
-    })
-  }
+  return React.useCallback(
+    (row: AllCollectionRow, next: boolean) => {
+      update(row, {
+        collected: next,
+        collectedBy: next ? user?.id : "",
+        collectedAt: next ? new Date().toISOString() : "",
+      })
+    },
+    [update, user]
+  )
 }
 
 // The reassign dialog's own save action — corrects who's credited and/or
@@ -322,9 +336,12 @@ function useToggleCollected() {
 // showing the edit affordance at all).
 function useReassignCollected() {
   const update = useCollectionRecordUpdaters()
-  return async (row: AllCollectionRow, collectedBy: string, collectedAt: string) => {
-    await update(row, { collectedBy, collectedAt })
-  }
+  return React.useCallback(
+    async (row: AllCollectionRow, collectedBy: string, collectedAt: string) => {
+      await update(row, { collectedBy, collectedAt })
+    },
+    [update]
+  )
 }
 
 // Approves every not-yet-collected row in the given set, one at a time
@@ -335,14 +352,19 @@ function useReassignCollected() {
 function useBulkApproveCollected() {
   const update = useCollectionRecordUpdaters()
   const { user } = useAuth()
-  return async (rows: AllCollectionRow[]) => {
-    const collectedAt = new Date().toISOString()
-    for (const row of rows) {
-      if (row.collected) continue
-      await update(row, { collected: true, collectedBy: user?.id, collectedAt })
-    }
-  }
+  return React.useCallback(
+    async (rows: AllCollectionRow[]) => {
+      const collectedAt = new Date().toISOString()
+      for (const row of rows) {
+        if (row.collected) continue
+        await update(row, { collected: true, collectedBy: user?.id, collectedAt })
+      }
+    },
+    [update, user]
+  )
 }
+
+const ALL_COLLECTION_PAGE_SIZE = 50
 
 const SOURCE_MODULE_KEYS: Record<AllCollectionSource, string> = {
   collection: "collectionModule",
@@ -908,6 +930,16 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
           <DataTable
             columns={columns}
             data={scopedRows}
+            // 50 rows per page, not DataTable's show-everything default: every
+            // row here carries ~8 inline-edit controls, so mounting all ~1,000
+            // at once put ~35k DOM nodes on the page (multi-second open, laggy
+            // typing). "All rows" is still one click away in the footer, and
+            // search still filters the full dataset before it's paged.
+            pageSize={ALL_COLLECTION_PAGE_SIZE}
+            // Saving an inline edit refetches (new `data` identity); without
+            // this the table would bounce back to page 1 on every save. The
+            // page now only resets when the scope pills below change.
+            pageResetKey={`${dateRangeFilter}|${selectedMonth}|${selectedDay ?? ""}`}
             searchPlaceholder={t("searchPlaceholder")}
             emptyMessage={t("noRecordsFound")}
             tableContainerClassName="scrollbar-always-visible"
