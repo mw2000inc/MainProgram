@@ -23,7 +23,7 @@ import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { printScheduleTable, type ScheduleTableRow } from "@/lib/export/print"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
+import { technicianFilterOptions } from "@/lib/technicians"
 import type { ScheduleJob, Customer, FilterChangePlan, CollectionPlan, SaleListEntry } from "@/lib/types"
 
 // Picks the best soft-match among same-order-number candidates from a
@@ -109,10 +109,12 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   // matchesTechnician's own comment on why the match itself is shared) —
   // its own independent state, not synced with the List view's filter,
   // same as this view's date isn't either. Defaults to "all", matching
-  // today's unfiltered behavior. Options come from the TECHNICIANS roster,
-  // not the jobs actually on record — a name stays choosable even on a day
-  // with nothing assigned to them yet, matching the List view.
+  // today's unfiltered behavior. Options are the TECHNICIANS roster (a name
+  // stays choosable even with nothing assigned to them yet, matching the List
+  // view) plus any other name on a job as its technician or technician_2 — see
+  // technicianFilterOptions.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
+  const technicianOptions = React.useMemo(() => technicianFilterOptions(jobs), [jobs])
 
   // Sorted by technician, then by route_sequence within that technician's
   // day (nulls last) — same ordering ScheduleAgenda applies, so this
@@ -174,7 +176,7 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("allTechnicians")}</SelectItem>
-                  {TECHNICIANS.map((tech) => (
+                  {technicianOptions.map((tech) => (
                     <SelectItem key={tech} value={tech}>
                       {tech}
                     </SelectItem>

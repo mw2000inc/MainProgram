@@ -24,6 +24,8 @@ type CustomerRow = {
   filter_installed: boolean
   installed_date: string | null
   assigned_technician: string
+  // Absent until the 20261003000000_second_technician migration is applied.
+  assigned_technician_2?: string
   notes: string | null
   created_at: string
 }
@@ -51,6 +53,7 @@ function fromRow(row: CustomerRow): Customer {
     filterInstalled: row.filter_installed,
     installedDate: row.installed_date ?? undefined,
     assignedTechnician: row.assigned_technician,
+    assignedTechnician2: row.assigned_technician_2 ?? "",
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
     isSystem: false,
@@ -80,6 +83,7 @@ function toRow(input: Partial<Omit<Customer, "id" | "createdAt">>) {
   if (input.filterInstalled !== undefined) row.filter_installed = input.filterInstalled
   if (input.installedDate !== undefined) row.installed_date = input.installedDate || null
   if (input.assignedTechnician !== undefined) row.assigned_technician = input.assignedTechnician
+  if (input.assignedTechnician2 !== undefined) row.assigned_technician_2 = input.assignedTechnician2
   if (input.notes !== undefined) row.notes = input.notes || null
   return row
 }

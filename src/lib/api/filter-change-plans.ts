@@ -16,6 +16,8 @@ type Row = {
   pre_d: string | null
   acc_d: string | null
   serviceman: string
+  // Absent until the 20261003000000_second_technician migration is applied.
+  serviceman_2?: string
   note: string | null
   created_at: string
   customer_id: string | null
@@ -52,6 +54,7 @@ function fromRow(row: Row): FilterChangePlan {
     preD: row.pre_d ?? undefined,
     accD: row.acc_d ?? undefined,
     serviceman: row.serviceman,
+    serviceman2: row.serviceman_2 ?? "",
     note: row.note ?? undefined,
     createdAt: row.created_at,
     customerId: row.customer_id ?? undefined,
@@ -88,6 +91,7 @@ function toRow(input: Partial<Omit<FilterChangePlan, "id" | "createdAt">>) {
   if (input.preD !== undefined) row.pre_d = input.preD || null
   if (input.accD !== undefined) row.acc_d = input.accD || null
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
+  if (input.serviceman2 !== undefined) row.serviceman_2 = input.serviceman2
   if (input.note !== undefined) row.note = input.note || null
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   return row

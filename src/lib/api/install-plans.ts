@@ -25,6 +25,8 @@ type Row = {
   sales_person: string | null
   via: string | null
   serviceman: string
+  // Absent until the 20261003000000_second_technician migration is applied.
+  serviceman_2?: string
   created_at: string
   dispatch_status: string | null
   notify_contact: string | null
@@ -67,6 +69,7 @@ function fromRow(row: Row): InstallPlan {
     salesPerson: row.sales_person ?? undefined,
     via: row.via ?? undefined,
     serviceman: row.serviceman,
+    serviceman2: row.serviceman_2 ?? "",
     createdAt: row.created_at,
     dispatchStatus: (row.dispatch_status as InstallPlan["dispatchStatus"]) ?? undefined,
     notifyContact: row.notify_contact ?? undefined,
@@ -109,6 +112,7 @@ function toRow(input: Partial<Omit<InstallPlan, "id" | "createdAt">>) {
   if (input.salesPerson !== undefined) row.sales_person = input.salesPerson || null
   if (input.via !== undefined) row.via = input.via || null
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
+  if (input.serviceman2 !== undefined) row.serviceman_2 = input.serviceman2
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   if (input.collected !== undefined) row.collected = input.collected
   if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null

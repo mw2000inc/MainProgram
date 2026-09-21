@@ -5,13 +5,15 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineCurrencyCell, InlineTextCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineCurrencyCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
+import { pairPatchToFields } from "@/lib/technicians"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
 import type { CollectionPlan } from "@/lib/types"
 
 // The linked customer's own "SK001-####" order_number, never rendered as a
@@ -162,7 +164,7 @@ export function getCollectionsColumns({
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => row.original.serviceman || "—",
+      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
     },
     {
       accessorKey: "status",
@@ -178,7 +180,7 @@ export function getCollectionsColumns({
 // the moment a date is picked — so that edit stays on the Collection Plan
 // form. C/T and Amount on a recurring row are re-written from the sale list
 // entry whenever that entry is next saved, same as when edited on the record.
-export type CollectionDailyReportPatch = Partial<Pick<CollectionPlan, "preD" | "accD" | "amount" | "note" | "serviceman" | "ct">>
+export type CollectionDailyReportPatch = Partial<Pick<CollectionPlan, "preD" | "accD" | "amount" | "note" | "serviceman" | "serviceman2" | "ct">>
 
 // Widened, inline-editable column set for the Daily Report's own compact
 // panel (see daily-report-section.tsx) — same idea as
@@ -261,21 +263,23 @@ export function getCollectionsDailyReportColumns({
       header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
       cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
     },
-    // Inline-editable, same TECHNICIANS-roster Select Filter Change's own
-    // Daily Report serviceman column already uses — this field previously
-    // had no table anywhere it could even be set outside the Pending
-    // Approvals edit dialog.
+    // Inline-editable, same pick-or-type technician cell Filter Change's own
+    // Daily Report serviceman column uses — this field previously had no
+    // table anywhere it could even be set outside the Pending Approvals
+    // edit dialog.
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
       cell: ({ row }) => {
         const entry = row.original
-        if (!onFieldChange) return <span className="inline-block min-w-37.5">{entry.serviceman || "—"}</span>
+        if (!onFieldChange) {
+          return <span className="inline-block min-w-37.5">{entry.serviceman ? formatTechnicians(entry.serviceman, entry.serviceman2, "&") : "—"}</span>
+        }
         return (
-          <InlineSelectCell
-            value={entry.serviceman}
-            options={TECHNICIANS}
-            onCommit={(next) => onFieldChange(entry, { serviceman: next })}
+          <InlineTechnicianPairCell
+            primary={entry.serviceman}
+            secondary={entry.serviceman2}
+            onCommit={(patch) => onFieldChange(entry, pairPatchToFields(patch, { primary: "serviceman", secondary: "serviceman2" }))}
           />
         )
       },
@@ -378,7 +382,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => row.original.serviceman || "—",
+      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
     },
     {
       accessorKey: "status",
@@ -422,5 +426,6 @@ export const COLLECTIONS_EXPORT_COLUMNS = [
   { header: "Payment Type", key: "paymentType" },
   { header: "Source", key: "source" },
   { header: "Serviceman", key: "serviceman" },
+  { header: "Serviceman 2", key: "serviceman2" },
   { header: "Status", key: "status" },
 ]

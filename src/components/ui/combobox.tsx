@@ -24,6 +24,9 @@ export function Combobox({
   options,
   placeholder,
   className,
+  showAllOnExactMatch,
+  onOptionSelect,
+  openOnFocus = true,
   // Forwarded straight onto the underlying <input> — critically including
   // `id`/`aria-*`, which FormControl (a Radix Slot) clones onto whatever
   // single child it wraps. Without forwarding these through, a FormLabel's
@@ -36,6 +39,21 @@ export function Combobox({
   options: ComboboxOption[]
   placeholder?: string
   className?: string
+  // Opt-in. By default the list filters to whatever is typed, so a field that
+  // already holds a complete option (e.g. "Mell") only ever offers that one
+  // option back — fine for a long catalog, awkward for a short pick-list
+  // someone is trying to change. With this set, a value that exactly matches
+  // an option shows the whole list instead.
+  showAllOnExactMatch?: boolean
+  // Opt-in. Fires only when a suggestion is picked from the list (onChange
+  // also fires per keystroke, so it can't tell the two apart) — lets a caller
+  // save immediately on a pick while still waiting for blur on typed text.
+  onOptionSelect?: (value: string) => void
+  // Defaults to true (focusing the field opens the list). Set false where the
+  // field is auto-focused on entry — e.g. inside a popover, whose content
+  // Radix focuses on open — and an already-open list would cover whatever sits
+  // below the field (a Save button). A click or typing still opens it.
+  openOnFocus?: boolean
 } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "placeholder" | "className">) {
   const { t } = useTranslation("common")
   const [open, setOpen] = React.useState(false)
@@ -44,8 +62,9 @@ export function Combobox({
   const filtered = React.useMemo(() => {
     const q = value.trim().toLowerCase()
     if (!q) return options
+    if (showAllOnExactMatch && options.some((o) => o.value.toLowerCase() === q)) return options
     return options.filter((o) => o.value.toLowerCase().includes(q))
-  }, [options, value])
+  }, [options, value, showAllOnExactMatch])
 
   const groups = React.useMemo(() => {
     const map = new Map<string, ComboboxOption[]>()
@@ -69,7 +88,7 @@ export function Combobox({
             if (!open) setOpen(true)
           }}
           onFocus={(e) => {
-            setOpen(true)
+            if (openOnFocus) setOpen(true)
             inputProps.onFocus?.(e)
           }}
           // Also needed alongside onFocus above — a click that both focuses
@@ -110,6 +129,7 @@ export function Combobox({
                     value={opt.value}
                     onSelect={() => {
                       onChange(opt.value)
+                      onOptionSelect?.(opt.value)
                       setOpen(false)
                       inputRef.current?.focus()
                     }}

@@ -71,5 +71,12 @@
   "stacked": "Stacked",
   "grid": "Grid",
   "layout": "Layout",
-  "customerInfoFilled": "Found an existing order — filled in the customer's info."
+  "customerInfoFilled": "Found an existing order — filled in the customer's info.",
+  "selectOrTypeTechnician": "Select or type a technician",
+  "selectOrType": "Select or type...",
+  "secondTechnician": "Second technician...",
+  "secondTechnicianOptional": "Second technician (optional)",
+  "addSecondTechnician": "Add a second technician",
+  "secondTechnicianNeedsFirst": "Assign a technician first",
+  "technicianAlreadyAssigned": "That person is already the first technician."
 }

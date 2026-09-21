@@ -1,16 +1,21 @@
 "use client"
 
+import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineGridPickerCell } from "@/components/shared/inline-edit-cell"
+import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
+import { pairPatchToFields } from "@/lib/technicians"
+import { useProducts } from "@/lib/hooks/use-inventory"
+import { getFilterPartOptions } from "@/lib/filter-parts"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { TECHNICIANS } from "@/lib/constants"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
@@ -159,11 +164,44 @@ export function getFilterChangeCustomerPortalColumns(): ColumnDef<FilterChangePl
 
 // Plan D (planDate) is deliberately not in this list: on a recurring row it's
 // re-written by the sale-list sync, so the one-off-visit override is Pre D.
-export type FilterChangeDailyReportPatch = Partial<Pick<FilterChangePlan, "preD" | "accD" | "serviceman" | "filterType">>
+export type FilterChangeDailyReportPatch = Partial<Pick<FilterChangePlan, "preD" | "accD" | "serviceman" | "serviceman2" | "filterType">>
 
 interface FilterChangeDailyReportColumnParams {
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
   onFieldChange?: (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => void
+}
+
+// Filter is a comma-separated list of inventory product SKUs ("012, 013") —
+// the same products table the technician's job-completion filter picker and
+// the Sale List's Product# dropdown read — so it's picked from a grid of those
+// filter parts rather than typed. Named component (not inline in the column
+// def) so it can call useProducts; the query is shared, so every row's cell
+// reads the one cached fetch. Still required: the grid picker keeps
+// InlineTextCell's guard of never saving an emptied Filter.
+function FilterCell({
+  plan,
+  onFieldChange,
+}: {
+  plan: FilterChangePlan
+  onFieldChange: (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => void
+}) {
+  const { t } = useTranslation("filterChange")
+  const { data: products = [] } = useProducts()
+  const options = React.useMemo(() => getFilterPartOptions(products), [products])
+  return (
+    <InlineGridPickerCell
+      value={plan.filterType}
+      options={options}
+      required
+      placeholder={t("filterPickerPlaceholder")}
+      requiredHint={t("filterPickerRequiredHint")}
+      otherLabel={t("filterPickerOtherLabel")}
+      doneLabel={t("filterPickerDone")}
+      customPlaceholder={t("filterPickerCustomPlaceholder")}
+      addLabel={t("filterPickerAddCustom")}
+      onCommit={(next) => onFieldChange(plan, { filterType: next })}
+    />
+  )
 }
 
 // One column-def builder shared by the compact and expanded (Maximize2)
@@ -197,14 +235,7 @@ function dailyReportColumnDefs({
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) return <span>{plan.filterType}</span>
-        return (
-          <InlineTextCell
-            value={plan.filterType}
-            required
-            className="min-w-25"
-            onCommit={(next) => onFieldChange(plan, { filterType: next })}
-          />
-        )
+        return <FilterCell plan={plan} onFieldChange={onFieldChange} />
       },
     },
     contactNumber: {
@@ -245,12 +276,14 @@ function dailyReportColumnDefs({
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
       cell: ({ row }) => {
         const plan = row.original
-        if (!onFieldChange) return <span className="inline-block min-w-[150px]">{plan.serviceman || "—"}</span>
+        if (!onFieldChange) {
+          return <span className="inline-block min-w-[150px]">{plan.serviceman ? formatTechnicians(plan.serviceman, plan.serviceman2, "&") : "—"}</span>
+        }
         return (
-          <InlineSelectCell
-            value={plan.serviceman}
-            options={TECHNICIANS}
-            onCommit={(next) => onFieldChange(plan, { serviceman: next })}
+          <InlineTechnicianPairCell
+            primary={plan.serviceman}
+            secondary={plan.serviceman2}
+            onCommit={(patch) => onFieldChange(plan, pairPatchToFields(patch, { primary: "serviceman", secondary: "serviceman2" }))}
           />
         )
       },
@@ -324,7 +357,11 @@ export function getFilterChangeExpandedColumns(
       header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
-    editable?.serviceman ?? { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
+    editable?.serviceman ?? {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+    },
     {
       accessorKey: "source",
       header: () => <ColumnHeader tKey="source" ns="fields" />,
@@ -387,7 +424,11 @@ export function getFilterChangeFullColumns({
       header: () => <ColumnHeader tKey="productNo" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.productNo} />,
     },
-    { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
+    {
+      accessorKey: "serviceman",
+      header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
+      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+    },
     {
       accessorKey: "source",
       header: () => <ColumnHeader tKey="source" ns="fields" />,
@@ -440,6 +481,7 @@ export const FILTER_CHANGE_EXPORT_COLUMNS = [
   { header: "Acc D", key: "accD" },
   { header: "Product #", key: "productNo" },
   { header: "Serviceman", key: "serviceman" },
+  { header: "Serviceman 2", key: "serviceman2" },
   { header: "Source", key: "source" },
   { header: "Note", key: "note" },
   { header: "Status", key: "status" },

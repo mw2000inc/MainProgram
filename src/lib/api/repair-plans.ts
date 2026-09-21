@@ -15,6 +15,8 @@ type Row = {
   pre_d: string | null
   acc_d: string | null
   th: string
+  // Absent until the 20261003000000_second_technician migration is applied.
+  th_2?: string
   part_no: string | null
   amt: number
   unit_in_out: string
@@ -64,6 +66,7 @@ function fromRow(row: Row): RepairPlan {
     preD: row.pre_d ?? undefined,
     accD: row.acc_d ?? undefined,
     th: row.th,
+    th2: row.th_2 ?? "",
     partNo: row.part_no ?? undefined,
     amt: row.amt,
     unitInOut: row.unit_in_out,
@@ -113,6 +116,7 @@ function toRow(input: Partial<Omit<RepairPlan, "id" | "createdAt">>) {
   if (input.preD !== undefined) row.pre_d = input.preD || null
   if (input.accD !== undefined) row.acc_d = input.accD || null
   if (input.th !== undefined) row.th = input.th
+  if (input.th2 !== undefined) row.th_2 = input.th2
   if (input.partNo !== undefined) row.part_no = input.partNo || null
   if (input.amt !== undefined) row.amt = input.amt
   if (input.unitInOut !== undefined) row.unit_in_out = input.unitInOut

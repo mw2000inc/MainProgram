@@ -30,7 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { TECHNICIANS, VEHICLE_TYPES } from "@/lib/constants"
+import { VEHICLE_TYPES } from "@/lib/constants"
+import { TechnicianCombobox } from "@/components/shared/technician-combobox"
+import { normalizeTechnicianPair } from "@/lib/technicians"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
@@ -69,7 +71,8 @@ function createSchema(
 ) {
   return z.object({
     jobType: z.custom<ScheduleJobType>((v) => typeof v === "string" && v.length > 0, t("selectJobType")),
-    technician: z.string().min(1, t("selectTechnician")),
+    // Trimmed before the required check — typable field (see TechnicianCombobox).
+    technician: z.string().trim().min(1, t("selectTechnician")),
     // Transport method for this job — optional, same as most fields here
     // beyond the core job/technician/date. Plain text under the hood (see
     // VEHICLE_TYPES in constants.ts), so this schema never restricts it to
@@ -77,7 +80,7 @@ function createSchema(
     vehicle: z.string().optional(),
     // Optional second technician — most jobs only need the one above; this is
     // only for jobs that genuinely need two people (e.g. pull-out + install).
-    technician2: z.string().optional(),
+    technician2: z.string().trim().optional(),
     orderNo: z.string().optional(),
     scheduledDate: z
       .string()
@@ -203,6 +206,12 @@ export function ScheduleFormDialog({
   const technicianValue = form.watch("technician")
   const hasSecondTechnician = !!technician2Value && technician2Value !== NONE_SENTINEL
 
+  // The job's technician pair after the shared rules (see lib/technicians.ts);
+  // this form stores "no second technician" as NONE_SENTINEL.
+  function technicianPairOf(values: FormValues) {
+    return normalizeTechnicianPair(values.technician, values.technician2 === NONE_SENTINEL ? "" : values.technician2)
+  }
+
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
@@ -212,7 +221,13 @@ export function ScheduleFormDialog({
       // blank), so this coerces the type back to what ScheduleJob expects
       // without changing any actual runtime value.
       vehicle: values.vehicle ?? "",
-      technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
+      // The pair after the shared rules (no second without a real first, never the same
+      // person twice). "" — not undefined — for "no second technician": toRow only writes
+      // technician_2 when it isn't undefined, so undefined here meant removing a second
+      // technician on an edit never actually cleared it (same reason technicianUserId
+      // below is "" rather than undefined).
+      technician: technicianPairOf(values).primary,
+      technician2: technicianPairOf(values).secondary,
       // "" (not undefined) so toRow's `!== undefined` check still fires and
       // actually clears technician_user_id in the DB when an edit sets this
       // back to "None" — undefined here would make toRow skip the field
@@ -266,7 +281,13 @@ export function ScheduleFormDialog({
       // blank), so this coerces the type back to what ScheduleJob expects
       // without changing any actual runtime value.
       vehicle: values.vehicle ?? "",
-      technician2: values.technician2 && values.technician2 !== NONE_SENTINEL ? values.technician2 : undefined,
+      // The pair after the shared rules (no second without a real first, never the same
+      // person twice). "" — not undefined — for "no second technician": toRow only writes
+      // technician_2 when it isn't undefined, so undefined here meant removing a second
+      // technician on an edit never actually cleared it (same reason technicianUserId
+      // below is "" rather than undefined).
+      technician: technicianPairOf(values).primary,
+      technician2: technicianPairOf(values).secondary,
       technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
       technician2UserId:
         values.technician2UserId && values.technician2UserId !== NONE_SENTINEL ? values.technician2UserId : "",
@@ -332,20 +353,9 @@ export function ScheduleFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("technician")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("selectTechnician")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {TECHNICIANS.map((tech) => (
-                        <SelectItem key={tech} value={tech}>
-                          {tech}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <TechnicianCombobox value={field.value ?? ""} onChange={field.onChange} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -394,21 +404,18 @@ export function ScheduleFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("secondTechnicianOptional")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("addSecondTechnicianPlaceholder")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
-                      {TECHNICIANS.map((tech) => (
-                        <SelectItem key={tech} value={tech}>
-                          {tech}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Blank text is "no second technician". The form's own
+                      NONE_SENTINEL (which the rest of this dialog — the shared-
+                      date note, submit — already keys off) stays the stored
+                      value for "none"; this control just maps it to/from an
+                      empty box. A whitespace-only entry counts as none too. */}
+                  <FormControl>
+                    <TechnicianCombobox
+                      value={field.value === NONE_SENTINEL ? "" : (field.value ?? "")}
+                      onChange={(next) => field.onChange(next.trim() ? next : NONE_SENTINEL)}
+                      placeholder={t("addSecondTechnicianPlaceholder")}
+                    />
+                  </FormControl>
                   {/* There's deliberately no separate date field for the second
                       technician — the Date field below applies to this one
                       shared job, so both technicians are always on it together. */}

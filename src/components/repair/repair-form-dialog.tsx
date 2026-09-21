@@ -32,7 +32,9 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { TECHNICIANS, PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
+import { PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
+import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
+import { normalizeTechnicianPair } from "@/lib/technicians"
 import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
@@ -65,7 +67,11 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     solutionStatus: z.string().optional(),
     preD: dateFieldSchema(t),
     accD: dateFieldSchema(t),
-    th: z.string().min(1, t("selectField", { field: tf("serviceman") })),
+    // Trimmed before the required check so a whitespace-only entry can't slip
+    // through now that this is a typable field (see TechnicianCombobox).
+    th: z.string().trim().min(1, t("selectField", { field: tf("serviceman") })),
+    // Optional second technician — normalized again in onSubmit.
+    th2: z.string().trim().optional(),
     partNo: z.string().optional(),
     amt: moneySchema(t),
     unitInOut: z.string().min(1),
@@ -105,6 +111,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
       preD: plan.preD ?? "",
       accD: plan.accD ?? "",
       th: plan.th,
+      th2: plan.th2 ?? "",
       partNo: plan.partNo ?? "",
       amt: String(plan.amt ?? 0),
       unitInOut: plan.unitInOut,
@@ -134,6 +141,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     preD: "",
     accD: "",
     th: "",
+    th2: "",
     partNo: "",
     amt: "0",
     unitInOut: "In",
@@ -185,6 +193,7 @@ export function RepairFormDialog({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNo, plan),
   })
+  const thValue = form.watch("th")
 
   // See filter-change-form-dialog.tsx's own comment on this same pattern —
   // fills only currently-empty fields, add-only, never overwrites anything
@@ -280,6 +289,9 @@ export function RepairFormDialog({
   async function onSubmit(values: FormValues) {
     const input = {
       ...values,
+      // No second technician without a real first, and never the same person twice.
+      th: normalizeTechnicianPair(values.th, values.th2).primary,
+      th2: normalizeTechnicianPair(values.th, values.th2).secondary,
       amt: Number(values.amt),
       unitPrice: Number(values.unitPrice),
       cpPrice: Number(values.cpPrice),
@@ -450,23 +462,17 @@ export function RepairFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{tFields("th")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("selectTechnician")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {TECHNICIANS.map((tech) => (
-                        <SelectItem key={tech} value={tech}>
-                          {tech}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <TechnicianCombobox value={field.value ?? ""} onChange={field.onChange} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
+            />
+            <FormField
+              control={form.control}
+              name="th2"
+              render={({ field }) => <SecondTechnicianFormItem value={field.value} onChange={field.onChange} primary={thValue} />}
             />
             <FormField
               control={form.control}

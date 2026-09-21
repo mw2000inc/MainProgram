@@ -9,6 +9,7 @@ import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { RepairPlan } from "@/lib/types"
 
 export const REPAIR_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
@@ -94,7 +95,11 @@ export function getRepairColumns({
       header: () => <ColumnHeader tKey="amt" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.amt),
     },
-    { accessorKey: "th", header: () => <ColumnHeader tKey="th" ns="fields" /> },
+    {
+      accessorKey: "th",
+      header: () => <ColumnHeader tKey="th" ns="fields" />,
+      cell: ({ row }) => (row.original.th ? formatTechnicians(row.original.th, row.original.th2, "&") : "—"),
+    },
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
@@ -211,6 +216,7 @@ export const REPAIR_EXPORT_COLUMNS = [
   { header: "Acc D", key: "accD" },
   { header: "AMT", key: "amt" },
   { header: "TH", key: "th" },
+  { header: "TH 2", key: "th2" },
   { header: "Part No", key: "partNo" },
   { header: "Status", key: "status" },
 ]

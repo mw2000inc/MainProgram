@@ -71,5 +71,12 @@
   "stacked": "스택형",
   "grid": "격자형",
   "layout": "레이아웃",
-  "customerInfoFilled": "기존 주문을 찾아 고객 정보를 채웠습니다."
+  "customerInfoFilled": "기존 주문을 찾아 고객 정보를 채웠습니다.",
+  "selectOrTypeTechnician": "기술자를 선택하거나 직접 입력",
+  "selectOrType": "선택 또는 입력...",
+  "secondTechnician": "두 번째 기술자...",
+  "secondTechnicianOptional": "두 번째 기술자 (선택)",
+  "addSecondTechnician": "두 번째 기술자 추가",
+  "secondTechnicianNeedsFirst": "먼저 기술자를 지정하세요",
+  "technicianAlreadyAssigned": "이미 첫 번째 기술자로 지정된 분입니다."
 }

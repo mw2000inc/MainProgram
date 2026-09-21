@@ -27,6 +27,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
 import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { InstallPlan } from "@/lib/types"
 
 function InstallPageContent() {
@@ -315,7 +316,10 @@ function InstallPageContent() {
                   />
                   <DetailField label={tFields("salesPerson")} value={selected.salesPerson} />
                   <DetailField label={tFields("via")} value={selected.via} />
-                  <DetailField label={tFields("serviceman")} value={selected.serviceman} />
+                  <DetailField
+                    label={tFields("serviceman")}
+                    value={selected.serviceman ? formatTechnicians(selected.serviceman, selected.serviceman2, "&") : selected.serviceman}
+                  />
                   <DetailField label={tFields("status")} value={planStatusLabel(selected.status, tStatus)} />
                   <DetailField label={tFields("note")} value={selected.note} className="sm:col-span-2" />
                 </DetailPanel>

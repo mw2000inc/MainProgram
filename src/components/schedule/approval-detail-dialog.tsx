@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge, type BadgeTone } from "@/components/shared/status-badge"
 import type { PendingApprovalRow } from "@/components/schedule/pending-approvals-panel"
 import {
@@ -28,8 +27,10 @@ import { useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { TECHNICIANS } from "@/lib/constants"
+import { TechnicianPairCombobox } from "@/components/shared/technician-combobox"
+import { normalizeTechnicianPair } from "@/lib/technicians"
 import { formatDate, formatDateTime } from "@/lib/utils"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -39,18 +40,6 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     </div>
   )
 }
-
-// Radix Select forbids an empty-string item value, so "Not Assigned" needs
-// its own sentinel — mapped back to "" (the plan's own serviceman/th
-// columns are `not null default ''`, never a real NULL) on save. Same
-// pattern schedule-form-dialog.tsx's own optional-technician Selects
-// already use. "N/A" (the roster's own placeholder, used elsewhere for
-// scoring/scheduling purposes — see smart-schedule.ts) is deliberately
-// excluded from this list in favor of this explicit option, so this
-// plan-level field's "nobody assigned yet" state is never confused with
-// that separate roster concept.
-const TECHNICIAN_NONE_SENTINEL = "__none__"
-const TECHNICIAN_OPTIONS: string[] = TECHNICIANS.filter((t) => t !== "N/A")
 
 // The single-item Review flow for the Schedule page's Pending Approvals
 // tab — Approve & Schedule / Reject / Request Reschedule, exactly the three
@@ -68,6 +57,7 @@ export function ApprovalDetailDialog({
   const { t } = useTranslation("dispatch")
   const { t: tFields } = useTranslation("fields")
   const { t: tCommon } = useTranslation("common")
+  const { t: tSchedule } = useTranslation("schedule")
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const approve = useApproveDispatchItem()
@@ -98,6 +88,7 @@ export function ApprovalDetailDialog({
   // filter_change_plans/install_plans/collections have `note`, and filter/
   // collection "details" are naturally module-specific.
   const [servicemanValue, setServicemanValue] = React.useState(row?.servicemanField ?? "")
+  const [servicemanValue2, setServicemanValue2] = React.useState(row?.servicemanField2 ?? "")
   const [dateValue, setDateValue] = React.useState(row?.scheduledDate ?? "")
   const [noteValue, setNoteValue] = React.useState(row?.planNote ?? "")
   const [filterTypeValue, setFilterTypeValue] = React.useState(row?.filterDetails?.filterType ?? "")
@@ -124,23 +115,26 @@ export function ApprovalDetailDialog({
   // call below (approve or accept) takes it straight back out of Draft.
   async function saveEditedFields() {
     if (!row) return
+    // Typable fields — trimmed once here for all four modules, and run through the
+    // shared pair rules (no second without a real first, never the same person twice).
+    const { primary: serviceman, secondary: serviceman2 } = normalizeTechnicianPair(servicemanValue, servicemanValue2)
     if (row.entityType === "filter_change_plans") {
       await updateFilterChangePlan.mutateAsync({
         id: row.entityId,
-        input: { preD: dateValue, serviceman: servicemanValue, note: noteValue, filterType: filterTypeValue, productNo: productNoValue, sc: scValue },
+        input: { preD: dateValue, serviceman, serviceman2, note: noteValue, filterType: filterTypeValue, productNo: productNoValue, sc: scValue },
       })
     } else if (row.entityType === "install_plans") {
       await updateInstallPlan.mutateAsync({
         id: row.entityId,
-        input: { preInstalledDate: dateValue, note: noteValue, serviceman: servicemanValue },
+        input: { preInstalledDate: dateValue, note: noteValue, serviceman, serviceman2 },
       })
     } else if (row.entityType === "collections") {
       await updateCollection.mutateAsync({
         id: row.entityId,
-        input: { preD: dateValue, note: noteValue, amount: Number(amountValue) || 0, ct: ctValue, serviceman: servicemanValue },
+        input: { preD: dateValue, note: noteValue, amount: Number(amountValue) || 0, ct: ctValue, serviceman, serviceman2 },
       })
     } else if (row.entityType === "repair_plans") {
-      await updateRepairPlan.mutateAsync({ id: row.entityId, input: { preD: dateValue, th: servicemanValue } })
+      await updateRepairPlan.mutateAsync({ id: row.entityId, input: { preD: dateValue, th: serviceman, th2: serviceman2 } })
     }
   }
 
@@ -231,37 +225,26 @@ export function ApprovalDetailDialog({
                 )}
                 <Field label={t("requestedTimeLabel")} value={row.requestedTime || "—"} />
                 {isAwaitingCustomer ? (
-                  <Field label={t("technicianColumn")} value={servicemanValue || t("notAssigned")} />
+                  <Field
+                    label={t("technicianColumn")}
+                    value={servicemanValue ? formatTechnicians(servicemanValue, servicemanValue2, tSchedule("and")) : t("notAssigned")}
+                  />
                 ) : (
-                  <div>
-                    <Label htmlFor="approval-technician" className="text-xs font-medium text-muted-foreground">
-                      {t("technicianColumn")}
-                    </Label>
-                    <Select
-                      value={servicemanValue || TECHNICIAN_NONE_SENTINEL}
-                      onValueChange={(v) => setServicemanValue(v === TECHNICIAN_NONE_SENTINEL ? "" : v)}
-                    >
-                      <SelectTrigger id="approval-technician" className="mt-0.5 h-8 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={TECHNICIAN_NONE_SENTINEL}>{t("notAssigned")}</SelectItem>
-                        {/* A value already on the record that isn't one of the
-                            known roster names (e.g. typed in before this was a
-                            dropdown, or someone no longer on the roster) still
-                            gets its own option — never silently hidden just
-                            because it doesn't match the current TECHNICIANS list. */}
-                        {servicemanValue && !TECHNICIAN_OPTIONS.includes(servicemanValue) && (
-                          <SelectItem value={servicemanValue}>{servicemanValue}</SelectItem>
-                        )}
-                        {TECHNICIAN_OPTIONS.map((tech) => (
-                          <SelectItem key={tech} value={tech}>
-                            {tech}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <TechnicianPairCombobox
+                    primaryId="approval-technician"
+                    secondaryId="approval-technician-2"
+                    primaryLabel={t("technicianColumn")}
+                    // Blank is "Not assigned" here, so "N/A" isn't offered. A value already
+                    // on the record that isn't a roster name (typed in earlier, or someone
+                    // no longer on the roster) is simply the text in the box — no special case.
+                    includeNotApplicable={false}
+                    primaryPlaceholder={t("notAssigned")}
+                    primary={servicemanValue}
+                    secondary={servicemanValue2}
+                    onPrimaryChange={setServicemanValue}
+                    onSecondaryChange={setServicemanValue2}
+                    inputClassName="mt-0.5 h-8"
+                  />
                 )}
                 <Field label={t("routeColumn")} value={row.routeSequence != null ? String(row.routeSequence) : t("notAssigned")} />
                 <Field label={t("requestDateTimeLabel")} value={formatDateTime(row.createdAt)} />

@@ -4,13 +4,14 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineSelectCell } from "@/components/shared/inline-edit-cell"
+import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
+import { pairPatchToFields } from "@/lib/technicians"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
 import type { InstallPlan } from "@/lib/types"
 
 export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
@@ -53,7 +54,7 @@ export function getInstallColumns({
   // undefined (non-admin) falls the serviceman cell below back to plain
   // read-only text. Only serviceman for now; widen this Pick if another
   // field here ever needs the same inline-edit treatment.
-  onFieldChange?: (plan: InstallPlan, patch: Partial<Pick<InstallPlan, "serviceman">>) => void
+  onFieldChange?: (plan: InstallPlan, patch: Partial<Pick<InstallPlan, "serviceman" | "serviceman2">>) => void
 } = {}): ColumnDef<InstallPlan, unknown>[] {
   return [
     {
@@ -99,7 +100,7 @@ export function getInstallColumns({
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell plan={row.original} />,
     },
-    // Inline-editable, same TECHNICIANS-roster Select Filter Change's own
+    // Inline-editable, same pick-or-type technician cell Filter Change's own
     // Daily Report serviceman column uses — this field previously had no
     // table anywhere it could even be set outside the Pending Approvals
     // edit dialog, despite existing on install_plans since the
@@ -109,12 +110,14 @@ export function getInstallColumns({
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
       cell: ({ row }) => {
         const plan = row.original
-        if (!onFieldChange) return <span className="inline-block min-w-37.5">{plan.serviceman || "—"}</span>
+        if (!onFieldChange) {
+          return <span className="inline-block min-w-37.5">{plan.serviceman ? formatTechnicians(plan.serviceman, plan.serviceman2, "&") : "—"}</span>
+        }
         return (
-          <InlineSelectCell
-            value={plan.serviceman}
-            options={TECHNICIANS}
-            onCommit={(next) => onFieldChange(plan, { serviceman: next })}
+          <InlineTechnicianPairCell
+            primary={plan.serviceman}
+            secondary={plan.serviceman2}
+            onCommit={(patch) => onFieldChange(plan, pairPatchToFields(patch, { primary: "serviceman", secondary: "serviceman2" }))}
           />
         )
       },
@@ -287,7 +290,8 @@ export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unkn
     {
       id: "latestServiceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => row.original.latest.serviceman || "—",
+      cell: ({ row }) =>
+        row.original.latest.serviceman ? formatTechnicians(row.original.latest.serviceman, row.original.latest.serviceman2, "&") : "—",
     },
     {
       id: "latestStatus",
@@ -328,5 +332,6 @@ export const INSTALL_EXPORT_COLUMNS = [
   { header: "Note", key: "note" },
   { header: "Model(dp)", key: "modelDp" },
   { header: "Serviceman", key: "serviceman" },
+  { header: "Serviceman 2", key: "serviceman2" },
   { header: "Status", key: "status" },
 ]

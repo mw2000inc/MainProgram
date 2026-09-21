@@ -20,5 +20,11 @@
   "autoSuggestConfirmTitle": "Auto-suggest technicians for {count} plan(s)?",
   "autoSuggestConfirmDescription": "Assigns the nearest available technician to every plan in this month's view that has no technician yet, clustering nearby jobs together. You can still edit any individual assignment afterward.",
   "noUnassignedPlans": "Every plan in this view already has a technician assigned.",
-  "suggestedInstead": "Clustering would suggest {technician} instead —"
+  "suggestedInstead": "Clustering would suggest {technician} instead —",
+  "filterPickerPlaceholder": "Select filters...",
+  "filterPickerRequiredHint": "Pick at least one filter.",
+  "filterPickerOtherLabel": "Custom — not in the product catalog",
+  "filterPickerCustomPlaceholder": "Or type your own filter...",
+  "filterPickerAddCustom": "Add",
+  "filterPickerDone": "Done"
 }

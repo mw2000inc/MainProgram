@@ -49,7 +49,10 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, getContractStatus, initials } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
-import { DISPENSER_TYPES, TECHNICIANS } from "@/lib/constants"
+import { DISPENSER_TYPES } from "@/lib/constants"
+import { TechnicianPairCombobox } from "@/components/shared/technician-combobox"
+import { normalizeTechnicianPair } from "@/lib/technicians"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 
 const TECHNICIAN_NA = "N/A"
 
@@ -85,6 +88,7 @@ export default function CustomerProfilePage() {
   }, [params.id])
   const [technicianOpen, setTechnicianOpen] = React.useState(false)
   const [technicianDraft, setTechnicianDraft] = React.useState(TECHNICIAN_NA)
+  const [technicianDraft2, setTechnicianDraft2] = React.useState("")
   const [installedDateOpen, setInstalledDateOpen] = React.useState(false)
   const [installedDateDraft, setInstalledDateDraft] = React.useState("")
   const [orderNumberOpen, setOrderNumberOpen] = React.useState(false)
@@ -271,7 +275,10 @@ export default function CustomerProfilePage() {
             open={technicianOpen}
             onOpenChange={(open) => {
               setTechnicianOpen(open)
-              if (open) setTechnicianDraft(customer.assignedTechnician || TECHNICIAN_NA)
+              if (open) {
+                setTechnicianDraft(customer.assignedTechnician || TECHNICIAN_NA)
+                setTechnicianDraft2(customer.assignedTechnician2 ?? "")
+              }
             }}
           >
             <PopoverTrigger asChild>
@@ -283,26 +290,29 @@ export default function CustomerProfilePage() {
               <p className="text-sm font-semibold mb-3">{t("assignedTechnician")}</p>
               {isAdmin ? (
                 <div className="space-y-3">
-                  <Select value={technicianDraft} onValueChange={setTechnicianDraft}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TECHNICIANS.map((tech) => (
-                        <SelectItem key={tech} value={tech}>
-                          {tech}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* openOnFocus off: Radix focuses this input when the popover
+                      opens, and an already-open suggestion list would sit on
+                      top of the Save button below it. Clicking or typing opens it. */}
+                  <TechnicianPairCombobox
+                    primary={technicianDraft}
+                    secondary={technicianDraft2}
+                    onPrimaryChange={setTechnicianDraft}
+                    onSecondaryChange={setTechnicianDraft2}
+                    openOnFocus={false}
+                  />
                   <Button
                     size="sm"
                     className="w-full"
                     disabled={updateCustomer.isPending}
                     onClick={async () => {
+                      // Typable now — trimmed and run through the shared pair rules
+                      // (no second without a real first, never the same person twice).
+                      // "N/A" or an emptied first box both mean unassigned, stored as "".
+                      const pair = normalizeTechnicianPair(technicianDraft, technicianDraft2)
+                      const primary = pair.primary === TECHNICIAN_NA ? "" : pair.primary
                       await updateCustomer.mutateAsync({
                         id: customer.id,
-                        input: { assignedTechnician: technicianDraft === TECHNICIAN_NA ? "" : technicianDraft },
+                        input: { assignedTechnician: primary, assignedTechnician2: primary ? pair.secondary : "" },
                       })
                       setTechnicianOpen(false)
                     }}
@@ -311,7 +321,7 @@ export default function CustomerProfilePage() {
                   </Button>
                 </div>
               ) : (
-                <InfoRow icon={Wrench} label={tFields("name")} value={customer.assignedTechnician || tCommon("notAvailable")} />
+                <InfoRow icon={Wrench} label={tFields("name")} value={customer.assignedTechnician ? formatTechnicians(customer.assignedTechnician, customer.assignedTechnician2, "&") : tCommon("notAvailable")} />
               )}
             </PopoverContent>
           </Popover>
@@ -448,7 +458,7 @@ export default function CustomerProfilePage() {
                 value={customer.installedDate ? formatDate(customer.installedDate) : tCommon("notAvailable")}
               />
               <InfoRow icon={Droplet} label={t("waterFilterInstalled")} value={customer.filterInstalled ? tCommon("yes") : tCommon("no")} />
-              <InfoRow icon={Wrench} label={t("assignedTechnician")} value={customer.assignedTechnician || tCommon("notAvailable")} />
+              <InfoRow icon={Wrench} label={t("assignedTechnician")} value={customer.assignedTechnician ? formatTechnicians(customer.assignedTechnician, customer.assignedTechnician2, "&") : tCommon("notAvailable")} />
             </CardContent>
           </Card>
         </TabsContent>

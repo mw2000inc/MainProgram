@@ -103,6 +103,9 @@ export interface PendingApprovalRow {
   // per-module in buildRows() below rather than guaranteed by a shared base
   // type.
   servicemanField?: string
+  // The plan's optional second technician (serviceman_2 / th_2) — same
+  // per-module sourcing as servicemanField above.
+  servicemanField2?: string
   // The plan's own `note` column directly (filter_change_plans/
   // install_plans/collections have it; repair_plans doesn't).
   planNote?: string
@@ -179,6 +182,7 @@ function buildRows(
         rescheduleReason: p.rescheduleReason,
         createdAt: p.createdAt,
         servicemanField: p.serviceman,
+        servicemanField2: p.serviceman2,
         planNote: p.note,
         filterDetails: { filterType: p.filterType, productNo: p.productNo, sc: p.sc },
       })
@@ -204,6 +208,7 @@ function buildRows(
         rescheduleReason: p.rescheduleReason,
         createdAt: p.createdAt,
         servicemanField: p.serviceman,
+        servicemanField2: p.serviceman2,
         planNote: p.note,
       })
     )
@@ -228,6 +233,7 @@ function buildRows(
         rescheduleReason: c.rescheduleReason,
         createdAt: c.createdAt,
         servicemanField: c.serviceman,
+        servicemanField2: c.serviceman2,
         planNote: c.note,
         collectionDetails: { amount: c.amount, ct: c.ct },
       })
@@ -252,6 +258,7 @@ function buildRows(
         rescheduleReason: r.rescheduleReason,
         createdAt: r.createdAt,
         servicemanField: r.th,
+        servicemanField2: r.th2,
       })
     )
   }

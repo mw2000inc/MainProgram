@@ -34,6 +34,8 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { dateFieldSchema } from "@/lib/form-schemas"
+import { normalizeTechnicianPair } from "@/lib/technicians"
+import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { toast } from "sonner"
@@ -54,7 +56,10 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     productNo: z.string().optional(),
     preD: dateFieldSchema(t),
     accD: dateFieldSchema(t),
-    serviceman: z.string().optional(),
+    // Both trimmed — typable fields (see TechnicianCombobox); the pair is
+    // normalized again in onSubmit.
+    serviceman: z.string().trim().optional(),
+    serviceman2: z.string().trim().optional(),
     note: z.string().optional(),
   })
 }
@@ -75,6 +80,7 @@ function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: 
       preD: plan.preD ?? "",
       accD: plan.accD ?? "",
       serviceman: plan.serviceman,
+      serviceman2: plan.serviceman2 ?? "",
       note: plan.note ?? "",
     }
   }
@@ -90,6 +96,7 @@ function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: 
     preD: "",
     accD: "",
     serviceman: "",
+    serviceman2: "",
     note: "",
   }
 }
@@ -125,6 +132,7 @@ export function FilterChangeFormDialog({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNumber, plan),
   })
+  const servicemanValue = form.watch("serviceman")
 
   React.useEffect(() => {
     if (!open) return
@@ -206,7 +214,9 @@ export function FilterChangeFormDialog({
       address: values.address ?? "",
       sc: values.sc ?? "",
       productNo: values.productNo ?? "",
-      serviceman: values.serviceman ?? "",
+      // No second technician without a real first, and never the same person twice.
+      serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
+      serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,
     }
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input })
@@ -375,7 +385,7 @@ export function FilterChangeFormDialog({
                     <FormLabel>{tFields("serviceman")}</FormLabel>
                     <div className="flex gap-1.5">
                       <FormControl>
-                        <Input placeholder={t("technicianName")} {...field} />
+                        <TechnicianCombobox value={field.value ?? ""} onChange={field.onChange} className="flex-1" />
                       </FormControl>
                       {isEdit && plan?.customerId && (
                         <Button
@@ -403,6 +413,13 @@ export function FilterChangeFormDialog({
                     )}
                     <FormMessage />
                   </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="serviceman2"
+                render={({ field }) => (
+                  <SecondTechnicianFormItem value={field.value} onChange={field.onChange} primary={servicemanValue} />
                 )}
               />
               <FormField

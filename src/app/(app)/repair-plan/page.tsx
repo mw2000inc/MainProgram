@@ -28,6 +28,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
 import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
 import { formatCurrency, formatDate, todayIso } from "@/lib/utils"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { RepairPlan } from "@/lib/types"
 
 function RepairPlanPageContent() {
@@ -321,7 +322,10 @@ function RepairPlanPageContent() {
                   <DetailField label={tFields("solutionStatus")} value={selected.solutionStatus} className="sm:col-span-2" />
                   <DetailField label={tFields("preD")} value={selected.preD ? formatDate(selected.preD) : undefined} />
                   <DetailField label={tFields("accD")} value={selected.accD ? formatDate(selected.accD) : undefined} />
-                  <DetailField label={tFields("th")} value={selected.th} />
+                  <DetailField
+                    label={tFields("th")}
+                    value={selected.th ? formatTechnicians(selected.th, selected.th2, "&") : selected.th}
+                  />
                   <DetailField label={tFields("amt")} value={formatCurrency(selected.amt)} />
                   <DetailField label={tFields("status")} value={planStatusLabel(selected.status, tStatus)} />
                 </DetailPanel>

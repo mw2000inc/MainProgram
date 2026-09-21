@@ -28,6 +28,7 @@ import { planStatusLabel } from "@/components/shared/status-badge"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { cn, formatDate, todayIso } from "@/lib/utils"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import { suggestTechnician as fetchSuggestedTechnician, type TechnicianSuggestion } from "@/lib/api/filter-change-plans"
 import type { FilterChangePlan } from "@/lib/types"
 
@@ -300,7 +301,7 @@ function FilterChangePageContent() {
                 label={tFields("serviceman")}
                 value={
                   <>
-                    {selected.serviceman || "—"}
+                    {selected.serviceman ? formatTechnicians(selected.serviceman, selected.serviceman2, "&") : "—"}
                     {(() => {
                       const cached = suggestionCache[selected.id]
                       if (!cached) return null

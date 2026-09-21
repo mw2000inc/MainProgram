@@ -33,7 +33,7 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { formatDate, todayIso } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
+import { technicianFilterOptions } from "@/lib/technicians"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
 
@@ -78,6 +78,9 @@ function ScheduleContent() {
   // up for either name — filtering by "Eubert Montalbo" surfaces a job where
   // he's only the second technician, same as if he were primary.
   const [technicianFilter, setTechnicianFilter] = React.useState<string>("all")
+  // The TECHNICIANS roster, plus any other name actually on a job as its technician
+  // OR technician_2 (names can be typed in now) — see technicianFilterOptions.
+  const technicianOptions = React.useMemo(() => technicianFilterOptions(jobs), [jobs])
 
   // Folds in the linked customer's own "SK001-####" order_number (see
   // customer-lookup.ts's resolveCustomerForPlan) — this job's own orderNo
@@ -268,7 +271,7 @@ function ScheduleContent() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("allTechnicians")}</SelectItem>
-                        {TECHNICIANS.map((tech) => (
+                        {technicianOptions.map((tech) => (
                           <SelectItem key={tech} value={tech}>
                             {tech}
                           </SelectItem>

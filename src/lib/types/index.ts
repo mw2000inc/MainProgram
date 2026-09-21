@@ -43,6 +43,10 @@ export interface Customer {
   filterInstalled: boolean
   installedDate?: string
   assignedTechnician: string
+  // Optional second technician (20261003000000_second_technician migration) —
+  // blank/undefined means just the one above. Only meaningful alongside a real
+  // primary; see normalizeTechnicianPair in lib/technicians.ts.
+  assignedTechnician2?: string
   notes?: string
   createdAt: string
   isSystem?: boolean
@@ -581,6 +585,10 @@ export interface FilterChangePlan extends DispatchFields {
   preD?: string
   accD?: string
   serviceman: string
+  // Optional second technician (20261003000000_second_technician migration) —
+  // blank/undefined means just the one above. Only meaningful alongside a real
+  // primary; see normalizeTechnicianPair in lib/technicians.ts.
+  serviceman2?: string
   note?: string
   createdAt: string
 }
@@ -613,6 +621,10 @@ export interface InstallPlan extends DispatchFields {
   // admin can assign someone before this ever reaches the customer, not
   // only after confirmation via schedule_jobs.technician.
   serviceman: string
+  // Optional second technician (20261003000000_second_technician migration) —
+  // blank/undefined means just the one above. Only meaningful alongside a real
+  // primary; see normalizeTechnicianPair in lib/technicians.ts.
+  serviceman2?: string
   createdAt: string
   // Set once a customer confirms this dispatch (see the
   // auto_create_schedule_job_on_confirm migration) -- links to the
@@ -648,6 +660,10 @@ export interface RepairPlan extends DispatchFields {
   preD?: string
   accD?: string
   th: string
+  // Optional second technician (20261003000000_second_technician migration) —
+  // blank/undefined means just the one above. Only meaningful alongside a real
+  // primary; see normalizeTechnicianPair in lib/technicians.ts.
+  th2?: string
   partNo?: string
   amt: number
   unitInOut: string
@@ -737,6 +753,10 @@ export interface CollectionPlan extends DispatchFields {
   // admin can assign someone before this ever reaches the customer, not
   // only after confirmation via schedule_jobs.technician.
   serviceman: string
+  // Optional second technician (20261003000000_second_technician migration) —
+  // blank/undefined means just the one above. Only meaningful alongside a real
+  // primary; see normalizeTechnicianPair in lib/technicians.ts.
+  serviceman2?: string
   createdAt: string
   // Same linking/tagging pattern as FilterChangePlan — see its comments.
   // Both optional (rather than defaulted client-side) so existing manual-

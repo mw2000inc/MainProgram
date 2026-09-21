@@ -33,7 +33,9 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { PRODUCT_CATALOG, PAYMENT_METHODS, TECHNICIANS, formatProductOption } from "@/lib/constants"
+import { PRODUCT_CATALOG, PAYMENT_METHODS, formatProductOption } from "@/lib/constants"
+import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
+import { normalizeTechnicianPair } from "@/lib/technicians"
 import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
@@ -91,8 +93,10 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     // assigned later from the Pending Approvals dialog's own Technician
     // dropdown (see onSubmit's own comment); this doesn't change that
     // workflow, it just lets an admin who already knows who's doing the job
-    // set it now instead of waiting for that later step.
-    serviceman: z.string().optional(),
+    // set it now instead of waiting for that later step. Trimmed, since it's
+    // now a typable field (see TechnicianCombobox).
+    serviceman: z.string().trim().optional(),
+    serviceman2: z.string().trim().optional(),
     // Transient — never saved onto the install_plans row itself (it has no
     // such column). Only used, on add, as the new Customer's own
     // memberAccountNumber when this order turns out to have no existing
@@ -126,6 +130,7 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
       salesPerson: plan.salesPerson ?? "",
       via: plan.via ?? "",
       serviceman: plan.serviceman ?? "",
+      serviceman2: plan.serviceman2 ?? "",
       memberAccountNumber: "",
     }
   }
@@ -149,6 +154,7 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
     salesPerson: "",
     via: "",
     serviceman: "",
+    serviceman2: "",
     memberAccountNumber: "",
   }
 }
@@ -180,6 +186,7 @@ export function InstallFormDialog({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, plan),
   })
+  const servicemanValue = form.watch("serviceman")
 
   // Read-only, never submitted — install_plans has no column for this at
   // all (per the explicit decision on this: purely a display convenience,
@@ -278,7 +285,9 @@ export function InstallFormDialog({
       orderNo,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
-      serviceman: values.serviceman ?? "",
+      // No second technician without a real first, and never the same person twice.
+      serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
+      serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,
       unitPrice: Number(values.unitPrice),
       cpPrice: Number(values.cpPrice),
       deliveryInstallationFee: Number(values.deliveryInstallationFee),
@@ -649,38 +658,29 @@ export function InstallFormDialog({
                   </FormItem>
                 )}
               />
-              {/* Same optional Select + "none" sentinel shape Payment Mode
-                  above already uses — Radix Select forbids a real empty-
-                  string item value, and this field genuinely can be left
-                  unassigned (see the schema's own comment). Same
-                  TECHNICIANS roster Repair Plan's own required Technician
-                  field uses, unfiltered — matching this app's other
-                  existing serviceman editing surface (Daily Report's own
-                  inline Select for this same field), not
-                  ApprovalDetailDialog's separate N/A-filtered copy. */}
+              {/* Optional (this field genuinely can be left unassigned — see
+                  the schema's own comment), so blank is "not assigned". Pick a
+                  name from the TECHNICIANS roster (unfiltered, same list
+                  Repair Plan's own Technician field and the Daily Report's
+                  inline cell use) or type any other. */}
               <FormField
                 control={form.control}
                 name="serviceman"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tFields("serviceman")}</FormLabel>
-                    <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t("selectTechnician")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">{t("notAssigned")}</SelectItem>
-                        {TECHNICIANS.map((tech) => (
-                          <SelectItem key={tech} value={tech}>
-                            {tech}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <TechnicianCombobox value={field.value ?? ""} onChange={field.onChange} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="serviceman2"
+                render={({ field }) => (
+                  <SecondTechnicianFormItem value={field.value} onChange={field.onChange} primary={servicemanValue} />
                 )}
               />
               <FormField

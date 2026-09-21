@@ -151,6 +151,7 @@ export default function CustomersPage() {
     { header: "Contract End", key: "contractEnd" },
     { header: "Water Purification Type", key: "dispenserType" },
     { header: "Technician", key: "assignedTechnician" },
+    { header: "Technician 2", key: "assignedTechnician2" },
   ]
 
   // Mirrors exactly what's shown in the Member detail panel below (the six

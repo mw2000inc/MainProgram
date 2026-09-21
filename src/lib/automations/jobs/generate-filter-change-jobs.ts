@@ -1,9 +1,24 @@
 import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCustomerFilterChangeDueDate, getCpSystemFilterChangeDueDate } from "@/lib/utils"
-import { TECHNICIANS } from "@/lib/constants"
+import { normalizeTechnicianPair } from "@/lib/technicians"
 import type { AutomationResult } from "../types"
 import type { CpSystemComponent } from "@/lib/types"
+
+// A customer's Assigned technician(s) are pick-or-type now (any name, not only the
+// TECHNICIANS roster) and there can be two, so the generated job gets whatever
+// pair is there — as schedule_jobs.technician + technician_2. "N/A" only when the
+// first is blank. This used to fall back to "N/A" for any name not on the roster,
+// which made sense while the field was a locked Select and would now silently
+// discard a typed name. Goes through the same pair rules as every other surface
+// (no second without a real first, never the same person twice).
+function assignedTechnicianPair(
+  primary: string | null | undefined,
+  secondary: string | null | undefined
+): { technician: string; technician_2: string | null } {
+  const pair = normalizeTechnicianPair(primary, secondary)
+  return { technician: pair.primary || "N/A", technician_2: pair.secondary || null }
+}
 
 // For every customer whose next filter change is due (installed date/
 // contract start + monitoring interval <= today) and doesn't already have
@@ -36,7 +51,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   const admin = createAdminClient()
 
   const [{ data: customers, error: customersError }, { data: settingsRow, error: settingsError }] = await Promise.all([
-    admin.from("customers").select("id, order_number, installed_date, contract_start, dispenser_type, assigned_technician"),
+    admin.from("customers").select("id, order_number, installed_date, contract_start, dispenser_type, assigned_technician, assigned_technician_2"),
     admin.from("company_settings").select("monitoring_default_months, monitoring_intervals").eq("id", 1).maybeSingle(),
   ])
   if (customersError) return { ok: false, message: customersError.message }
@@ -48,7 +63,6 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const validTechnicians: readonly string[] = TECHNICIANS
 
   let created = 0
   let alreadyPending = 0
@@ -93,10 +107,10 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       continue
     }
 
-    const technician = validTechnicians.includes(c.assigned_technician) ? c.assigned_technician : "N/A"
+    const technicians = assignedTechnicianPair(c.assigned_technician, c.assigned_technician_2)
     const { error: insertError } = await admin.from("schedule_jobs").insert({
       job_type: "filter_change",
-      technician,
+      ...technicians,
       customer_id: c.id,
       order_no: c.order_number,
       scheduled_date: today,
@@ -194,11 +208,11 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
     }
 
     const customer = entry.customer_id ? customerById.get(entry.customer_id) : undefined
-    const technician = customer && validTechnicians.includes(customer.assigned_technician) ? customer.assigned_technician : "N/A"
+    const technicians = assignedTechnicianPair(customer?.assigned_technician, customer?.assigned_technician_2)
 
     const { error: insertError } = await admin.from("schedule_jobs").insert({
       job_type: "filter_change",
-      technician,
+      ...technicians,
       customer_id: entry.customer_id,
       order_no: orderNo,
       scheduled_date: today,

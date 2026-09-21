@@ -20,5 +20,11 @@
   "autoSuggestConfirmTitle": "{count}개 계획에 대해 기술자를 자동으로 추천하시겠습니까?",
   "autoSuggestConfirmDescription": "이 달 보기에서 아직 기술자가 배정되지 않은 모든 계획에 가장 가까운 기술자를 배정하여 인근 작업을 묶습니다. 이후에도 개별 배정을 자유롭게 수정할 수 있습니다.",
   "noUnassignedPlans": "이 보기의 모든 계획에 이미 기술자가 배정되어 있습니다.",
-  "suggestedInstead": "클러스터링 결과 {technician}님을 대신 추천합니다 —"
+  "suggestedInstead": "클러스터링 결과 {technician}님을 대신 추천합니다 —",
+  "filterPickerPlaceholder": "필터 선택...",
+  "filterPickerRequiredHint": "필터를 하나 이상 선택하세요.",
+  "filterPickerOtherLabel": "직접 입력 — 제품 카탈로그에 없음",
+  "filterPickerCustomPlaceholder": "또는 필터를 직접 입력...",
+  "filterPickerAddCustom": "추가",
+  "filterPickerDone": "완료"
 }
