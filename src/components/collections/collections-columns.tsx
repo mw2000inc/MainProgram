@@ -172,6 +172,14 @@ export function getCollectionsColumns({
   ]
 }
 
+// Plan D (collectionDate) is deliberately not editable inline: on the first
+// occurrence of a recurring series it re-anchors every later Pending
+// occurrence (trg_reanchor_collection_schedule), and the date cell commits
+// the moment a date is picked — so that edit stays on the Collection Plan
+// form. C/T and Amount on a recurring row are re-written from the sale list
+// entry whenever that entry is next saved, same as when edited on the record.
+export type CollectionDailyReportPatch = Partial<Pick<CollectionPlan, "preD" | "accD" | "amount" | "note" | "serviceman" | "ct">>
+
 // Widened, inline-editable column set for the Daily Report's own compact
 // panel (see daily-report-section.tsx) — same idea as
 // getFilterChangeDailyReportColumns: leaves the plain getCollectionsColumns()
@@ -187,7 +195,7 @@ export function getCollectionsDailyReportColumns({
   onFieldChange,
 }: {
   onStatusChange?: (entry: CollectionPlan, status: string) => void
-  onFieldChange?: (entry: CollectionPlan, patch: Partial<Pick<CollectionPlan, "preD" | "amount" | "note" | "serviceman">>) => void
+  onFieldChange?: (entry: CollectionPlan, patch: CollectionDailyReportPatch) => void
 } = {}): ColumnDef<CollectionPlan, unknown>[] {
   return [
     {
@@ -209,7 +217,15 @@ export function getCollectionsDailyReportColumns({
         return <InlineCurrencyCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
       },
     },
-    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
+    {
+      accessorKey: "ct",
+      header: () => <ColumnHeader tKey="ct" ns="fields" />,
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange) return <span>{entry.ct}</span>
+        return <InlineTextCell value={entry.ct} className="min-w-25" onCommit={(next) => onFieldChange(entry, { ct: next })} />
+      },
+    },
     {
       accessorKey: "collectionDate",
       header: () => <ColumnHeader tKey="planD" ns="fields" />,
@@ -228,9 +244,12 @@ export function getCollectionsDailyReportColumns({
     {
       accessorKey: "accD",
       header: () => <ColumnHeader tKey="accD" ns="fields" />,
-      cell: ({ row }) => (
-        <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
-      ),
+      cell: ({ row }) => {
+        const entry = row.original
+        if (!onFieldChange)
+          return <span className="inline-block min-w-[100px]">{entry.accD ? formatDate(entry.accD) : "—"}</span>
+        return <InlineDateCell value={entry.accD} onCommit={(next) => onFieldChange(entry, { accD: next })} />
+      },
     },
     {
       accessorKey: "note",

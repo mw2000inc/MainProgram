@@ -29,6 +29,7 @@ import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
   getFilterChangeDailyReportExpandedColumns,
   FILTER_CHANGE_EXPORT_COLUMNS,
+  type FilterChangeDailyReportPatch,
 } from "@/components/filter-change/filter-change-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
@@ -478,13 +479,13 @@ export function DailyReportSection() {
   const filterChangeColumnParams = React.useMemo(
     () => ({
       onStatusChange: isAdmin ? (plan: FilterChangePlan, status: string) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
-      // Pre D/Serviceman edited straight from the cell (compact or
-      // expanded — both share the same cell renderers, see
+      // Filter/Pre D/Acc D/Serviceman edited straight from the cell
+      // (compact or expanded — both share the same cell renderers, see
       // dailyReportColumnDefs) — same mutate-and-invalidate hook the status
       // column already uses, so the panel's own day-filtered rows update
       // immediately without a manual refetch.
       onFieldChange: isAdmin
-        ? (plan: FilterChangePlan, patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman">>) =>
+        ? (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) =>
             updateFilterChangePlan.mutate({ id: plan.id, input: patch })
         : undefined,
     }),
@@ -533,9 +534,9 @@ export function DailyReportSection() {
         filterColumnsByVisibility(
           getCollectionsDailyReportColumns({
             onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
-            // Pre D/Amount/Note edited straight from the panel cell (see
-            // getCollectionsDailyReportColumns) — same mutate-and-invalidate
-            // hook the status column above already uses.
+            // C/T/Pre D/Acc D/Amount/Note/Serviceman edited straight from
+            // the panel cell (see getCollectionsDailyReportColumns) — same
+            // mutate-and-invalidate hook the status column above already uses.
             onFieldChange: isAdmin ? (entry, patch) => updateCollection.mutate({ id: entry.id, input: patch }) : undefined,
           }),
           visibleFieldsFor("collection")

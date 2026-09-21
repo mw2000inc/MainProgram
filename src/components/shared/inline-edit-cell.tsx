@@ -55,11 +55,16 @@ export function InlineTextCell({
   placeholder,
   onCommit,
   className,
+  required,
 }: {
   value: string | undefined
   placeholder?: string
   onCommit: (next: string) => void
   className?: string
+  // For a field the record's own form doesn't allow blank (e.g. Filter
+  // Change's Filter) — an emptied field snaps back to the last saved value
+  // on blur instead of committing "".
+  required?: boolean
 }) {
   // Resyncing draft to an incoming value change (another admin's edit
   // landing via the query cache) belongs during render, not in an effect —
@@ -81,6 +86,10 @@ export function InlineTextCell({
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
+        if (required && !draft.trim()) {
+          setDraft(value ?? "")
+          return
+        }
         if (draft !== (value ?? "")) onCommit(draft)
       }}
     />

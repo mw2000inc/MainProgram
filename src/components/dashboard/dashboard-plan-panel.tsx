@@ -365,7 +365,20 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
       </Card>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col gap-0 p-0">
+        <DialogContent
+          className="w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col gap-0 p-0"
+          // A dialog opened from inside this one (a row's Edit dialog, the
+          // bulk-delete confirm below) is a React-tree sibling, not a child,
+          // so a press inside it counts as "outside" here — and Radix defers
+          // that check to the click, by which time a Cancel/X click has
+          // already unmounted the top dialog, so this one would be dismissed
+          // along with it. A press that started inside another dialog is
+          // never a dismissal of this one.
+          onPointerDownOutside={(e) => {
+            const target = e.detail.originalEvent.target
+            if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) e.preventDefault()
+          }}
+        >
           <DialogHeader className="border-b p-4 pb-3">
             <DialogTitle className="flex items-center gap-2">
               <Icon className="h-4 w-4 text-primary" /> {title}

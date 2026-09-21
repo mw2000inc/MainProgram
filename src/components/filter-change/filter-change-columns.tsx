@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
-import { InlineDateCell, InlineSelectCell } from "@/components/shared/inline-edit-cell"
+import { InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
@@ -157,9 +157,13 @@ export function getFilterChangeCustomerPortalColumns(): ColumnDef<FilterChangePl
   ]
 }
 
+// Plan D (planDate) is deliberately not in this list: on a recurring row it's
+// re-written by the sale-list sync, so the one-off-visit override is Pre D.
+export type FilterChangeDailyReportPatch = Partial<Pick<FilterChangePlan, "preD" | "accD" | "serviceman" | "filterType">>
+
 interface FilterChangeDailyReportColumnParams {
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
-  onFieldChange?: (plan: FilterChangePlan, patch: Partial<Pick<FilterChangePlan, "preD" | "serviceman">>) => void
+  onFieldChange?: (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => void
 }
 
 // One column-def builder shared by the compact and expanded (Maximize2)
@@ -187,7 +191,22 @@ function dailyReportColumnDefs({
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <span className="inline-block min-w-[140px]">{row.original.memberAccount}</span>,
     },
-    filterType: { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
+    filterType: {
+      accessorKey: "filterType",
+      header: () => <ColumnHeader tKey="filter" ns="fields" />,
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange) return <span>{plan.filterType}</span>
+        return (
+          <InlineTextCell
+            value={plan.filterType}
+            required
+            className="min-w-25"
+            onCommit={(next) => onFieldChange(plan, { filterType: next })}
+          />
+        )
+      },
+    },
     contactNumber: {
       accessorKey: "contactNumber",
       header: () => <ColumnHeader tKey="contactNumber" ns="fields" />,
@@ -215,9 +234,11 @@ function dailyReportColumnDefs({
     accD: {
       accessorKey: "accD",
       header: () => <ColumnHeader tKey="accD" ns="fields" />,
-      cell: ({ row }) => (
-        <span className="inline-block min-w-[100px]">{row.original.accD ? formatDate(row.original.accD) : "—"}</span>
-      ),
+      cell: ({ row }) => {
+        const plan = row.original
+        if (!onFieldChange) return <span className="inline-block min-w-[100px]">{plan.accD ? formatDate(plan.accD) : "—"}</span>
+        return <InlineDateCell value={plan.accD} onCommit={(next) => onFieldChange(plan, { accD: next })} />
+      },
     },
     serviceman: {
       accessorKey: "serviceman",
@@ -263,7 +284,7 @@ export function getFilterChangeDailyReportColumns(
 // Status), for the full 10-column set with horizontal scrolling. Shares
 // the exact same cell renderers (and onFieldChange/onStatusChange editing)
 // as the compact view via dailyReportColumnDefs, so switching to full-
-// screen never loses the ability to edit Pre D/Serviceman/Status.
+// screen never loses the ability to edit Filter/Pre D/Acc D/Serviceman/Status.
 export function getFilterChangeDailyReportExpandedColumns(
   params: FilterChangeDailyReportColumnParams = {}
 ): ColumnDef<FilterChangePlan, unknown>[] {
@@ -272,7 +293,15 @@ export function getFilterChangeDailyReportExpandedColumns(
 }
 
 // Full AppSheet-parity column set, shown only in the panel's expanded view.
-export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, unknown>[] {
+// Read-only unless onFieldChange is given — then Filter/Pre D/Acc D/Serviceman
+// swap in the same inline cells the Daily Report columns use (see
+// dailyReportColumnDefs), so the wider view of an editable table stays
+// editable. Callers passing nothing (Sale List, the order page) get the plain
+// cells below, unchanged.
+export function getFilterChangeExpandedColumns(
+  params: FilterChangeDailyReportColumnParams = {}
+): ColumnDef<FilterChangePlan, unknown>[] {
+  const editable = params.onFieldChange ? dailyReportColumnDefs(params) : undefined
   return [
     {
       accessorKey: "orderNumber",
@@ -280,22 +309,22 @@ export function getFilterChangeExpandedColumns(): ColumnDef<FilterChangePlan, un
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
     { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
-    { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
+    editable?.filterType ?? { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
     { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },
     { accessorKey: "sc", header: () => <ColumnHeader tKey="sc" ns="fields" /> },
     { accessorKey: "productNo", header: () => <ColumnHeader tKey="productNo" ns="fields" /> },
-    {
+    editable?.preD ?? {
       accessorKey: "preD",
       header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
     },
-    {
+    editable?.accD ?? {
       accessorKey: "accD",
       header: () => <ColumnHeader tKey="accD" ns="fields" />,
       cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
     },
-    { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
+    editable?.serviceman ?? { accessorKey: "serviceman", header: () => <ColumnHeader tKey="serviceman" ns="fields" /> },
     {
       accessorKey: "source",
       header: () => <ColumnHeader tKey="source" ns="fields" />,
