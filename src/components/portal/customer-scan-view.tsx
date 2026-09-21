@@ -42,6 +42,7 @@ import {
   todayIso,
 } from "@/lib/utils"
 import { getServiceHistory } from "@/lib/service-history"
+import { pickCurrentOrder } from "@/lib/customer-lookup"
 
 // Shared, read-only customer profile shown after scanning a QR code. Rendered by
 // both /scan/[customerId] (the canonical public route) and /portal/[id] (kept
@@ -66,6 +67,12 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     const accountLabel = customer.companyName || customer.fullName
     return (profile?.saleList ?? []).map((sl) => ({ ...sl, accountLabel }))
   }, [profile, customer])
+
+  // Personal Information describes the customer's current REAL order — not
+  // customers.order_number/installed_date, which are the member's auto-generated
+  // "SK001-####" number and a member-level date that is almost never filled in
+  // (see pickCurrentOrder). Both fields come from the same order so they can't disagree.
+  const currentOrder = React.useMemo(() => pickCurrentOrder(saleListRows), [saleListRows])
 
   // The customer's next filter change still on the books — earliest
   // 'Pending' plan by its effective service date (preD, the real scheduled
@@ -225,11 +232,11 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 <CardTitle className="text-base">{t("personalInformation")}</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <InfoRow icon={Hash} label={tFields("orderNumber")} value={customer.orderNumber} />
+                <InfoRow icon={Hash} label={tFields("orderNumber")} value={currentOrder ? currentOrder.orderNumber.trim() : t("na")} />
                 <InfoRow
                   icon={CalendarDays}
                   label={tFields("installedDate")}
-                  value={customer.installedDate ? formatDate(customer.installedDate) : t("na")}
+                  value={currentOrder?.installedDate ? formatDate(currentOrder.installedDate) : t("na")}
                 />
                 <InfoRow icon={Mail} label={tMember("emailAddress")} value={customer.email} />
                 <InfoRow icon={Phone} label={t("contactNumber")} value={customer.contactNumber} />

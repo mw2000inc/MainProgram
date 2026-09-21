@@ -143,3 +143,31 @@ export function findExistingMemberMatch(
 
   return undefined
 }
+
+// The one order a customer-level summary (the customer portal's "Personal
+// Information") should describe when a customer can have several. A member's
+// own customers.order_number ("SK001-####") is NOT an order — it's an
+// auto-generated member/contract number (a database trigger hands out the next
+// value in a sequence on insert), and customers.installed_date is a member-level
+// field that is almost never filled in — so neither can stand in for the real
+// order; the real ones are the customer's sale_list_entries.
+//
+// "Current" = the most recently installed order, ignoring discontinued
+// (INACTIVE) ones unless that's all there is; ties (same install date, e.g. two
+// units installed the same day) go to the most recently entered, then to the
+// higher order number so the pick is deterministic. Undefined when the customer
+// has no orders at all — callers show "N/A" then, never a made-up number.
+export function pickCurrentOrder<T extends Pick<SaleListEntry, "orderNumber" | "installedDate" | "status" | "createdAt">>(
+  entries: T[]
+): T | undefined {
+  if (entries.length === 0) return undefined
+  const live = entries.filter((e) => e.status !== "INACTIVE")
+  const pool = live.length > 0 ? live : entries
+  return [...pool].sort((a, b) => {
+    const byInstalled = (b.installedDate ?? "").localeCompare(a.installedDate ?? "")
+    if (byInstalled !== 0) return byInstalled
+    const byCreated = (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
+    if (byCreated !== 0) return byCreated
+    return b.orderNumber.trim().localeCompare(a.orderNumber.trim())
+  })[0]
+}
