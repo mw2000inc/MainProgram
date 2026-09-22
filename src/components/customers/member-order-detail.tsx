@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ClipboardCheck, Droplets, Banknote, Wrench, Pencil } from "lucide-react"
+import { ClipboardCheck, Droplets, Banknote, Wrench, HardHat, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/data-table/data-table"
@@ -28,14 +28,19 @@ import {
 } from "@/components/collections/collections-columns"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
-import { useDeleteSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { InstallFormDialog } from "@/components/install/install-form-dialog"
+import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
+import { useDeleteSaleListEntries, useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, todayIso as today } from "@/lib/utils"
 import { useAuth, type Permission } from "@/lib/auth/auth-context"
-import type { CollectionPlan, Customer, FilterChangePlan, RepairPlan } from "@/lib/types"
+import type { CollectionPlan, Customer, FilterChangePlan, InstallPlan, RepairPlan } from "@/lib/types"
 
 // Trailing pencil column that opens the record's own Edit dialog in place —
 // sits alongside whatever inline cells the table already has (for the fields
@@ -111,6 +116,16 @@ export function MemberOrderDetail({
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: collections = [] } = useCollections()
   const { data: repairPlans = [] } = useRepairPlans()
+  const { data: installPlans = [] } = useInstallPlans()
+  // Only needed to resolve Install's own customer link below (install_plans
+  // has no customer_id column — see resolveCustomerForPlan's own comment —
+  // so this is the same customers + sale-list-entries bridge
+  // findCustomerByOrderNumber/resolveCustomerForPlan already use everywhere
+  // else in the app for exactly this "which member does this order belong
+  // to" question). Filter Changes/Collections/Repairs above don't need
+  // either array: this order's own orderNumber is already a direct match.
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   // Same update hooks the Daily Report's panels use — they invalidate the
@@ -127,12 +142,14 @@ export function MemberOrderDetail({
   const [filterFormOpen, setFilterFormOpen] = React.useState(false)
   const [collectionFormOpen, setCollectionFormOpen] = React.useState(false)
   const [repairFormOpen, setRepairFormOpen] = React.useState(false)
+  const [installFormOpen, setInstallFormOpen] = React.useState(false)
   // The record an Edit pencil opened, if any — same `editing` + form-open
   // pairing the standalone Filter Change/Collection Plan/Repair Plan pages
   // use to drive these same dialogs (see the dialogs' render below).
   const [editingFilterChange, setEditingFilterChange] = React.useState<FilterChangePlan | undefined>(undefined)
   const [editingCollection, setEditingCollection] = React.useState<CollectionPlan | undefined>(undefined)
   const [editingRepair, setEditingRepair] = React.useState<RepairPlan | undefined>(undefined)
+  const [editingInstall, setEditingInstall] = React.useState<InstallPlan | undefined>(undefined)
 
   const narrowColumns = React.useMemo(() => getSaleListOrderNumberColumn(), [])
   // The compact Filter Changes card on this page shows exactly 5 fields,
@@ -192,6 +209,12 @@ export function MemberOrderDetail({
     const columns = getRepairColumns()
     return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingRepair) : columns
   }, [isAdmin, tCommon])
+  // Same plain read-only-columns + Edit-pencil shape as Repairs above — no
+  // inline field editing here either.
+  const installColumns = React.useMemo(() => {
+    const columns = getInstallColumns({})
+    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingInstall) : columns
+  }, [isAdmin, tCommon])
 
   const orderFilterChanges = React.useMemo(
     () => filterChangePlans.filter((p) => p.orderNumber === entry.orderNumber),
@@ -204,6 +227,19 @@ export function MemberOrderDetail({
   const orderRepairs = React.useMemo(
     () => repairPlans.filter((r) => r.orderNo === entry.orderNumber),
     [repairPlans, entry]
+  )
+  // Unlike the three above, this is scoped to the whole MEMBER, not just this
+  // one order — a member can have several installed units over time, each
+  // under its own order number, and all of them belong here. install_plans
+  // has no customer_id column, so each row's owning customer is resolved the
+  // same way the rest of the app already does it (resolveCustomerForPlan,
+  // via the order-number -> sale_list_entries -> customer_id bridge, falling
+  // back to a direct customers.order_number match) — the exact mechanism
+  // that already makes a new Install record auto-link to the right member
+  // with no manual step, whichever order number it's filed under.
+  const memberInstalls = React.useMemo(
+    () => installPlans.filter((p) => resolveCustomerForPlan(customers, saleListEntries, undefined, p.orderNo)?.id === customer.id),
+    [installPlans, customers, saleListEntries, customer.id]
   )
 
   const accountLabel = customer.companyName || customer.fullName
@@ -308,6 +344,45 @@ export function MemberOrderDetail({
                     headerAlwaysRow
                   />
                 </div>
+                {/* Same clearance reasoning as Repairs' own wrapper above —
+                    guaranteed full-width below it regardless of either
+                    section's own height. dateKey="installedDate" turns on
+                    the same month-pill scoping Filter Changes/Collections
+                    already have above, which matters more here than it does
+                    for a single order's own records: this section can span
+                    every unit this member has ever had installed, across
+                    however many years and orders that covers.
+                    tableContainerClassName/tableClassName: same fix Filter
+                    Changes/Collections already needed above — Install's own
+                    12 real columns + the Edit pencil are wider than this
+                    Card's own available width, and the Card (like every
+                    Card in this app) clips overflow at its own edge
+                    (overflow-hidden, for its rounded corners). Without an
+                    explicit min-w on the table, the table doesn't reliably
+                    engage the DataTable's own horizontal scroll before
+                    hitting that edge, silently clipping away everything
+                    past Contact # (Model through Status, and the Edit
+                    pencil) with no way to reach it — confirmed by rendering
+                    this exact section and inspecting it, not guessed.
+                    Repairs above doesn't need this: its own column set is
+                    narrow enough to never hit the same wall. */}
+                <div className="mt-6 clear-both">
+                  <OrderRelatedSection
+                    title={t("installSection")}
+                    icon={HardHat}
+                    data={memberInstalls}
+                    dateKey="installedDate"
+                    columns={installColumns}
+                    exportColumns={INSTALL_EXPORT_COLUMNS}
+                    exportFileName={`installs-${customer.id}`}
+                    emptyMessage={t("noInstallHistory")}
+                    canAdd
+                    onAdd={() => setInstallFormOpen(true)}
+                    headerAlwaysRow
+                    tableContainerClassName="overflow-x-auto scrollbar-always-visible"
+                    tableClassName="min-w-[1000px] w-full"
+                  />
+                </div>
               </>
             }
           >
@@ -383,6 +458,16 @@ export function MemberOrderDetail({
         defaultDate={today()}
         defaultOrderNo={entry.orderNumber}
         plan={editingRepair}
+      />
+      <InstallFormDialog
+        open={installFormOpen || !!editingInstall}
+        onOpenChange={(o) => {
+          setInstallFormOpen(o)
+          if (!o) setEditingInstall(undefined)
+        }}
+        defaultDate={today()}
+        defaultOrderNo={entry.orderNumber}
+        plan={editingInstall}
       />
     </>
   )

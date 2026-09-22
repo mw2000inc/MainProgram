@@ -108,7 +108,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
 
 type FormValues = z.infer<ReturnType<typeof createSchema>>
 
-function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
+function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: InstallPlan): FormValues {
   if (plan) {
     return {
       inputDate: plan.inputDate,
@@ -147,7 +147,7 @@ function defaultValues(defaultDate: string, plan?: InstallPlan): FormValues {
     installedDate: "",
     note: "",
     modelDp: "",
-    orderNo: "",
+    orderNo: defaultOrderNo ?? "",
     inOut: "IN",
     paymentMode: "",
     receiptNo: "",
@@ -163,11 +163,16 @@ export function InstallFormDialog({
   open,
   onOpenChange,
   defaultDate,
+  defaultOrderNo,
   plan,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
+  // Pre-fills Order No. when opened from an order's own detail page — same
+  // add-only autofill as Filter Change/Collection/Repair's own
+  // defaultOrderNo (see handleOrderNoBlur below, fired once on open).
+  defaultOrderNo?: string
   // Editing an existing plan instead of creating a new one.
   plan?: InstallPlan
 }) {
@@ -184,7 +189,7 @@ export function InstallFormDialog({
   const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(defaultDate, plan),
+    defaultValues: defaultValues(defaultDate, defaultOrderNo, plan),
   })
   const servicemanValue = form.watch("serviceman")
 
@@ -198,9 +203,16 @@ export function InstallFormDialog({
   const yearMonthPlan = inputDateValue ? inputDateValue.slice(0, 7) : ""
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, plan))
+    if (!open) return
+    form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    // Same immediate-fill-on-open as Filter Change/Collection/Repair's own
+    // defaultOrderNo — opening this dialog already pointed at a real order
+    // (e.g. from that order's own detail page) fills the rest in right away,
+    // without needing the admin to click into and back out of a field that's
+    // already correctly filled.
+    if (!plan && defaultOrderNo) handleOrderNoBlur(defaultOrderNo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate, plan])
+  }, [open, defaultDate, defaultOrderNo, plan])
 
   // See filter-change-form-dialog.tsx's own comment on this same pattern —
   // fills only currently-empty fields, add-only, never overwrites anything
