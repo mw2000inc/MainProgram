@@ -176,8 +176,8 @@ interface FilterChangeDailyReportColumnParams {
 // the Sale List's Product# dropdown read — so it's picked from a grid of those
 // filter parts rather than typed. Named component (not inline in the column
 // def) so it can call useProducts; the query is shared, so every row's cell
-// reads the one cached fetch. Still required: the grid picker keeps
-// InlineTextCell's guard of never saving an emptied Filter.
+// reads the one cached fetch. Not required: an admin can clear it down to
+// blank (e.g. before an install visit confirms which filters actually apply).
 function FilterCell({
   plan,
   onFieldChange,
@@ -192,9 +192,7 @@ function FilterCell({
     <InlineGridPickerCell
       value={plan.filterType}
       options={options}
-      required
       placeholder={t("filterPickerPlaceholder")}
-      requiredHint={t("filterPickerRequiredHint")}
       otherLabel={t("filterPickerOtherLabel")}
       doneLabel={t("filterPickerDone")}
       customPlaceholder={t("filterPickerCustomPlaceholder")}

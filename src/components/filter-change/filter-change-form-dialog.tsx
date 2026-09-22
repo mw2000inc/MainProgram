@@ -48,7 +48,7 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
   return z.object({
     orderNumber: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
     memberAccount: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
-    filterType: z.string().min(1, t("requiredField", { field: tf("filter") })),
+    filterType: z.string(),
     planDate: dateFieldSchema(t, tf("planD")),
     contactNumber: z.string().optional(),
     address: z.string().optional(),
