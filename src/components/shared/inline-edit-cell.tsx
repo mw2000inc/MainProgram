@@ -1,8 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronDown, X } from "lucide-react"
+import { format, parseISO } from "date-fns"
+import { Calendar as CalendarIcon, Check, ChevronDown, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { CurrencyInput } from "@/components/shared/currency-input"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
@@ -23,10 +25,28 @@ import { cn } from "@/lib/utils"
 // comment for the same reasoning), just generalized past "status" to any
 // date/text/number/select field a column wants to make editable in place.
 
-// A native date input's onChange only ever fires once a complete, valid
-// date has actually been picked (never per-keystroke), so there's no
-// separate blur step needed here the way there is for free text — this
-// commits straight on change.
+// English month names regardless of the app's own EN/KO toggle — matching
+// every other calendar-popover in this app today (DailyReportDateButton,
+// ActivityDateFilter, RepairDateSwitcher), none of which localizes this
+// either. A deliberate consistency choice, not an oversight.
+const DATE_PICKER_MONTH_NAMES = Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), "MMMM"))
+
+// A calendar-popover date picker: click the field, a calendar drops down,
+// pick a day visually — reusing the same Popover + Calendar (ui/calendar.tsx,
+// built on react-day-picker) shell already established by
+// DailyReportDateButton/ActivityDateFilter/RepairDateSwitcher, rather than a
+// fourth bespoke implementation. Picking a day only ever fires once a whole,
+// valid date is chosen (never partial), so — like the native date input this
+// replaces — there's no separate blur/confirm step: selecting commits
+// immediately and closes the popover.
+//
+// Explicit Month/Year <Select>s (not just prev/next arrows) are included
+// because Pre D/Acc D/etc. regularly hold real dates years in the past
+// (AppSheet-imported records go back to 2019) — paging a calendar
+// month-by-month to reach one would be unusable. Built directly against
+// Calendar's own month/onMonthChange contract rather than react-day-picker's
+// built-in captionLayout="dropdown" — same reasoning RepairDateSwitcher's own
+// comment gives for why that built-in doesn't work reliably here.
 export function InlineDateCell({
   value,
   onCommit,
@@ -36,14 +56,120 @@ export function InlineDateCell({
   onCommit: (next: string) => void
   className?: string
 }) {
+  const [open, setOpen] = React.useState(false)
+  const selectedDate = value ? parseISO(value) : undefined
+  // The month/year the calendar GRID is showing — separate from the actually
+  // selected day so browsing via the Selects doesn't itself change the
+  // value. Reset to the selected date's own month (or today, if unset) every
+  // time the popover opens, rather than remembering wherever it was left.
+  const [viewMonth, setViewMonth] = React.useState(() => selectedDate ?? new Date())
+
+  // ± 10 years from THIS render's current year, not a hardcoded range —
+  // same window RepairDateSwitcher's own year Select uses, stays correct
+  // without ever needing another edit here.
+  const yearOptions = React.useMemo(() => {
+    const year = new Date().getFullYear()
+    return Array.from({ length: 21 }, (_, i) => year - 10 + i)
+  }, [])
+  const calendarBounds = React.useMemo(
+    () => ({ startMonth: new Date(yearOptions[0], 0), endMonth: new Date(yearOptions[yearOptions.length - 1], 11) }),
+    [yearOptions]
+  )
+
+  function handleOpenChange(next: boolean) {
+    if (next) setViewMonth(selectedDate ?? new Date())
+    setOpen(next)
+  }
+
   return (
     <div onClick={(e) => e.stopPropagation()} className="inline-block">
-      <Input
-        type="date"
-        className={cn("h-7 w-[136px] text-xs", className)}
-        value={value ?? ""}
-        onChange={(e) => e.target.value && onCommit(e.target.value)}
-      />
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn("w-[136px] justify-start gap-1.5 px-2 text-xs font-normal", className)}
+          >
+            <CalendarIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            <span className={cn("truncate", !value && "text-muted-foreground")}>
+              {value ? format(selectedDate!, "MM/dd/yyyy") : "mm/dd/yyyy"}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-auto p-0"
+          // The Month/Year Selects below render their own open listbox in a
+          // SEPARATE Radix portal appended to document.body, just like this
+          // Popover's own content — so, DOM-wise, that listbox isn't a
+          // descendant of this PopoverContent at all. Without this guard,
+          // clicking a month/year option registers as a pointer-down
+          // "outside" this popover and closes the whole calendar before the
+          // selection is even applied. Same fix RepairDateSwitcher's own
+          // Month/Year Selects already needed, for the same reason.
+          onInteractOutside={(event) => {
+            const target = event.target as HTMLElement | null
+            if (target?.closest('[data-slot="select-content"]') || target?.closest('[role="listbox"]')) {
+              event.preventDefault()
+            }
+          }}
+        >
+          <div className="flex items-center gap-1.5 border-b p-2">
+            <Select
+              value={String(viewMonth.getMonth())}
+              onValueChange={(v) => setViewMonth((d) => new Date(d.getFullYear(), Number(v), 1))}
+            >
+              <SelectTrigger size="sm" className="h-7 flex-1 text-xs">
+                <SelectValue>{DATE_PICKER_MONTH_NAMES[viewMonth.getMonth()]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="max-h-48">
+                {DATE_PICKER_MONTH_NAMES.map((name, index) => (
+                  <SelectItem key={name} value={String(index)}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={String(viewMonth.getFullYear())}
+              onValueChange={(v) => setViewMonth((d) => new Date(Number(v), d.getMonth(), 1))}
+            >
+              <SelectTrigger size="sm" className="h-7 w-21.25 text-xs">
+                <SelectValue>{viewMonth.getFullYear()}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="max-h-48">
+                {yearOptions.map((year) => (
+                  <SelectItem key={year} value={String(year)}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            month={viewMonth}
+            onMonthChange={setViewMonth}
+            startMonth={calendarBounds.startMonth}
+            endMonth={calendarBounds.endMonth}
+            // The default caption row (react-day-picker's own month/year
+            // label + prev/next arrows) would otherwise duplicate the
+            // Selects above — the prev/next arrows still work (they call
+            // onMonthChange internally, same as ever); only the redundant
+            // text label is gone. Same treatment RepairDateSwitcher gives
+            // its own caption, done here in the shared component instead
+            // since every InlineDateCell caller wants it.
+            classNames={{ month_caption: "hidden" }}
+            onSelect={(date) => {
+              if (!date) return
+              setOpen(false)
+              onCommit(format(date, "yyyy-MM-dd"))
+            }}
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
@@ -367,7 +493,8 @@ export function InlineGridPickerCell({
   onCommit: (next: string) => void
   required?: boolean
   placeholder: string
-  requiredHint: string
+  // Only shown (and only needed) when `required` is set.
+  requiredHint?: string
   // Heading for entries that aren't in `options` (typed by hand or legacy —
   // kept, and removable).
   otherLabel: string
@@ -417,21 +544,36 @@ export function InlineGridPickerCell({
   }
 
   function handleOpenChange(next: boolean) {
-    setOpen(next)
-    setCustom("")
     if (next) {
+      setOpen(true)
+      setCustom("")
       setDraft(value)
       return
     }
     const discard = escapedRef.current
     escapedRef.current = false
-    // Whatever is still typed in the custom box counts as added — the same
-    // "don't lose what was typed" rule the Combobox follows on blur.
-    const composed = composePickerValue(splitPickerTokens(hasPendingCustom ? `${draft},${custom}` : draft), options)
-    if (discard || (required && composed === "")) {
+    if (discard) {
+      setOpen(false)
+      setCustom("")
       setDraft(value)
       return
     }
+    // Whatever is still typed in the custom box counts as added — the same
+    // "don't lose what was typed" rule the Combobox follows on blur.
+    const composed = composePickerValue(splitPickerTokens(hasPendingCustom ? `${draft},${custom}` : draft), options)
+    // Done and click-away are both "save" gestures (only Escape means
+    // discard, handled above) — a required field can't save empty, so
+    // refuse to close at all rather than silently closing with the old
+    // value still in place. Without this, unchecking every tile and
+    // clicking Done/away looked exactly like removal not working: the
+    // popover closed as if it saved, but the value snapped back with no
+    // indication why. The "Pick at least one filter" hint (rendered
+    // whenever this same condition holds) stays visible so it's clear why
+    // it won't close, and Escape remains the explicit way to abandon the
+    // edit entirely.
+    if (required && composed === "") return
+    setOpen(false)
+    setCustom("")
     // Compared in normalized form so opening and closing without a change
     // (even on a value with a stray trailing space or different order) never
     // fires a save.
@@ -547,7 +689,13 @@ export function InlineGridPickerCell({
             <span className="text-xs text-muted-foreground">
               {required && tokens.length === 0 && !hasPendingCustom ? requiredHint : ""}
             </span>
-            <Button type="button" size="sm" className="h-7" onClick={() => handleOpenChange(false)}>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7"
+              disabled={required && tokens.length === 0 && !hasPendingCustom}
+              onClick={() => handleOpenChange(false)}
+            >
               {doneLabel}
             </Button>
           </div>
