@@ -250,7 +250,7 @@ function PartFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEditing ? t("editPart") : t("addPart")}</DialogTitle>
         </DialogHeader>
