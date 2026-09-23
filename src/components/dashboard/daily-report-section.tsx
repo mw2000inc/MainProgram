@@ -49,11 +49,12 @@ import {
   getInventoryListExpandedColumns,
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
+import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useStockMovementRows } from "@/lib/hooks/use-inventory"
+import { useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
@@ -253,7 +254,7 @@ function filterColumnsByVisibility<T>(columns: ColumnDef<T, unknown>[], visibleF
 // rather than drifting as two separate copies.
 export function DailyReportSection() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, can } = useAuth()
   const isAdmin = user?.role === "admin"
   const { t: tFilterChange } = useTranslation("filterChange")
   const { t: tInstall } = useTranslation("install")
@@ -465,6 +466,18 @@ export function DailyReportSection() {
   const [installFormOpen, setInstallFormOpen] = React.useState(false)
   const [repairFormOpen, setRepairFormOpen] = React.useState(false)
   const [collectionsFormOpen, setCollectionsFormOpen] = React.useState(false)
+  // Same +Add pairing as the four states above, for the Inventory List
+  // panel's own +Add button.
+  const [inventoryFormOpen, setInventoryFormOpen] = React.useState(false)
+  // The record an Edit button on the Inventory List panel opened, if any —
+  // same editing + form-open pairing every other panel's own Edit pencil
+  // already uses (see member-order-detail.tsx's withEditColumn). Combined
+  // with inventoryFormOpen on the single StockMovementFormDialog instance
+  // below (open={inventoryFormOpen || !!editingStockMovement}) exactly the
+  // way member-order-detail.tsx already combines its own formOpen/editing
+  // pair for a shared Add-or-Edit dialog — movement stays undefined for the
+  // +Add case, putting the dialog in create mode.
+  const [editingStockMovement, setEditingStockMovement] = React.useState<StockMovementRow | undefined>(undefined)
 
   // Each section's column set, trimmed to the admin's configured Visible
   // Fields (see Settings > Daily Report Sections > Edit Section) — empty
@@ -548,8 +561,13 @@ export function DailyReportSection() {
   // above), so no visibleFieldsFor entry exists for it — always the full
   // set as defined in inventory-list-columns.tsx (getInventoryListColumns,
   // the narrower 5-column set, is no longer used by this panel — see the
-  // inventory panel's own comment below).
-  const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(), [])
+  // inventory panel's own comment below). onEdit gated by inventory:edit
+  // specifically (not isAdmin) — matches the same permission the standalone
+  // Inventory > In & Out page already gates its own Edit action behind.
+  const inventoryListExpandedColumns = React.useMemo(
+    () => getInventoryListExpandedColumns({ onEdit: can("inventory:edit") ? setEditingStockMovement : undefined }),
+    [can, setEditingStockMovement]
+  )
 
   // Pre D, when set, is the record's actual (re)scheduled date — it wins
   // over each module's own base date field for deciding which day's Daily
@@ -592,8 +610,11 @@ export function DailyReportSection() {
   // Filtered by the movement's own `date` (its as-of day — defaults to the
   // day it was recorded, and matches the completed job's scheduledDate for
   // the filter-change deduction path), same convention as every other
-  // section here filtering by its own date field. History only — this
-  // never approves/edits/creates anything; see getInventoryListExpandedColumns.
+  // section here filtering by its own date field. This never approves
+  // anything itself — that stays on Inventory > In & Out — but +Add/Edit
+  // (both inventory:edit-gated) do let an admin create or fix a pending
+  // movement straight from here; see getInventoryListExpandedColumns and
+  // the inventory panel's own canAdd/onAdd below.
   const dayStockMovements = React.useMemo(
     () => stockMovements.filter((m) => m.date === reportDate),
     [stockMovements, reportDate]
@@ -693,16 +714,20 @@ export function DailyReportSection() {
         getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
     ),
-    // Read-only — no canAdd/onAdd/canDelete/onDeleteSelected, deliberately:
-    // this panel only ever displays the existing stock_movements ledger, it
-    // never creates, edits, or approves anything itself. Approving a
-    // pending movement stays exactly where it already was, on Inventory >
-    // In & Out — clicking through there is a convenience, not a shortcut
-    // around that page's own admin-only approve action.
+    // Still no canDelete/onDeleteSelected, and it never approves anything
+    // itself — approving a pending movement stays exactly where it already
+    // was, on Inventory > In & Out — clicking through there is a
+    // convenience, not a shortcut around that page's own admin-only approve
+    // action. +Add and the trailing Edit column (both inventory:edit-gated,
+    // not isAdmin — matches that same standalone page's own gate) are the
+    // two exceptions, both via the same StockMovementFormDialog that page's
+    // own Add/Edit already use.
     inventory: (
       <DashboardPlanPanel
         title={tInventory("inventoryListTitle")}
         icon={Package}
+        canAdd={can("inventory:edit")}
+        onAdd={() => setInventoryFormOpen(true)}
         // The full 10-column set (getInventoryListExpandedColumns) directly
         // in the compact panel now, not just the Maximize2 dialog — see the
         // "Enable Horizontal Scroll" change on the Filter Change panel just
@@ -851,6 +876,16 @@ export function DailyReportSection() {
       <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} />
       <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} />
       <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} />
+      <StockMovementFormDialog
+        open={inventoryFormOpen || !!editingStockMovement}
+        onOpenChange={(o) => {
+          if (!o) {
+            setInventoryFormOpen(false)
+            setEditingStockMovement(undefined)
+          }
+        }}
+        movement={editingStockMovement}
+      />
     </div>
   )
 }

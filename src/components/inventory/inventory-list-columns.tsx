@@ -1,17 +1,20 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
+import { Pencil } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDateTime } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
-// This is a pure history/view — no add/edit/delete/approve affordances
-// anywhere on it (see the Daily Report panel wiring, which passes neither
-// canAdd nor canDelete). Approving a movement stays exactly where it
-// already was, on Inventory > In & Out — this panel only reads the same
-// stock_movements ledger that page's own table already reads.
+// Otherwise a pure history/view — no add/delete/approve affordances anywhere
+// on it (see the Daily Report panel wiring, which passes neither canAdd nor
+// canDelete). Approving a movement stays exactly where it already was, on
+// Inventory > In & Out — only editing (onEdit, inventory:edit-gated) was
+// added here, so a wrong quantity/reason can be fixed without leaving the
+// Daily Report page.
 
 // 'pending'/'approved'/'rejected' (see the stock_movement_rejection
 // migration) are the three real statuses this app has (see
@@ -22,6 +25,23 @@ function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }
   if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
   if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
   return <StatusBadge tone="success" label={t("approved")} />
+}
+
+function EditButtonCell({ movement, onEdit }: { movement: StockMovementRow; onEdit: (movement: StockMovementRow) => void }) {
+  const { t } = useTranslation("common")
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      aria-label={t("edit")}
+      onClick={(e) => {
+        e.stopPropagation()
+        onEdit(movement)
+      }}
+    >
+      <Pencil className="h-4 w-4" />
+    </Button>
+  )
 }
 
 // A row's quantity is (almost) always entirely on one side — quantityAdded
@@ -55,8 +75,17 @@ function QtyCell({ row }: { row: StockMovementRow }) {
 // tableClassName="min-w-max") as well as the Maximize2 dialog, which
 // renders these exact same columns now that there's no narrower compact
 // set held back from it.
-export function getInventoryListExpandedColumns(): ColumnDef<StockMovementRow, unknown>[] {
-  return [
+//
+// onEdit omitted (a technician, or an admin without inventory:edit) falls
+// back to the plain column set with no trailing Edit column at all — same
+// on/off convention every other Daily Report column set already uses for
+// its own admin-only affordances.
+export function getInventoryListExpandedColumns({
+  onEdit,
+}: {
+  onEdit?: (movement: StockMovementRow) => void
+} = {}): ColumnDef<StockMovementRow, unknown>[] {
+  const columns: ColumnDef<StockMovementRow, unknown>[] = [
     { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
     { id: "type", header: () => <ColumnHeader tKey="type" ns="inventory" />, cell: ({ row }) => <TypeCell row={row.original} /> },
     { id: "qty", header: () => <ColumnHeader tKey="quantity" ns="fields" />, cell: ({ row }) => <QtyCell row={row.original} /> },
@@ -88,6 +117,14 @@ export function getInventoryListExpandedColumns(): ColumnDef<StockMovementRow, u
       cell: ({ row }) => formatDateTime(row.original.createdAt),
     },
   ]
+  if (onEdit) {
+    columns.push({
+      id: "edit",
+      header: "",
+      cell: ({ row }) => <EditButtonCell movement={row.original} onEdit={onEdit} />,
+    })
+  }
+  return columns
 }
 
 // Print/export column headers stay in English regardless of interface

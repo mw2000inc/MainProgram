@@ -77,13 +77,16 @@ const editSchema = z.object({
 
 type EditFormValues = z.infer<typeof editSchema>
 
-const AUTOMATED_ONLY_REASONS = ["Sale", "Filter Change"] as const
+const AUTOMATED_ONLY_REASONS = ["Sale", "Filter Change", "Repair"] as const
 
 function editDefaultValues(m: StockMovement): EditFormValues {
   return {
-    // "Sale"/"Filter Change" movements never reach this dialog (the actions menu
-    // hides them), but the reason field only accepts the manually-selectable
-    // reasons — fall back defensively.
+    // The reason field only accepts the manually-selectable reasons
+    // (STOCK_MOVEMENT_REASONS) — an automated-only reason (Sale, Filter
+    // Change, Repair) can still land here now that the Daily Report
+    // Inventory List's own Edit button opens this same dialog with no
+    // reason-based filtering, so this falls back to "Adjustment" rather
+    // than handing the <Select> a value it has no matching option for.
     reason: (AUTOMATED_ONLY_REASONS as readonly string[]).includes(m.reason) ? "Adjustment" : (m.reason as EditFormValues["reason"]),
     quantityAdded: m.quantityAdded,
     quantityRemoved: m.quantityRemoved,

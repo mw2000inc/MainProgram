@@ -226,6 +226,7 @@ export type StockMovementReason =
   | "Damaged"
   | "Adjustment"
   | "Filter Change"
+  | "Repair"
 
 export interface StockMovement {
   id: string
