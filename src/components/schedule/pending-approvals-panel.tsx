@@ -309,17 +309,35 @@ function rowKey(row: PendingApprovalRow): string {
   return `${row.entityType}:${row.entityId}`
 }
 
+// A Draft/Reschedule Requested row often has no schedule_jobs row yet at
+// all (see withJob's own comment), or one that predates a technician ever
+// being assigned to it — in either case row.technician/technician2 (job-
+// sourced) come back blank even though the plan record itself may already
+// carry its own technician directly (serviceman on Filter Change/
+// Install/Collection, th/th2 on Repair — see servicemanField/
+// servicemanField2 in buildRows above). Falls back to that plan-level
+// field only when the job-sourced one is genuinely empty, so an admin who
+// only ever set the technician on the plan itself (never touching a
+// schedule_jobs row) still sees — and can bulk-approve as — the technician
+// that's actually on record, instead of a false "Not Assigned".
+function effectiveTechnicians(row: PendingApprovalRow): { technician?: string; technician2?: string } {
+  if (row.technician?.trim()) return { technician: row.technician, technician2: row.technician2 }
+  return { technician: row.servicemanField, technician2: row.servicemanField2 }
+}
+
 // Two rows count as "the same technician" only if their full technician +
 // technician2 pair matches, order-independent — a 2-tech job never
 // silently groups with an unrelated 1-tech job assigned to just one of the
-// same two people. Returns undefined for a row with no technician at all:
-// that never counts as a shared value with anything, including another
+// same two people. Returns undefined for a row with no technician at all
+// (job-sourced or, per effectiveTechnicians above, plan-sourced): that
+// never counts as a shared value with anything, including another
 // unassigned row — bulk-approving "no one in particular" together isn't the
 // same claim as bulk-approving one technician's actual batch of work (see
 // batchMismatch below).
 function technicianKey(row: PendingApprovalRow): string | undefined {
-  const a = row.technician?.trim() ?? ""
-  const b = row.technician2?.trim() ?? ""
+  const { technician, technician2 } = effectiveTechnicians(row)
+  const a = technician?.trim() ?? ""
+  const b = technician2?.trim() ?? ""
   if (!a && !b) return undefined
   return [a, b].sort().join("|")
 }
@@ -525,7 +543,12 @@ export function PendingApprovalsPanel({
     if (techKeys.includes(undefined)) return { kind: "unassigned" }
     if (techKeys.length > 1) {
       const technicians = Array.from(
-        new Set(selectedRows.map((r) => formatTechnicians(r.technician ?? "", r.technician2)))
+        new Set(
+          selectedRows.map((r) => {
+            const { technician, technician2 } = effectiveTechnicians(r)
+            return formatTechnicians(technician ?? "", technician2)
+          })
+        )
       )
       return { kind: "technicians", technicians }
     }
@@ -617,7 +640,10 @@ export function PendingApprovalsPanel({
       {
         accessorKey: "technician",
         header: t("technicianColumn"),
-        cell: ({ row }) => (row.original.technician ? formatTechnicians(row.original.technician, row.original.technician2) : t("notAssigned")),
+        cell: ({ row }) => {
+          const { technician, technician2 } = effectiveTechnicians(row.original)
+          return technician ? formatTechnicians(technician, technician2) : t("notAssigned")
+        },
       },
       {
         id: "routeSequence",
