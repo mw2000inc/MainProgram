@@ -57,14 +57,23 @@ export function useSuggestTechnician() {
   })
 }
 
-export function useBulkSuggestTechnicians() {
+// Read-only, same reasoning as useSuggestTechnician above — no cache to
+// invalidate since nothing is written until useApplyTechnicianAssignments
+// below actually runs.
+export function usePreviewTechnicianSuggestions() {
+  return useMutation({
+    mutationFn: (planIds: string[]) => api.previewTechnicianSuggestions(planIds),
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useApplyTechnicianAssignments() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (planIds: string[]) => api.suggestTechniciansBulk(planIds),
-    onSuccess: (summary) => {
+    mutationFn: (assignments: { planId: string; technician: string }[]) => api.applyTechnicianAssignments(assignments),
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: filterChangePlansKey })
-      const coverageNote = summary.flaggedOutsideCoverage > 0 ? `, ${summary.flaggedOutsideCoverage} outside usual coverage` : ""
-      toast.success(`Assigned ${summary.assigned} plan(s)${coverageNote}${summary.skipped > 0 ? `, ${summary.skipped} skipped` : ""}`)
+      toast.success(`Assigned ${result.applied} plan(s)`)
     },
     onError: (error: Error) => toast.error(error.message),
   })

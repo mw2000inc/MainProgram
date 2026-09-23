@@ -13,6 +13,7 @@ export const TECHNICIANS = [
   "Jeric Salirio",
   "Mell",
   "Butch",
+  "Pritz",
   "N/A",
 ] as const
 

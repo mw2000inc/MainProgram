@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { CalendarClock, Plus, List, Table2 } from "lucide-react"
+import { CalendarClock, Plus, List, Table2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { BulkTechnicianSuggestDialog } from "@/components/shared/bulk-technician-suggest-dialog"
 import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,7 +26,12 @@ import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNu
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
-import { useDeleteScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
+import {
+  useApplyTechnicianAssignmentsToJobs,
+  usePreviewTechnicianSuggestionsForJobs,
+  useDeleteScheduleJob,
+  useScheduleJobs,
+} from "@/lib/hooks/use-schedule"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -54,10 +60,13 @@ function ScheduleContent() {
   const { t: tNav } = useTranslation("nav")
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
+  const { t: tCommon } = useTranslation("common")
   const { data: jobs = [], isPending } = useScheduleJobs()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const deleteJob = useDeleteScheduleJob()
+  const previewSuggestions = usePreviewTechnicianSuggestionsForJobs()
+  const applyAssignments = useApplyTechnicianAssignmentsToJobs()
 
   // Deep link from the Activity Log (?id=<jobId>) — opens that job's detail
   // panel directly. Only meaningful in the "list" view (see selection below);
@@ -68,6 +77,7 @@ function ScheduleContent() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ScheduleJob | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<ScheduleJob | undefined>(undefined)
+  const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [filteredRows, setFilteredRows] = React.useState<ScheduleRow[]>([])
   const [view, setView] = React.useState<"list" | "table">("list")
   const [tableDate, setTableDate] = React.useState(todayIso)
@@ -124,6 +134,19 @@ function ScheduleContent() {
       return a.routeSequence - b.routeSequence
     })
   }, [jobsWithOrder, technicianFilter])
+
+  // Same "unassigned in the current view" scoping as Filter Change's own
+  // unassignedInView (filter-change/page.tsx) — pending only, a completed
+  // or cancelled job with no technician isn't something to suggest one for.
+  const unassignedInView = React.useMemo(() => scopedJobs.filter((j) => !j.technician.trim() && j.status === "pending"), [scopedJobs])
+  const bulkSuggestItems = React.useMemo(
+    () =>
+      unassignedInView.map((j) => ({
+        id: j.id,
+        label: `${formatDate(j.scheduledDate)} · ${JOB_TYPE_LABELS[j.jobType]} · ${j.orderNo || j.customerOrderNumber || "—"}`,
+      })),
+    [unassignedInView]
+  )
 
   // Same computation ScheduleAgenda uses (see computeStopNumbers' own
   // comment on why it's shared) — the List view and the Daily Report panel
@@ -224,6 +247,15 @@ function ScheduleContent() {
                   customer/filter-change data (see ScheduleTableView), so a
                   second export here would just be confusing/redundant. */}
               {view === "list" && <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />}
+              {/* List view only — same scoping as unassignedInView itself
+                  (computed off scopedJobs, the List view's own row set);
+                  Table View has no equivalent "jobs in view" concept to
+                  scope a bulk run to. */}
+              {isAdmin && view === "list" && (
+                <Button variant="outline" className="gap-1.5" onClick={() => setBulkConfirmOpen(true)}>
+                  <Sparkles className="h-4 w-4" /> {t("autoSuggestTechnicians")}
+                </Button>
+              )}
               {isAdmin && (
                 <Button
                   className="gap-1.5"
@@ -365,6 +397,26 @@ function ScheduleContent() {
           await deleteJob.mutateAsync(deleting.id)
           setDeleting(undefined)
           if (wasSelected) selection.close()
+        }}
+      />
+
+      <BulkTechnicianSuggestDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        items={bulkSuggestItems}
+        title={t("autoSuggestConfirmTitle", { count: String(unassignedInView.length) })}
+        description={t("autoSuggestConfirmDescription")}
+        noItemsMessage={t("noUnassignedJobs")}
+        outsideCoverageLabel={t("outsideUsualCoverage")}
+        cancelLabel={tCommon("cancel")}
+        confirmLabel={t("autoSuggestTechnicians")}
+        applyingLabel={tCommon("saving")}
+        onPreview={async (ids) => {
+          const results = await previewSuggestions.mutateAsync(ids)
+          return results.map(({ jobId, result }) => ({ id: jobId, result }))
+        }}
+        onApply={async (assignments) => {
+          await applyAssignments.mutateAsync(assignments.map(({ id, technician }) => ({ jobId: id, technician })))
         }}
       />
     </div>

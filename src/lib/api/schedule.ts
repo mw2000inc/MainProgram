@@ -109,3 +109,45 @@ export async function deleteScheduleJob(id: string): Promise<void> {
   const { error } = await supabase.from("schedule_jobs").delete().eq("id", id)
   if (error) throw error
 }
+
+// Same preview-then-apply shape as filter-change-plans.ts's own
+// TechnicianSuggestion/BulkSuggestionResult — see schedule-job-suggest.ts
+// for the underlying logic these two routes call. Only the bulk path is
+// exposed here — the Schedule page's "Auto-suggest technicians" is the one
+// toolbar-level feature asked for, matching Filter Change's own toolbar
+// button; there's no per-record single-suggest UI on this page to back a
+// single-job endpoint.
+export interface TechnicianSuggestion {
+  technician: string
+  distanceKm: number | null
+  nearbyCount: number
+  explanation: string
+  outsideCoverage: boolean
+}
+
+export interface BulkSuggestionResult {
+  jobId: string
+  result: TechnicianSuggestion | { error: string }
+}
+
+export async function previewTechnicianSuggestionsForJobs(jobIds: string[]): Promise<BulkSuggestionResult[]> {
+  const res = await fetch("/api/schedule-jobs/suggest-technician-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to preview technician suggestions")
+  return data.results as BulkSuggestionResult[]
+}
+
+export async function applyTechnicianAssignmentsToJobs(assignments: { jobId: string; technician: string }[]): Promise<{ applied: number }> {
+  const res = await fetch("/api/schedule-jobs/suggest-technician-apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assignments }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to assign technicians")
+  return data as { applied: number }
+}

@@ -1,17 +1,18 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { TECHNICIANS } from "@/lib/constants"
-import { haversineKm, resolveViaCustomer } from "./smart-schedule"
+import { haversineKm, resolveViaCustomer, autoSuggestTechnicianRoster } from "./smart-schedule"
 
 // Extends the same nearest-technician heuristic smart-schedule.ts already
 // uses for the customer-dispatch-confirm path (installs/repairs/
 // collections) to filter_change_plans — a table that path never touches,
 // since recurring filter-change plans are never linked to a schedule_jobs
-// row. This is deliberately suggest-then-confirm, not silent
-// auto-assignment: it never writes anything itself for a single plan (the
-// route/UI layer does, via the same update path an admin's own edit would
-// use); the bulk path does write, but only because an admin explicitly
-// triggered that batch run, the same way "Run now" on an automation does.
+// row. Suggest-then-confirm: suggestTechnicianForPlan (the single per-record
+// path, still used by the edit-form's own Sparkles button) never writes
+// anything; the bulk path is preview-then-apply — previewSuggestionsForPlans
+// computes without writing, the admin reviews/edits in the confirm dialog,
+// and applyTechnicianAssignments writes exactly what's shown. Nothing here
+// writes on its own initiative; every write is the admin's explicit
+// confirmation, the same way clicking "Run now" on an automation is.
 //
 // Clusters technician *choice* across a +-WINDOW_DAYS date window around a
 // plan's own plan_date rather than moving plan_date itself -- plan_date is
@@ -54,7 +55,7 @@ function scoreTechnicians(
   point: { lat: number; lon: number },
   nearby: { technician: string; lat: number; lon: number }[]
 ): TechnicianSuggestion {
-  const roster = TECHNICIANS.filter((t) => t !== "N/A")
+  const roster = autoSuggestTechnicianRoster()
   const picks = roster.map((technician) => {
     const jobs = nearby.filter((j) => j.technician === technician)
     let minDistanceKm: number | null = null
@@ -88,37 +89,45 @@ function scoreTechnicians(
   }
 }
 
-// Resolves every other filter_change_plans row already assigned to a
-// technician within the date window, with a usable point (their own cached
-// lat/lon, resolved via the customer the same way as the target plan —
-// never geocoded on the fly here, since only the plan actually being
-// suggested for is worth spending a Nominatim call on; an unresolvable
-// neighbor just doesn't contribute to any technician's score).
+// Resolves every other filter_change_plans row that counts as "assigned"
+// within the date window, with a usable point (their own cached lat/lon,
+// resolved via the customer the same way as the target plan — never
+// geocoded on the fly here, since only the plan actually being suggested
+// for is worth spending a Nominatim call on; an unresolvable neighbor just
+// doesn't contribute to any technician's score).
+//
+// `simulated` overrides a plan's real (possibly still-blank) serviceman
+// with an in-memory pick — how previewSuggestionsForPlans below lets later
+// plans in the same batch see earlier ones as already-assigned neighbors
+// without writing anything to the database yet. Omitted entirely for the
+// single-plan suggestTechnicianForPlan path below, which has no batch to
+// simulate against.
 async function fetchNearbyAssignedPlans(
   admin: SupabaseClient,
   planId: string,
-  planDate: string
+  planDate: string,
+  simulated?: Map<string, string>
 ): Promise<{ technician: string; lat: number; lon: number }[]> {
   const { from, to } = windowDates(planDate)
   const { data } = await admin
     .from("filter_change_plans")
     .select("id, serviceman, customer_id")
     .neq("id", planId)
-    .neq("serviceman", "")
     .gte("plan_date", from)
     .lte("plan_date", to)
   const rows = (data ?? []) as NearbyPlanRow[]
 
   const result: { technician: string; lat: number; lon: number }[] = []
   for (const row of rows) {
-    if (!row.customer_id) continue
+    const technician = simulated?.get(row.id) ?? row.serviceman
+    if (!technician || !row.customer_id) continue
     const { data: customer } = await admin
       .from("customers")
       .select("latitude, longitude")
       .eq("id", row.customer_id)
       .maybeSingle()
     if (typeof customer?.latitude === "number" && typeof customer?.longitude === "number") {
-      result.push({ technician: row.serviceman, lat: customer.latitude, lon: customer.longitude })
+      result.push({ technician, lat: customer.latitude, lon: customer.longitude })
     }
   }
   return result
@@ -148,23 +157,57 @@ export interface BulkSuggestionResult {
   result: TechnicianSuggestion | { error: string }
 }
 
-// Writes serviceman immediately after each successful suggestion (rather
-// than computing every suggestion first and writing them all at the end) so
-// later plans in the same run see earlier ones as already-assigned
-// neighbors — a batch of previously all-empty nearby plans should cluster
-// onto the same technician *within* that one run, not just against
-// pre-existing assignments from before it started. Running this route at
-// all is the admin's confirmation (same as clicking "Run now" on an
-// automation) — that's what makes writing directly here consistent with
-// this feature's suggest-then-confirm design elsewhere.
-export async function suggestAndAssignBulk(admin: SupabaseClient, planIds: string[]): Promise<BulkSuggestionResult[]> {
+// Read-only: computes a suggestion for every plan in the batch, without
+// writing anything — the admin reviews (and can override) each one in the
+// confirm dialog before anything is actually saved. Processed sequentially,
+// simulating each successful pick in memory (simulated map) so later plans
+// in the same batch still see earlier ones as already-assigned neighbors —
+// the exact same within-run clustering the old blind bulk-write produced,
+// just without touching the database until applyTechnicianAssignments is
+// explicitly called afterward.
+export async function previewSuggestionsForPlans(admin: SupabaseClient, planIds: string[]): Promise<BulkSuggestionResult[]> {
   const results: BulkSuggestionResult[] = []
+  const simulated = new Map<string, string>()
   for (const planId of planIds) {
-    const result = await suggestTechnicianForPlan(admin, planId)
-    if (!("error" in result)) {
-      await admin.from("filter_change_plans").update({ serviceman: result.technician }).eq("id", planId)
+    const { data: plan } = await admin
+      .from("filter_change_plans")
+      .select("id, plan_date, customer_id")
+      .eq("id", planId)
+      .maybeSingle()
+    if (!plan) {
+      results.push({ planId, result: { error: "Plan not found." } })
+      continue
     }
+    if (!plan.customer_id) {
+      results.push({ planId, result: { error: "This plan isn't linked to a customer record, so its location can't be resolved." } })
+      continue
+    }
+    const { point } = await resolveViaCustomer(admin, plan.customer_id, "customer_cached", "customer_geocoded")
+    if (!point) {
+      results.push({ planId, result: { error: "Could not resolve this customer's location (no cached coordinates and geocoding failed)." } })
+      continue
+    }
+    const nearby = await fetchNearbyAssignedPlans(admin, planId, plan.plan_date, simulated)
+    const result = scoreTechnicians(point, nearby)
+    simulated.set(planId, result.technician)
     results.push({ planId, result })
   }
   return results
+}
+
+// Writes exactly what's given — no scoring, no recomputation. Called only
+// after the admin has reviewed (and possibly overridden) the preview above,
+// so every assignment here is something a human explicitly signed off on,
+// whether that's the algorithm's own suggestion or a manual override.
+export async function applyTechnicianAssignments(
+  admin: SupabaseClient,
+  assignments: { planId: string; technician: string }[]
+): Promise<{ applied: number }> {
+  let applied = 0
+  for (const { planId, technician } of assignments) {
+    if (!technician.trim()) continue
+    const { error } = await admin.from("filter_change_plans").update({ serviceman: technician }).eq("id", planId)
+    if (!error) applied += 1
+  }
+  return { applied }
 }

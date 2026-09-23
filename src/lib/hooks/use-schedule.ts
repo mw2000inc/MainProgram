@@ -45,3 +45,24 @@ export function useDeleteScheduleJob() {
     onError: () => toast.error("Failed to remove job"),
   })
 }
+
+// Same preview-then-apply shape as use-filter-change-plans.ts's own
+// usePreviewTechnicianSuggestions/useApplyTechnicianAssignments.
+export function usePreviewTechnicianSuggestionsForJobs() {
+  return useMutation({
+    mutationFn: (jobIds: string[]) => api.previewTechnicianSuggestionsForJobs(jobIds),
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useApplyTechnicianAssignmentsToJobs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (assignments: { jobId: string; technician: string }[]) => api.applyTechnicianAssignmentsToJobs(assignments),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      toast.success(`Assigned ${result.applied} job(s)`)
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}

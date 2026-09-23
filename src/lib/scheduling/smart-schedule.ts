@@ -36,6 +36,23 @@ import { TECHNICIANS } from "@/lib/constants"
 const WORKLOAD_PENALTY_KM = 3 // each existing job that day nudges a technician's score, so one very central technician doesn't silently absorb the whole day
 const UNKNOWN_DISTANCE_BASELINE_KM = 20 // treat "no located job to compare against yet" as roughly this far, not as infinitely close or infinitely far
 
+// Standing rule (not a one-time fix, confirmed with the admin): Mell,
+// Butch, and Pritz are never picked by any auto-suggest/auto-assign
+// algorithm, anywhere. This is the one place that pool is built —
+// pickBestTechnician below (used by both autoAssignScheduleJob's real-time
+// auto-assign and schedule-job-suggest.ts's admin-facing preview) and
+// filter-change-suggest.ts's own scoreTechnicians both call this instead of
+// filtering TECHNICIANS themselves, so the exclusion applies everywhere
+// auto-suggest runs without needing to be repeated per caller. Manual
+// assignment is completely untouched by this — an admin can still type or
+// pick any of these three names directly into any technician field; only
+// this shared candidate pool an algorithm scores from is affected.
+const AUTO_SUGGEST_EXCLUDED = new Set<string>(["N/A", "Mell", "Butch", "Pritz"])
+
+export function autoSuggestTechnicianRoster(): string[] {
+  return TECHNICIANS.filter((t) => !AUTO_SUGGEST_EXCLUDED.has(t))
+}
+
 export type DispatchEntityType = "filter_change_plans" | "install_plans" | "collections" | "repair_plans"
 export type ScheduleJobTypeDb = "installation" | "filter_change" | "repair" | "collection" | "monitoring" | "other"
 
@@ -163,7 +180,13 @@ async function resolveJobLocation(
   return { point: null, source: "unavailable" }
 }
 
-interface SameDayJobRow {
+// Exported so schedule-job-suggest.ts's admin-triggered "Auto-suggest
+// technicians" on the Schedule page can score against a schedule_jobs row
+// the exact same way this module's own real-time auto-assign already does
+// — one scorer, not a third reimplementation (filter_change_plans already
+// has its own variant in filter-change-suggest.ts, for a table with no
+// schedule_jobs row of its own to score against).
+export interface SameDayJobRow {
   id: string
   technician: string
   technician_2: string | null
@@ -172,7 +195,7 @@ interface SameDayJobRow {
   route_sequence: number | null
 }
 
-interface TechnicianPick {
+export interface TechnicianPick {
   technician: string
   minDistanceKm: number | null
   jobCount: number
@@ -185,8 +208,8 @@ interface TechnicianPick {
 // their nearest job were UNKNOWN_DISTANCE_BASELINE_KM away, so genuinely
 // idle technicians can still win over someone both far away AND already
 // busy, without pretending to know a real distance for them.
-function pickBestTechnician(newPoint: GeoPoint, sameDayJobs: SameDayJobRow[]): TechnicianPick {
-  const roster: string[] = TECHNICIANS.filter((t) => t !== "N/A")
+export function pickBestTechnician(newPoint: GeoPoint, sameDayJobs: SameDayJobRow[]): TechnicianPick {
+  const roster: string[] = autoSuggestTechnicianRoster()
   const picks: TechnicianPick[] = roster.map((technician) => {
     let minDistanceKm: number | null = null
     let jobCount = 0
@@ -222,7 +245,7 @@ function pickBestTechnician(newPoint: GeoPoint, sameDayJobs: SameDayJobRow[]): T
 // route re-optimization (see the feature's own report on this), just a
 // reasonable place to drop a brand-new stop without disturbing anything
 // that already exists.
-function computeRouteSequence(newPoint: GeoPoint, technicianJobsThatDay: SameDayJobRow[]): number {
+export function computeRouteSequence(newPoint: GeoPoint, technicianJobsThatDay: SameDayJobRow[]): number {
   const ordered = technicianJobsThatDay
     .filter((j) => j.route_sequence != null)
     .sort((a, b) => (a.route_sequence as number) - (b.route_sequence as number))

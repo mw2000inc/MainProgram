@@ -9,12 +9,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { BulkTechnicianSuggestDialog } from "@/components/shared/bulk-technician-suggest-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS, type FilterChangeRow } from "@/components/filter-change/filter-change-columns"
 import {
-  useBulkSuggestTechnicians,
+  useApplyTechnicianAssignments,
+  usePreviewTechnicianSuggestions,
   useDeleteFilterChangePlans,
   useFilterChangePlans,
   useUpdateFilterChangePlan,
@@ -49,7 +51,8 @@ function FilterChangePageContent() {
   const { data: saleListEntries = [] } = useSaleListEntries()
   const deletePlans = useDeleteFilterChangePlans()
   const updatePlan = useUpdateFilterChangePlan()
-  const bulkSuggest = useBulkSuggestTechnicians()
+  const previewSuggestions = usePreviewTechnicianSuggestions()
+  const applyAssignments = useApplyTechnicianAssignments()
 
   // Deep link from e.g. the Daily Report's Filter Change Plan panel
   // (?id=<planId>) — opens that record's detail panel directly.
@@ -129,6 +132,10 @@ function FilterChangePageContent() {
   }, [rows, selectedMonth])
 
   const unassignedInView = React.useMemo(() => scopedPlans.filter((p) => !p.serviceman.trim()), [scopedPlans])
+  const bulkSuggestItems = React.useMemo(
+    () => unassignedInView.map((p) => ({ id: p.id, label: `${p.orderNumber} — ${p.memberAccount}` })),
+    [unassignedInView]
+  )
 
   const columns = React.useMemo(
     () =>
@@ -356,22 +363,24 @@ function FilterChangePageContent() {
         }}
       />
 
-      <ConfirmDialog
+      <BulkTechnicianSuggestDialog
         open={bulkConfirmOpen}
         onOpenChange={setBulkConfirmOpen}
+        items={bulkSuggestItems}
         title={t("autoSuggestConfirmTitle", { count: String(unassignedInView.length) })}
-        description={unassignedInView.length > 0 ? t("autoSuggestConfirmDescription") : t("noUnassignedPlans")}
+        description={t("autoSuggestConfirmDescription")}
+        noItemsMessage={t("noUnassignedPlans")}
+        outsideCoverageLabel={t("outsideUsualCoverage")}
+        cancelLabel={tCommon("cancel")}
         confirmLabel={t("autoSuggestTechnicians")}
-        destructive={false}
-        loading={bulkSuggest.isPending}
-        onConfirm={async () => {
-          if (unassignedInView.length === 0) {
-            setBulkConfirmOpen(false)
-            return
-          }
-          await bulkSuggest.mutateAsync(unassignedInView.map((p) => p.id))
+        applyingLabel={tCommon("saving")}
+        onPreview={async (ids) => {
+          const results = await previewSuggestions.mutateAsync(ids)
+          return results.map(({ planId, result }) => ({ id: planId, result }))
+        }}
+        onApply={async (assignments) => {
+          await applyAssignments.mutateAsync(assignments.map(({ id, technician }) => ({ planId: id, technician })))
           setSuggestionCache({})
-          setBulkConfirmOpen(false)
         }}
       />
     </div>

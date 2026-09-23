@@ -134,10 +134,9 @@ export interface TechnicianSuggestion {
   outsideCoverage: boolean
 }
 
-export interface BulkSuggestSummary {
-  assigned: number
-  skipped: number
-  flaggedOutsideCoverage: number
+export interface BulkSuggestionResult {
+  planId: string
+  result: TechnicianSuggestion | { error: string }
 }
 
 export async function suggestTechnician(planId: string): Promise<TechnicianSuggestion> {
@@ -151,13 +150,27 @@ export async function suggestTechnician(planId: string): Promise<TechnicianSugge
   return data as TechnicianSuggestion
 }
 
-export async function suggestTechniciansBulk(planIds: string[]): Promise<BulkSuggestSummary> {
-  const res = await fetch("/api/filter-change-plans/suggest-technician-bulk", {
+// Read-only — computes every suggestion up front so the confirm dialog can
+// show (and let the admin edit) each one before anything is saved. Pairs
+// with applyTechnicianAssignments below, which does the actual writing.
+export async function previewTechnicianSuggestions(planIds: string[]): Promise<BulkSuggestionResult[]> {
+  const res = await fetch("/api/filter-change-plans/suggest-technician-preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ planIds }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Failed to auto-assign technicians")
-  return data as BulkSuggestSummary
+  if (!res.ok) throw new Error(data.error ?? "Failed to preview technician suggestions")
+  return data.results as BulkSuggestionResult[]
+}
+
+export async function applyTechnicianAssignments(assignments: { planId: string; technician: string }[]): Promise<{ applied: number }> {
+  const res = await fetch("/api/filter-change-plans/suggest-technician-apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assignments }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to assign technicians")
+  return data as { applied: number }
 }

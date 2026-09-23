@@ -81,5 +81,10 @@
   "pendingApprovalsTabLabel": "Pending Approvals ({count})",
   "scheduledDateLabel": "Technician Errand / Scheduled Date",
   "scheduleAtLeastOneDayAheadHelp": "Schedules must be created at least 1 day in advance. Select the date when the technician will perform the errand.",
-  "scheduleAtLeastOneDayAhead": "This job must be scheduled at least 1 day in advance — today or an earlier date can't be selected."
+  "scheduleAtLeastOneDayAhead": "This job must be scheduled at least 1 day in advance — today or an earlier date can't be selected.",
+  "autoSuggestTechnicians": "Auto-suggest technicians",
+  "autoSuggestConfirmTitle": "Auto-suggest technicians for {count} job(s)?",
+  "autoSuggestConfirmDescription": "Suggests the nearest available technician for every job below, clustering nearby jobs on the same day together — review and edit any pick before confirming.",
+  "noUnassignedJobs": "Every job in this view already has a technician assigned.",
+  "outsideUsualCoverage": "Outside usual coverage"
 }
