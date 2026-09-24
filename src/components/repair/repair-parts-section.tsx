@@ -153,7 +153,9 @@ function GroupedPartsTables({
   )
 }
 
-type PartFormInput = {
+// Exported alongside PartFormDialog so repair-form-dialog.tsx's own onStage
+// handler can be typed against exactly what that dialog submits.
+export type PartFormInput = {
   productId?: string
   customPartNo?: string
   customPartName?: string
@@ -162,19 +164,58 @@ type PartFormInput = {
   partDate: string
 }
 
-function PartFormDialog({
+// A part added while creating a brand-new repair — before that repair has a
+// real id for repair_plan_parts.repair_plan_id to reference, so it can't be
+// persisted yet (see repair-form-dialog.tsx's own comment on the two-step
+// create-repair-then-create-its-parts submit). tempId is purely a client-
+// side React key/identity, replaced by a real id once the repair itself
+// saves and this gets submitted for real. productSku/productName are
+// captured at stage time (from the selected catalog product, or the
+// free-typed custom name) rather than re-derived later, mirroring how a
+// real RepairPlanPart's own denormalized fields work.
+export interface StagedRepairPlanPart {
+  tempId: string
+  productId?: string
+  customPartNo?: string
+  customPartName?: string
+  productSku: string
+  productName: string
+  inOut: "IN" | "OUT"
+  quantity: number
+  partDate: string
+}
+
+// Exported so repair-form-dialog.tsx can reuse this exact same form (same
+// fields, same catalog-or-custom validation) for staging a new repair's
+// parts before it exists, rather than a second, duplicated part-entry form.
+// repairPlanId/part are the "real" (network-backed) mode this component has
+// always had; stagedPart/onStage are the new staging mode — exactly one of
+// (repairPlanId) or (onStage) is ever provided by a caller, never both.
+export function PartFormDialog({
   open,
   onOpenChange,
   repairPlanId,
   part,
+  stagedPart,
+  onStage,
   defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  repairPlanId: string
+  // Required in the real (network-backed) mode; unused in staging mode.
+  repairPlanId?: string
   // Undefined = adding a new row; set = editing that existing row, form
-  // pre-populated from it.
+  // pre-populated from it. Real mode only.
   part?: RepairPlanPart
+  // Staging mode's own equivalent of `part` above — editing an
+  // already-staged (not yet saved) entry.
+  stagedPart?: StagedRepairPlanPart
+  // Provided instead of repairPlanId to put this dialog in staging mode:
+  // submitting calls this instead of the create/update mutations, and
+  // never touches the network. tempId is passed through when editing an
+  // existing staged entry (so the caller replaces it in place instead of
+  // appending a duplicate), omitted when adding a new one.
+  onStage?: (input: PartFormInput & { productSku: string; productName: string }, tempId?: string) => void
   defaultDate: string
 }) {
   const { t } = useTranslation("repair")
@@ -183,22 +224,24 @@ function PartFormDialog({
   const { data: products = [] } = useProducts()
   const createPart = useCreateRepairPlanPart()
   const updatePart = useUpdateRepairPlanPart()
-  const isEditing = !!part
+  const prefill = part ?? stagedPart
+  const isEditing = !!prefill
 
   const formatPart = React.useCallback((p: (typeof products)[number]) => `${p.sku} — ${p.name}`, [])
 
   // Reconstructed straight from the row's own already-denormalized
-  // productSku/productName (see repair-plan-parts.ts's fromRow) rather than
-  // looked up in `products` — that list may not have loaded yet on first
-  // render, but the row already carries the exact display values either
-  // way, catalog-linked or custom.
+  // productSku/productName (see repair-plan-parts.ts's fromRow, or
+  // StagedRepairPlanPart's own comment for the staging-mode equivalent)
+  // rather than looked up in `products` — that list may not have loaded yet
+  // on first render, but the row already carries the exact display values
+  // either way, catalog-linked or custom.
   const [partText, setPartText] = React.useState(() =>
-    part ? (part.productId ? `${part.productSku} — ${part.productName}` : part.productName) : ""
+    prefill ? (prefill.productId ? `${prefill.productSku} — ${prefill.productName}` : prefill.productName) : ""
   )
-  const [partNoText, setPartNoText] = React.useState(() => part?.productSku ?? "")
-  const [inOutText, setInOutText] = React.useState<string>(part?.inOut ?? "IN")
-  const [quantity, setQuantity] = React.useState(part ? String(part.quantity) : "1")
-  const [date, setDate] = React.useState(part?.partDate ?? defaultDate)
+  const [partNoText, setPartNoText] = React.useState(() => prefill?.productSku ?? "")
+  const [inOutText, setInOutText] = React.useState<string>(prefill?.inOut ?? "IN")
+  const [quantity, setQuantity] = React.useState(prefill ? String(prefill.quantity) : "1")
+  const [date, setDate] = React.useState(prefill?.partDate ?? defaultDate)
 
   // Every field below is a typable Combobox (free text + filtered
   // suggestions), not a click-only native Select. in_out is still a real,
@@ -308,10 +351,18 @@ function PartFormDialog({
                     quantity: Number(quantity),
                     partDate: date,
                   }
-              if (isEditing) {
-                await updatePart.mutateAsync({ id: part.id, repairPlanId, input })
+              if (onStage) {
+                onStage(
+                  { ...input, productSku: selectedProduct?.sku ?? trimmedPartNo, productName: selectedProduct?.name ?? trimmedPart },
+                  stagedPart?.tempId
+                )
+                onOpenChange(false)
+                return
+              }
+              if (part) {
+                await updatePart.mutateAsync({ id: part.id, repairPlanId: repairPlanId!, input })
               } else {
-                await createPart.mutateAsync({ repairPlanId, input })
+                await createPart.mutateAsync({ repairPlanId: repairPlanId!, input })
               }
               onOpenChange(false)
             }}
@@ -689,7 +740,19 @@ export function RepairPartsSection({
       )}
 
       <Dialog open={expandedOpen} onOpenChange={onExpandedOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent
+          className="sm:max-w-2xl"
+          // A dialog opened from inside this one (the Add/Edit Part dialog
+          // above, or the delete-part ConfirmDialog below) is a React-tree
+          // sibling, not a child, so a press inside it counts as "outside"
+          // here — same fix, same reasoning as dashboard-plan-panel.tsx's
+          // own Maximize dialog. A press that started inside another
+          // dialog/alertdialog is never a dismissal of this one.
+          onPointerDownOutside={(e) => {
+            const target = e.detail.originalEvent.target
+            if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) e.preventDefault()
+          }}
+        >
           <DialogHeader>
             <div className="flex flex-wrap items-center gap-2">
               <DialogTitle className="flex items-center gap-2">
