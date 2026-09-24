@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { STOCK_MOVEMENT_REASONS } from "@/lib/constants"
+import { dateFieldSchema } from "@/lib/form-schemas"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useAddStockMovement, useProducts, useUpdateStockMovement } from "@/lib/hooks/use-inventory"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -44,6 +45,7 @@ function createAddSchema(
   return z
     .object({
       productId: z.string().min(1, t("selectField", { field: ti("product") })),
+      date: dateFieldSchema(t, ti("date")),
       direction: z.enum(["in", "out"]),
       reason: z.enum(STOCK_MOVEMENT_REASONS),
       quantity: z.number().int().min(0),
@@ -101,6 +103,7 @@ export function StockMovementFormDialog({
   onOpenChange,
   movement,
   defaultDirection = "in",
+  defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -109,6 +112,11 @@ export function StockMovementFormDialog({
   // In & Out Summary's "Out Stock" panel should default to Stock Out). Ignored
   // in edit mode.
   defaultDirection?: "in" | "out"
+  // Pre-fills the Add form's editable Date — the date the page it was opened
+  // from is currently showing (Inventory's Date, the Daily Report's date), so
+  // an entry made while viewing a past day files under that day. Falls back to
+  // today. Ignored in edit mode, which has no Date field.
+  defaultDate?: string
 }) {
   const isEdit = !!movement
   const { t } = useTranslation("inventory")
@@ -125,7 +133,12 @@ export function StockMovementFormDialog({
         {isEdit ? (
           <EditMovementForm movement={movement} open={open} onOpenChange={onOpenChange} />
         ) : (
-          <AddMovementForm open={open} onOpenChange={onOpenChange} defaultDirection={defaultDirection} />
+          <AddMovementForm
+            open={open}
+            onOpenChange={onOpenChange}
+            defaultDirection={defaultDirection}
+            defaultDate={defaultDate}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -136,10 +149,12 @@ function AddMovementForm({
   open,
   onOpenChange,
   defaultDirection,
+  defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDirection: "in" | "out"
+  defaultDate?: string
 }) {
   const { user } = useAuth()
   const { data: products = [] } = useProducts()
@@ -151,6 +166,7 @@ function AddMovementForm({
 
   const defaultsFor = (direction: "in" | "out"): AddFormValues => ({
     productId: "",
+    date: defaultDate || todayIso(),
     direction,
     reason: direction === "in" ? "Restock" : "Adjustment",
     quantity: 1,
@@ -167,7 +183,7 @@ function AddMovementForm({
   React.useEffect(() => {
     if (open) form.reset(defaultsFor(defaultDirection))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDirection])
+  }, [open, defaultDirection, defaultDate])
 
   async function onSubmit(values: AddFormValues) {
     const quantityAdded = values.direction === "in" ? values.quantity : 0
@@ -177,7 +193,7 @@ function AddMovementForm({
     const sign = values.direction === "out" ? -1 : 1
 
     await addMovement.mutateAsync({
-      date: todayIso(),
+      date: values.date,
       productId: values.productId,
       quantityAdded,
       quantityRemoved,
@@ -271,25 +287,40 @@ function AddMovementForm({
             )}
           />
         </div>
-        <FormField
-          control={form.control}
-          name="quantity"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{tFields("quantity")}</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  value={field.value}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{tFields("quantity")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={field.value}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("date")}</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <div className="grid grid-cols-3 gap-4">
           {(
             [

@@ -9,6 +9,8 @@
   "descriptionOptional": "Description (Optional)",
   "itemAutoParseHint": "Tip: entering \"[SKU] / [Description]\" here fills in SKU and Description below automatically.",
   "addProduct": "Add Product",
+  "addInOut": "Add In/Out",
+  "date": "Date",
   "addSupplierTitle": "Add Supplier",
   "addSupplierDescription": "Register a new supplier to source products from.",
   "supplierName": "Supplier Name",

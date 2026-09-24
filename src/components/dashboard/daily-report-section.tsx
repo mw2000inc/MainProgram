@@ -885,6 +885,7 @@ export function DailyReportSection() {
           }
         }}
         movement={editingStockMovement}
+        defaultDate={reportDate}
       />
     </div>
   )

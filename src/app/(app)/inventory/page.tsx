@@ -21,6 +21,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DateControl } from "@/components/dashboard/date-control"
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog"
+import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
 import { getInventoryColumns, type ProductRow } from "@/components/inventory/inventory-columns"
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -54,6 +55,7 @@ function InventoryContent() {
   const [statusFilter, setStatusFilter] = React.useState<"all" | StockStatus>("all")
   const [monthYear, setMonthYear] = React.useState<MonthYearValue>({ month: "all", year: "all" })
   const [formOpen, setFormOpen] = React.useState(false)
+  const [movementFormOpen, setMovementFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Product | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<Product | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<ProductRow[]>([])
@@ -78,7 +80,9 @@ function InventoryContent() {
   // the other three buckets. Balance "as of" the selected date is that live total
   // minus the net effect of every movement dated AFTER the selected date — an
   // exact reconstruction from the ledger, not an approximation. In/Out Stock are
-  // just that date's own movements.
+  // just that date's own movements. Only approved movements count: a pending
+  // or rejected one never touched stock_quantity (see apply_stock_movement()),
+  // so counting it here would show a stock change that hasn't happened.
   const conditionTotals = React.useMemo(() => {
     const totals = new Map<
       string,
@@ -92,6 +96,7 @@ function InventoryContent() {
       }
     >()
     for (const m of movements) {
+      if (m.status !== "approved") continue
       const entry = totals.get(m.productId) ?? {
         secondHandReadyAsOf: 0,
         secondHandRepairAsOf: 0,
@@ -134,20 +139,15 @@ function InventoryContent() {
   const rows: ProductRow[] = React.useMemo(
     () =>
       products.map((p) => {
-        // A product with zero rows in the stock movement ledger (e.g. one
-        // just created via Add Product, whose static Stock Balances came
-        // straight from AppSheet and were never touched by a movement) has
-        // no real history to reconstruct an "as of the selected date" figure
-        // from — conditionTotals.get would silently return the zeroed
-        // default below and every column would show 0 even though the
-        // product record itself holds real numbers. Fall back to those
-        // stored values instead in exactly that case. A product that DOES
-        // have movement history but simply had none on this specific date
-        // is a different, correct case (0 in/out that day) and keeps using
-        // the computed figures as before.
-        const totals = conditionTotals.get(p.id)
-        const hasMovementHistory = totals !== undefined
-        const resolvedTotals = totals ?? {
+        // stock_quantity is the single source of truth for the regular stock
+        // pool: the 20261006000000_rebaseline_stock_quantity migration set it
+        // to the imported static Brand New plus every approved movement, and
+        // apply_stock_movement() keeps it in step from there. Everything here
+        // is derived from it and the approved ledger — never from the static
+        // AppSheet Balance/In/Out columns on the product, which stopped
+        // being read the moment a product's first movement was recorded and
+        // made its figures jump to a different baseline.
+        const resolvedTotals = conditionTotals.get(p.id) ?? {
           secondHandReadyAsOf: 0,
           secondHandRepairAsOf: 0,
           demoAsOf: 0,
@@ -163,14 +163,14 @@ function InventoryContent() {
           ...p,
           stockStatus: getStockStatus(p.stockQuantity, p.minStockLevel),
           supplierName: suppliers.find((s) => s.id === p.supplierId)?.name ?? "Unknown",
-          brandNewQuantity: hasMovementHistory ? brandNewAsOf : p.brandNew,
+          brandNewQuantity: brandNewAsOf,
           secondHandReadyQuantity: resolvedTotals.secondHandReadyAsOf,
           secondHandRepairQuantity: resolvedTotals.secondHandRepairAsOf,
           demoQuantity: resolvedTotals.demoAsOf,
-          inStockOnDate: hasMovementHistory ? resolvedTotals.inOnDate : p.inStock,
-          outStockOnDate: hasMovementHistory ? resolvedTotals.outOnDate : p.outStock,
-          balance: hasMovementHistory ? balance : p.balance,
-          pBalance: hasMovementHistory ? pBalance : p.pBalance,
+          inStockOnDate: resolvedTotals.inOnDate,
+          outStockOnDate: resolvedTotals.outOnDate,
+          balance,
+          pBalance,
         }
       }),
     [products, suppliers, conditionTotals]
@@ -255,6 +255,15 @@ function InventoryContent() {
             </Button>
           </Link>
           <PanelExportMenu columns={exportColumns} rows={filteredRows} fileName="inventory" />
+          {/* Files the entry under this page's own Date field (selectedDate),
+              not necessarily today — the dialog's Date stays editable. Gated
+              inventory:edit like the Daily Report's own +Add for the same
+              dialog (Add Product below is a different action). */}
+          {canEdit && (
+            <Button variant="outline" onClick={() => setMovementFormOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" /> {t("addInOut")}
+            </Button>
+          )}
           {can("inventory:add") && (
             <Button
               onClick={() => {
@@ -336,6 +345,7 @@ function InventoryContent() {
       </div>
 
       <ProductFormDialog open={formOpen} onOpenChange={setFormOpen} product={editing} />
+      <StockMovementFormDialog open={movementFormOpen} onOpenChange={setMovementFormOpen} defaultDate={selectedDate} />
 
       <ConfirmDialog
         open={!!deleting}
