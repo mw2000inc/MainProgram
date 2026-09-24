@@ -240,6 +240,17 @@ export function RepairFormDialog({
     }
   }
 
+  // Acc D defaults to whatever Pre D is set to while creating, since the two
+  // dates usually match — a default, not a lock: it stops following the
+  // moment the admin edits Acc D themselves (including clearing it). A ref,
+  // not RHF's dirty state, because this component's own setValue below would
+  // otherwise be indistinguishable from the admin's edit. Tracks Pre D on
+  // every change rather than on blur so re-picking Pre D also moves Acc D
+  // along, and a native date input's per-keystroke intermediate values (year
+  // typed digit by digit) settle on the final date instead of leaving Acc D
+  // stuck on the first partial one.
+  const accDEditedRef = React.useRef(false)
+
   // See filter-change-form-dialog.tsx's own comment on this same pattern —
   // fills only currently-empty fields, add-only, never overwrites anything
   // already typed.
@@ -321,6 +332,7 @@ export function RepairFormDialog({
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    accDEditedRef.current = false
     // Never carries over from a previous "Add" session — staged parts are
     // scoped to the one not-yet-saved repair currently being created.
     setStagedParts([])
@@ -510,7 +522,14 @@ export function RepairFormDialog({
                 <FormItem>
                   <FormLabel>{tFields("preD")}</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input
+                      type="date"
+                      {...field}
+                      onChange={(e) => {
+                        field.onChange(e)
+                        if (!isEdit && !accDEditedRef.current) form.setValue("accD", e.target.value)
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -523,7 +542,14 @@ export function RepairFormDialog({
                 <FormItem>
                   <FormLabel>{tFields("accD")}</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input
+                      type="date"
+                      {...field}
+                      onChange={(e) => {
+                        accDEditedRef.current = true
+                        field.onChange(e)
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
