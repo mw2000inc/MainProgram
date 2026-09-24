@@ -14,7 +14,7 @@
   "deleteDescription": "This will permanently remove this install record.",
   "noPlansForDate": "No installs for this date.",
   "selectDatePrompt": "Select a date to view its details.",
-  "memberAccountNumberHint": "Only used if this order creates a new member",
+  "memberAccountNumberHint": "Saved on this install; also used if it creates a new member",
   "selectTechnician": "Select technician",
   "notAssigned": "Not Assigned"
 }

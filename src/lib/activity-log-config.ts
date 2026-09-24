@@ -82,6 +82,7 @@ const FIELD_KEYS: Record<string, string> = {
   // added).
   id: "fieldRecordId",
   member_account: "fieldMemberAccount",
+  member_account_number: "fieldMemberAccount",
   filter_type: "fieldFilterType",
   plan_date: "fieldPlanDate",
   s_c: "fieldSC",

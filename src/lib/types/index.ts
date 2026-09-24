@@ -610,6 +610,10 @@ export interface InstallPlan extends DispatchFields {
   installedDate?: string
   note?: string
   modelDp?: string
+  // The Member Account# typed on this install (20261007000000 migration) —
+  // '' when none was entered, in which case the member is inferred from
+  // Order No./phone/name instead (see the Install page's orderGroups).
+  memberAccountNumber?: string
   inOut: string
   // AppSheet's own SalesSchedule form fields — genuinely new, not tracked
   // anywhere else on this record before (20260923000000 migration).

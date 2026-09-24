@@ -97,8 +97,9 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     // now a typable field (see TechnicianCombobox).
     serviceman: z.string().trim().optional(),
     serviceman2: z.string().trim().optional(),
-    // Transient — never saved onto the install_plans row itself (it has no
-    // such column). Only used, on add, as the new Customer's own
+    // Saved on the install_plans row itself (20261007000000 migration) so the
+    // detail card and member grouping show exactly what was typed, on add and
+    // on edit. On add it is ALSO used as the new Customer's own
     // memberAccountNumber when this order turns out to have no existing
     // customer match (see onSubmit) — optional since it defaults to '' at
     // the database level either way.
@@ -131,7 +132,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
       via: plan.via ?? "",
       serviceman: plan.serviceman ?? "",
       serviceman2: plan.serviceman2 ?? "",
-      memberAccountNumber: "",
+      memberAccountNumber: plan.memberAccountNumber ?? "",
     }
   }
   return {
@@ -297,6 +298,7 @@ export function InstallFormDialog({
       orderNo,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
+      memberAccountNumber: (values.memberAccountNumber ?? "").trim(),
       // No second technician without a real first, and never the same person twice.
       serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
       serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,

@@ -58,7 +58,6 @@ function InstallPageContent() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<InstallPlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<InstallPlan | undefined>(undefined)
-  const [filteredGroups, setFilteredGroups] = React.useState<InstallOrderGroup[]>([])
 
   // One row per distinct MEMBER (Member Account#) rather than per order_no —
   // a member with several different order numbers (repeat installs logged
@@ -95,12 +94,23 @@ function InstallPageContent() {
     const byMember = new Map<string, InstallPlan[]>()
     const byName = new Map<string, InstallPlan[]>()
     for (const p of plans) {
-      const viaOrder = findCustomerByOrderNumber(customers, saleListEntries, p.orderNo)
-      const viaName = viaOrder
-        ? undefined
-        : findExistingMemberMatch(customers, { contactNumber: p.contactNumber, fullName: p.name, companyName: p.name })
-            ?.customer
-      const memberAccountNumber = (viaOrder ?? viaName)?.memberAccountNumber?.trim()
+      // An Account# typed on the install itself is explicit, so it wins over
+      // the Order No./phone/name inference below (which is only a guess —
+      // and Order No. is optional, so it often finds nothing). Matched to a
+      // real member when one exists, so it lands in that member's own group
+      // under their exact Account#; otherwise it still keys a group of its
+      // own rather than being dropped.
+      const ownAccount = p.memberAccountNumber?.trim() ?? ""
+      const viaAccount = ownAccount ? findExistingMemberMatch(customers, { memberAccountNumber: ownAccount })?.customer : undefined
+      const viaOrder = ownAccount ? undefined : findCustomerByOrderNumber(customers, saleListEntries, p.orderNo)
+      const viaName =
+        ownAccount || viaOrder
+          ? undefined
+          : findExistingMemberMatch(customers, { contactNumber: p.contactNumber, fullName: p.name, companyName: p.name })
+              ?.customer
+      const memberAccountNumber = ownAccount
+        ? viaAccount?.memberAccountNumber.trim() || ownAccount
+        : (viaOrder ?? viaName)?.memberAccountNumber?.trim()
       const map = memberAccountNumber ? byMember : byName
       const key = memberAccountNumber || p.name.trim().toLowerCase()
       const list = map.get(key)
@@ -150,7 +160,14 @@ function InstallPageContent() {
     [orderGroups, initialPlan]
   )
 
-  const orderSelection = useSplitViewSelection(filteredGroups, initialGroupId)
+  // Reads the live orderGroups, not the list table's last-reported filtered
+  // rows: that callback only fires while the member list is mounted, so once a
+  // member was open its group (and every visit's data in the detail card) was
+  // frozen at whatever it was when opened — an edit saved fine but the card
+  // kept showing the old values until the member was closed and reopened.
+  // Nothing at this level ever needs the search-filtered subset: the list is
+  // unmounted while a member is selected.
+  const orderSelection = useSplitViewSelection(orderGroups, initialGroupId)
   // The specific install visit (date) shown within the drilled-into member —
   // scoped to that member's own records, not the full plans list, so Prev/
   // Next steps through this member's dates rather than every unrelated
@@ -213,7 +230,6 @@ function InstallPageContent() {
                 data={orderGroups}
                 searchPlaceholder={t("searchPlaceholder")}
                 emptyMessage={t("noPlansFound")}
-                onFilteredRowsChange={setFilteredGroups}
                 onRowClick={orderSelection.open}
               />
             </div>
@@ -293,11 +309,13 @@ function InstallPageContent() {
                   <DetailField label={tFields("name")} value={selected.name} />
                   <DetailField label={tFields("address")} value={selected.address} className="sm:col-span-2" />
                   <DetailField label={tFields("contactNumber")} value={selected.contactNumber} />
-                  {/* install_plans has no member_account_number/customer_id
-                      column of its own — this is the member this record's
-                      own group already resolved (see orderGroups' own
-                      comment on that lookup), not a separate query. */}
-                  <DetailField label={tFields("memberAccount")} value={orderSelection.selected.memberAccountNumber} />
+                  {/* This visit's own saved Account#, else the member its group
+                      resolved from Order No./phone/name (see orderGroups'
+                      own comment on that lookup) — not a separate query. */}
+                  <DetailField
+                    label={tFields("memberAccount")}
+                    value={selected.memberAccountNumber || orderSelection.selected.memberAccountNumber}
+                  />
                   <DetailField label={tFields("inOrOut")} value={selected.inOut} />
                   <DetailField label={tFields("model")} value={selected.model} />
                   <DetailField label={tFields("modelDp")} value={selected.modelDp} />
