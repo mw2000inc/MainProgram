@@ -194,6 +194,20 @@ export function generateId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-4)}`
 }
 
+// AppSheet's own Item column is often (not always) a combined
+// "[SKU] / [Description]" string — e.g. "011 / MW) Pre-Sediment" splits
+// into SKU "011" and Description "MW) Pre-Sediment". Splits on the FIRST
+// slash only (non-greedy first group), tolerant of the space padding
+// either side of it actually being optional. Returns null for a plain
+// name with no "/" at all — most existing/new items aren't required to
+// follow this convention, so callers only auto-fill when this actually
+// matches rather than forcing every Item value through it.
+export function parseItemString(item: string): { sku: string; description: string } | null {
+  const match = item.match(/^(.+?)\s*\/\s*(.+)$/)
+  if (!match) return null
+  return { sku: match[1].trim(), description: match[2].trim() }
+}
+
 const ORDER_NUMBER_PREFIX = "SK001"
 
 export function formatOrderNumber(sequence: number): string {

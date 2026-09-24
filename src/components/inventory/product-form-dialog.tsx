@@ -21,23 +21,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
 import { useCreateProduct, useUpdateProduct } from "@/lib/hooks/use-inventory"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { parseItemString } from "@/lib/utils"
 import type { Product } from "@/lib/types"
 
 const CATEGORY_OPTIONS: ComboboxOption[] = PRODUCT_CATEGORIES.map((c) => ({ value: c }))
-
-// AppSheet's own Item column is often (not always) a combined
-// "[SKU] / [Description]" string — e.g. "011 / MW) Pre-Sediment" splits
-// into SKU "011" and Description "MW) Pre-Sediment". Splits on the FIRST
-// slash only (non-greedy first group), tolerant of the space padding
-// either side of it actually being optional. Returns null for a plain
-// name with no "/" at all — most existing/new items aren't required to
-// follow this convention, so callers only auto-fill when this actually
-// matches rather than forcing every Item value through it.
-function parseItemString(item: string): { sku: string; description: string } | null {
-  const match = item.match(/^(.+?)\s*\/\s*(.+)$/)
-  if (!match) return null
-  return { sku: match[1].trim(), description: match[2].trim() }
-}
 
 function createSchema(
   t: (key: string, params?: Record<string, string>) => string,

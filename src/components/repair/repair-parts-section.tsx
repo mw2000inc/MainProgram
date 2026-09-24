@@ -21,7 +21,7 @@ import {
   useUpdateRepairPlanPart,
 } from "@/lib/hooks/use-repair-plan-parts"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate } from "@/lib/utils"
+import { cn, formatDate, parseItemString } from "@/lib/utils"
 import type { RepairPlanPart } from "@/lib/types"
 
 // Full month names for RepairDateSwitcher's own Month <Select> — year 2000
@@ -264,10 +264,34 @@ export function PartFormDialog({
   // catalog entry just leaves them as independent free text instead (a
   // custom, not-yet-cataloged part) — see canSubmit/the submit handler
   // below for how that's still addable.
+  //
+  // A custom Part is usually AppSheet's combined "[code] / [description]"
+  // string (e.g. "1080 / T1 Old) Tank Cover Assy"), so Part No is derived
+  // from that leading numeric code via the same parseItemString the Product
+  // form uses for Item -> SKU. Only numeric codes are taken: a free-typed
+  // name like "Hot / Cold Tap" shouldn't yield a Part No of "Hot".
+  function derivedPartNo(text: string): string | null {
+    const catalogMatch = products.find((p) => formatPart(p) === text)
+    if (catalogMatch) return catalogMatch.sku
+    const parsed = parseItemString(text)
+    return parsed && /^\d+$/.test(parsed.sku) ? parsed.sku : null
+  }
+
   function handlePartChange(value: string) {
+    const previous = derivedPartNo(partText)
+    const next = derivedPartNo(value)
     setPartText(value)
-    const match = products.find((p) => formatPart(p) === value)
-    if (match) setPartNoText(match.sku)
+    if (products.some((p) => formatPart(p) === value)) {
+      setPartNoText(next ?? "")
+      return
+    }
+    // Part No follows Part only while it's blank or still holds what Part
+    // last derived, so a Part No the admin typed themselves is never
+    // overwritten (same "never clobbers" rule as the Product form's SKU).
+    const current = partNoText.trim()
+    if ((next !== null || previous !== null) && (current === "" || current === previous)) {
+      setPartNoText(next ?? "")
+    }
   }
 
   function handlePartNoChange(value: string) {
