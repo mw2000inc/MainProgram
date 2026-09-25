@@ -25,5 +25,7 @@
   "selectProduct": "Select or type a part",
   "noPartsFound": "No parts recorded for this repair.",
   "deletePartTitle": "Remove this part?",
-  "deletePartDescription": "This will permanently remove this part line item from the repair record."
+  "deletePartDescription": "This will permanently remove this part line item from the repair record.",
+  "duplicatePlanWarningTitle": "This repair plan already exists",
+  "duplicatePlanWarningDescription": "A repair with the same Issued Date, Order No., Account Name, Problem, Solution/Status, Pre D, and Acc D is already on file. Change one of these to save, or find and open the existing record instead."
 }

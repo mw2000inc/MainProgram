@@ -25,5 +25,7 @@
   "selectProduct": "부품 선택 또는 직접 입력",
   "noPartsFound": "이 수리에 등록된 부품이 없습니다.",
   "deletePartTitle": "이 부품을 삭제하시겠습니까?",
-  "deletePartDescription": "이 부품 항목이 수리 기록에서 영구적으로 삭제됩니다."
+  "deletePartDescription": "이 부품 항목이 수리 기록에서 영구적으로 삭제됩니다.",
+  "duplicatePlanWarningTitle": "이미 존재하는 수리 계획입니다",
+  "duplicatePlanWarningDescription": "접수일, 주문 번호, 계정명, 문제, 해결/상태, Pre D, Acc D가 모두 동일한 수리 기록이 이미 있습니다. 저장하려면 이 중 하나를 변경하거나, 기존 기록을 찾아 여세요."
 }

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react"
 import {
   Form,
   FormControl,
@@ -37,7 +37,7 @@ import { CurrencyInput } from "@/components/shared/currency-input"
 import { PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
-import { useCreateRepairPlan, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
+import { useCreateRepairPlan, useUpdateRepairPlan, useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCreateRepairPlanPart } from "@/lib/hooks/use-repair-plan-parts"
 import { PartFormDialog, type PartFormInput, type StagedRepairPlanPart } from "@/components/repair/repair-parts-section"
 import { useCustomers } from "@/lib/hooks/use-customers"
@@ -191,6 +191,7 @@ export function RepairFormDialog({
   const createPart = useCreateRepairPlanPart()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  const { data: repairPlans = [] } = useRepairPlans()
   const { t } = useTranslation("repair")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -201,6 +202,38 @@ export function RepairFormDialog({
   })
   const thValue = form.watch("th")
   const issuedDateValue = form.watch("issuedDate")
+  const orderNoValue = form.watch("orderNo")
+  const accountNameValue = form.watch("accountName")
+  const problemValue = form.watch("problem")
+  const solutionStatusValue = form.watch("solutionStatus")
+  const preDValue = form.watch("preD")
+  const accDValue = form.watch("accD")
+
+  // Catches the same repair being logged twice by mistake (a double submit,
+  // or re-entering from a paper form without checking first) — every field
+  // an admin would actually recognize a repair by has to match an EXISTING
+  // saved plan exactly (trimmed, case-insensitive); two plans that merely
+  // look similar (a different Problem, a different Pre D) are never
+  // flagged. Skips the check entirely while any required field is still
+  // blank, since those can't be saved anyway and would otherwise transiently
+  // match some unrelated sparse row. Excludes this record's own id while
+  // editing, so saving an unrelated field change on a plan never flags it as
+  // a duplicate of itself.
+  const duplicatePlan = React.useMemo(() => {
+    if (!issuedDateValue || !orderNoValue.trim() || !accountNameValue.trim() || !problemValue.trim()) return undefined
+    const norm = (v?: string) => (v ?? "").trim().toLowerCase()
+    return repairPlans.find(
+      (p) =>
+        p.id !== plan?.id &&
+        norm(p.issuedDate) === norm(issuedDateValue) &&
+        norm(p.orderNo) === norm(orderNoValue) &&
+        norm(p.accountName) === norm(accountNameValue) &&
+        norm(p.problem) === norm(problemValue) &&
+        norm(p.solutionStatus) === norm(solutionStatusValue) &&
+        norm(p.preD) === norm(preDValue) &&
+        norm(p.accD) === norm(accDValue)
+    )
+  }, [issuedDateValue, orderNoValue, accountNameValue, problemValue, solutionStatusValue, preDValue, accDValue, repairPlans, plan?.id])
 
   // Parts staged while creating a brand-new repair — this record has no
   // real id yet for repair_plan_parts.repair_plan_id to reference, so these
@@ -347,6 +380,14 @@ export function RepairFormDialog({
   }, [open, defaultDate, defaultOrderNo, plan])
 
   async function onSubmit(values: FormValues) {
+    // Belt-and-suspenders alongside the submit button's own disabled state
+    // below — that's the primary guard, this just makes sure nothing (a
+    // stray Enter keypress before React re-renders the button, a race on
+    // repairPlans still loading) can slip a duplicate through regardless.
+    if (duplicatePlan) {
+      toast.error(t("duplicatePlanWarningTitle"))
+      return
+    }
     const input = {
       ...values,
       // No second technician without a real first, and never the same person twice.
@@ -401,6 +442,15 @@ export function RepairFormDialog({
           <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
           <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
+        {duplicatePlan && (
+          <div className="flex items-start gap-2 rounded-md border bg-warning/10 text-warning border-warning/20 p-3 text-sm">
+            <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">{t("duplicatePlanWarningTitle")}</p>
+              <p className="text-xs">{t("duplicatePlanWarningDescription")}</p>
+            </div>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -908,7 +958,7 @@ export function RepairFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending || !!duplicatePlan}>
                 {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("save")}
               </Button>
             </DialogFooter>
