@@ -87,6 +87,14 @@ interface DataTableProps<TData> {
   onRowClick?: (row: TData) => void
   // Extra className per row (e.g. strikethrough for completed/inactive entries).
   getRowClassName?: (row: TData) => string | undefined
+  // Opt-in — no caller sets this by default. Returns the section label a row
+  // belongs to; a full-width header row is inserted whenever that label
+  // differs from the previous visible row's, so the caller supplies `data`
+  // already ordered so each group is contiguous. Headers are worked out from
+  // the rows actually shown, so a search that filters a whole group out
+  // removes its header too. Column sorting is turned off while this is set —
+  // sorting would scatter the groups and leave the same header repeated.
+  groupBy?: (row: TData) => string
   // Extra classes merged onto the one real scroll wrapper (see that div's
   // own comment below — both this and scrollContainerClassName land on the
   // SAME element now, ui/table.tsx's own container no longer scrolls at
@@ -138,6 +146,7 @@ export function DataTable<TData>({
   pageResetKey,
   onRowClick,
   getRowClassName,
+  groupBy,
   tableContainerClassName,
   tableClassName,
   scrollContainerClassName,
@@ -165,6 +174,7 @@ export function DataTable<TData>({
     data,
     columns,
     state: { sorting, globalFilter, pagination },
+    enableSorting: !groupBy,
     onSortingChange: (updater) => {
       setSorting(updater)
       if (keepPageOnRefresh) goToFirstPage()
@@ -331,22 +341,38 @@ export function DataTable<TData>({
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className={cn(onRowClick && "cursor-pointer hover:bg-muted/50", getRowClassName?.(row.original))}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
+              table.getRowModel().rows.flatMap((row, index, rows) => {
+                const bodyRow = (
+                  <TableRow
+                    key={row.id}
+                    className={cn(onRowClick && "cursor-pointer hover:bg-muted/50", getRowClassName?.(row.original))}
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(bodyCellClassName, cell.column.columnDef.meta?.cellClassName)}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+                if (!groupBy) return [bodyRow]
+                const label = groupBy(row.original)
+                if (index > 0 && label === groupBy(rows[index - 1].original)) return [bodyRow]
+                return [
+                  <TableRow key={`group:${row.id}`} className="bg-muted/40 hover:bg-muted/40">
                     <TableCell
-                      key={cell.id}
-                      className={cn(bodyCellClassName, cell.column.columnDef.meta?.cellClassName)}
+                      colSpan={columns.length}
+                      className="py-1.5 text-xs font-semibold text-muted-foreground"
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {label}
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))
+                  </TableRow>,
+                  bodyRow,
+                ]
+              })
             )}
           </TableBody>
         </Table>

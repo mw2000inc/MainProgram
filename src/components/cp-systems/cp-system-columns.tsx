@@ -5,6 +5,7 @@ import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { formatCpSystemComponents } from "@/lib/cp-system-display"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
 
 // Synthesized per-render from CpSystem.components (a plain jsonb array, no
@@ -12,16 +13,6 @@ import type { CpSystem, CpSystemComponent } from "@/lib/types"
 // position an Edit/Delete click applies to. Never persisted or compared
 // across renders.
 export type CpSystemComponentRow = CpSystemComponent & { id: string; status?: string }
-
-// Same "name - Xm" comma-joined summary the table's own components cell
-// renders (see getCpSystemColumns below) — pulled out here so the CSV/Excel
-// export can show the same readable text instead of a raw components array,
-// without duplicating the formatting rule in two places.
-export function formatCpSystemComponents(components: CpSystemComponent[]): string {
-  return components
-    .map((c) => `${c.name}${c.quantity && c.quantity !== 1 ? ` x${c.quantity}` : ""} - ${c.intervalMonths}M`)
-    .join(", ")
-}
 
 export const CP_SYSTEM_EXPORT_COLUMNS = [
   { header: "System Code", key: "systemCode" },
@@ -79,11 +70,15 @@ export function getCpSystemColumns({
   canDelete,
   onEdit,
   onDelete,
+  descriptionBySku,
 }: {
   canEdit: boolean
   canDelete: boolean
   onEdit: (system: CpSystem) => void
   onDelete: (system: CpSystem) => void
+  // From the live product catalog (see buildFilterDescriptionMap) — lets a
+  // component stored as a bare code show its readable description.
+  descriptionBySku: Map<string, string>
 }): ColumnDef<CpSystem, unknown>[] {
   const columns: ColumnDef<CpSystem, unknown>[] = [
     {
@@ -94,14 +89,13 @@ export function getCpSystemColumns({
     {
       id: "components",
       header: () => <ColumnHeader tKey="cpDetailsAll" ns="cpSystem" />,
-      // Same "name - Xm" comma-joined shape as the old AppSheet free-text
-      // column, just derived from the structured data instead of being the
-      // source of truth itself. "x{quantity}" only when it's not the
-      // implied default of 1 (also covers every component predating the
-      // field, which has no quantity at all) — keeps the common case exactly
-      // as compact as before this field existed.
+      // The old AppSheet column's "description - Xm, ..." shape, derived live
+      // from the structured components rather than being the source of truth
+      // itself — see formatCpSystemComponents for the exact rules.
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{formatCpSystemComponents(row.original.components)}</span>
+        <span className="text-sm text-muted-foreground">
+          {formatCpSystemComponents(row.original.components, descriptionBySku)}
+        </span>
       ),
     },
   ]

@@ -19,11 +19,17 @@ import {
   getCpSystemColumns,
   getCpSystemNarrowColumn,
   getCpSystemDetailColumns,
-  formatCpSystemComponents,
   CP_SYSTEM_EXPORT_COLUMNS,
   type CpSystemComponentRow,
 } from "@/components/cp-systems/cp-system-columns"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
+import {
+  buildFilterDescriptionMap,
+  cpSystemFamily,
+  formatCpSystemComponents,
+  sortCpSystemsForList,
+} from "@/lib/cp-system-display"
+import { useProducts } from "@/lib/hooks/use-inventory"
 import { useCpSystems, useDeleteCpSystem, useUpdateCpSystem } from "@/lib/hooks/use-cp-systems"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
@@ -32,6 +38,10 @@ import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { CpSystem, CpSystemComponent } from "@/lib/types"
+
+// Stable module-level function (not an inline arrow) so DataTable's groupBy
+// prop keeps the same identity on every render.
+const groupByFamily = (system: CpSystem) => cpSystemFamily(system.systemCode)
 
 // Replaces the old AppSheet "MW CP > CP System" reference screen — a catalog
 // of system codes and the filter components each is built from. Same
@@ -58,6 +68,7 @@ function CpSystemContent() {
   const { data: saleListEntries = [], isPending: p2 } = useSaleListEntries()
   const { data: repairPlans = [], isPending: p3 } = useRepairPlans()
   const { data: customers = [], isPending: p4 } = useCustomers()
+  const { data: products = [], isPending: p5 } = useProducts()
   const deleteSystem = useDeleteCpSystem()
   const updateSystem = useUpdateCpSystem()
 
@@ -74,9 +85,15 @@ function CpSystemContent() {
   )
   const [deletingComponentIndex, setDeletingComponentIndex] = React.useState<number | undefined>(undefined)
 
-  const isPending = p1 || p2 || p3 || p4
+  const isPending = p1 || p2 || p3 || p4 || p5
 
-  const selection = useSplitViewSelection(systems, initialId)
+  // Family (descending), then code — the order both the main list and the
+  // narrow list render in, so Prev/Next in the detail panel steps through
+  // the same order the admin sees rather than the database's own.
+  const sortedSystems = React.useMemo(() => sortCpSystemsForList(systems), [systems])
+  const descriptionBySku = React.useMemo(() => buildFilterDescriptionMap(products), [products])
+
+  const selection = useSplitViewSelection(sortedSystems, initialId)
   const selected = selection.selected
   useDeepLinkNotFoundToast(initialId, isPending, systems.some((s) => s.id === initialId))
 
@@ -90,8 +107,9 @@ function CpSystemContent() {
           setFormOpen(true)
         },
         onDelete: (system) => setDeleting(system),
+        descriptionBySku,
       }),
-    [isAdmin]
+    [isAdmin, descriptionBySku]
   )
   const narrowColumns = React.useMemo(() => getCpSystemNarrowColumn(), [])
   const componentRows: CpSystemComponentRow[] = React.useMemo(
@@ -135,10 +153,11 @@ function CpSystemContent() {
   // export rows use (see e.g. ScheduleAgenda's exportRows) — the raw
   // components array on each CpSystem isn't something PanelExportMenu can
   // render on its own, so it's turned into the same comma-joined summary
-  // the table's own components column already shows.
+  // the table's own components column already shows, in the same order.
   const exportRows = React.useMemo(
-    () => systems.map((s) => ({ ...s, componentsSummary: formatCpSystemComponents(s.components) })),
-    [systems]
+    () =>
+      sortedSystems.map((s) => ({ ...s, componentsSummary: formatCpSystemComponents(s.components, descriptionBySku) })),
+    [sortedSystems, descriptionBySku]
   )
 
   if (isPending) {
@@ -193,7 +212,8 @@ function CpSystemContent() {
               <CardContent className="pt-6">
                 <DataTable
                   columns={narrowColumns}
-                  data={systems}
+                  data={sortedSystems}
+                  groupBy={groupByFamily}
                   searchPlaceholder={t("searchBySystemCode")}
                   emptyMessage={t("noSystemsDefined")}
                   onRowClick={(row) => selection.open(row)}
@@ -262,7 +282,8 @@ function CpSystemContent() {
           <CardContent className="pt-6">
             <DataTable
               columns={columns}
-              data={systems}
+              data={sortedSystems}
+              groupBy={groupByFamily}
               searchPlaceholder={t("searchBySystemCode")}
               emptyMessage={t("noSystemsDefined")}
               onRowClick={(row) => selection.open(row)}
