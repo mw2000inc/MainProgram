@@ -109,6 +109,7 @@ export function CollectionsFormDialog({
   defaultDate,
   defaultOrderNo,
   entry,
+  onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -117,6 +118,12 @@ export function CollectionsFormDialog({
   defaultOrderNo?: string
   // Editing an existing collection instead of creating a new one.
   entry?: CollectionPlan
+  // Fired with the saved record right after a successful create OR update,
+  // before the dialog closes — see filter-change-form-dialog.tsx's own
+  // identical prop for why: this page's own table is scoped to one month
+  // tab, so a saved record dated outside it would otherwise be invisible
+  // until the admin happened to switch tabs themselves.
+  onSaved?: (entry: CollectionPlan) => void
 }) {
   const isEdit = !!entry
   const createCollection = useCreateCollection()
@@ -160,15 +167,14 @@ export function CollectionsFormDialog({
 
   async function onSubmit(values: FormValues) {
     const input = { ...values, amount: Number(values.amount), ct: values.ct ?? "" }
-    if (isEdit) {
-      await updateCollection.mutateAsync({ id: entry.id, input })
-    } else {
-      // A new manually-scheduled dispatch enters the admin approval queue —
-      // see the dispatch_confirmation_workflow migration. serviceman starts
-      // unassigned — the admin picks one from the Pending Approvals dialog's
-      // own Technician dropdown before approving, same as every other module.
-      await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft", serviceman: "" })
-    }
+    const saved = isEdit
+      ? await updateCollection.mutateAsync({ id: entry.id, input })
+      : // A new manually-scheduled dispatch enters the admin approval queue —
+        // see the dispatch_confirmation_workflow migration. serviceman starts
+        // unassigned — the admin picks one from the Pending Approvals dialog's
+        // own Technician dropdown before approving, same as every other module.
+        await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft", serviceman: "" })
+    onSaved?.(saved)
     onOpenChange(false)
   }
 

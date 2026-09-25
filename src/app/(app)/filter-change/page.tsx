@@ -28,14 +28,60 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { planStatusLabel } from "@/components/shared/status-badge"
 import { extractCityLabel } from "@/lib/geo/city-label"
-import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import { suggestTechnician as fetchSuggestedTechnician, type TechnicianSuggestion } from "@/lib/api/filter-change-plans"
-import type { FilterChangePlan } from "@/lib/types"
+import type { Customer, FilterChangePlan, SaleListEntry } from "@/lib/types"
 
 function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
+}
+
+// resolveCustomerForPlan/findCustomerByOrderNumber (customer-lookup.ts) do a
+// linear .find() per call — fine for the single-record lookups they're used
+// for elsewhere (an onBlur handler, one detail panel), but this page calls
+// the equivalent once per row to build `rows` below, and filter_change_plans
+// is the largest table in the app by a wide margin (2,291 rows live vs. low
+// hundreds for Repair/Collection, single digits for Install) — turning
+// "linear scan" into "linear scan per row." Pre-indexes both lookup tables
+// once per customers/saleListEntries change instead, replicating the exact
+// same precedence (a direct customerId hit, then the matching sale-list
+// entry's own customerId, then a customer's own order_number) as O(1) Map
+// reads. "First match wins" on a duplicate key, same as .find() would give,
+// via the has() guard below.
+function buildCustomerLookupMaps(customers: Customer[], saleListEntries: SaleListEntry[]) {
+  const byId = new Map<string, Customer>()
+  for (const c of customers) if (!byId.has(c.id)) byId.set(c.id, c)
+  const byOrderNumber = new Map<string, Customer>()
+  for (const c of customers) {
+    const key = c.orderNumber.trim()
+    if (key && !byOrderNumber.has(key)) byOrderNumber.set(key, c)
+  }
+  const saleEntryByOrderNumber = new Map<string, SaleListEntry>()
+  for (const e of saleListEntries) {
+    const key = e.orderNumber.trim()
+    if (key && !saleEntryByOrderNumber.has(key)) saleEntryByOrderNumber.set(key, e)
+  }
+  return { byId, byOrderNumber, saleEntryByOrderNumber }
+}
+
+function resolveCustomerOrderNumberFast(
+  maps: ReturnType<typeof buildCustomerLookupMaps>,
+  customerId: string | undefined,
+  orderNumber: string
+): string {
+  if (customerId) {
+    const direct = maps.byId.get(customerId)
+    if (direct) return direct.orderNumber
+  }
+  const trimmed = orderNumber.trim()
+  if (!trimmed) return ""
+  const viaSale = maps.saleEntryByOrderNumber.get(trimmed)
+  if (viaSale?.customerId) {
+    const customer = maps.byId.get(viaSale.customerId)
+    if (customer) return customer.orderNumber
+  }
+  return maps.byOrderNumber.get(trimmed)?.orderNumber ?? ""
 }
 
 function FilterChangePageContent() {
@@ -66,17 +112,21 @@ function FilterChangePageContent() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [filteredRows, setFilteredRows] = React.useState<FilterChangeRow[]>([])
 
-  // Folds in the linked customer's own "SK001-####" order_number (see
-  // customer-lookup.ts's resolveCustomerForPlan) — this plan's own
-  // orderNumber ("001-####") is already searchable directly, this was the
-  // missing direction, same gap the Sep 11 Member List fix closed there.
+  // Folds in the linked customer's own "SK001-####" order_number (same
+  // customer-lookup.ts precedence resolveCustomerForPlan uses) — this plan's
+  // own orderNumber ("001-####") is already searchable directly, this was
+  // the missing direction, same gap the Sep 11 Member List fix closed there.
+  const customerLookupMaps = React.useMemo(
+    () => buildCustomerLookupMaps(customers, saleListEntries),
+    [customers, saleListEntries]
+  )
   const rows: FilterChangeRow[] = React.useMemo(
     () =>
       plans.map((p) => ({
         ...p,
-        customerOrderNumber: resolveCustomerForPlan(customers, saleListEntries, p.customerId, p.orderNumber)?.orderNumber ?? "",
+        customerOrderNumber: resolveCustomerOrderNumberFast(customerLookupMaps, p.customerId, p.orderNumber),
       })),
-    [plans, customers, saleListEntries]
+    [plans, customerLookupMaps]
   )
   // Cached per plan id so re-selecting the same plan doesn't re-fire the
   // suggestion API — this is a read-only comparison shown in the detail
@@ -346,6 +396,17 @@ function FilterChangePageContent() {
         }}
         defaultDate={todayIso()}
         plan={editing}
+        // The table below only ever shows scopedPlans (one month tab at a
+        // time) — without this, saving a plan dated outside whatever tab
+        // happened to be open made it look like the save didn't take,
+        // when it had, it just wasn't in view. Jumps straight to that
+        // record's own month only when it actually landed somewhere the
+        // current tab wouldn't show; saving a date that was already
+        // visible (or the admin is on "All") leaves the tab untouched.
+        onSaved={(saved) => {
+          const savedMonth = yearMonth(saved.planDate)
+          if (selectedMonth !== "all" && selectedMonth !== savedMonth) setSelectedMonth(savedMonth)
+        }}
       />
 
       <ConfirmDialog

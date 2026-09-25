@@ -107,6 +107,7 @@ export function FilterChangeFormDialog({
   defaultDate,
   defaultOrderNumber,
   plan,
+  onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -116,6 +117,13 @@ export function FilterChangeFormDialog({
   defaultOrderNumber?: string
   // Editing an existing plan instead of creating a new one.
   plan?: FilterChangePlan
+  // Fired with the saved record right after a successful create OR update,
+  // before the dialog closes — lets the list page (which scopes its own
+  // table to one month tab) jump to whichever month this record actually
+  // landed in, so it's visible immediately instead of silently filtered out
+  // of the tab the admin happened to be on when they saved a plan dated
+  // outside it.
+  onSaved?: (plan: FilterChangePlan) => void
 }) {
   const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
@@ -218,15 +226,14 @@ export function FilterChangeFormDialog({
       serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
       serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,
     }
-    if (isEdit) {
-      await updatePlan.mutateAsync({ id: plan.id, input })
-    } else {
-      // A new manually-scheduled dispatch enters the admin approval queue —
-      // unlike auto-generated recurring-schedule/C/T-completion rows, which
-      // stay at the 'Confirmed' default set at the database layer (see the
-      // dispatch_confirmation_workflow migration).
-      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
-    }
+    const saved = isEdit
+      ? await updatePlan.mutateAsync({ id: plan.id, input })
+      : // A new manually-scheduled dispatch enters the admin approval queue —
+        // unlike auto-generated recurring-schedule/C/T-completion rows, which
+        // stay at the 'Confirmed' default set at the database layer (see the
+        // dispatch_confirmation_workflow migration).
+        await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+    onSaved?.(saved)
     onOpenChange(false)
   }
 

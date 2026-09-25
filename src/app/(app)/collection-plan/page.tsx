@@ -281,6 +281,15 @@ function CollectionPlanPageContent() {
         }}
         defaultDate={todayIso()}
         entry={editing}
+        // See filter-change/page.tsx's own identical prop for why: this
+        // page's table is also scoped to one month tab, so a saved record
+        // dated outside it would otherwise look like the save silently
+        // failed. Only switches tabs when the saved record actually isn't
+        // visible in the current one.
+        onSaved={(saved) => {
+          const savedMonth = yearMonth(saved.collectionDate)
+          if (selectedMonth !== "all" && selectedMonth !== savedMonth) setSelectedMonth(savedMonth)
+        }}
       />
 
       <ConfirmDialog
