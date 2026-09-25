@@ -76,10 +76,19 @@ export function ProductFormDialog({
   open,
   onOpenChange,
   product,
+  liveStock,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   product?: Product
+  // The product's current stock as the Inventory table shows it: Brand New
+  // from stock_quantity, the three buckets from the approved movement ledger.
+  // When given (editing), Brand New / 2nd Hand / Balance are shown here as
+  // read-only calculated values instead of the static numbers stored on the
+  // record — those stopped feeding the table when stock_quantity became the
+  // source of truth, so editing them silently did nothing. Stock changes now
+  // go through an In/Out movement.
+  liveStock?: { brandNew: number; secondHandReady: number; secondHandRepair: number; demo: number }
 }) {
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct()
@@ -101,7 +110,21 @@ export function ProductFormDialog({
 
   async function onSubmit(values: FormValues) {
     if (isEdit) {
-      await updateProduct.mutateAsync({ id: product.id, input: values })
+      // With liveStock those three aren't editable here, so they're left out
+      // of the write rather than re-saving whatever the form was seeded with
+      // (for balance that is the table's as-of-date figure, not the stored one).
+      const input = liveStock
+        ? {
+            name: values.name,
+            category: values.category,
+            sku: values.sku,
+            description: values.description,
+            pBalance: values.pBalance,
+            inStock: values.inStock,
+            outStock: values.outStock,
+          }
+        : values
+      await updateProduct.mutateAsync({ id: product.id, input })
     } else {
       await createProduct.mutateAsync(values)
     }
@@ -127,6 +150,16 @@ export function ProductFormDialog({
         {...form.register(name, { valueAsNumber: true })}
       />
       {errors[name] && <p className="text-destructive text-sm">{errors[name]?.message as string}</p>}
+    </div>
+  )
+
+  // A calculated value: shown like the inputs around it but not editable, with
+  // the formula underneath so it's clear what feeds it.
+  const readOnlyField = (label: string, value: number, formula?: string) => (
+    <div className="grid content-start gap-2">
+      <Label>{label}</Label>
+      <Input type="number" value={value} readOnly disabled aria-label={label} />
+      {formula && <p className="text-xs text-muted-foreground">{formula}</p>}
     </div>
   )
 
@@ -198,9 +231,30 @@ export function ProductFormDialog({
               {numberField("pBalance", t("pBalance"))}
               {numberField("inStock", t("inStock"))}
               {numberField("outStock", t("outStock"))}
-              {numberField("balance", t("balance"))}
-              {numberField("brandNew", t("brandNew"))}
-              {numberField("secondHand", t("secondHand"))}
+              {liveStock ? (
+                <>
+                  {readOnlyField(t("brandNew"), liveStock.brandNew)}
+                  {readOnlyField(t("secondHandReady"), liveStock.secondHandReady)}
+                  {readOnlyField(t("secondHandRepair"), liveStock.secondHandRepair)}
+                  {readOnlyField(
+                    t("secondHand"),
+                    liveStock.secondHandReady + liveStock.secondHandRepair,
+                    `${t("secondHandReady")} + ${t("secondHandRepair")}`
+                  )}
+                  {readOnlyField(t("demo"), liveStock.demo)}
+                  {readOnlyField(
+                    t("balance"),
+                    liveStock.brandNew + liveStock.secondHandReady + liveStock.secondHandRepair + liveStock.demo,
+                    `${t("brandNew")} + ${t("secondHand")} + ${t("demo")}`
+                  )}
+                </>
+              ) : (
+                <>
+                  {numberField("balance", t("balance"))}
+                  {numberField("brandNew", t("brandNew"))}
+                  {numberField("secondHand", t("secondHand"))}
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

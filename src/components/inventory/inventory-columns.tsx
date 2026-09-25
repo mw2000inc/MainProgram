@@ -13,6 +13,9 @@ export type ProductRow = Product & {
   brandNewQuantity: number
   secondHandReadyQuantity: number
   secondHandRepairQuantity: number
+  // 2nd Hand (Ready) + 2nd Hand (Repair) — never the static Product.secondHand
+  // stored on the record, which is kept untouched alongside it.
+  secondHandQuantity: number
   demoQuantity: number
   // Computed as of the page's selected Date (defaults to today) whenever the
   // product has at least one stock_movements row: P_Balance = Balance minus
@@ -57,11 +60,10 @@ export function getInventoryColumns({
       cell: ({ row }) => <span className="font-medium">{row.original.balance}</span>,
     },
     { accessorKey: "brandNewQuantity", header: () => <ColumnHeader tKey="brandNew" ns="inventory" /> },
-    // Unlike the columns above, this one is never derived from the movement
-    // ledger — it's always the static value stored directly on the product
-    // record (see the Product type's own comment), the same way AppSheet's
-    // own Stock Balances screen has it.
-    { accessorKey: "secondHand", header: () => <ColumnHeader tKey="secondHand" ns="inventory" /> },
+    // The sum of the two 2nd Hand columns to its right (Ready + Need Repair),
+    // both of which come from the approved movement ledger — so this moves
+    // whenever either of them does. Balance above is Brand New + this + Demo.
+    { accessorKey: "secondHandQuantity", header: () => <ColumnHeader tKey="secondHand" ns="inventory" /> },
     { accessorKey: "secondHandReadyQuantity", header: () => <ColumnHeader tKey="secondHandReadyShort" ns="inventory" /> },
     { accessorKey: "secondHandRepairQuantity", header: () => <ColumnHeader tKey="secondHandRepairShort" ns="inventory" /> },
     { accessorKey: "demoQuantity", header: () => <ColumnHeader tKey="demo" ns="inventory" /> },

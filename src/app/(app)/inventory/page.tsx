@@ -156,8 +156,8 @@ function InventoryContent() {
           outOnDate: 0,
         }
         const brandNewAsOf = p.stockQuantity - resolvedTotals.netRegularAfter
-        const balance =
-          brandNewAsOf + resolvedTotals.secondHandReadyAsOf + resolvedTotals.secondHandRepairAsOf + resolvedTotals.demoAsOf
+        const secondHandQuantity = resolvedTotals.secondHandReadyAsOf + resolvedTotals.secondHandRepairAsOf
+        const balance = brandNewAsOf + secondHandQuantity + resolvedTotals.demoAsOf
         const pBalance = balance - (resolvedTotals.inOnDate - resolvedTotals.outOnDate)
         return {
           ...p,
@@ -166,6 +166,7 @@ function InventoryContent() {
           brandNewQuantity: brandNewAsOf,
           secondHandReadyQuantity: resolvedTotals.secondHandReadyAsOf,
           secondHandRepairQuantity: resolvedTotals.secondHandRepairAsOf,
+          secondHandQuantity,
           demoQuantity: resolvedTotals.demoAsOf,
           inStockOnDate: resolvedTotals.inOnDate,
           outStockOnDate: resolvedTotals.outOnDate,
@@ -212,7 +213,7 @@ function InventoryContent() {
     { header: "Out Stock", key: "outStockOnDate" },
     { header: "Balance", key: "balance" },
     { header: "Brand New", key: "brandNewQuantity" },
-    { header: "2nd Hand", key: "secondHand" },
+    { header: "2nd Hand", key: "secondHandQuantity" },
     { header: "2nd hand (ready)", key: "secondHandReadyQuantity" },
     { header: "2nd hand (need repair)", key: "secondHandRepairQuantity" },
     { header: "Demo", key: "demoQuantity" },
@@ -344,7 +345,26 @@ function InventoryContent() {
         </Card>
       </div>
 
-      <ProductFormDialog open={formOpen} onOpenChange={setFormOpen} product={editing} />
+      {/* liveStock is read off the CURRENT row (by id), not the `editing`
+          snapshot set when the row was clicked, so the dialog's calculated
+          2nd Hand / Balance track the same numbers the table shows — including
+          after a movement is added or approved. */}
+      <ProductFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        product={editing}
+        liveStock={(() => {
+          const row = editing ? rows.find((r) => r.id === editing.id) : undefined
+          return row
+            ? {
+                brandNew: row.brandNewQuantity,
+                secondHandReady: row.secondHandReadyQuantity,
+                secondHandRepair: row.secondHandRepairQuantity,
+                demo: row.demoQuantity,
+              }
+            : undefined
+        })()}
+      />
       <StockMovementFormDialog open={movementFormOpen} onOpenChange={setMovementFormOpen} defaultDate={selectedDate} />
 
       <ConfirmDialog
