@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Banknote, Pencil, CheckCheck, History, Search } from "lucide-react"
+import { format, parseISO } from "date-fns"
+import { Banknote, Pencil, CheckCheck, History, Search, Calendar as CalendarIcon, ClipboardList } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -41,6 +44,7 @@ import { cn, formatCurrency, formatDate, formatDateTime, todayIso, twoDaysFromNo
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
+import { CollectionBreakdownDialog } from "@/components/dashboard/collection-breakdown-dialog"
 import type { ComboboxOption } from "@/components/ui/combobox"
 
 // Same presets as the Add/Edit Collection form's own PAYMENT_TYPE_OPTIONS —
@@ -106,19 +110,18 @@ interface AllCollectionRow {
   paymentType?: string
 }
 
-function yearMonth(dateStr: string) {
-  return dateStr.slice(0, 7)
-}
-
-// Sentinel value for selectedMonth's own "Today" pill — sits alongside "all"
-// and real "YYYY-MM" values in that same single-select state, rather than a
-// separate boolean, so it composes for free with everything already keyed
-// off selectedMonth: the existing pageResetKey (a fresh value here already
-// resets pagination to page 1, same as switching months), the day-pills row
-// staying hidden (a single day has nothing to drill into further), and the
-// global search box (DataTable's own state, entirely independent of which
-// tab is active, so it already applies within whatever scopedRows is).
-const TODAY_TAB = "today"
+// The three mutually exclusive ways this view's own date scope (distinct
+// from dateRangeFilter above it in the header, which narrows "All Dates" vs.
+// "Next 2 Days" vs. "Overdue" — this is the row underneath) can be set:
+// every record regardless of date, just today, an admin-picked [from, to]
+// range (inclusive both ends, see DateRangeCalendarButton below), or every
+// record that falls in a given CALENDAR month regardless of which year
+// ("every August," not "August 2024") — a genuinely different axis from
+// "custom," which is always year-specific. Replaces the old "one pill
+// button per YYYY-MM" row, which wrapped into several lines once this
+// view's real data (back to 2020) accumulated enough months — a single
+// popover/dropdown scales to any span instead.
+export type DateScope = "all" | "today" | "custom" | "monthOnly"
 
 // Same next2Days/all/overdue shape as DispatchApprovalQueue's own copy —
 // own local copy rather than a shared cross-import, matching the "keep
@@ -129,13 +132,44 @@ const TODAY_TAB = "today"
 // ledger that shows every record regardless of collected status by design
 // (see its own top-level comment), so narrowing the default view to a
 // 3-day window would contradict that; the option is still one click away.
-type DateRangeFilter = "all" | "next2Days" | "overdue"
+export type DateRangeFilter = "all" | "next2Days" | "overdue"
 
 function matchesDateRangeFilter(date: string, filter: DateRangeFilter): boolean {
   if (filter === "all") return true
   const today = todayIso()
   if (filter === "overdue") return date < today
   return date >= today && date <= twoDaysFromNowIso()
+}
+
+// The full active date scope this view is currently narrowed to — both
+// layers (the header's dateRangeFilter AND the All/Today/custom-range/
+// monthOnly row beneath it). Exported so CollectionBreakdownDialog (a
+// separate view onto the SAME collections records, opened via the
+// "Collection Details" badge) can filter its own rows by literally this
+// same function rather than a second, separately-maintained copy of this
+// logic that could silently drift out of sync with what the main table is
+// actually showing.
+export interface ActiveDateScopeParams {
+  dateRangeFilter: DateRangeFilter
+  dateScope: DateScope
+  customFrom: string | undefined
+  customTo: string | undefined
+  monthOnlyIndex: number | undefined
+}
+
+export function matchesActiveDateScope(date: string, params: ActiveDateScopeParams): boolean {
+  if (!matchesDateRangeFilter(date, params.dateRangeFilter)) return false
+  if (params.dateScope === "today") return date === todayIso()
+  if (params.dateScope === "custom" && params.customFrom && params.customTo) {
+    return date >= params.customFrom && date <= params.customTo
+  }
+  if (params.dateScope === "monthOnly" && params.monthOnlyIndex != null) {
+    // See scopedRows' own comment below for why this is a string slice, not
+    // new Date(date).getMonth() — a timezone bug that class of parsing has
+    // already been confirmed and guarded against once.
+    return Number(date.slice(5, 7)) - 1 === params.monthOnlyIndex
+  }
+  return true
 }
 
 // Every record with a monetary field across the program, regardless of
@@ -585,15 +619,155 @@ function CollectedCell({
   )
 }
 
+// English month names regardless of the app's own EN/KO toggle — matching
+// InlineDateCell's own DATE_PICKER_MONTH_NAMES precedent for the exact same
+// need (fast navigation to a date years in the past — this view's real data
+// goes back to 2020, so prev/next-arrow-only paging would be unusable).
+const DATE_RANGE_MONTH_NAMES = Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), "MMMM"))
+
+// The custom-range replacement for the old per-month pill row: a single
+// Popover + range-mode Calendar. ui/calendar.tsx already ships full
+// range_start/range_middle/range_end styling (react-day-picker's own),
+// simply never exercised anywhere in this app until now, so this needed no
+// new CSS. Same Popover+Calendar+Month/Year-select shell as InlineDateCell
+// (see that component's own comment for why the Selects exist instead of
+// react-day-picker's built-in captionLayout="dropdown"), just with
+// mode="range"/a {from,to} selection instead of a single day — the first
+// click sets `from` (with `to` still unset), the second sets `to`, even
+// after navigating to a different month in between; the popover only closes
+// once both ends are picked, exactly like InlineDateCell closes once its
+// own single pick completes.
+function DateRangeCalendarButton({
+  from,
+  to,
+  active,
+  onChange,
+  placeholder,
+}: {
+  from: string | undefined
+  to: string | undefined
+  active: boolean
+  onChange: (from: string | undefined, to: string | undefined) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  const selectedFrom = from ? parseISO(from) : undefined
+  const selectedTo = to ? parseISO(to) : undefined
+  const [viewMonth, setViewMonth] = React.useState(() => selectedFrom ?? new Date())
+  // Tracks a genuinely in-progress pick — confirmed live that react-day-picker's
+  // range mode reports {from: day, to: day} on the very FIRST click of a
+  // fresh selection (not {from: day, to: undefined}, which is what a naive
+  // "close once both ends are set" check would assume). Without this, the
+  // popover closed after exactly one click, silently turning "Aug 10 to Aug
+  // 20" into a false one-day range the moment the admin clicked Aug 10.
+  const [pendingFrom, setPendingFrom] = React.useState<Date | undefined>(undefined)
+
+  const yearOptions = React.useMemo(() => {
+    const year = new Date().getFullYear()
+    return Array.from({ length: 21 }, (_, i) => year - 10 + i)
+  }, [])
+  const calendarBounds = React.useMemo(
+    () => ({ startMonth: new Date(yearOptions[0], 0), endMonth: new Date(yearOptions[yearOptions.length - 1], 11) }),
+    [yearOptions]
+  )
+
+  function handleOpenChange(next: boolean) {
+    if (next) setViewMonth(selectedFrom ?? new Date())
+    setPendingFrom(undefined)
+    setOpen(next)
+  }
+
+  const label = from && to ? `${format(parseISO(from), "MM/dd/yyyy")} - ${format(parseISO(to), "MM/dd/yyyy")}` : placeholder
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button type="button" size="sm" variant={active ? "default" : "outline"} className="h-7 gap-1.5 font-normal">
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-auto p-0"
+        // Same guard InlineDateCell's own PopoverContent uses, for the same
+        // reason: the Month/Year Selects' own open listbox portals to
+        // document.body too, so a click inside it would otherwise register
+        // as "outside" this popover and close the whole calendar before the
+        // selection applies.
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null
+          if (target?.closest('[data-slot="select-content"]') || target?.closest('[role="listbox"]')) {
+            event.preventDefault()
+          }
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b p-2">
+          <Select value={String(viewMonth.getMonth())} onValueChange={(v) => setViewMonth((d) => new Date(d.getFullYear(), Number(v), 1))}>
+            <SelectTrigger size="sm" className="h-7 flex-1 text-xs">
+              <SelectValue>{DATE_RANGE_MONTH_NAMES[viewMonth.getMonth()]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-48">
+              {DATE_RANGE_MONTH_NAMES.map((name, index) => (
+                <SelectItem key={name} value={String(index)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(viewMonth.getFullYear())} onValueChange={(v) => setViewMonth((d) => new Date(Number(v), d.getMonth(), 1))}>
+            <SelectTrigger size="sm" className="h-7 w-21.25 text-xs">
+              <SelectValue>{viewMonth.getFullYear()}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-48">
+              {yearOptions.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Calendar
+          mode="range"
+          selected={{ from: selectedFrom, to: selectedTo }}
+          month={viewMonth}
+          onMonthChange={setViewMonth}
+          startMonth={calendarBounds.startMonth}
+          endMonth={calendarBounds.endMonth}
+          classNames={{ month_caption: "hidden" }}
+          onSelect={(range) => {
+            // The very first click of a fresh pick reports {from: day, to:
+            // day} — treat that as ONLY setting the start, not a complete
+            // one-day range, so a second click is still needed for the end
+            // (see pendingFrom's own comment above for why this matters).
+            const isFirstClickOfFreshPick =
+              !pendingFrom && range?.from && range.to && range.from.getTime() === range.to.getTime()
+            if (isFirstClickOfFreshPick) {
+              setPendingFrom(range.from)
+              onChange(format(range.from!, "yyyy-MM-dd"), undefined)
+              return
+            }
+            const nextFrom = range?.from ? format(range.from, "yyyy-MM-dd") : undefined
+            const nextTo = range?.to ? format(range.to, "yyyy-MM-dd") : undefined
+            onChange(nextFrom, nextTo)
+            setPendingFrom(undefined)
+            if (nextFrom && nextTo) setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // Admin-only cross-module payments view (Daily Report header, alongside
 // Pending Dispatch/Inventory Approval and Daily Report Approvals) — every
-// monetary record in the program in one place, month-filterable, with an
+// monetary record in the program in one place, date-filterable, with an
 // explicit admin-set Collected flag per row. Dialog shape (fullscreen
-// toggle, Escape handling) mirrors DispatchApprovalQueue exactly; the
-// month filter reuses the same monthGroups/selectedMonth logic Filter
-// Change/Collection Plan's own list pages already use, as a horizontal
-// button row rather than a tall sidebar — this is a Dialog, not a full
-// page, so there's no equivalent bounded-height column to put a sidebar in.
+// toggle, Escape handling) mirrors DispatchApprovalQueue exactly; the date
+// scope row (All/Today/a custom range) sits as a horizontal row rather than
+// a tall sidebar — this is a Dialog, not a full page, so there's no
+// equivalent bounded-height column to put a sidebar in.
 export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation("allCollection")
   const { t: tCommon } = useTranslation("common")
@@ -622,15 +796,28 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
   const editingInstall = editingRow?.source === "install" ? installPlans.find((p) => p.id === editingRow.recordId) : undefined
   const editingRepair = editingRow?.source === "repair" ? repairPlans.find((p) => p.id === editingRow.recordId) : undefined
   const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
-  const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
-  // Only ever meaningful within a selected month (see dayGroups below) —
-  // reset the instant the month itself changes, so a stale day from a
-  // previous month can never silently keep filtering the new one.
-  const [selectedDay, setSelectedDay] = React.useState<string | undefined>(undefined)
+  const [dateScope, setDateScope] = React.useState<DateScope>("all")
+  // Only meaningful once dateScope is "custom" — both set together (see
+  // DateRangeCalendarButton's own onChange below), and picking All/Today
+  // doesn't clear them, so re-opening the range popover afterward still
+  // shows whatever range was last picked rather than starting blank.
+  const [customFrom, setCustomFrom] = React.useState<string | undefined>(undefined)
+  const [customTo, setCustomTo] = React.useState<string | undefined>(undefined)
+  // Only meaningful once dateScope is "monthOnly" — a plain 0-11 index
+  // (January=0), same convention Date.getMonth() uses, matching how this
+  // filter was specified; not cleared by picking All/Today/a custom range,
+  // same "remembers the last pick" reasoning customFrom/customTo above has.
+  const [monthOnlyIndex, setMonthOnlyIndex] = React.useState<number | undefined>(undefined)
   const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("all")
+  // Independent of every date-scope control above — an admin hunting for
+  // what's still outstanding wants this to stay engaged while they browse
+  // different ranges, not reset every time dateScope does. Toggling a badge
+  // twice (or the other one) clears back to "all".
+  const [collectedFilter, setCollectedFilter] = React.useState<"all" | "collected" | "notCollected">("all")
   const [confirmBulkApprove, setConfirmBulkApprove] = React.useState(false)
   const [bulkApproving, setBulkApproving] = React.useState(false)
   const [historyOpen, setHistoryOpen] = React.useState(false)
+  const [breakdownOpen, setBreakdownOpen] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) exitFullScreen()
@@ -640,52 +827,53 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
   const adminNameById = React.useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
 
   // The coarse top-level scope (matching DispatchApprovalQueue's own date-
-  // range dropdown) — month/day pills below then narrow *within* whatever
-  // this leaves, same as Dispatch's own list rendering inside its filter.
+  // range dropdown) — the All/Today/custom-range row below then narrows
+  // *within* whatever this leaves, same as Dispatch's own list rendering
+  // inside its filter.
   const dateRangeRows = React.useMemo(
     () => rows.filter((r) => matchesDateRangeFilter(r.date, dateRangeFilter)),
     [rows, dateRangeFilter]
   )
 
-  const monthGroups = React.useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const r of dateRangeRows) counts.set(yearMonth(r.date), (counts.get(yearMonth(r.date)) ?? 0) + 1)
-    return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month))
-  }, [dateRangeRows])
-
-  // Counted from dateRangeRows (the same top-level scope every month/day
-  // count above already derives from), not the full unfiltered `rows` — so
-  // this stays consistent with whatever the Next 2 Days/Overdue dropdown is
-  // currently set to, exactly like every other tab in this same row.
+  // Counted from dateRangeRows (the same top-level scope scopedRows below
+  // also derives from), not the full unfiltered `rows` — so this stays
+  // consistent with whatever the Next 2 Days/Overdue dropdown is currently
+  // set to, exactly like every other tab in this same row.
   const todayCount = React.useMemo(() => {
     const today = todayIso()
     return dateRangeRows.filter((r) => r.date === today).length
   }, [dateRangeRows])
 
-  const monthRows = React.useMemo(() => {
-    if (selectedMonth === TODAY_TAB) {
-      const today = todayIso()
-      return dateRangeRows.filter((r) => r.date === today)
-    }
-    if (selectedMonth === "all") return dateRangeRows
-    return dateRangeRows.filter((r) => yearMonth(r.date) === selectedMonth)
-  }, [dateRangeRows, selectedMonth])
+  // Derived straight from `rows` via the shared matchesActiveDateScope
+  // (which already re-checks dateRangeFilter itself) rather than filtering
+  // dateRangeRows a second time — this is also the exact predicate
+  // CollectionBreakdownDialog applies to its own collections rows, so the
+  // two views can never silently disagree about what "the current date
+  // scope" means.
+  const scopedRows = React.useMemo(
+    () => rows.filter((r) => matchesActiveDateScope(r.date, { dateRangeFilter, dateScope, customFrom, customTo, monthOnlyIndex })),
+    [rows, dateRangeFilter, dateScope, customFrom, customTo, monthOnlyIndex]
+  )
 
-  // Same computation as monthGroups above, one level deeper — only rendered
-  // once a specific month is selected (see the button row below), so this
-  // never has to render a whole history's worth of day pills at once.
-  const dayGroups = React.useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const r of monthRows) counts.set(r.date, (counts.get(r.date) ?? 0) + 1)
-    return Array.from(counts, ([day, count]) => ({ day, count })).sort((a, b) => a.day.localeCompare(b.day))
-  }, [monthRows])
-
-  const scopedRows = React.useMemo(() => {
-    if (!selectedDay) return monthRows
-    return monthRows.filter((r) => r.date === selectedDay)
-  }, [monthRows, selectedDay])
-
+  // Bulk-approve stays scoped to a deliberately bounded window, same as
+  // before this replaced the old "drill into one specific day" pills — now
+  // "a custom range is picked" plays that same role instead of "a single
+  // day," rather than being offered for "All" (unbounded, too easy to
+  // blanket-approve records never actually reviewed) or "Today."
   const uncollectedInDay = React.useMemo(() => scopedRows.filter((r) => !r.collected), [scopedRows])
+  // Collected/Not Collected summary badges' own counts — deliberately from
+  // scopedRows (the current date/month/day scope), NOT the collected-filtered
+  // result below, so neither count collapses to 0 once its own badge is
+  // toggled on; uncollectedInDay above is exactly the "Not Collected" count
+  // already, reused rather than recomputed.
+  const collectedInScope = React.useMemo(() => scopedRows.filter((r) => r.collected), [scopedRows])
+
+  // The actual table data — scopedRows narrowed one step further by the
+  // Collected/Not Collected toggle.
+  const displayedRows = React.useMemo(() => {
+    if (collectedFilter === "all") return scopedRows
+    return scopedRows.filter((r) => (collectedFilter === "collected" ? r.collected : !r.collected))
+  }, [scopedRows, collectedFilter])
 
   const columns = React.useMemo<ColumnDef<AllCollectionRow, unknown>[]>(
     () => [
@@ -914,82 +1102,90 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
           <Button
             type="button"
             size="sm"
-            variant={selectedMonth === "all" ? "default" : "outline"}
+            variant={dateScope === "all" ? "default" : "outline"}
             className="h-7 gap-1.5"
-            onClick={() => {
-              setSelectedMonth("all")
-              setSelectedDay(undefined)
-            }}
+            onClick={() => setDateScope("all")}
           >
             {tCommon("all")}
           </Button>
           <Button
             type="button"
             size="sm"
-            variant={selectedMonth === TODAY_TAB ? "default" : "outline"}
+            variant={dateScope === "today" ? "default" : "outline"}
             className="h-7 gap-1.5"
-            onClick={() => {
-              setSelectedMonth(TODAY_TAB)
-              setSelectedDay(undefined)
-            }}
+            onClick={() => setDateScope("today")}
           >
             {tCommon("today")} <Badge variant="secondary" className="ml-0.5">{todayCount}</Badge>
           </Button>
-          {monthGroups.map((g) => (
+          {/* Replaces the old per-month pill row (and the day-pills row that
+              used to sit beneath it) with one popover: pick any inclusive
+              [from, to] range instead of only a whole calendar month, with
+              no upper bound on how far apart this view's real data (back to
+              2020) can span without ever wrapping into multiple lines. */}
+          <DateRangeCalendarButton
+            from={customFrom}
+            to={customTo}
+            active={dateScope === "custom"}
+            placeholder={t("selectDateRangePlaceholder")}
+            onChange={(from, to) => {
+              setCustomFrom(from)
+              setCustomTo(to)
+              if (from && to) setDateScope("custom")
+            }}
+          />
+          {/* A genuinely different axis from the range picker above — "every
+              August across every year," not "August of one specific year."
+              Independent state (monthOnlyIndex), so switching to this and
+              back to a custom range doesn't clobber either one's own last
+              pick. */}
+          <Select
+            value={dateScope === "monthOnly" && monthOnlyIndex != null ? String(monthOnlyIndex) : ""}
+            onValueChange={(v) => {
+              setMonthOnlyIndex(Number(v))
+              setDateScope("monthOnly")
+            }}
+          >
+            <SelectTrigger className={cn("h-7 w-40 text-xs", dateScope === "monthOnly" && "border-primary")}>
+              <SelectValue placeholder={t("selectMonthOnlyPlaceholder")}>
+                {dateScope === "monthOnly" && monthOnlyIndex != null
+                  ? t("monthOnlySelectedLabel", { month: DATE_RANGE_MONTH_NAMES[monthOnlyIndex] })
+                  : undefined}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_RANGE_MONTH_NAMES.map((name, index) => (
+                <SelectItem key={name} value={String(index)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Bulk-approve stays scoped to a deliberately bounded window (a
+              custom range), same as it was previously scoped to "a single
+              drilled-into day" — never offered for "All" (unbounded),
+              "Today" (no explicit review step behind it), or "monthOnly"
+              (can span years of records — not the same kind of deliberately
+              narrow window a specific range or day was), unchanged from
+              before. */}
+          {dateScope === "custom" && uncollectedInDay.length > 0 && (
             <Button
-              key={g.month}
               type="button"
               size="sm"
-              variant={selectedMonth === g.month ? "default" : "outline"}
-              className="h-7 gap-1.5"
-              onClick={() => {
-                setSelectedMonth(g.month)
-                setSelectedDay(undefined)
-              }}
+              variant="outline"
+              className="h-7 gap-1.5 ml-1.5"
+              disabled={bulkApproving}
+              onClick={() => setConfirmBulkApprove(true)}
             >
-              {g.month} <Badge variant="secondary" className="ml-0.5">{g.count}</Badge>
+              <CheckCheck className="h-3.5 w-3.5" />
+              {t("bulkApproveDayCount", { count: String(uncollectedInDay.length) })}
             </Button>
-          ))}
+          )}
         </div>
-
-        {/* Day pills — one level deeper than the month row above, same
-            monthGroups/count shape, only rendered once a specific month is
-            selected (see dayGroups' own comment) so this never has to show
-            a whole history's worth of individual days at once. */}
-        {selectedMonth !== "all" && selectedMonth !== TODAY_TAB && (
-          <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-t pt-1.5">
-            {dayGroups.map((g) => (
-              <Button
-                key={g.day}
-                type="button"
-                size="sm"
-                variant={selectedDay === g.day ? "default" : "outline"}
-                className="h-7 gap-1.5"
-                onClick={() => setSelectedDay((prev) => (prev === g.day ? undefined : g.day))}
-              >
-                {formatDate(g.day)} <Badge variant="secondary" className="ml-0.5">{g.count}</Badge>
-              </Button>
-            ))}
-            {selectedDay && uncollectedInDay.length > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 ml-1.5"
-                disabled={bulkApproving}
-                onClick={() => setConfirmBulkApprove(true)}
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                {t("bulkApproveDayCount", { count: String(uncollectedInDay.length) })}
-              </Button>
-            )}
-          </div>
-        )}
 
         <div className={cn("flex-1 min-h-0", isFullScreen ? "flex flex-col" : undefined)}>
           <DataTable
             columns={columns}
-            data={scopedRows}
+            data={displayedRows}
             // 50 rows per page, not DataTable's show-everything default: every
             // row here carries ~8 inline-edit controls, so mounting all ~1,000
             // at once put ~35k DOM nodes on the page (multi-second open, laggy
@@ -998,13 +1194,48 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
             pageSize={ALL_COLLECTION_PAGE_SIZE}
             // Saving an inline edit refetches (new `data` identity); without
             // this the table would bounce back to page 1 on every save. The
-            // page now only resets when the scope pills below change.
-            pageResetKey={`${dateRangeFilter}|${selectedMonth}|${selectedDay ?? ""}`}
+            // page now only resets when the scope pills below (or the
+            // Collected/Not Collected toggle) change.
+            pageResetKey={`${dateRangeFilter}|${dateScope}|${customFrom ?? ""}|${customTo ?? ""}|${collectedFilter}`}
             searchPlaceholder={t("searchPlaceholder")}
             emptyMessage={t("noRecordsFound")}
             tableContainerClassName="scrollbar-always-visible"
             tableClassName="min-w-max"
             scrollContainerClassName={isFullScreen ? undefined : "overflow-y-visible"}
+            // Same Button+inner-count-Badge shape the month/day scope pills
+            // above already use — clicking the active one again clears back
+            // to "all" (a toggle, not a one-way radio), so an admin never
+            // gets stuck unable to see everything again without hunting for
+            // a separate "clear" control.
+            toolbar={
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={collectedFilter === "collected" ? "default" : "outline"}
+                  className="h-8 gap-1.5"
+                  onClick={() => setCollectedFilter((prev) => (prev === "collected" ? "all" : "collected"))}
+                >
+                  {t("collected")} <Badge variant="secondary" className="ml-0.5">{collectedInScope.length}</Badge>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={collectedFilter === "notCollected" ? "default" : "outline"}
+                  className="h-8 gap-1.5"
+                  onClick={() => setCollectedFilter((prev) => (prev === "notCollected" ? "all" : "notCollected"))}
+                >
+                  {t("notCollected")} <Badge variant="secondary" className="ml-0.5">{uncollectedInDay.length}</Badge>
+                </Button>
+                {/* Opens CollectionBreakdownDialog — a separate cash/cheque
+                    reconciliation view over collections records specifically
+                    (see that dialog's own comment for why it's Collections-
+                    only), scoped to this SAME active date filter. */}
+                <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setBreakdownOpen(true)}>
+                  <ClipboardList className="h-3.5 w-3.5" /> {t("collectionDetailsBadge")}
+                </Button>
+              </>
+            }
           />
         </div>
       </DialogContent>
@@ -1021,11 +1252,24 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
         adminNameById={adminNameById}
       />
 
+      <CollectionBreakdownDialog
+        open={breakdownOpen}
+        onOpenChange={setBreakdownOpen}
+        dateRangeFilter={dateRangeFilter}
+        dateScope={dateScope}
+        customFrom={customFrom}
+        customTo={customTo}
+        monthOnlyIndex={monthOnlyIndex}
+      />
+
       <ConfirmDialog
         open={confirmBulkApprove}
         onOpenChange={setConfirmBulkApprove}
         title={t("bulkApproveConfirmTitle")}
-        description={t("bulkApproveConfirmDescription", { count: String(uncollectedInDay.length), day: selectedDay ? formatDate(selectedDay) : "" })}
+        description={t("bulkApproveConfirmDescription", {
+          count: String(uncollectedInDay.length),
+          range: customFrom && customTo ? `${formatDate(customFrom)} - ${formatDate(customTo)}` : "",
+        })}
         confirmLabel={tCommon("approve")}
         destructive={false}
         loading={bulkApproving}

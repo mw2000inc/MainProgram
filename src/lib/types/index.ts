@@ -794,4 +794,15 @@ export interface CollectionPlan extends DispatchFields {
   // InstallPlan/RepairPlan's own paymentMode (collection_payment_type
   // migration).
   paymentType?: string
+  // The four fields below (collection_breakdown_fields migration) back the
+  // All Collection view's own "Collection Details" breakdown dialog — a
+  // cash/cheque reconciliation table matching an existing external
+  // spreadsheet. Collections-only: no equivalent workflow exists on
+  // InstallPlan/RepairPlan (see that migration's own comment on why).
+  description?: string
+  chequeDetails?: string
+  depositedDate?: string
+  // '' means "not yet categorized," not itself a real fund destination —
+  // see DEPOSITED_FUND_OPTIONS in constants.ts for the five real values.
+  depositedFund?: string
 }

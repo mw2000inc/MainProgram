@@ -40,6 +40,11 @@ type Row = {
   collected_by: string | null
   collected_at: string | null
   payment_type: string | null
+  // Absent until the 20261009000000_collection_breakdown_fields migration is applied.
+  description?: string
+  cheque_details?: string
+  deposited_date?: string | null
+  deposited_fund?: string
 }
 
 function fromRow(row: Row): CollectionPlan {
@@ -79,6 +84,10 @@ function fromRow(row: Row): CollectionPlan {
     collectedBy: row.collected_by ?? undefined,
     collectedAt: row.collected_at ?? undefined,
     paymentType: row.payment_type ?? undefined,
+    description: row.description ?? undefined,
+    chequeDetails: row.cheque_details ?? undefined,
+    depositedDate: row.deposited_date ?? undefined,
+    depositedFund: row.deposited_fund ?? undefined,
   }
 }
 
@@ -101,6 +110,10 @@ function toRow(input: Partial<Omit<CollectionPlan, "id" | "createdAt">>) {
   if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null
   if (input.collectedAt !== undefined) row.collected_at = input.collectedAt || null
   if (input.paymentType !== undefined) row.payment_type = input.paymentType || null
+  if (input.description !== undefined) row.description = input.description
+  if (input.chequeDetails !== undefined) row.cheque_details = input.chequeDetails
+  if (input.depositedDate !== undefined) row.deposited_date = input.depositedDate || null
+  if (input.depositedFund !== undefined) row.deposited_fund = input.depositedFund
   return row
 }
 
