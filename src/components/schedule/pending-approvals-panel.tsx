@@ -657,6 +657,19 @@ export function PendingApprovalsPanel({
       {
         id: "actions",
         header: "",
+        // Pinned to the right edge of the table's own horizontal scroll —
+        // this table has 9 columns, several inherently wide, so Review
+        // could scroll out of view entirely on a narrower viewport with no
+        // way back to it short of scrolling right again. bg-card on the
+        // header cell matches TableHead's own default background (avoiding
+        // a visible seam against its non-sticky sibling header cells in the
+        // same row); bg-background on the body cell matches every ordinary
+        // (non-sticky) cell's own effectively-transparent background,
+        // which shows the dialog's own background through it.
+        meta: {
+          headerClassName: "sticky right-0 z-10 bg-card",
+          cellClassName: "sticky right-0 z-10 bg-background",
+        },
         cell: ({ row }) => (
           <Button size="sm" variant="outline" onClick={() => setReviewing(row.original)}>
             {t("review")}
@@ -854,8 +867,8 @@ export function PendingApprovalsPanel({
   // the Minimize2 button always works correctly either way since it's a
   // direct click handler, not reliant on winning that race.
   //
-  // pointer-events-auto + z-60 are load-bearing, not decorative, when
-  // this is nested inside PendingApprovalsDialog: Radix's own DialogContent
+  // pointer-events-auto is load-bearing, not decorative, when this is
+  // nested inside PendingApprovalsDialog: Radix's own DialogContent
   // (@radix-ui/react-dialog's DialogContentModal) sets
   // disableOutsidePointerEvents={context.open} on its DismissableLayer,
   // which — confirmed directly in @radix-ui/react-dismissable-layer's own
@@ -865,18 +878,37 @@ export function PendingApprovalsPanel({
   // sibling of that Content node rather than a descendant of it, would
   // otherwise silently inherit that "none" — every click, row selection,
   // and scrollbar drag/wheel event on it would do nothing, with no visual
-  // sign anything was wrong. z-60 (above every z-50 elsewhere in this
-  // app, including Radix's own Dialog overlay/content) is the same fix
-  // applied to stacking instead of pointer handling, so this never depends
-  // on DOM-insertion-order tie-breaking to paint on top. overflow-y-auto
-  // replaces the previous overflow-hidden here (see tableScrollClassName
-  // above) so this div itself is the one scrolling region, not a second
-  // one nested inside DataTable's own wrapper.
+  // sign anything was wrong.
+  //
+  // z-50 (NOT higher — see below) to beat the wrapping PendingApprovalsDialog's
+  // own overlay/content (also z-50, Radix's shared default across
+  // Dialog/Select/Popover/DropdownMenu in this app): siblings portaled
+  // straight to <body> with EQUAL z-index stack in DOM insertion order,
+  // later wins (CSS stacking-context tree order, not a fallback — confirmed
+  // live). This div is inserted after the wrapping Dialog's own content (it
+  // only appears once the admin clicks the fullscreen toggle, after that
+  // Dialog already mounted), so z-50 already paints it on top — no need to
+  // outrank the shared z-50 default. Escalating to z-60 was tried first and
+  // reverted: it also outranks every OTHER z-50 popup opened FROM WITHIN
+  // full-screen mode (the Status/Date-range Select dropdowns, the History
+  // dialog, Review's ApprovalDetailDialog — all portal to <body> too), since
+  // those all default to the same shared z-50 primitives used everywhere
+  // else in this app. Confirmed live: at z-60 the Status Select's own
+  // dropdown option was unclickable — Playwright reported this very div
+  // "intercepts pointer events" — because 60 beats their 50 regardless of
+  // DOM order. Staying at the shared z-50 default and relying on insertion
+  // order instead means every one of those popups, each opened AFTER this
+  // div while it's still mounted, naturally renders on top of it, exactly
+  // as they would in the non-full-screen Card/dialog view.
+  //
+  // overflow-y-auto replaces the previous overflow-hidden here (see
+  // tableScrollClassName above) so this div itself is the one scrolling
+  // region, not a second one nested inside DataTable's own wrapper.
   if (isFullScreen && typeof document !== "undefined") {
     return (
       <>
         {createPortal(
-          <div className="pointer-events-auto fixed inset-0 z-60 flex flex-col gap-4 overflow-y-auto bg-background p-6">
+          <div className="pointer-events-auto fixed inset-0 z-50 flex flex-col gap-4 overflow-y-auto bg-background p-6">
             {toolbarAndTable}
           </div>,
           document.body
@@ -933,7 +965,15 @@ export function PendingApprovalsDialog({
         // table is told not to bound/scroll itself too (renderedInDialog
         // below), specifically so this doesn't nest into a second,
         // independent scrollbar inside the first.
-        className="sm:max-w-4xl max-h-[80vh] overflow-y-auto"
+        // Widened from sm:max-w-4xl — this table has 9 columns (several
+        // inherently wide: a date picker, technician names, a route stop
+        // label), so the old width pushed Status/Review off past a lot of
+        // horizontal scroll on an ordinary laptop viewport. Doesn't
+        // eliminate horizontal scroll outright (a real <table> auto-sizes
+        // to its widest content, not proportionally to the viewport — see
+        // the actions column's own sticky-right fix below for the part of
+        // this that still needs it regardless of width), just needs it less often.
+        className="sm:max-w-7xl max-h-[80vh] overflow-y-auto"
         // A misclick on the backdrop (or, via Radix's own "interact
         // outside" detection, opening the Status/Date Range Selects below
         // — their dropdowns portal outside this DialogContent's own DOM
