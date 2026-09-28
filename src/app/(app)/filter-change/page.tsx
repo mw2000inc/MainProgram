@@ -37,6 +37,13 @@ function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
 }
 
+// See all-collection-dialog.tsx's own useCollectionRecordUpdaters comment —
+// same measured cause, same fix: filter_change_plans is now 2,572+ rows and
+// growing, all mounted unpaginated (DataTable defaults to showing every row
+// on one page). 50 keeps that DOM small by default while "All" stays
+// available from the rows-per-page control for anyone who wants it.
+const FILTER_CHANGE_PAGE_SIZE = 50
+
 // resolveCustomerForPlan/findCustomerByOrderNumber (customer-lookup.ts) do a
 // linear .find() per call — fine for the single-record lookups they're used
 // for elsewhere (an onBlur handler, one detail panel), but this page calls
@@ -96,7 +103,14 @@ function FilterChangePageContent() {
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
   const deletePlans = useDeleteFilterChangePlans()
-  const updatePlan = useUpdateFilterChangePlan()
+  // Only mutateAsync is taken from the mutation, not the mutation object
+  // itself — useMutation returns a fresh object every render, but
+  // mutateAsync is bound once per mutation observer and stays stable. That
+  // stability is what lets the columns useMemo below actually stay memoized
+  // instead of rebuilding (and remounting every inline-edit cell) on every
+  // render — see all-collection-dialog.tsx's own comment on this exact
+  // mechanism, measured there at ~2s+ per render at 1,000 rows.
+  const { mutateAsync: updatePlan } = useUpdateFilterChangePlan()
   const previewSuggestions = usePreviewTechnicianSuggestions()
   const applyAssignments = useApplyTechnicianAssignments()
 
@@ -192,7 +206,7 @@ function FilterChangePageContent() {
       getFilterChangeFullColumns({
         canDelete: isAdmin,
         onDelete: (p) => setDeleting(p),
-        onStatusChange: isAdmin ? (p, status) => updatePlan.mutate({ id: p.id, input: { status } }) : undefined,
+        onStatusChange: isAdmin ? (p, status) => updatePlan({ id: p.id, input: { status } }) : undefined,
       }),
     [isAdmin, updatePlan]
   )
@@ -298,6 +312,13 @@ function FilterChangePageContent() {
                   <DataTable
                     columns={columns}
                     data={scopedPlans}
+                    pageSize={FILTER_CHANGE_PAGE_SIZE}
+                    // Only the month tab needs to reset the page — DataTable
+                    // already resets to page 1 on a search-text change
+                    // internally (see its own onChange), and an edit-save
+                    // only invalidates/refetches the same query, which
+                    // doesn't change this key, so the current page survives it.
+                    pageResetKey={selectedMonth}
                     searchPlaceholder={t("searchPlaceholder")}
                     emptyMessage={t("noPlansFound")}
                     onFilteredRowsChange={setFilteredRows}
