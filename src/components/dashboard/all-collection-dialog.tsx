@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Banknote, Pencil, CheckCheck, History, Search } from "lucide-react"
 import {
@@ -39,6 +38,9 @@ import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { COLLECTION_PAYMENT_TYPES } from "@/lib/constants"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatCurrency, formatDate, formatDateTime, todayIso, twoDaysFromNowIso } from "@/lib/utils"
+import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
+import { InstallFormDialog } from "@/components/install/install-form-dialog"
+import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import type { ComboboxOption } from "@/components/ui/combobox"
 
 // Same presets as the Add/Edit Collection form's own PAYMENT_TYPE_OPTIONS —
@@ -389,19 +391,6 @@ const NAME_FIELD_BY_SOURCE: Record<AllCollectionSource, keyof CollectionRecordUp
   repair: "accountName",
 }
 
-// Where the Edit action column's button sends the admin — the standalone
-// list page each row's own record actually lives on, all three of which
-// already support a ?id= deep link straight to that specific record (see
-// each page's own initialId/initialGroupId resolution). This is for the
-// fields inline editing here deliberately doesn't cover (Model, Address,
-// Note, etc.) — inline editing handles Amount/Payment Type/Unit Price/C-P
-// Price/Delivery Fee/Date/Customer directly in this table already.
-const RECORD_PAGE_PATH_BY_SOURCE: Record<AllCollectionSource, string> = {
-  collection: "/collection-plan",
-  install: "/install",
-  repair: "/repair-plan",
-}
-
 
 function amountSummary(row: AllCollectionRow): string {
   const parts: string[] = []
@@ -596,7 +585,6 @@ function CollectedCell({
 // button row rather than a tall sidebar — this is a Dialog, not a full
 // page, so there's no equivalent bounded-height column to put a sidebar in.
 export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const router = useRouter()
   const { t } = useTranslation("allCollection")
   const { t: tCommon } = useTranslation("common")
   const { t: tDispatch } = useTranslation("dispatch")
@@ -606,6 +594,23 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
   const bulkApproveCollected = useBulkApproveCollected()
   const editField = useEditRecordField()
   const { data: users = [] } = useUsers()
+  // Same cached queries useAllCollectionRows() already reads internally
+  // (same query keys — this doesn't trigger a second fetch) — needed here
+  // too so the pencil action can open that record's OWN full edit dialog
+  // with the real record, not the flattened AllCollectionRow display shape.
+  const { data: collections = [] } = useCollections()
+  const { data: installPlans = [] } = useInstallPlans()
+  const { data: repairPlans = [] } = useRepairPlans()
+  // Which row's "everything inline editing doesn't cover" dialog is open —
+  // Address/Note/Model/Status/etc., genuinely different per source, so this
+  // opens that source's own already-built Add/Edit form (in edit mode) right
+  // on top of this dialog instead of navigating away from it. Saving there
+  // already invalidates the same query useAllCollectionRows() reads, so this
+  // table picks up the change with no extra plumbing.
+  const [editingRow, setEditingRow] = React.useState<AllCollectionRow | undefined>(undefined)
+  const editingCollection = editingRow?.source === "collection" ? collections.find((c) => c.id === editingRow.recordId) : undefined
+  const editingInstall = editingRow?.source === "install" ? installPlans.find((p) => p.id === editingRow.recordId) : undefined
+  const editingRepair = editingRow?.source === "repair" ? repairPlans.find((p) => p.id === editingRow.recordId) : undefined
   const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
   // Only ever meaningful within a selected month (see dayGroups below) —
@@ -791,21 +796,24 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
       {
         id: "actions",
         header: "",
-        // Jumps to the record's own standalone page for fields inline
-        // editing here doesn't cover (Model, Address, Note, etc.) — not a
-        // duplicate of inline editing, which already handles Amount/Payment
-        // Type/Unit Price/C-P Price/Delivery Fee/Date/Customer directly in
-        // this table. stopPropagation guards against a future onRowClick
-        // this table doesn't have today, same defensive convention every
-        // other row-action button in this app already follows.
+        // Opens that record's own full edit dialog (CollectionsFormDialog/
+        // InstallFormDialog/RepairFormDialog, rendered below) right on top of
+        // this one, for the fields inline editing here doesn't cover (Model,
+        // Address, Note, etc.) — not a duplicate of inline editing, which
+        // already handles Amount/Payment Type/Unit Price/C-P Price/Delivery
+        // Fee/Date/Customer/Collected directly in this table. Deliberately
+        // no navigation and no closing this dialog: closing the edit dialog
+        // (Cancel or Save) leaves the admin right back where they were,
+        // scroll position and month/day filters intact. stopPropagation
+        // guards against a future onRowClick this table doesn't have today,
+        // same defensive convention every other row-action button here follows.
         cell: ({ row }) => (
           <Button
             size="sm"
             variant="ghost"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenChange(false)
-              router.push(`${RECORD_PAGE_PATH_BY_SOURCE[row.original.source]}?id=${row.original.recordId}`)
+              setEditingRow(row.original)
             }}
           >
             <Pencil className="h-4 w-4" />
@@ -813,7 +821,7 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
         ),
       },
     ],
-    [tDispatch, toggleCollected, admins, reassignCollected, editField, onOpenChange, router]
+    [tDispatch, toggleCollected, admins, reassignCollected, editField]
   )
 
   return (
@@ -978,6 +986,33 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
             setBulkApproving(false)
           }
         }}
+      />
+
+      {/* The pencil action's own dialog — whichever one source's `entry`/
+          `plan` is actually set (see editingCollection/editingInstall/
+          editingRepair above) opens; the other two stay closed. Each of
+          these already has its own onInteractOutside guard against a
+          backdrop click closing it early, same as every other dialog nested
+          inside another one in this app. defaultDate is inert here (always
+          overridden the moment `entry`/`plan` is set — see each dialog's own
+          defaultValues) but still required by their shared prop shape. */}
+      <CollectionsFormDialog
+        open={!!editingCollection}
+        onOpenChange={(o) => !o && setEditingRow(undefined)}
+        defaultDate={todayIso()}
+        entry={editingCollection}
+      />
+      <InstallFormDialog
+        open={!!editingInstall}
+        onOpenChange={(o) => !o && setEditingRow(undefined)}
+        defaultDate={todayIso()}
+        plan={editingInstall}
+      />
+      <RepairFormDialog
+        open={!!editingRepair}
+        onOpenChange={(o) => !o && setEditingRow(undefined)}
+        defaultDate={todayIso()}
+        plan={editingRepair}
       />
     </Dialog>
   )
