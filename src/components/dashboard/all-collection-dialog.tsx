@@ -623,7 +623,11 @@ function CollectedCell({
 // InlineDateCell's own DATE_PICKER_MONTH_NAMES precedent for the exact same
 // need (fast navigation to a date years in the past — this view's real data
 // goes back to 2020, so prev/next-arrow-only paging would be unusable).
-const DATE_RANGE_MONTH_NAMES = Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), "MMMM"))
+// Exported so CollectionBreakdownDialog's own CSV export can name a
+// monthOnly-scoped file "August_All_Years" using the same month names this
+// file's own dropdown already shows, rather than a second, separately-
+// maintained copy.
+export const DATE_RANGE_MONTH_NAMES = Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), "MMMM"))
 
 // The custom-range replacement for the old per-month pill row: a single
 // Popover + range-mode Calendar. ui/calendar.tsx already ships full

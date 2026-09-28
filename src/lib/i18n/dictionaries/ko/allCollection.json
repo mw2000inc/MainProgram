@@ -35,5 +35,6 @@
   "modeOfPaymentColumn": "결제 수단",
   "chequeDetailsColumn": "수표 정보",
   "depositedDateColumn": "입금일",
-  "depositedFundColumn": "입금 계정"
+  "depositedFundColumn": "입금 계정",
+  "exportCsvButton": "CSV 내보내기"
 }

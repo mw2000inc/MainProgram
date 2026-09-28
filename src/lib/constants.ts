@@ -39,15 +39,21 @@ export const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Credit Card", "GCash",
 // PAYMENT_METHODS above (Install's own Payment Mode field): different
 // wording ("Card"/"Bank" vs. "Credit Card"/"Bank Transfer"), different
 // field, offered via a typable Combobox rather than PAYMENT_METHODS' own
-// locked Select, so this isn't the same vocabulary just reused.
-export const COLLECTION_PAYMENT_TYPES = ["GCash", "Card", "Bank", "Cash", "Check"] as const
+// locked Select, so this isn't the same vocabulary just reused. "Bank" is
+// kept as-is (not renamed to PAYMENT_METHODS' own "Bank Transfer" wording)
+// even though a later request described this list using that phrase —
+// renaming would silently orphan every already-stored "Bank" value from
+// existing rows, which a wording tweak isn't worth risking; PDC (Post-Dated
+// Check) added alongside it as its own new value instead.
+export const COLLECTION_PAYMENT_TYPES = ["GCash", "Card", "Bank", "Cash", "Check", "PDC"] as const
 
 // Where a collections payment actually ended up once received — the
 // Collection Details breakdown dialog's own "Deposited Fund" column
-// (collection_breakdown_fields migration). COH = Cash on Hand (not yet
+// (collection_breakdown_fields migration, WB added by
+// 20261010000000_deposited_fund_add_wb.sql). COH = Cash on Hand (not yet
 // deposited anywhere); the rest are named bank/e-wallet destinations this
 // company actually deposits into.
-export const DEPOSITED_FUND_OPTIONS = ["COH", "GCash", "MB", "EW", "BDO"] as const
+export const DEPOSITED_FUND_OPTIONS = ["COH", "GCash", "MB", "EW", "BDO", "WB"] as const
 
 export const PAYMENT_STATUSES = ["Paid", "Pending", "Overdue", "Partial"] as const
 

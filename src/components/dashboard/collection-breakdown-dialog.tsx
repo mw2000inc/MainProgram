@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
+import { Download } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table/data-table"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -16,8 +18,39 @@ import { InlineCurrencyCell, InlineDateCell, InlineSelectCell, InlineTextCell } 
 import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { COLLECTION_PAYMENT_TYPES, DEPOSITED_FUND_OPTIONS } from "@/lib/constants"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { exportToCsv } from "@/lib/export/csv"
+import { todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
-import { matchesActiveDateScope, type DateScope, type DateRangeFilter } from "@/components/dashboard/all-collection-dialog"
+import {
+  matchesActiveDateScope,
+  DATE_RANGE_MONTH_NAMES,
+  type DateScope,
+  type DateRangeFilter,
+} from "@/components/dashboard/all-collection-dialog"
+
+// Names the exported file after whatever the active date scope actually is,
+// so an admin who exports twice under two different filters doesn't end up
+// with two files both just called "Collection_Breakdown.csv" — a custom
+// range gets its own [from, to] span in the name, a monthOnly scope gets its
+// month name, matching the same DATE_RANGE_MONTH_NAMES the scope's own
+// dropdown already shows.
+function buildExportFileName(params: {
+  dateScope: DateScope
+  customFrom: string | undefined
+  customTo: string | undefined
+  monthOnlyIndex: number | undefined
+}): string {
+  if (params.dateScope === "custom" && params.customFrom && params.customTo) {
+    return `Collection_Breakdown_${params.customFrom}_to_${params.customTo}`
+  }
+  if (params.dateScope === "monthOnly" && params.monthOnlyIndex != null) {
+    return `Collection_Breakdown_${DATE_RANGE_MONTH_NAMES[params.monthOnlyIndex]}_All_Years`
+  }
+  if (params.dateScope === "today") {
+    return `Collection_Breakdown_Today_${todayIso()}`
+  }
+  return "Collection_Breakdown_All"
+}
 
 // Same reasoning all-collection-dialog.tsx's own ALL_COLLECTION_PAGE_SIZE
 // gives: every row here carries several inline-edit controls (two Selects,
@@ -66,6 +99,7 @@ export function CollectionBreakdownDialog({
   monthOnlyIndex: number | undefined
 }) {
   const { t } = useTranslation("allCollection")
+  const { t: tFields } = useTranslation("fields")
   // isPending: in practice this dialog is only ever opened from a button
   // inside AllCollectionDialog, which reads this exact same query (same
   // queryKey, shared cache) to render the rows the admin is ALREADY looking
@@ -98,6 +132,25 @@ export function CollectionBreakdownDialog({
     () => collections.filter((c) => matchesActiveDateScope(c.collectionDate, { dateRangeFilter, dateScope, customFrom, customTo, monthOnlyIndex })),
     [collections, dateRangeFilter, dateScope, customFrom, customTo, monthOnlyIndex]
   )
+
+  // Exports scopedCollections (the full active-date-scope set) rather than
+  // whatever the table's own search box or current page happen to be
+  // showing — "all rows matching the active date scope" is what was asked
+  // for, not "whatever's currently visible on screen."
+  function handleExportCsv() {
+    const records = scopedCollections.map((c) => ({
+      [t("orderNumberColumn")]: c.orderNo,
+      [t("nameColumn")]: c.accountName,
+      [t("descriptionColumn")]: c.description ?? "",
+      [t("modeOfPaymentColumn")]: c.paymentType ?? "",
+      [tFields("amount")]: c.amount,
+      [t("chequeDetailsColumn")]: c.chequeDetails ?? "",
+      [t("depositedDateColumn")]: c.depositedDate ?? "",
+      [t("depositedFundColumn")]: c.depositedFund ?? "",
+      [tFields("note")]: c.note ?? "",
+    }))
+    exportToCsv(records, buildExportFileName({ dateScope, customFrom, customTo, monthOnlyIndex }))
+  }
 
   const columns: ColumnDef<CollectionPlan, unknown>[] = React.useMemo(
     () => [
@@ -200,15 +253,19 @@ export function CollectionBreakdownDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-6xl max-h-[85vh] overflow-y-auto">
-        {/* No onInteractOutside guard needed here: AllCollectionDialog's own
-            guard already protects IT from a click landing inside this
-            dialog (the nested-Dialog gotcha it documents), and this dialog
-            has no further nested dialog of its own to protect against —
-            only inline Select/Popover cells (Mode of Payment, Deposited
-            Fund, Deposited Date), which the exact same components already
-            work correctly inside AllCollectionDialog's own main table
-            without any such guard. */}
+      <DialogContent
+        className="sm:max-w-6xl max-h-[85vh] overflow-y-auto"
+        // A backdrop click (or a stray click that lands outside this
+        // content for any other reason) must never close this dialog —
+        // only the X button or Escape may. Both handlers set for the same
+        // reason CollectionsFormDialog/InstallFormDialog/RepairFormDialog
+        // already do this: onPointerDownOutside alone only covers pointer
+        // events, onInteractOutside also covers a focus-outside dismissal,
+        // and Radix fires whichever is relevant to how the outside
+        // interaction happened.
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{t("breakdownTitle")}</DialogTitle>
           <DialogDescription>{t("breakdownDescription")}</DialogDescription>
@@ -234,6 +291,17 @@ export function CollectionBreakdownDialog({
             emptyMessage={t("breakdownNoRecords")}
             tableContainerClassName="scrollbar-always-visible"
             tableClassName="min-w-max"
+            // Exports scopedCollections (see handleExportCsv's own comment),
+            // not the table's own further-narrowed search/page state — the
+            // toolbar sits directly beside DataTable's own search input,
+            // same placement the Collected/Not Collected badges use on
+            // AllCollectionDialog's own table.
+            toolbar={
+              <Button type="button" variant="outline" size="sm" onClick={handleExportCsv}>
+                <Download className="w-4 h-4 mr-2" />
+                {t("exportCsvButton")}
+              </Button>
+            }
           />
         )}
       </DialogContent>
