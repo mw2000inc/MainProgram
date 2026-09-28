@@ -25,11 +25,15 @@ export async function POST(request: Request) {
   const auth = await requireAdmin()
   if ("error" in auth) return auth.error
 
-  const body = (await request.json().catch(() => null)) as { assignments?: { jobId?: string; technician?: string }[] } | null
+  const body = (await request.json().catch(() => null)) as {
+    assignments?: { jobId?: string; technician?: string; technician2?: string }[]
+  } | null
   if (!body?.assignments || !Array.isArray(body.assignments) || body.assignments.length === 0) {
     return NextResponse.json({ error: "assignments (non-empty array) is required" }, { status: 400 })
   }
-  const assignments = body.assignments.filter((a): a is { jobId: string; technician: string } => !!a.jobId && !!a.technician)
+  const assignments = body.assignments
+    .filter((a): a is { jobId: string; technician: string; technician2?: string } => !!a.jobId && !!a.technician)
+    .map((a) => ({ jobId: a.jobId, technician: a.technician, technician2: a.technician2 }))
   if (assignments.length === 0) {
     return NextResponse.json({ error: "No valid assignments (each needs jobId and technician)" }, { status: 400 })
   }

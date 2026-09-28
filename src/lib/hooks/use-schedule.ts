@@ -58,7 +58,8 @@ export function usePreviewTechnicianSuggestionsForJobs() {
 export function useApplyTechnicianAssignmentsToJobs() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (assignments: { jobId: string; technician: string }[]) => api.applyTechnicianAssignmentsToJobs(assignments),
+    mutationFn: (assignments: { jobId: string; technician: string; technician2?: string }[]) =>
+      api.applyTechnicianAssignmentsToJobs(assignments),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: scheduleJobsKey })
       toast.success(`Assigned ${result.applied} job(s)`)

@@ -11,9 +11,15 @@ export const NOT_APPLICABLE_TECHNICIAN = "N/A"
 
 // "N/A" is the roster's own "nobody" placeholder, and blank means the same —
 // neither is a real person, so neither can have a second technician alongside.
+// "Unassigned" (any case) is treated the same way even though nothing in
+// this app currently writes that literal string — every technician field
+// this feeds is a free-typable combobox (technician-combobox.tsx) with no DB
+// enum guarding it, so nothing rules out an admin typing it in, unlike
+// status elsewhere which IS a Postgres enum and can't drift like this.
 export function isAssignedTechnician(name: string | null | undefined): boolean {
   const trimmed = (name ?? "").trim()
-  return trimmed !== "" && trimmed !== NOT_APPLICABLE_TECHNICIAN
+  if (trimmed === "" || trimmed === NOT_APPLICABLE_TECHNICIAN) return false
+  return trimmed.toLowerCase() !== "unassigned"
 }
 
 // Trims both, then drops the second technician whenever it can't stand:

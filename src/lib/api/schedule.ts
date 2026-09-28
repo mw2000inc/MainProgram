@@ -141,7 +141,9 @@ export async function previewTechnicianSuggestionsForJobs(jobIds: string[]): Pro
   return data.results as BulkSuggestionResult[]
 }
 
-export async function applyTechnicianAssignmentsToJobs(assignments: { jobId: string; technician: string }[]): Promise<{ applied: number }> {
+export async function applyTechnicianAssignmentsToJobs(
+  assignments: { jobId: string; technician: string; technician2?: string }[]
+): Promise<{ applied: number }> {
   const res = await fetch("/api/schedule-jobs/suggest-technician-apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

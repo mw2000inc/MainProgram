@@ -35,6 +35,27 @@ import { TECHNICIANS } from "@/lib/constants"
 
 const WORKLOAD_PENALTY_KM = 3 // each existing job that day nudges a technician's score, so one very central technician doesn't silently absorb the whole day
 const UNKNOWN_DISTANCE_BASELINE_KM = 20 // treat "no located job to compare against yet" as roughly this far, not as infinitely close or infinitely far
+// Multiplies minDistanceKm in the score below (WORKLOAD_PENALTY_KM stays
+// unscaled) so real proximity dominates the flat per-job workload nudge
+// instead of being gradually outweighed by it. Confirmed this was a real
+// gap, not just a tuning nitpick: at the old 1x weight, a technician 0.5km
+// away with just 3 existing jobs that day (score 0.5+3*3=9.5) already LOST
+// to a completely idle technician 5km away (score 5+0=5) — a same-day
+// cluster would silently break apart and start routing to a farther,
+// less-loaded technician after only 2-3 stacked jobs. At 4x, that same
+// 0.5km/3-job technician scores 0.5*4+9=11 against the 5km/idle
+// technician's 5*4=20 — correctly keeps the cluster together. Deliberately
+// NOT a hard distance cutoff or a hard per-day job cap (e.g. "max 6 jobs
+// then must switch technicians") — no such limit is configured or even
+// tracked anywhere in this app (confirmed: no day-off/capacity data exists
+// for technicians, see this file's own top-of-file comment), so a genuine
+// hard cap would mean inventing an arbitrary number with no basis. This
+// keeps the existing soft, continuous heuristic but recalibrated so
+// clustering wins by a wide margin for a normal-sized batch of nearby jobs,
+// while workload balance still naturally reasserts itself once a
+// technician's day is heavily stacked in one area (the score keeps
+// climbing with every added job either way).
+const DISTANCE_WEIGHT = 4
 
 // Standing rule (not a one-time fix, confirmed with the admin): Mell,
 // Butch, and Pritz are never picked by any auto-suggest/auto-assign
@@ -193,12 +214,25 @@ export interface SameDayJobRow {
   latitude: number | null
   longitude: number | null
   route_sequence: number | null
+  // Optional: only actually selected by schedule-job-suggest.ts's own
+  // fetchSameDayJobs, to resolve nearestJobId below into a human-readable
+  // "Clustered with Order #X" explanation. autoAssignScheduleJob's own
+  // real-time query doesn't select it — its explanation text doesn't need
+  // it — so this has to stay optional rather than required.
+  order_no?: string | null
 }
 
 export interface TechnicianPick {
   technician: string
   minDistanceKm: number | null
   jobCount: number
+  // The id of the same-day job that produced minDistanceKm — null whenever
+  // minDistanceKm itself is null (no located same-day job to compare
+  // against). Lets a caller with access to that job's own label (order
+  // number) name it in the suggestion's explanation, instead of only
+  // reporting a bare distance with no indication of WHICH job it's
+  // clustered with.
+  nearestJobId: string | null
 }
 
 // Ranks every real technician (roster minus the 'N/A' placeholder) by a
@@ -208,26 +242,45 @@ export interface TechnicianPick {
 // their nearest job were UNKNOWN_DISTANCE_BASELINE_KM away, so genuinely
 // idle technicians can still win over someone both far away AND already
 // busy, without pretending to know a real distance for them.
-export function pickBestTechnician(newPoint: GeoPoint, sameDayJobs: SameDayJobRow[]): TechnicianPick {
+//
+// newPoint is nullable for schedule-job-suggest.ts's own admin-triggered
+// "Auto-suggest technicians" path: a job whose OWN location can't be
+// resolved at all (no cached coordinates, no linked customer, or a customer
+// with no address to geocode) has nothing to measure distance against, but
+// should still get a real suggestion instead of an unfillable error — see
+// that file's own comment. With newPoint null, every technician's
+// minDistanceKm stays null regardless of same-day jobs' own locations,
+// which the existing scoring below already treats as
+// UNKNOWN_DISTANCE_BASELINE_KM — collapsing this into a pure
+// workload-balance-then-roster-order pick, i.e. round-robin among whoever
+// has the fewest jobs that day. autoAssignScheduleJob's own real-time path
+// never passes null here (it already bails out before reaching this call
+// when a job's location can't be resolved — see its own comment on why that
+// separate, unattended background path is left alone).
+export function pickBestTechnician(newPoint: GeoPoint | null, sameDayJobs: SameDayJobRow[]): TechnicianPick {
   const roster: string[] = autoSuggestTechnicianRoster()
   const picks: TechnicianPick[] = roster.map((technician) => {
     let minDistanceKm: number | null = null
+    let nearestJobId: string | null = null
     let jobCount = 0
     for (const job of sameDayJobs) {
       const isThisTech = job.technician === technician || job.technician_2 === technician
       if (!isThisTech) continue
       jobCount += 1
-      if (job.latitude != null && job.longitude != null) {
+      if (newPoint && job.latitude != null && job.longitude != null) {
         const d = haversineKm(newPoint, { lat: job.latitude, lon: job.longitude })
-        if (minDistanceKm === null || d < minDistanceKm) minDistanceKm = d
+        if (minDistanceKm === null || d < minDistanceKm) {
+          minDistanceKm = d
+          nearestJobId = job.id
+        }
       }
     }
-    return { technician, minDistanceKm, jobCount }
+    return { technician, minDistanceKm, jobCount, nearestJobId }
   })
 
   picks.sort((a, b) => {
-    const scoreA = (a.minDistanceKm ?? UNKNOWN_DISTANCE_BASELINE_KM) + a.jobCount * WORKLOAD_PENALTY_KM
-    const scoreB = (b.minDistanceKm ?? UNKNOWN_DISTANCE_BASELINE_KM) + b.jobCount * WORKLOAD_PENALTY_KM
+    const scoreA = (a.minDistanceKm ?? UNKNOWN_DISTANCE_BASELINE_KM) * DISTANCE_WEIGHT + a.jobCount * WORKLOAD_PENALTY_KM
+    const scoreB = (b.minDistanceKm ?? UNKNOWN_DISTANCE_BASELINE_KM) * DISTANCE_WEIGHT + b.jobCount * WORKLOAD_PENALTY_KM
     if (scoreA !== scoreB) return scoreA - scoreB
     // Deterministic tiebreak: earlier in the roster wins, rather than
     // whatever order the DB/array happened to return.

@@ -12,7 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TechnicianCombobox } from "@/components/shared/technician-combobox"
+import { TechnicianCombobox, InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
+import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 
 export interface BulkSuggestItem {
   id: string
@@ -61,13 +63,21 @@ export function BulkTechnicianSuggestDialog({
   cancelLabel,
   confirmLabel,
   applyingLabel,
+  // Opt-in, not the default: this dialog is shared by Filter Change and
+  // Schedule, and applyTechnicianAssignments (Filter Change's own apply
+  // path, filter-change-suggest.ts) doesn't persist a second technician at
+  // all — showing the pair picker there would silently accept a second
+  // name the caller then drops on the floor. Only Schedule's own
+  // applyTechnicianAssignmentsToJobs actually writes technician_2, so only
+  // that caller passes this true.
+  supportsSecondTechnician = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   // The unassigned-in-view set the confirm dialog was opened for.
   items: BulkSuggestItem[]
   onPreview: (ids: string[]) => Promise<BulkSuggestionEntry[]>
-  onApply: (assignments: { id: string; technician: string }[]) => Promise<void>
+  onApply: (assignments: { id: string; technician: string; technician2?: string }[]) => Promise<void>
   title: string
   description: string
   noItemsMessage: string
@@ -75,10 +85,17 @@ export function BulkTechnicianSuggestDialog({
   cancelLabel: string
   confirmLabel: string
   applyingLabel: string
+  supportsSecondTechnician?: boolean
 }) {
   const [applying, setApplying] = React.useState(false)
   const [entries, setEntries] = React.useState<Record<string, BulkSuggestionEntry["result"]> | null>(null)
   const [overrides, setOverrides] = React.useState<Record<string, string>>({})
+  // Never auto-suggested — the algorithm has no signal for who should pair
+  // with the primary pick, so every row starts with no second technician
+  // and the admin adds one manually if they want one, same as a fresh
+  // schedule job's own technician2 defaults to blank until set by hand.
+  const [secondaryOverrides, setSecondaryOverrides] = React.useState<Record<string, string>>({})
+  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
   // Derived, not a separate state — true exactly while the dialog is open
   // on a non-empty batch and the preview fetch hasn't landed yet, so
   // there's no setState call needed to track it.
@@ -87,13 +104,17 @@ export function BulkTechnicianSuggestDialog({
   // Same "adjust state during render" pattern InlineTextCell/
   // InlineGridPickerCell already use elsewhere in this app — resets the
   // preview the moment the dialog closes, rather than a setState call
-  // sitting directly in an effect body.
+  // sitting directly in an effect body. Full-screen resets too, so
+  // reopening always starts at the normal size rather than remembering the
+  // last session's choice.
   const [wasOpen, setWasOpen] = React.useState(false)
   if (open !== wasOpen) {
     setWasOpen(open)
     if (!open) {
       setEntries(null)
       setOverrides({})
+      setSecondaryOverrides({})
+      exitFullScreen()
     }
   }
 
@@ -114,6 +135,7 @@ export function BulkTechnicianSuggestDialog({
         }
         setEntries(nextEntries)
         setOverrides(nextOverrides)
+        setSecondaryOverrides({})
       })
       .catch(() => {
         // The mutation hook itself already toasts the error — this just
@@ -124,6 +146,7 @@ export function BulkTechnicianSuggestDialog({
         for (const item of items) nextEntries[item.id] = { error: "Failed to load a suggestion." }
         setEntries(nextEntries)
         setOverrides({})
+        setSecondaryOverrides({})
       })
     return () => {
       cancelled = true
@@ -135,7 +158,11 @@ export function BulkTechnicianSuggestDialog({
 
   async function handleConfirm() {
     const assignments = items
-      .map((i) => ({ id: i.id, technician: (overrides[i.id] ?? "").trim() }))
+      .map((i) => {
+        const technician = (overrides[i.id] ?? "").trim()
+        const technician2 = (secondaryOverrides[i.id] ?? "").trim()
+        return { id: i.id, technician, ...(technician2 ? { technician2 } : {}) }
+      })
       .filter((a) => a.technician)
     if (assignments.length === 0) {
       onOpenChange(false)
@@ -152,7 +179,22 @@ export function BulkTechnicianSuggestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        className={
+          isFullScreen
+            ? // sm: prefix required, not just a bare max-w-[95vw] — DialogContent's
+              // own base class hardcodes sm:max-w-sm, and an unprefixed utility
+              // loses to a same-or-higher breakpoint-prefixed one in the CSS
+              // cascade at any viewport that breakpoint applies to (confirmed
+              // live: without the prefix this rendered at exactly 384px,
+              // Tailwind's max-w-sm, not 95vw) — sm:max-w-xl below works for the
+              // same reason.
+              "sm:max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] overflow-y-auto"
+            : "sm:max-w-xl max-h-[85vh] overflow-y-auto"
+        }
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} className="absolute top-2 right-10" />
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{items.length > 0 ? description : noItemsMessage}</DialogDescription>
@@ -182,9 +224,18 @@ export function BulkTechnicianSuggestDialog({
                           </>
                         ) : null}
                       </div>
-                      <div className="w-44 shrink-0">
+                      <div className={supportsSecondTechnician ? "w-56 shrink-0" : "w-44 shrink-0"}>
                         {hasError ? (
                           <span className="text-xs text-muted-foreground">—</span>
+                        ) : supportsSecondTechnician ? (
+                          <InlineTechnicianPairCell
+                            primary={overrides[item.id] ?? ""}
+                            secondary={secondaryOverrides[item.id] ?? ""}
+                            onCommit={(patch) => {
+                              if (patch.primary !== undefined) setOverrides((old) => ({ ...old, [item.id]: patch.primary! }))
+                              if (patch.secondary !== undefined) setSecondaryOverrides((old) => ({ ...old, [item.id]: patch.secondary! }))
+                            }}
+                          />
                         ) : (
                           <TechnicianCombobox
                             value={overrides[item.id] ?? ""}

@@ -39,7 +39,7 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { formatDate, todayIso } from "@/lib/utils"
-import { technicianFilterOptions } from "@/lib/technicians"
+import { technicianFilterOptions, isAssignedTechnician } from "@/lib/technicians"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
 
@@ -105,17 +105,23 @@ function ScheduleContent() {
     [jobs, customers, saleListEntries]
   )
 
+  // The main Schedule tab (List + Table View) shows only active/approved
+  // jobs — a manually-created job still awaiting admin approval
+  // ('pending_approval', see the Admin Schedule Approval workflow) lives
+  // in its own "Pending Schedule Approval" tab instead, the same way an
+  // unconfirmed dispatch item never reaches this list at all. Admin
+  // sessions CAN read pending_approval rows (RLS lets them; a technician
+  // can't), so without this filter they'd otherwise show up mixed into
+  // the active schedule here.
+  //
+  // Pulled out of scopedJobs's own useMemo below so unassignedInView (further
+  // down) can filter from this same active set directly, WITHOUT the
+  // toolbar's own technicianFilter narrowing it first — see that constant's
+  // own comment for why.
+  const activeJobs = React.useMemo(() => jobsWithOrder.filter((j) => j.status !== "pending_approval"), [jobsWithOrder])
+
   const scopedJobs = React.useMemo(() => {
-    // The main Schedule tab (List + Table View) shows only active/approved
-    // jobs — a manually-created job still awaiting admin approval
-    // ('pending_approval', see the Admin Schedule Approval workflow) lives
-    // in its own "Pending Schedule Approval" tab instead, the same way an
-    // unconfirmed dispatch item never reaches this list at all. Admin
-    // sessions CAN read pending_approval rows (RLS lets them; a technician
-    // can't), so without this filter they'd otherwise show up mixed into
-    // the active schedule here.
-    const active = jobsWithOrder.filter((j) => j.status !== "pending_approval")
-    const base = technicianFilter === "all" ? active : active.filter((j) => matchesTechnician(j, technicianFilter))
+    const base = technicianFilter === "all" ? activeJobs : activeJobs.filter((j) => matchesTechnician(j, technicianFilter))
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
     // exactly as before. Grouped by technician, then date, then
@@ -133,12 +139,42 @@ function ScheduleContent() {
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobsWithOrder, technicianFilter])
+  }, [activeJobs, technicianFilter])
 
-  // Same "unassigned in the current view" scoping as Filter Change's own
-  // unassignedInView (filter-change/page.tsx) — pending only, a completed
-  // or cancelled job with no technician isn't something to suggest one for.
-  const unassignedInView = React.useMemo(() => scopedJobs.filter((j) => !j.technician.trim() && j.status === "pending"), [scopedJobs])
+  // Deliberately from activeJobs, NOT scopedJobs — "Auto-suggest
+  // technicians" (the button below) has to see every genuinely unassigned
+  // job regardless of whatever the admin's own Technician filter dropdown
+  // happens to be narrowed to right now, or it would silently miss real
+  // unassigned jobs any time that filter isn't "all" (a blank technician
+  // never matches matchesTechnician's own equality check against a specific
+  // name, so a scopedJobs-based version would show 0 unassigned jobs
+  // whenever a specific technician was selected, even with plenty actually
+  // unassigned elsewhere). The table itself still only ever displays
+  // scopedJobs; this only widens what the bulk-suggest action operates on,
+  // not what's visibly listed.
+  //
+  // isAssignedTechnician (not a plain blank check) — confirmed live that the
+  // filter-change-schedule cron which pre-creates upcoming filter_change
+  // jobs ahead of their due date writes the roster's own "N/A" placeholder
+  // into technician, not true blank: 26 of this app's 27 schedule_jobs rows
+  // right now are exactly this (every one tagged "Auto-generated ... (CP
+  // System)" in its own notes, with no location_source, distinct from a
+  // real admin/auto-assigned pick). A plain `!j.technician.trim()` check
+  // treats "N/A" as already-assigned (it's a non-empty string), so every one
+  // of those 26 was invisible to this feature — the actual, live-data-
+  // confirmed cause of "Auto-suggest technicians" reporting far fewer (often
+  // zero) jobs than the N/A rows visibly sitting in the table. Pending only
+  // — a completed or cancelled job with no technician isn't something to
+  // suggest one for; status itself needs no case-insensitive handling here
+  // (unlike technician, a free-typable field with no DB constraint) since
+  // it's a Postgres enum restricted to exactly 'pending' / 'pending_approval'
+  // / 'completed' / 'cancelled', always lowercase — confirmed against the
+  // schema, there is no live or even reachable 'Pending' or 'auto_generated'
+  // value to guard against.
+  const unassignedInView = React.useMemo(
+    () => activeJobs.filter((j) => !isAssignedTechnician(j.technician) && j.status === "pending"),
+    [activeJobs]
+  )
   const bulkSuggestItems = React.useMemo(
     () =>
       unassignedInView.map((j) => ({
@@ -247,10 +283,11 @@ function ScheduleContent() {
                   customer/filter-change data (see ScheduleTableView), so a
                   second export here would just be confusing/redundant. */}
               {view === "list" && <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />}
-              {/* List view only — same scoping as unassignedInView itself
-                  (computed off scopedJobs, the List view's own row set);
-                  Table View has no equivalent "jobs in view" concept to
-                  scope a bulk run to. */}
+              {/* List view only — Table View has no equivalent "jobs in
+                  view" concept to scope a bulk run to. Note unassignedInView
+                  itself is intentionally NOT List-View-filter-scoped (see
+                  its own comment) — this button always evaluates every
+                  unassigned job app-wide, regardless of what's on screen. */}
               {isAdmin && view === "list" && (
                 <Button variant="outline" className="gap-1.5" onClick={() => setBulkConfirmOpen(true)}>
                   <Sparkles className="h-4 w-4" /> {t("autoSuggestTechnicians")}
@@ -411,12 +448,13 @@ function ScheduleContent() {
         cancelLabel={tCommon("cancel")}
         confirmLabel={t("autoSuggestTechnicians")}
         applyingLabel={tCommon("saving")}
+        supportsSecondTechnician
         onPreview={async (ids) => {
           const results = await previewSuggestions.mutateAsync(ids)
           return results.map(({ jobId, result }) => ({ id: jobId, result }))
         }}
         onApply={async (assignments) => {
-          await applyAssignments.mutateAsync(assignments.map(({ id, technician }) => ({ jobId: id, technician })))
+          await applyAssignments.mutateAsync(assignments.map(({ id, technician, technician2 }) => ({ jobId: id, technician, technician2 })))
         }}
       />
     </div>
