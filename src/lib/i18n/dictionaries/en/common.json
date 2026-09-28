@@ -49,6 +49,7 @@
   "copy": "Copy",
   "print": "Print",
   "all": "All",
+  "today": "Today",
   "noItems": "No items",
   "filterByStatus": "Filter by status",
   "selectRows": "Select rows",

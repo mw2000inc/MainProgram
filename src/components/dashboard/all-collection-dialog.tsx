@@ -110,6 +110,16 @@ function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
 }
 
+// Sentinel value for selectedMonth's own "Today" pill — sits alongside "all"
+// and real "YYYY-MM" values in that same single-select state, rather than a
+// separate boolean, so it composes for free with everything already keyed
+// off selectedMonth: the existing pageResetKey (a fresh value here already
+// resets pagination to page 1, same as switching months), the day-pills row
+// staying hidden (a single day has nothing to drill into further), and the
+// global search box (DataTable's own state, entirely independent of which
+// tab is active, so it already applies within whatever scopedRows is).
+const TODAY_TAB = "today"
+
 // Same next2Days/all/overdue shape as DispatchApprovalQueue's own copy —
 // own local copy rather than a shared cross-import, matching the "keep
 // these panel files independent" precedent DispatchApprovalQueue and
@@ -643,7 +653,20 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
     return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month))
   }, [dateRangeRows])
 
+  // Counted from dateRangeRows (the same top-level scope every month/day
+  // count above already derives from), not the full unfiltered `rows` — so
+  // this stays consistent with whatever the Next 2 Days/Overdue dropdown is
+  // currently set to, exactly like every other tab in this same row.
+  const todayCount = React.useMemo(() => {
+    const today = todayIso()
+    return dateRangeRows.filter((r) => r.date === today).length
+  }, [dateRangeRows])
+
   const monthRows = React.useMemo(() => {
+    if (selectedMonth === TODAY_TAB) {
+      const today = todayIso()
+      return dateRangeRows.filter((r) => r.date === today)
+    }
     if (selectedMonth === "all") return dateRangeRows
     return dateRangeRows.filter((r) => yearMonth(r.date) === selectedMonth)
   }, [dateRangeRows, selectedMonth])
@@ -900,6 +923,18 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
           >
             {tCommon("all")}
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedMonth === TODAY_TAB ? "default" : "outline"}
+            className="h-7 gap-1.5"
+            onClick={() => {
+              setSelectedMonth(TODAY_TAB)
+              setSelectedDay(undefined)
+            }}
+          >
+            {tCommon("today")} <Badge variant="secondary" className="ml-0.5">{todayCount}</Badge>
+          </Button>
           {monthGroups.map((g) => (
             <Button
               key={g.month}
@@ -921,7 +956,7 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
             monthGroups/count shape, only rendered once a specific month is
             selected (see dayGroups' own comment) so this never has to show
             a whole history's worth of individual days at once. */}
-        {selectedMonth !== "all" && (
+        {selectedMonth !== "all" && selectedMonth !== TODAY_TAB && (
           <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-t pt-1.5">
             {dayGroups.map((g) => (
               <Button
