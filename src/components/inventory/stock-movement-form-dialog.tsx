@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { STOCK_MOVEMENT_REASONS } from "@/lib/constants"
+import { AUTOMATED_STOCK_MOVEMENT_REASONS, STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useAddStockMovement, useProducts, useUpdateStockMovement } from "@/lib/hooks/use-inventory"
@@ -79,8 +79,6 @@ const editSchema = z.object({
 
 type EditFormValues = z.infer<typeof editSchema>
 
-const AUTOMATED_ONLY_REASONS = ["Sale", "Filter Change", "Repair"] as const
-
 function editDefaultValues(m: StockMovement): EditFormValues {
   return {
     // The reason field only accepts the manually-selectable reasons
@@ -89,7 +87,7 @@ function editDefaultValues(m: StockMovement): EditFormValues {
     // Inventory List's own Edit button opens this same dialog with no
     // reason-based filtering, so this falls back to "Adjustment" rather
     // than handing the <Select> a value it has no matching option for.
-    reason: (AUTOMATED_ONLY_REASONS as readonly string[]).includes(m.reason) ? "Adjustment" : (m.reason as EditFormValues["reason"]),
+    reason: (AUTOMATED_STOCK_MOVEMENT_REASONS as readonly string[]).includes(m.reason) ? "Adjustment" : (m.reason as EditFormValues["reason"]),
     quantityAdded: m.quantityAdded,
     quantityRemoved: m.quantityRemoved,
     secondHandReadyQuantity: m.secondHandReadyQuantity,

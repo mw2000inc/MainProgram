@@ -42,9 +42,26 @@ export const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Credit Card", "GCash",
 // locked Select, so this isn't the same vocabulary just reused.
 export const COLLECTION_PAYMENT_TYPES = ["GCash", "Card", "Bank", "Cash", "Check"] as const
 
+// Where a collections payment actually ended up once received — the
+// Collection Details breakdown dialog's own "Deposited Fund" column
+// (collection_breakdown_fields migration). COH = Cash on Hand (not yet
+// deposited anywhere); the rest are named bank/e-wallet destinations this
+// company actually deposits into.
+export const DEPOSITED_FUND_OPTIONS = ["COH", "GCash", "MB", "EW", "BDO"] as const
+
 export const PAYMENT_STATUSES = ["Paid", "Pending", "Overdue", "Partial"] as const
 
 export const STOCK_MOVEMENT_REASONS = ["Restock", "Return", "Damaged", "Adjustment"] as const
+
+// Written only by triggers (the sale-item trigger, the filter-change
+// deduction, the repair-part deduction — see their own migrations), never
+// offered as a Select option in the Stock Movement form. Every stock
+// movement's reason is one of these three OR one of STOCK_MOVEMENT_REASONS
+// above — the two sets are mutually exclusive and, together, exhaustive of
+// every reason this app has ever written — so a row's own reason value
+// already tells you whether an admin typed it in directly (see
+// useStockMovementRows' own `source` field, which is exactly this check).
+export const AUTOMATED_STOCK_MOVEMENT_REASONS = ["Sale", "Filter Change", "Repair"] as const
 
 // The old AppSheet system's fixed product catalog, grouped by brand prefix —
 // used by the Sale List entry form's Product# dropdown. `name` is stored

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/inventory"
+import { AUTOMATED_STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
@@ -28,6 +29,13 @@ export type StockMovementRow = StockMovement & {
   // productName/userName already are.
   relatedCustomerName?: string
   relatedJobOrderNo?: string
+  // "Manual" for a row an admin typed into the Add/Edit Stock Movement
+  // dialog, "System" for one written by a trigger (the sale-item, filter-
+  // change, or repair-part deduction) — derived straight from the reason
+  // value itself (see AUTOMATED_STOCK_MOVEMENT_REASONS' own comment on why
+  // that's a reliable signal) rather than a separate stored column, so it
+  // can never drift out of sync with what actually wrote the row.
+  source: "Manual" | "System"
 }
 
 function warnIfLowStock(result: api.StockMovementResult) {
@@ -133,6 +141,7 @@ export function useStockMovementRows() {
         userName: users.find((u) => u.id === m.userId)?.name ?? "Unknown",
         approvedByName: m.approvedBy ? (users.find((u) => u.id === m.approvedBy)?.name ?? "Unknown") : undefined,
         rejectedByName: m.rejectedBy ? (users.find((u) => u.id === m.rejectedBy)?.name ?? "Unknown") : undefined,
+        source: (AUTOMATED_STOCK_MOVEMENT_REASONS as readonly string[]).includes(m.reason) ? "System" : "Manual",
         relatedCustomerName: customer ? customer.companyName || customer.fullName : undefined,
         relatedJobOrderNo: job?.orderNo,
       }
