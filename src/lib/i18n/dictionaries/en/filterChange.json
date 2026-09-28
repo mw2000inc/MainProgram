@@ -26,5 +26,6 @@
   "filterPickerOtherLabel": "Custom — not in the product catalog",
   "filterPickerCustomPlaceholder": "Or type your own filter...",
   "filterPickerAddCustom": "Add",
-  "filterPickerDone": "Done"
+  "filterPickerDone": "Done",
+  "filterSuggestedFromCpSystem": "Filled in the filters from this order's CP System ({systemCode}) — feel free to adjust."
 }

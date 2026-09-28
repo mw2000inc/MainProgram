@@ -32,7 +32,10 @@ import {
 } from "@/lib/hooks/use-filter-change-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
+import { useProducts } from "@/lib/hooks/use-inventory"
 import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
+import { getCpSystemFilterSkus } from "@/lib/filter-parts"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
@@ -132,6 +135,8 @@ export function FilterChangeFormDialog({
   const suggestion = suggestTechnician.data ?? null
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  const { data: cpSystems = [] } = useCpSystems()
+  const { data: products = [] } = useProducts()
   const { t } = useTranslation("filterChange")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -174,22 +179,42 @@ export function FilterChangeFormDialog({
   function handleOrderNumberBlur(orderNumber: string) {
     if (isEdit) return
     const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNumber)
-    if (!customer) return
-    let filled = false
-    const name = customer.companyName || customer.fullName
-    if (name && !form.getValues("memberAccount").trim()) {
-      form.setValue("memberAccount", name)
-      filled = true
+    if (customer) {
+      let filled = false
+      const name = customer.companyName || customer.fullName
+      if (name && !form.getValues("memberAccount").trim()) {
+        form.setValue("memberAccount", name)
+        filled = true
+      }
+      if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
+        form.setValue("contactNumber", customer.contactNumber)
+        filled = true
+      }
+      if (customer.address && !(form.getValues("address") ?? "").trim()) {
+        form.setValue("address", customer.address)
+        filled = true
+      }
+      if (filled) toast.success(tCommon("customerInfoFilled"))
     }
-    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
-      form.setValue("contactNumber", customer.contactNumber)
-      filled = true
+
+    // CP System is linked per ORDER (sale_list_entries.cp_system_id), not per
+    // customer — one customer can have several orders on different systems —
+    // so this is matched directly against the typed order number rather than
+    // going through the customer resolved above. Same add-only rule as
+    // everything else here: only fires into a still-blank Filter field, and
+    // only when the linked system actually has at least one component that
+    // resolves to a real product SKU (see getCpSystemFilterSkus) — an
+    // unlinked order, or one on a system with no catalog match yet, leaves
+    // Filter exactly as untouched as it always was.
+    if (!form.getValues("filterType").trim()) {
+      const saleEntry = saleListEntries.find((e) => e.orderNumber.trim() === orderNumber.trim())
+      const system = saleEntry?.cpSystemId ? cpSystems.find((s) => s.id === saleEntry.cpSystemId) : undefined
+      const skus = system ? getCpSystemFilterSkus(system, products) : []
+      if (system && skus.length > 0) {
+        form.setValue("filterType", skus.join(", "))
+        toast.success(t("filterSuggestedFromCpSystem", { systemCode: system.systemCode }))
+      }
     }
-    if (customer.address && !(form.getValues("address") ?? "").trim()) {
-      form.setValue("address", customer.address)
-      filled = true
-    }
-    if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
   // Same add-only autofill as handleOrderNumberBlur above, keyed off Member

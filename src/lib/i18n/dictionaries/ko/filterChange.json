@@ -26,5 +26,6 @@
   "filterPickerOtherLabel": "직접 입력 — 제품 카탈로그에 없음",
   "filterPickerCustomPlaceholder": "또는 필터를 직접 입력...",
   "filterPickerAddCustom": "추가",
-  "filterPickerDone": "완료"
+  "filterPickerDone": "완료",
+  "filterSuggestedFromCpSystem": "이 주문의 CP 시스템({systemCode})에서 필터를 채웠습니다 — 필요하면 수정하세요."
 }

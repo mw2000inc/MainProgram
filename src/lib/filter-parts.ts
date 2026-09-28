@@ -1,5 +1,6 @@
 import type { GridPickerOption } from "@/components/shared/inline-edit-cell"
-import type { Product } from "@/lib/types"
+import type { CpSystem, Product } from "@/lib/types"
+import { parseItemString } from "@/lib/utils"
 
 // The inventory `products` table is the only catalog of filter parts — the
 // technician's job-completion filter picker and the live half of the Sale
@@ -27,4 +28,26 @@ export function getFilterPartOptions(products: Product[]): GridPickerOption[] {
     .filter((p) => !!p.sku && !NON_FILTER_PRODUCT_CATEGORIES.has(p.category))
     .map((p) => ({ value: p.sku, label: shortLabel(p), group: p.category }))
     .sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }))
+}
+
+// A CP System's own components carry a filter's identity only as a loose
+// text convention, the same "[SKU] / [Description]" pattern parseItemString
+// already splits for the Product form and the Add Part dialog (e.g. "012 /
+// MW) Pre-Carbon" -> "012") — never a real product_id, see CpSystemComponent's
+// own comment. A bare code with no slash (e.g. "014") is used as-is. Checked
+// against the live catalog before relying on this: 152 of 166 components
+// across every cataloged system resolve to a real product SKU this way; the
+// rest (AW/PF/PR-series systems) name parts that were never in this app's
+// product catalog to begin with, not a parsing failure — silently skipped
+// rather than surfacing a raw, non-existent "SKU" no admin could act on.
+// Deduplicated since two components can legitimately reference the same
+// physical part at two different intervals.
+export function getCpSystemFilterSkus(system: CpSystem, products: Product[]): string[] {
+  const validSkus = new Set(products.map((p) => p.sku))
+  const skus: string[] = []
+  for (const component of system.components) {
+    const code = (parseItemString(component.name)?.sku ?? component.name).trim()
+    if (validSkus.has(code) && !skus.includes(code)) skus.push(code)
+  }
+  return skus
 }
