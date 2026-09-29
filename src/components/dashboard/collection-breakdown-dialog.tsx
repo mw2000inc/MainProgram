@@ -14,12 +14,14 @@ import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table/data-table"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
+import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { InlineCurrencyCell, InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { COLLECTION_PAYMENT_TYPES, DEPOSITED_FUND_OPTIONS } from "@/lib/constants"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { exportToCsv } from "@/lib/export/csv"
-import { todayIso } from "@/lib/utils"
+import { cn, todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 import {
   matchesActiveDateScope,
@@ -100,6 +102,16 @@ export function CollectionBreakdownDialog({
 }) {
   const { t } = useTranslation("allCollection")
   const { t: tFields } = useTranslation("fields")
+  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
+  // This component never unmounts when the dialog closes (AllCollectionDialog
+  // always renders it, passing `open` straight through to Radix's own
+  // Dialog — see scopedCollections' own comment below on this same fact) —
+  // without this, full-screen would still be engaged the next time the
+  // admin opens this dialog, same reset-on-close AllCollectionDialog's own
+  // full-screen toggle already does.
+  React.useEffect(() => {
+    if (!open) exitFullScreen()
+  }, [open, exitFullScreen])
   // isPending: in practice this dialog is only ever opened from a button
   // inside AllCollectionDialog, which reads this exact same query (same
   // queryKey, shared cache) to render the rows the admin is ALREADY looking
@@ -254,7 +266,21 @@ export function CollectionBreakdownDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-6xl max-h-[85vh] overflow-y-auto"
+        className={cn(
+          // Same full-screen className shape AllCollectionDialog's own
+          // toggle already uses — this dialog is already its own real Radix
+          // Dialog (not a plain div needing a manual document.body portal
+          // the way pending-approvals-panel.tsx's full-screen view does),
+          // so Radix's own DismissableLayer already re-enables pointer
+          // events on this exact Content node regardless of size or
+          // nesting inside AllCollectionDialog — confirmed by every inline
+          // edit in this table already working correctly today at the
+          // normal size. Only the sizing needs to change.
+          isFullScreen
+            ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
+            : "sm:max-w-6xl max-h-[85vh]",
+          "overflow-y-auto"
+        )}
         // A backdrop click (or a stray click that lands outside this
         // content for any other reason) must never close this dialog —
         // only the X button or Escape may. Both handlers set for the same
@@ -267,7 +293,10 @@ export function CollectionBreakdownDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{t("breakdownTitle")}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+            <span>{t("breakdownTitle")}</span>
+            <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
+          </DialogTitle>
           <DialogDescription>{t("breakdownDescription")}</DialogDescription>
         </DialogHeader>
         {isPending ? (
