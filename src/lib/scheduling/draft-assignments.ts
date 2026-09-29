@@ -18,8 +18,10 @@ import { isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians
 // install_plans and vehicle/Liteace-pairing — out of scope for this pass
 // (see this feature's own report).
 
+export type DraftEntityType = "filter_change_plans" | "collections" | "repair_plans"
+
 export interface SourcePlanColumns {
-  table: "filter_change_plans" | "collections" | "repair_plans"
+  table: DraftEntityType
   primaryColumn: "serviceman" | "th"
   secondaryColumn: "serviceman_2" | "th_2"
   dateColumns: [preD: string, base: string]

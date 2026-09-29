@@ -153,3 +153,18 @@ export async function applyTechnicianAssignmentsToJobs(
   if (!res.ok) throw new Error(data.error ?? "Failed to assign technicians")
   return data as { applied: number }
 }
+
+// "Clear Schedule" / "Unassign All" for a date — deletes every schedule_jobs
+// row on that date and blanks the linked filter_change_plans/collections/
+// repair_plans row's own technician columns (see clear-schedule.ts), so the
+// date is back to a clean slate for a fresh Draft Assignments Generate run.
+export async function clearScheduleForDate(targetDate: string): Promise<{ jobsCleared: number; plansUnlinked: number }> {
+  const res = await fetch("/api/schedule-jobs/clear-schedule", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetDate }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to clear schedule")
+  return data as { jobsCleared: number; plansUnlinked: number }
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Printer } from "lucide-react"
+import { Printer, Eraser } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,12 +14,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { formatTechnicians, matchesTechnician } from "@/components/schedule/schedule-columns"
-import { useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { useScheduleJobs, useClearScheduleForDate } from "@/lib/hooks/use-schedule"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useAuth } from "@/lib/auth/auth-context"
 import { printScheduleTable, type ScheduleTableRow } from "@/lib/export/print"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -98,6 +100,10 @@ function resolveRows(
 export function ScheduleTableView({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
   const { t } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
+  const clearSchedule = useClearScheduleForDate()
+  const [confirmClearOpen, setConfirmClearOpen] = React.useState(false)
   const { data: jobs = [], isPending: p1 } = useScheduleJobs()
   const { data: customers = [], isPending: p2 } = useCustomers()
   const { data: filterChangePlans = [], isPending: p3 } = useFilterChangePlans()
@@ -185,10 +191,35 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
               </Select>
             </div>
           </div>
-          <Button variant="outline" className="gap-1.5" onClick={handlePrint}>
-            <Printer className="h-4 w-4" /> {tCommon("print")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && dayJobs.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-1.5 text-destructive hover:text-destructive"
+                onClick={() => setConfirmClearOpen(true)}
+              >
+                <Eraser className="h-4 w-4" /> {t("clearSchedule")}
+              </Button>
+            )}
+            <Button variant="outline" className="gap-1.5" onClick={handlePrint}>
+              <Printer className="h-4 w-4" /> {tCommon("print")}
+            </Button>
+          </div>
         </div>
+
+        <ConfirmDialog
+          open={confirmClearOpen}
+          onOpenChange={setConfirmClearOpen}
+          title={t("clearScheduleConfirmTitle")}
+          description={t("clearScheduleConfirmDescription", { count: String(dayJobs.length), date: dateHeading })}
+          confirmLabel={t("clearSchedule")}
+          loading={clearSchedule.isPending}
+          onConfirm={async () => {
+            await clearSchedule.mutateAsync(date)
+            setConfirmClearOpen(false)
+          }}
+        />
 
         <h2 className="text-lg font-semibold">{dateHeading}</h2>
 
