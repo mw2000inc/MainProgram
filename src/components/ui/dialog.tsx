@@ -115,6 +115,23 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+// The scrolling region for a tall dialog. The X button is positioned
+// against DialogContent, so if DialogContent itself scrolls, the X and the
+// header scroll away with the content. Pair this with a non-scrolling
+// DialogContent ("flex flex-col overflow-hidden" plus a height bound) and
+// put everything that should stay pinned (header, search, footer) outside
+// it. min-h-0 is what lets it shrink below its content inside the flex
+// column; the px-1/-mx-1 keeps focus rings from being clipped at the edges.
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("-mx-1 min-h-0 flex-1 overflow-y-auto px-1", className)}
+      {...props}
+    />
+  )
+}
+
 function DialogFooter({
   className,
   showCloseButton = false,
@@ -176,6 +193,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,

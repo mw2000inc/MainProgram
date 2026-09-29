@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -121,7 +122,7 @@ export function ActivityDetailDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{entry?.userName}</DialogTitle>
           <DialogDescription>
@@ -130,7 +131,7 @@ export function ActivityDetailDialog({
           </DialogDescription>
         </DialogHeader>
         {entry && (
-          <div className="space-y-4 text-sm">
+          <DialogBody className="space-y-4 text-sm">
             {entry.description && (
               <div>
                 <p className="text-xs text-muted-foreground">{t("record")}</p>
@@ -167,7 +168,7 @@ export function ActivityDetailDialog({
                 </div>
               )
             )}
-          </div>
+          </DialogBody>
         )}
       </DialogContent>
     </Dialog>

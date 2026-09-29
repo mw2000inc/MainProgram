@@ -6,7 +6,7 @@ import { History } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -30,7 +30,7 @@ import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
+import { cn, formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
@@ -377,6 +377,7 @@ function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter):
 export function PendingApprovalsPanel({
   historyDefaultDate,
   renderedInDialog,
+  fullScreen,
 }: {
   // Forwarded to PendingApprovalsHistoryDialog's own initial date — the
   // Daily Report's own selected report date, when this panel is opened
@@ -385,7 +386,7 @@ export function PendingApprovalsPanel({
   // its own; the history dialog falls back to today in that case.
   historyDefaultDate?: string
   // True only when PendingApprovalsDialog renders this — that dialog's own
-  // DialogContent is already a single bounded overflow-y-auto region (see
+  // DialogBody is already a single bounded overflow-y-auto region (see
   // its own comment), so the table below must NOT also bound/scroll
   // itself in that case, or the two nest into a double scrollbar (an outer
   // one for the dialog, an inner one for the table, both visible at once).
@@ -393,6 +394,13 @@ export function PendingApprovalsPanel({
   // wrapping dialog to defer scrolling to — that case keeps its own
   // bounded, independently-scrolling table exactly as before.
   renderedInDialog?: boolean
+  // Full-screen state owned by a wrapping dialog. When given, full-screen
+  // grows that dialog in place instead of portaling a separate overlay to
+  // <body> — the overlay sits outside the dialog's own content, where the
+  // dialog's modal scroll lock swallows every mouse-wheel event. Omitted on
+  // the Schedule page's standalone tab (no dialog, no scroll lock), which
+  // keeps its own state and overlay.
+  fullScreen?: { isFullScreen: boolean; toggle: () => void }
 } = {}) {
   const { t } = useTranslation("dispatch")
   const { t: tCommon } = useTranslation("common")
@@ -430,7 +438,9 @@ export function PendingApprovalsPanel({
   )
   const [reviewing, setReviewing] = React.useState<PendingApprovalRow | undefined>(undefined)
   const [historyOpen, setHistoryOpen] = React.useState(false)
-  const { isFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
+  const ownFullScreen = useFullScreenToggle()
+  const isFullScreen = fullScreen?.isFullScreen ?? ownFullScreen.isFullScreen
+  const toggleFullScreen = fullScreen?.toggle ?? ownFullScreen.toggle
   const [activeTab, setActiveTab] = React.useState<"all" | DispatchEntityType>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
   // Defaults to the near-term dispatch window rather than every pending
@@ -691,27 +701,19 @@ export function PendingApprovalsPanel({
 
   // Shared between the normal (in-Card), renderedInDialog, and full-screen
   // (portaled overlay) render below — same toolbar/table content in every
-  // case, only which element actually owns the scrollbar differs. Both
-  // isFullScreen and renderedInDialog defer to an ancestor that's already
-  // its own single overflow-y-auto region (the portaled full-screen div
-  // itself below, or PendingApprovalsDialog's own DialogContent) —
-  // bounding the table too, in either case, would nest a second scrollbar
-  // inside the first (both visible, both scrolling the same content —
-  // confirmed exactly this way before this fix). "overflow-y-visible"
-  // cancels DataTable's own hardcoded overflow-y-auto via tailwind-merge's
-  // usual same-utility-group override (see cn()'s deduping — same
-  // mechanism the Full-Screen toggle's own sm:max-w-none fix already
-  // relies on), leaving overflow-x-auto for wide columns intact and
-  // letting the table grow to its natural content height — still needed
-  // even though DataTable's own scroll box no longer has a default
-  // max-height of its own (h-full only, see that file's own comment): a
-  // fullscreen/dialog ancestor DOES give it a real bounded height to
-  // resolve h-full against, so overflow-y-auto would otherwise still open
-  // a second, nested scroll region inside the dialog's own. Only the
-  // Schedule page's standalone tab (neither full-screen nor in a dialog,
-  // so nothing else nearby scrolls it) keeps its own bounded,
-  // independently scrolling max-h-[60vh] box.
-  const tableScrollClassName = isFullScreen || renderedInDialog ? "overflow-y-visible" : "max-h-[60vh]"
+  // case, only which element owns the vertical scrollbar differs, and there
+  // must only ever be one (two nested ones both scroll the same rows).
+  // - renderedInDialog (normal or full-screen — full-screen there just
+  //   grows the dialog): PendingApprovalsDialog's DialogBody is the scroll
+  //   region, so "overflow-y-visible" cancels DataTable's own overflow-y-auto
+  //   (tailwind-merge dedupes the same utility group), keeping only its
+  //   overflow-x-auto for wide columns.
+  // - Standalone full-screen overlay: the overlay itself never scrolls (so
+  //   its toolbar and exit button stay pinned); DataTable's own h-full
+  //   scroll box, a flex-1 child of that fixed-height overlay, scrolls.
+  // - Standalone Schedule tab: nothing else scrolls it, so the table keeps
+  //   its own bounded max-h-[60vh] box.
+  const tableScrollClassName = renderedInDialog ? "overflow-y-visible" : isFullScreen ? undefined : "max-h-[60vh]"
 
   const toolbarAndTable = (
     <>
@@ -750,7 +752,9 @@ export function PendingApprovalsPanel({
               <SelectItem value="approved">{t("approvedStatus")}</SelectItem>
             </SelectContent>
           </Select>
-          <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
+          {/* A wrapping dialog that owns full-screen shows this button in
+              its own pinned header instead, so it can't scroll away. */}
+          {!fullScreen && <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />}
           {isAdmin && (
             <Button type="button" size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setHistoryOpen(true)}>
               <History className="h-3.5 w-3.5" /> {t("historyButton")}
@@ -901,14 +905,17 @@ export function PendingApprovalsPanel({
   // div while it's still mounted, naturally renders on top of it, exactly
   // as they would in the non-full-screen Card/dialog view.
   //
-  // overflow-y-auto replaces the previous overflow-hidden here (see
-  // tableScrollClassName above) so this div itself is the one scrolling
-  // region, not a second one nested inside DataTable's own wrapper.
-  if (isFullScreen && typeof document !== "undefined") {
+  // overflow-hidden, not overflow-y-auto: if this overlay scrolled, its own
+  // toolbar (including the exit-full-screen button) would scroll away with
+  // the rows. DataTable's own scroll box does the scrolling instead (see
+  // tableScrollClassName above).
+  // Standalone only — a wrapping dialog that passed `fullScreen` grows
+  // itself instead (see that prop's own comment).
+  if (isFullScreen && !fullScreen && typeof document !== "undefined") {
     return (
       <>
         {createPortal(
-          <div className="pointer-events-auto fixed inset-0 z-50 flex flex-col gap-4 overflow-y-auto bg-background p-6">
+          <div className="pointer-events-auto fixed inset-0 z-50 flex flex-col gap-4 overflow-hidden bg-background p-6">
             {toolbarAndTable}
           </div>,
           document.body
@@ -957,14 +964,22 @@ export function PendingApprovalsDialog({
   historyDefaultDate?: string
 }) {
   const { t } = useTranslation("dispatch")
+  // Owned here, not by the panel, so full-screen grows this dialog in
+  // place — see PendingApprovalsPanel's `fullScreen` prop. Reset on close
+  // since this component stays mounted while closed.
+  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
+  React.useEffect(() => {
+    if (!open) exitFullScreen()
+  }, [open, exitFullScreen])
+  const fullScreen = React.useMemo(() => ({ isFullScreen, toggle: toggleFullScreen }), [isFullScreen, toggleFullScreen])
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        // max-h-[80vh] + overflow-y-auto here is the ONE vertical scroll
-        // boundary for this whole dialog — PendingApprovalsPanel's own
-        // table is told not to bound/scroll itself too (renderedInDialog
-        // below), specifically so this doesn't nest into a second,
-        // independent scrollbar inside the first.
+        // DialogBody below is the ONE vertical scroll boundary for this
+        // whole dialog — PendingApprovalsPanel's own table is told not to
+        // bound/scroll itself too (renderedInDialog), so the two never nest
+        // into a second scrollbar. DialogContent itself no longer scrolls,
+        // so the header and X button stay pinned above the rows.
         // Widened from sm:max-w-4xl — this table has 9 columns (several
         // inherently wide: a date picker, technician names, a route stop
         // label), so the old width pushed Status/Review off past a lot of
@@ -973,7 +988,20 @@ export function PendingApprovalsDialog({
         // to its widest content, not proportionally to the viewport — see
         // the actions column's own sticky-right fix below for the part of
         // this that still needs it regardless of width), just needs it less often.
-        className="sm:max-w-7xl max-h-[80vh] overflow-y-auto"
+        className={cn(
+          isFullScreen
+            ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
+            : "sm:max-w-7xl max-h-[80vh]",
+          "flex flex-col overflow-hidden"
+        )}
+        // Escape exits full-screen first rather than closing the dialog,
+        // same as every other full-screen-capable dialog here.
+        onEscapeKeyDown={(e) => {
+          if (isFullScreen) {
+            e.preventDefault()
+            exitFullScreen()
+          }
+        }}
         // A misclick on the backdrop (or, via Radix's own "interact
         // outside" detection, opening the Status/Date Range Selects below
         // — their dropdowns portal outside this DialogContent's own DOM
@@ -986,10 +1014,15 @@ export function PendingApprovalsDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{t("pendingApprovalsDialogTitle")}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+            <span>{t("pendingApprovalsDialogTitle")}</span>
+            <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
+          </DialogTitle>
           <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
         </DialogHeader>
-        <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} renderedInDialog />
+        <DialogBody>
+          <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} renderedInDialog fullScreen={fullScreen} />
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

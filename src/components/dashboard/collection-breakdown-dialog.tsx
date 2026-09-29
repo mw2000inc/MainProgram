@@ -291,7 +291,10 @@ export function CollectionBreakdownDialog({
           isFullScreen
             ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
             : "sm:max-w-6xl max-h-[85vh]",
-          "overflow-y-auto"
+          // Never scrolls itself — the X/full-screen buttons and header are
+          // positioned against this element. The table's own scroll box
+          // (DataTable, a flex-1 child here) does the scrolling instead.
+          "flex flex-col overflow-hidden"
         )}
         // A backdrop click (or a stray click that lands outside this
         // content for any other reason) must never close this dialog —

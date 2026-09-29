@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns"
 import { Banknote, Pencil, CheckCheck, History, Search, Calendar as CalendarIcon, ClipboardList } from "lucide-react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -485,7 +486,7 @@ function AllCollectionHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{t("historyTitle")}</DialogTitle>
           <DialogDescription>{t("historyDescription")}</DialogDescription>
@@ -501,31 +502,33 @@ function AllCollectionHistoryDialog({
           />
         </div>
 
-        {filteredRows.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            {collectedRows.length === 0 ? t("noHistoryYet") : t("noHistoryMatches")}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {filteredRows.map((row) => (
-              <div key={row.id} className="rounded-md border p-3 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{tDispatch(SOURCE_MODULE_KEYS[row.source])}</Badge>
-                  <span className="font-medium truncate">{row.customerDisplay}</span>
+        <DialogBody>
+          {filteredRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              {collectedRows.length === 0 ? t("noHistoryYet") : t("noHistoryMatches")}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {filteredRows.map((row) => (
+                <div key={row.id} className="rounded-md border p-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{tDispatch(SOURCE_MODULE_KEYS[row.source])}</Badge>
+                    <span className="font-medium truncate">{row.customerDisplay}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(row.date)} · {amountSummary(row)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("collectedByLine", {
+                      name: row.collectedBy ? adminNameById.get(row.collectedBy) ?? t("unknownAdmin") : t("unknownAdmin"),
+                      date: row.collectedAt ? formatDateTime(row.collectedAt) : "—",
+                    })}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(row.date)} · {amountSummary(row)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("collectedByLine", {
-                    name: row.collectedBy ? adminNameById.get(row.collectedBy) ?? t("unknownAdmin") : t("unknownAdmin"),
-                    date: row.collectedAt ? formatDateTime(row.collectedAt) : "—",
-                  })}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )
@@ -1015,7 +1018,10 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
           isFullScreen
             ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
             : "sm:max-w-5xl max-h-[80vh]",
-          "overflow-y-auto flex flex-col"
+          // Never scrolls itself — the X/full-screen buttons and header are
+          // positioned against this element, so if it scrolled they'd scroll
+          // away with the rows. The table's own scroll box does the scrolling.
+          "overflow-hidden flex flex-col"
         )}
         onEscapeKeyDown={(e) => {
           if (isFullScreen) {
@@ -1148,7 +1154,7 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
           )}
         </div>
 
-        <div className={cn("flex-1 min-h-0", isFullScreen ? "flex flex-col" : undefined)}>
+        <div className="flex min-h-0 flex-1 flex-col">
           <DataTable
             columns={columns}
             data={displayedRows}

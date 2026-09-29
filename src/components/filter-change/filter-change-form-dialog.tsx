@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form"
 import { Sparkles } from "lucide-react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -266,13 +267,14 @@ export function FilterChangeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEdit ? t("editTitle") : t("addTitle")}</DialogTitle>
           <DialogDescription>{isEdit ? t("editDescription") : t("addDescription")}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+            <DialogBody className="space-y-4 py-0.5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -481,6 +483,7 @@ export function FilterChangeFormDialog({
                 )}
               />
             </div>
+            </DialogBody>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {tCommon("cancel")}

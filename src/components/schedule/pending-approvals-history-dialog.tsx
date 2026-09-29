@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -87,7 +88,7 @@ export function PendingApprovalsHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center justify-between gap-3 pr-6">
               <span>{t("approvalsHistoryTitle")}</span>
@@ -101,7 +102,7 @@ export function PendingApprovalsHistoryDialog({
               column on narrow screens. Both lists are otherwise completely
               independent (different data sources, different empty states),
               so a grid is a purely visual pairing, not a shared layout. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <DialogBody className="grid grid-cols-1 sm:grid-cols-2 gap-5 content-start">
             <div className="space-y-2 min-w-0">
               <h3 className="text-sm font-medium">{t("approvedSectionTitle", { count: String(approvalEvents.length) })}</h3>
               {approvalsPending ? (
@@ -157,7 +158,7 @@ export function PendingApprovalsHistoryDialog({
                 </div>
               )}
             </div>
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

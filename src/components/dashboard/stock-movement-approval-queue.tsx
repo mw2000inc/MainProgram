@@ -4,6 +4,7 @@ import * as React from "react"
 import { Check, History, X } from "lucide-react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -68,7 +69,9 @@ export function StockMovementApprovalQueue({
           isFullScreen
             ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
             : "sm:max-w-lg max-h-[85vh]",
-          "overflow-y-auto"
+          // Never scrolls itself — DialogBody below is the scroll region, so
+          // the X/full-screen/History buttons stay pinned above the list.
+          "flex flex-col overflow-hidden"
         )}
         // Radix's own Escape-to-close would otherwise close the whole
         // dialog while full-screen — intercept it here so Escape exits
@@ -99,6 +102,7 @@ export function StockMovementApprovalQueue({
           <DialogDescription>{t("pendingApprovalDescription")}</DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">{t("nothingPendingApproval")}</p>
         ) : (
@@ -144,6 +148,7 @@ export function StockMovementApprovalQueue({
             ))}
           </div>
         )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
 

@@ -6,6 +6,7 @@ import { ko } from "date-fns/locale"
 import { Send, CheckCheck, CheckCircle2, TriangleAlert, CalendarClock, History, BellOff } from "lucide-react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -533,14 +534,11 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
           className={cn(
             isFullScreen
               ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
-              // The one and only vertical scroll boundary for this dialog
-              // — this queue has no nested DataTable/scroll box of its own
-              // (items/rescheduleRequests render as a plain list, not a
-              // table), so there's nothing else here that could nest a
-              // second scrollbar the way PendingApprovalsDialog's own
-              // DataTable used to.
               : "sm:max-w-2xl max-h-[80vh]",
-            "overflow-y-auto"
+            // DialogContent never scrolls itself (the X, full-screen, and
+            // History/Approve All buttons would scroll away with the list);
+            // DialogBody below is this dialog's one vertical scroll region.
+            "flex flex-col overflow-hidden"
           )}
           // Radix's own Escape-to-close would otherwise close the whole
           // dialog while full-screen — intercept it here so Escape exits
@@ -612,6 +610,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
             <DialogDescription>{t("description")}</DialogDescription>
           </DialogHeader>
 
+          <DialogBody className="space-y-4">
           {lastResult && (
             <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -744,6 +743,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
               ))}
             </div>
           )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

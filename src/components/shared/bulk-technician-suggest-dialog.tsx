@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -189,8 +190,11 @@ export function BulkTechnicianSuggestDialog({
               // live: without the prefix this rendered at exactly 384px,
               // Tailwind's max-w-sm, not 95vw) — sm:max-w-xl below works for the
               // same reason.
-              "sm:max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] overflow-y-auto"
-            : "sm:max-w-xl max-h-[85vh] overflow-y-auto"
+              // Never scrolls itself — the X and full-screen buttons are
+              // positioned against this element; DialogBody scrolls the list
+              // so those, the header, and the Confirm footer stay pinned.
+              "sm:max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] flex flex-col overflow-hidden"
+            : "sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden"
         }
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -201,7 +205,7 @@ export function BulkTechnicianSuggestDialog({
         </DialogHeader>
 
         {items.length > 0 && (
-          <div className="space-y-1">
+          <DialogBody className="space-y-1">
             {!entries
               ? Array.from({ length: Math.min(items.length, 4) }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)
               : items.map((item) => {
@@ -247,7 +251,7 @@ export function BulkTechnicianSuggestDialog({
                     </div>
                   )
                 })}
-          </div>
+          </DialogBody>
         )}
 
         <DialogFooter>

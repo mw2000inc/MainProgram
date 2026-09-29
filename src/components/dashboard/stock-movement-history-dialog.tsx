@@ -4,6 +4,7 @@ import * as React from "react"
 import { Search } from "lucide-react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -67,7 +68,7 @@ export function StockMovementHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{t("historyTitle")}</DialogTitle>
           <DialogDescription>{t("historyDescription")}</DialogDescription>
@@ -83,6 +84,7 @@ export function StockMovementHistoryDialog({
           />
         </div>
 
+        <DialogBody>
         {isPending ? (
           <p className="text-sm text-muted-foreground py-8 text-center">{tCommon("loading")}</p>
         ) : filtered.length === 0 ? (
@@ -125,6 +127,7 @@ export function StockMovementHistoryDialog({
             })}
           </div>
         )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )
