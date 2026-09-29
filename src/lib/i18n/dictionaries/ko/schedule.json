@@ -80,6 +80,7 @@
   "unassigned": "미배정",
   "scheduleTabLabel": "일정",
   "pendingApprovalsTabLabel": "승인 대기 ({count})",
+  "draftAssignmentsTabLabel": "임시 배정",
   "scheduledDateLabel": "기술자 작업 / 예정일",
   "scheduleAtLeastOneDayAheadHelp": "일정은 최소 1일 전에 생성해야 합니다. 기술자가 작업을 수행할 날짜를 선택하세요.",
   "scheduleAtLeastOneDayAhead": "이 작업은 최소 1일 전에 예약해야 합니다 — 오늘 또는 이전 날짜는 선택할 수 없습니다.",

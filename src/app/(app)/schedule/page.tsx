@@ -26,6 +26,7 @@ import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNu
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
+import { DraftAssignmentsPanel } from "@/components/schedule/draft-assignments-panel"
 import {
   useApplyTechnicianAssignmentsToJobs,
   usePreviewTechnicianSuggestionsForJobs,
@@ -88,7 +89,7 @@ function ScheduleContent() {
   const [filteredRows, setFilteredRows] = React.useState<ScheduleRow[]>([])
   const [view, setView] = React.useState<"list" | "table">("list")
   const [tableDate, setTableDate] = React.useState(todayIso)
-  const [tab, setTab] = React.useState<"schedule" | "pending" | "pendingSchedule">("schedule")
+  const [tab, setTab] = React.useState<"schedule" | "pending" | "pendingSchedule" | "draftAssignments">("schedule")
   const pendingApprovalsCount = usePendingApprovalsCount()
   const pendingScheduleApprovalCount = usePendingScheduleApprovalCount()
   // "All Technicians" by default. A shared job (technician + technician2) shows
@@ -256,7 +257,7 @@ function ScheduleContent() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "schedule" | "pending" | "pendingSchedule")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "schedule" | "pending" | "pendingSchedule" | "draftAssignments")}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <TabsList>
             <TabsTrigger value="schedule">{t("scheduleTabLabel")}</TabsTrigger>
@@ -264,6 +265,7 @@ function ScheduleContent() {
               {t("pendingScheduleApprovalTabLabel", { count: String(pendingScheduleApprovalCount) })}
             </TabsTrigger>
             <TabsTrigger value="pending">{t("pendingApprovalsTabLabel", { count: String(pendingApprovalsCount) })}</TabsTrigger>
+            {isAdmin && <TabsTrigger value="draftAssignments">{t("draftAssignmentsTabLabel")}</TabsTrigger>}
           </TabsList>
           {tab === "schedule" && (
             <div className="flex items-center gap-2">
@@ -324,6 +326,12 @@ function ScheduleContent() {
         <TabsContent value="pending" className="mt-4">
           <PendingApprovalsPanel />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="draftAssignments" className="mt-4">
+            <DraftAssignmentsPanel />
+          </TabsContent>
+        )}
 
         <TabsContent value="schedule" className="mt-4">
       {view === "table" ? (

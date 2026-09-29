@@ -130,7 +130,12 @@ export async function resolveViaCustomer(
   return { point, source: sourceIfGeocoded }
 }
 
-async function resolveJobLocation(
+// Exported so draft-assignments.ts's own clustering (pending plan rows that
+// have no schedule_jobs row of their own yet) can resolve each candidate's
+// location the exact same way autoAssignScheduleJob's real-time path
+// already does per entity type — one location resolver, not a fourth
+// reimplementation.
+export async function resolveJobLocation(
   admin: SupabaseClient,
   jobType: ScheduleJobTypeDb,
   entityType: DispatchEntityType,
