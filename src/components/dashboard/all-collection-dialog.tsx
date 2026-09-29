@@ -1160,14 +1160,11 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
               ))}
             </SelectContent>
           </Select>
-          {/* Bulk-approve stays scoped to a deliberately bounded window (a
-              custom range), same as it was previously scoped to "a single
-              drilled-into day" — never offered for "All" (unbounded),
-              "Today" (no explicit review step behind it), or "monthOnly"
-              (can span years of records — not the same kind of deliberately
-              narrow window a specific range or day was), unchanged from
-              before. */}
-          {dateScope === "custom" && uncollectedInDay.length > 0 && (
+          {/* Bulk-approve stays scoped to a deliberately bounded window — a
+              custom range, or (per explicit sign-off, given this can span
+              every year that month appears in) monthOnly — never "All"
+              (unbounded) or "Today" (no explicit review step behind it). */}
+          {(dateScope === "custom" || dateScope === "monthOnly") && uncollectedInDay.length > 0 && (
             <Button
               type="button"
               size="sm"
@@ -1268,7 +1265,12 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
         title={t("bulkApproveConfirmTitle")}
         description={t("bulkApproveConfirmDescription", {
           count: String(uncollectedInDay.length),
-          range: customFrom && customTo ? `${formatDate(customFrom)} - ${formatDate(customTo)}` : "",
+          range:
+            customFrom && customTo
+              ? `${formatDate(customFrom)} - ${formatDate(customTo)}`
+              : dateScope === "monthOnly" && monthOnlyIndex != null
+                ? t("monthOnlySelectedLabel", { month: DATE_RANGE_MONTH_NAMES[monthOnlyIndex] })
+                : "",
         })}
         confirmLabel={tCommon("approve")}
         destructive={false}
