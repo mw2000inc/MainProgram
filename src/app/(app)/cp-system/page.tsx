@@ -91,7 +91,7 @@ function CpSystemContent() {
   // narrow list render in, so Prev/Next in the detail panel steps through
   // the same order the admin sees rather than the database's own.
   const sortedSystems = React.useMemo(() => sortCpSystemsForList(systems), [systems])
-  const descriptionBySku = React.useMemo(() => buildFilterDescriptionMap(products), [products])
+  const descriptionBySku = React.useMemo(() => buildFilterDescriptionMap(products, systems), [products, systems])
 
   const selection = useSplitViewSelection(sortedSystems, initialId)
   const selected = selection.selected

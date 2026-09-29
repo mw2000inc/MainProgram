@@ -24,22 +24,32 @@ export function sortCpSystemsForList(systems: CpSystem[]): CpSystem[] {
   })
 }
 
-// sku -> readable filter description ("014" -> "MW) RO filter"), from the
-// live product catalog. Product names are usually "[SKU] / [Description]" and
-// only that prefix is dropped; a name without one is used whole.
-export function buildFilterDescriptionMap(products: Product[]): Map<string, string> {
+// sku -> readable filter description ("014" -> "MW) RO filter"). The live
+// product catalog wins; after that, any other CP system component already
+// stored as "NNN / description" names that code too — so a system that
+// stored the bare "601" still shows "PR) Hybrid home Carbon Block 10''"
+// because another system spelled the same code out. Product names are
+// usually "[SKU] / [Description]" and only that prefix is dropped; a name
+// without one is used whole.
+export function buildFilterDescriptionMap(products: Product[], systems: CpSystem[] = []): Map<string, string> {
   const map = new Map<string, string>()
   for (const p of products) {
     const sku = p.sku.trim()
     if (sku && !map.has(sku)) map.set(sku, parseItemString(p.name)?.description ?? p.name.trim())
   }
+  for (const s of systems) {
+    for (const c of s.components) {
+      const parsed = parseItemString(c.name)
+      if (parsed && !map.has(parsed.sku)) map.set(parsed.sku, parsed.description)
+    }
+  }
   return map
 }
 
 // A component's stored name is either "NNN / description" (the description is
-// used, the code dropped), or a bare code like "014" (looked up in the product
-// catalog), or a bare code the catalog doesn't know (401, 1152, 9002, ... —
-// shown as the code itself, since there is nothing readable to show instead).
+// used, the code dropped), or a bare code like "014" (looked up above), or a
+// bare code nothing in the app names (1152, 9002 — shown as the code itself,
+// since there is nothing readable to show instead).
 export function describeCpComponentName(name: string, descriptionBySku: Map<string, string>): string {
   const parsed = parseItemString(name)
   if (parsed) return parsed.description
@@ -47,19 +57,21 @@ export function describeCpComponentName(name: string, descriptionBySku: Map<stri
   return descriptionBySku.get(code) ?? code
 }
 
-// "MW) Sediment - 3M, MW) Pre-Carbon - 6M, ..." — shortest interval first
+// "MW) Sediment - 3M , MW) Pre-Carbon - 6M , ..." — shortest interval first
 // (stable, so components sharing an interval keep the order they were entered
-// in). "x{quantity}" only when it isn't the implied default of 1, which also
-// covers every component predating the quantity field.
+// in). A component with quantity N is listed N times, the way AppSheet
+// lists one entry per physical unit, rather than as "x N"; a missing
+// quantity (every component predating that field) counts as 1. Joined with
+// " , " (space before the comma) to match AppSheet's own list rendering.
 export function formatCpSystemComponents(
   components: CpSystemComponent[],
   descriptionBySku: Map<string, string>
 ): string {
   return [...components]
     .sort((a, b) => a.intervalMonths - b.intervalMonths)
-    .map(
-      (c) =>
-        `${describeCpComponentName(c.name, descriptionBySku)}${c.quantity && c.quantity !== 1 ? ` x${c.quantity}` : ""} - ${c.intervalMonths}M`
-    )
-    .join(", ")
+    .flatMap((c) => {
+      const label = `${describeCpComponentName(c.name, descriptionBySku)} - ${c.intervalMonths}M`
+      return Array.from({ length: Math.max(1, c.quantity ?? 1) }, () => label)
+    })
+    .join(" , ")
 }

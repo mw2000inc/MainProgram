@@ -76,7 +76,8 @@ export function getCpSystemColumns({
   canDelete: boolean
   onEdit: (system: CpSystem) => void
   onDelete: (system: CpSystem) => void
-  // From the live product catalog (see buildFilterDescriptionMap) — lets a
+  // From the live product catalog plus other systems' named components (see
+  // buildFilterDescriptionMap) — lets a
   // component stored as a bare code show its readable description.
   descriptionBySku: Map<string, string>
 }): ColumnDef<CpSystem, unknown>[] {
