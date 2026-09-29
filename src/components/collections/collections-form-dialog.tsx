@@ -31,6 +31,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import {
+  CollectedAttributionFields,
+  collectedAttributionDefaults,
+  collectedAttributionPatch,
+} from "@/components/shared/collected-attribution-fields"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useCustomers } from "@/lib/hooks/use-customers"
@@ -69,6 +74,8 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     accD: dateFieldSchema(t),
     note: z.string().optional(),
     paymentType: z.string().optional(),
+    collectedBy: z.string().optional(),
+    collectedAt: z.string().optional(),
   })
 }
 
@@ -87,6 +94,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
       accD: entry.accD ?? "",
       note: entry.note ?? "",
       paymentType: entry.paymentType ?? "",
+      ...collectedAttributionDefaults(entry),
     }
   }
   return {
@@ -100,6 +108,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, entry?: Col
     accD: "",
     note: "",
     paymentType: "",
+    ...collectedAttributionDefaults(),
   }
 }
 
@@ -166,9 +175,10 @@ export function CollectionsFormDialog({
   }
 
   async function onSubmit(values: FormValues) {
-    const input = { ...values, amount: Number(values.amount), ct: values.ct ?? "" }
+    const { collectedBy, collectedAt, ...rest } = values
+    const input = { ...rest, amount: Number(values.amount), ct: values.ct ?? "" }
     const saved = isEdit
-      ? await updateCollection.mutateAsync({ id: entry.id, input })
+      ? await updateCollection.mutateAsync({ id: entry.id, input: { ...input, ...collectedAttributionPatch(entry, { collectedBy, collectedAt }) } })
       : // A new manually-scheduled dispatch enters the admin approval queue —
         // see the dispatch_confirmation_workflow migration. serviceman starts
         // unassigned — the admin picks one from the Pending Approvals dialog's
@@ -333,6 +343,7 @@ export function CollectionsFormDialog({
                   </FormItem>
                 )}
               />
+              {isEdit && entry.collected && <CollectedAttributionFields control={form.control} />}
               <FormField
                 control={form.control}
                 name="note"

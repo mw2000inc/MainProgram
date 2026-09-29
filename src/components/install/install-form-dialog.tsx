@@ -33,6 +33,11 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import {
+  CollectedAttributionFields,
+  collectedAttributionDefaults,
+  collectedAttributionPatch,
+} from "@/components/shared/collected-attribution-fields"
 import { PRODUCT_CATALOG, PAYMENT_METHODS, formatProductOption } from "@/lib/constants"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
@@ -104,6 +109,8 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     // customer match (see onSubmit) — optional since it defaults to '' at
     // the database level either way.
     memberAccountNumber: z.string().optional(),
+    collectedBy: z.string().optional(),
+    collectedAt: z.string().optional(),
   })
 }
 
@@ -133,6 +140,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
       serviceman: plan.serviceman ?? "",
       serviceman2: plan.serviceman2 ?? "",
       memberAccountNumber: plan.memberAccountNumber ?? "",
+      ...collectedAttributionDefaults(plan),
     }
   }
   return {
@@ -157,6 +165,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
     serviceman: "",
     serviceman2: "",
     memberAccountNumber: "",
+    ...collectedAttributionDefaults(),
   }
 }
 
@@ -293,8 +302,9 @@ export function InstallFormDialog({
     // a required orderNo (the mutation input, findCustomerByOrderNumber,
     // the new Sale List entry created below).
     const orderNo = values.orderNo ?? ""
+    const { collectedBy, collectedAt, ...rest } = values
     const input = {
-      ...values,
+      ...rest,
       orderNo,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
@@ -307,7 +317,7 @@ export function InstallFormDialog({
       deliveryInstallationFee: Number(values.deliveryInstallationFee),
     }
     if (isEdit) {
-      await updatePlan.mutateAsync({ id: plan.id, input })
+      await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration. serviceman (from
@@ -697,6 +707,7 @@ export function InstallFormDialog({
                   <SecondTechnicianFormItem value={field.value} onChange={field.onChange} primary={servicemanValue} />
                 )}
               />
+              {isEdit && plan.collected && <CollectedAttributionFields control={form.control} />}
               <FormField
                 control={form.control}
                 name="note"

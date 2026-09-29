@@ -34,6 +34,11 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
+import {
+  CollectedAttributionFields,
+  collectedAttributionDefaults,
+  collectedAttributionPatch,
+} from "@/components/shared/collected-attribution-fields"
 import { PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
@@ -99,6 +104,8 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     salesPerson: z.string().optional(),
     via: z.string().optional(),
     note: z.string().optional(),
+    collectedBy: z.string().optional(),
+    collectedAt: z.string().optional(),
   })
 }
 
@@ -134,6 +141,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
       salesPerson: plan.salesPerson ?? "",
       via: plan.via ?? "",
       note: plan.note ?? "",
+      ...collectedAttributionDefaults(plan),
     }
   }
   return {
@@ -164,6 +172,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     salesPerson: "",
     via: "",
     note: "",
+    ...collectedAttributionDefaults(),
   }
 }
 
@@ -388,8 +397,9 @@ export function RepairFormDialog({
       toast.error(t("duplicatePlanWarningTitle"))
       return
     }
+    const { collectedBy, collectedAt, ...rest } = values
     const input = {
-      ...values,
+      ...rest,
       // No second technician without a real first, and never the same person twice.
       th: normalizeTechnicianPair(values.th, values.th2).primary,
       th2: normalizeTechnicianPair(values.th, values.th2).secondary,
@@ -399,7 +409,7 @@ export function RepairFormDialog({
       deliveryInstallationFee: Number(values.deliveryInstallationFee),
     }
     if (isEdit) {
-      await updatePlan.mutateAsync({ id: plan.id, input })
+      await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration.
@@ -941,6 +951,11 @@ export function RepairFormDialog({
                 </FormItem>
               )}
             />
+            {isEdit && plan.collected && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CollectedAttributionFields control={form.control} />
+              </div>
+            )}
             <FormField
               control={form.control}
               name="note"

@@ -354,39 +354,29 @@ function useEditRecordField() {
   )
 }
 
-// Checking the Switch stamps the CURRENT admin + now as collectedBy/
-// collectedAt (that's who's actually approving it, right now — never
-// something a form could pre-fill or misrepresent); unchecking it ("un-
-// approve") clears both rather than leaving a stale "collected by X"
-// showing on a row that's no longer marked collected. Reassigning who's
-// credited without touching the boolean is a separate action — see
-// useReassignCollected below.
+// Toggling never rewrites who collected it. Unchecking only flips the
+// boolean — collectedBy/collectedAt are kept (they're only displayed while
+// collected, so nothing stale shows), and re-checking restores that same
+// original credit instead of re-stamping whoever happened to click. Only a
+// row with no credit on record yet gets the current admin + now. Correcting
+// the credit itself is done from the row's own edit dialog (the pencil
+// action — see CollectedAttributionFields).
 function useToggleCollected() {
   const update = useCollectionRecordUpdaters()
   const { user } = useAuth()
   return React.useCallback(
     (row: AllCollectionRow, next: boolean) => {
+      if (!next) {
+        update(row, { collected: false })
+        return
+      }
       update(row, {
-        collected: next,
-        collectedBy: next ? user?.id : "",
-        collectedAt: next ? new Date().toISOString() : "",
+        collected: true,
+        collectedBy: row.collectedBy || user?.id,
+        collectedAt: row.collectedAt || new Date().toISOString(),
       })
     },
     [update, user]
-  )
-}
-
-// The reassign dialog's own save action — corrects who's credited and/or
-// when, without flipping `collected` itself (a row has to already be
-// collected to reassign its credit — see CollectedCell's own guard on
-// showing the edit affordance at all).
-function useReassignCollected() {
-  const update = useCollectionRecordUpdaters()
-  return React.useCallback(
-    async (row: AllCollectionRow, collectedBy: string, collectedAt: string) => {
-      await update(row, { collectedBy, collectedAt })
-    },
-    [update]
   )
 }
 
@@ -403,7 +393,13 @@ function useBulkApproveCollected() {
       const collectedAt = new Date().toISOString()
       for (const row of rows) {
         if (row.collected) continue
-        await update(row, { collected: true, collectedBy: user?.id, collectedAt })
+        // Same rule as useToggleCollected: a row that was collected before
+        // (then un-toggled) keeps its original credit.
+        await update(row, {
+          collected: true,
+          collectedBy: row.collectedBy || user?.id,
+          collectedAt: row.collectedAt || collectedAt,
+        })
       }
     },
     [update, user]
@@ -556,25 +552,17 @@ function CustomerCell({ row, onCommit }: { row: AllCollectionRow; onCommit: (nex
   )
 }
 
-// Reassigning credit (who's credited, and when) used to open a separate
-// Dialog stacked on top of AllCollectionDialog — a modal-on-modal that took
-// the admin away from the row they were looking at. Now it's two plain
-// inline controls, right in the row, matching every other editable field in
-// this table: an admin Select (a closed, known list — unlike Payment
-// Type's Combobox, no free text makes sense here) and an InlineDateCell,
-// each committing immediately on change/blur, same as Amount/Date/
-// Customer/etc. already do. Only shown once collected — reassigning credit
-// for a row that isn't actually marked Collected doesn't make sense.
+// Who collected it, and when, is read-only here once a row is Collected, so
+// a stray click in a busy table can't re-credit a payment. Correcting it is
+// a deliberate action in the row's own edit dialog (the pencil action).
 function CollectedCell({
   row,
-  admins,
+  collectorName,
   onToggle,
-  onReassign,
 }: {
   row: AllCollectionRow
-  admins: { id: string; name: string }[]
+  collectorName: string
   onToggle: (next: boolean) => void
-  onReassign: (collectedBy: string, collectedAt: string) => void
 }) {
   const { t } = useTranslation("allCollection")
   return (
@@ -592,28 +580,12 @@ function CollectedCell({
         </Badge>
       </div>
       {row.collected && (
-        <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Select
-            value={row.collectedBy ?? ""}
-            onValueChange={(next) => onReassign(next, row.collectedAt ?? "")}
-          >
-            <SelectTrigger className="h-6 w-[130px] text-[11px]">
-              <SelectValue placeholder={t("unknownAdmin")} />
-            </SelectTrigger>
-            <SelectContent>
-              {admins.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <InlineDateCell
-            value={row.collectedAt?.slice(0, 10)}
-            onCommit={(next) => onReassign(row.collectedBy ?? "", next)}
-            className="h-6 w-[120px] text-[11px]"
-          />
-        </div>
+        <p className="text-[11px] text-muted-foreground" data-testid="collected-by-line">
+          {t("collectedByLine", {
+            name: collectorName,
+            date: row.collectedAt ? formatDate(row.collectedAt) : "—",
+          })}
+        </p>
       )}
     </div>
   )
@@ -778,7 +750,6 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
   const { t: tDispatch } = useTranslation("dispatch")
   const rows = useAllCollectionRows()
   const toggleCollected = useToggleCollected()
-  const reassignCollected = useReassignCollected()
   const bulkApproveCollected = useBulkApproveCollected()
   const editField = useEditRecordField()
   const { data: users = [] } = useUsers()
@@ -827,7 +798,6 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
     if (!open) exitFullScreen()
   }, [open, exitFullScreen])
 
-  const admins = React.useMemo(() => users.filter((u) => u.role === "admin"), [users])
   const adminNameById = React.useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
 
   // The coarse top-level scope (matching DispatchApprovalQueue's own date-
@@ -1002,9 +972,8 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
         cell: ({ row }) => (
           <CollectedCell
             row={row.original}
-            admins={admins}
+            collectorName={(row.original.collectedBy && adminNameById.get(row.original.collectedBy)) || t("unknownAdmin")}
             onToggle={(next) => toggleCollected(row.original, next)}
-            onReassign={(collectedBy, collectedAt) => reassignCollected(row.original, collectedBy, collectedAt)}
           />
         ),
       },
@@ -1036,7 +1005,7 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
         ),
       },
     ],
-    [tDispatch, toggleCollected, admins, reassignCollected, editField]
+    [t, tDispatch, toggleCollected, adminNameById, editField]
   )
 
   return (

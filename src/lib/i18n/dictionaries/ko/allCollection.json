@@ -16,6 +16,8 @@
   "noMemberMatch": "일치하는 회원 없음",
   "collectedByLine": "{name}님이 수금 · {date}",
   "unknownAdmin": "알 수 없는 관리자",
+  "collectedByLabel": "수금 담당자",
+  "dateCollectedLabel": "수금일자",
   "bulkApproveDayCount": "일괄 승인 ({count})",
   "bulkApproveConfirmTitle": "이 기간의 모든 기록을 승인하시겠습니까?",
   "bulkApproveConfirmDescription": "{range} 기간의 미수금 기록 {count}건이 회원님 이름으로 수금 완료 처리됩니다. 이미 수금 완료된 기록은 변경되지 않습니다.",

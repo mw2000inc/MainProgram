@@ -16,6 +16,8 @@
   "noMemberMatch": "No member match",
   "collectedByLine": "Collected by {name} · {date}",
   "unknownAdmin": "Unknown admin",
+  "collectedByLabel": "Collected By",
+  "dateCollectedLabel": "Date Collected",
   "bulkApproveDayCount": "Approve All ({count})",
   "bulkApproveConfirmTitle": "Approve all records in this range?",
   "bulkApproveConfirmDescription": "This marks {count} not-yet-collected record(s) within {range} as Collected, credited to you. Already-collected records in this range are left as-is.",
