@@ -68,6 +68,7 @@
   "searchByTechnicianOrderNotes": "기술자, 주문 번호, 비고로 검색...",
   "noScheduledJobsFound": "예약된 작업을 찾을 수 없습니다.",
   "allTechnicians": "모든 기술자",
+  "allJobTypes": "모든 작업 유형",
   "secondaryAddress": "보조 주소",
   "time": "시간",
   "deleteJobTitle": "이 작업을 삭제하시겠습니까?",

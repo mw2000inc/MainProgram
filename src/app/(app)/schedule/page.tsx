@@ -41,7 +41,14 @@ import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { formatDate, todayIso } from "@/lib/utils"
 import { technicianFilterOptions, isAssignedTechnician } from "@/lib/technicians"
 import type { ColumnDef } from "@tanstack/react-table"
-import type { ScheduleJob } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
+
+// Same derivation schedule-form-dialog.tsx's own job-type Select already
+// uses — a closed 6-value enum, so listing every value statically (rather
+// than only options seen in the current jobs) means Collection/Repair are
+// always selectable even on a day with zero of either, instead of silently
+// disappearing from the dropdown.
+const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
 
 // The linked customer's own "SK001-####" order_number, never rendered as a
 // column — exists purely so DataTable's generic search on the Schedule
@@ -91,6 +98,7 @@ function ScheduleContent() {
   // The TECHNICIANS roster, plus any other name actually on a job as its technician
   // OR technician_2 (names can be typed in now) — see technicianFilterOptions.
   const technicianOptions = React.useMemo(() => technicianFilterOptions(jobs), [jobs])
+  const [jobTypeFilter, setJobTypeFilter] = React.useState<string>("all")
 
   // Folds in the linked customer's own "SK001-####" order_number (see
   // customer-lookup.ts's resolveCustomerForPlan) — this job's own orderNo
@@ -121,7 +129,8 @@ function ScheduleContent() {
   const activeJobs = React.useMemo(() => jobsWithOrder.filter((j) => j.status !== "pending_approval"), [jobsWithOrder])
 
   const scopedJobs = React.useMemo(() => {
-    const base = technicianFilter === "all" ? activeJobs : activeJobs.filter((j) => matchesTechnician(j, technicianFilter))
+    const byTechnician = technicianFilter === "all" ? activeJobs : activeJobs.filter((j) => matchesTechnician(j, technicianFilter))
+    const base = jobTypeFilter === "all" ? byTechnician : byTechnician.filter((j) => j.jobType === jobTypeFilter)
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
     // exactly as before. Grouped by technician, then date, then
@@ -139,7 +148,7 @@ function ScheduleContent() {
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [activeJobs, technicianFilter])
+  }, [activeJobs, technicianFilter, jobTypeFilter])
 
   // Deliberately from activeJobs, NOT scopedJobs — "Auto-suggest
   // technicians" (the button below) has to see every genuinely unassigned
@@ -334,19 +343,34 @@ function ScheduleContent() {
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                   toolbar={
-                    <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
-                      <SelectTrigger className="h-9 w-[220px]">
-                        <SelectValue placeholder={t("allTechnicians")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t("allTechnicians")}</SelectItem>
-                        {technicianOptions.map((tech) => (
-                          <SelectItem key={tech} value={tech}>
-                            {tech}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                        <SelectTrigger className="h-9 w-45">
+                          <SelectValue placeholder={t("allJobTypes")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{t("allJobTypes")}</SelectItem>
+                          {JOB_TYPES.map((jt) => (
+                            <SelectItem key={jt} value={jt}>
+                              {t(jt)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
+                        <SelectTrigger className="h-9 w-55">
+                          <SelectValue placeholder={t("allTechnicians")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{t("allTechnicians")}</SelectItem>
+                          {technicianOptions.map((tech) => (
+                            <SelectItem key={tech} value={tech}>
+                              {tech}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
                   }
                 />
               </CardContent>

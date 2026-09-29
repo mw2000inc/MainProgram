@@ -42,6 +42,49 @@ interface JobRow {
   scheduled_date: string
   latitude: number | null
   longitude: number | null
+  // Only selected (and meaningful) at applyTechnicianAssignmentsToJobs's own
+  // call site, to decide which source plan table (if any) to mirror the
+  // accepted technician assignment onto — see syncTechnicianToSourcePlan.
+  job_type?: string
+}
+
+// Which source plan table (if any) a schedule_jobs row was created for, and
+// that table's own technician column names — filter_change_plans/collections
+// use serviceman/serviceman_2 (20260914000000_collection_install_technician_column.sql),
+// repair_plans uses its own original th/th_2 naming
+// (20261003000000_second_technician.sql). installation/monitoring/other are
+// deliberately not mapped: install_plans wasn't part of this sync's scope,
+// and monitoring/other have no source plan table at all. vehicle is
+// deliberately never mirrored here — none of these plan tables have a
+// vehicle column; it stays a schedule_jobs/dispatch-only concept.
+const SOURCE_PLAN_BY_JOB_TYPE: Partial<Record<string, { table: string; primaryColumn: string; secondaryColumn: string }>> = {
+  filter_change: { table: "filter_change_plans", primaryColumn: "serviceman", secondaryColumn: "serviceman_2" },
+  collection: { table: "collections", primaryColumn: "serviceman", secondaryColumn: "serviceman_2" },
+  repair: { table: "repair_plans", primaryColumn: "th", secondaryColumn: "th_2" },
+}
+
+// Best-effort mirror of an accepted assignment onto whichever plan row (if
+// any) this schedule_jobs row was created for — a plan row only links back
+// here (via its own schedule_job_id) once a customer confirmed it or an
+// admin manually created this schedule_jobs row from one
+// (find_or_create_schedule_job's own dedupe key), so "no matching row" is a
+// normal, silent no-op here, not an error. Never blocks or fails the
+// schedule_jobs write itself — same "a secondary sync never fails the
+// primary action" principle the push-notification send already follows
+// elsewhere in this app (push-opt-in-banner.tsx).
+async function syncTechnicianToSourcePlan(
+  admin: SupabaseClient,
+  jobType: string | undefined,
+  jobId: string,
+  technician: string,
+  technician2: string
+): Promise<void> {
+  const mapping = jobType ? SOURCE_PLAN_BY_JOB_TYPE[jobType] : undefined
+  if (!mapping) return
+  await admin
+    .from(mapping.table)
+    .update({ [mapping.primaryColumn]: technician, [mapping.secondaryColumn]: technician2 })
+    .eq("schedule_job_id", jobId)
 }
 
 type LocationSource = "cached" | "customer_cached" | "customer_geocoded" | "unavailable"
@@ -230,7 +273,7 @@ export async function applyTechnicianAssignmentsToJobs(
       .map(async ({ jobId, technician, technician2 }) => {
         const { data: job } = await admin
           .from("schedule_jobs")
-          .select("id, technician, technician_2, customer_id, scheduled_date, latitude, longitude")
+          .select("id, technician, technician_2, customer_id, scheduled_date, latitude, longitude, job_type")
           .eq("id", jobId)
           .maybeSingle()
         // Someone else (another admin, or a prior run) already gave this job
@@ -293,7 +336,10 @@ export async function applyTechnicianAssignmentsToJobs(
       .eq("technician", job.technician)
       .eq("technician_2", job.technician_2 ?? "")
       .select("id")
-    if (!error && updated && updated.length > 0) applied += 1
+    if (!error && updated && updated.length > 0) {
+      applied += 1
+      await syncTechnicianToSourcePlan(admin, job.job_type, jobId, normalizedTechnician, normalizedTechnician2)
+    }
   }
   return { applied }
 }

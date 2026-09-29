@@ -68,6 +68,7 @@
   "searchByTechnicianOrderNotes": "Search by technician, order no, notes...",
   "noScheduledJobsFound": "No scheduled jobs found.",
   "allTechnicians": "All Technicians",
+  "allJobTypes": "All Job Types",
   "secondaryAddress": "Secondary Address",
   "time": "Time",
   "deleteJobTitle": "Delete this job?",
