@@ -72,23 +72,23 @@ function buildCustomerLookupMaps(customers: Customer[], saleListEntries: SaleLis
   return { byId, byOrderNumber, saleEntryByOrderNumber }
 }
 
-function resolveCustomerOrderNumberFast(
+function resolveCustomerFast(
   maps: ReturnType<typeof buildCustomerLookupMaps>,
   customerId: string | undefined,
   orderNumber: string
-): string {
+): Customer | undefined {
   if (customerId) {
     const direct = maps.byId.get(customerId)
-    if (direct) return direct.orderNumber
+    if (direct) return direct
   }
   const trimmed = orderNumber.trim()
-  if (!trimmed) return ""
+  if (!trimmed) return undefined
   const viaSale = maps.saleEntryByOrderNumber.get(trimmed)
   if (viaSale?.customerId) {
     const customer = maps.byId.get(viaSale.customerId)
-    if (customer) return customer.orderNumber
+    if (customer) return customer
   }
-  return maps.byOrderNumber.get(trimmed)?.orderNumber ?? ""
+  return maps.byOrderNumber.get(trimmed)
 }
 
 function FilterChangePageContent() {
@@ -136,10 +136,10 @@ function FilterChangePageContent() {
   )
   const rows: FilterChangeRow[] = React.useMemo(
     () =>
-      plans.map((p) => ({
-        ...p,
-        customerOrderNumber: resolveCustomerOrderNumberFast(customerLookupMaps, p.customerId, p.orderNumber),
-      })),
+      plans.map((p) => {
+        const customer = resolveCustomerFast(customerLookupMaps, p.customerId, p.orderNumber)
+        return { ...p, customerOrderNumber: customer?.orderNumber ?? "", resolvedCustomerId: customer?.id }
+      }),
     [plans, customerLookupMaps]
   )
   // Cached per plan id so re-selecting the same plan doesn't re-fire the

@@ -9,10 +9,22 @@ import { cn } from "@/lib/utils"
 // All") dataset would otherwise stretch that column — and the whole
 // table's rendered width — since the base <TableCell> is whitespace-nowrap
 // with no max-width of its own.
-export function TruncatedCell({ value, className }: { value?: string | null; className?: string }) {
+export function TruncatedCell({
+  value,
+  className,
+  onClick,
+}: {
+  value?: string | null
+  className?: string
+  onClick?: (e: React.MouseEvent<HTMLSpanElement>) => void
+}) {
   if (!value) return <span className="text-muted-foreground">—</span>
   return (
-    <span className={cn("block max-w-37.5 truncate", className)} title={value}>
+    <span
+      className={cn("block max-w-37.5 truncate", onClick && "cursor-pointer hover:underline", className)}
+      title={value}
+      onClick={onClick}
+    >
       {value}
     </span>
   )

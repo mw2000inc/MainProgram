@@ -12,6 +12,7 @@ import { pairPatchToFields } from "@/lib/technicians"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell } from "@/components/shared/truncated-cell"
+import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
@@ -21,7 +22,13 @@ import type { CollectionPlan } from "@/lib/types"
 // /collection-plan list can find an entry by that number too, not just its
 // own "001-####" orderNo (see collection-plan/page.tsx's own row-building
 // comment).
-export type CollectionRow = CollectionPlan & { customerOrderNumber: string }
+// resolvedCustomerId (distinct from CollectionPlan's own, often-absent
+// customerId column) is the same customer-lookup.ts fallback chain
+// customerOrderNumber above already runs — see collection-plan/page.tsx's
+// own rows memo. Used to make the Member Account cell clickable on the
+// standalone list page; undefined means no customer could be resolved for
+// this entry, and the cell just stays plain text.
+export type CollectionRow = CollectionPlan & { customerOrderNumber: string; resolvedCustomerId?: string }
 
 // Kept as "Collected" rather than the other three modules' "Completed" —
 // this is a payment record, and "Collected" is what the rest of this app
@@ -322,7 +329,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+      cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.resolvedCustomerId} />,
     },
     {
       accessorKey: "amount",

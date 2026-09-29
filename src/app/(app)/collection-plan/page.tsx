@@ -59,10 +59,10 @@ function CollectionPlanPageContent() {
   // direction, same gap the Sep 11 Member List fix closed there.
   const rows: CollectionRow[] = React.useMemo(
     () =>
-      entries.map((e) => ({
-        ...e,
-        customerOrderNumber: resolveCustomerForPlan(customers, saleListEntries, e.customerId, e.orderNo)?.orderNumber ?? "",
-      })),
+      entries.map((e) => {
+        const customer = resolveCustomerForPlan(customers, saleListEntries, e.customerId, e.orderNo)
+        return { ...e, customerOrderNumber: customer?.orderNumber ?? "", resolvedCustomerId: customer?.id }
+      }),
     [entries, customers, saleListEntries]
   )
 

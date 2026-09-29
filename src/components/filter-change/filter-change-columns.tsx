@@ -15,6 +15,7 @@ import { getFilterPartOptions } from "@/lib/filter-parts"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
@@ -25,7 +26,13 @@ import type { FilterChangePlan } from "@/lib/types"
 // /filter-change list can find a plan by that number too, not just this
 // plan's own "001-####" orderNumber (see filter-change/page.tsx's own
 // row-building comment).
-export type FilterChangeRow = FilterChangePlan & { customerOrderNumber: string }
+// resolvedCustomerId (distinct from FilterChangePlan's own, often-absent
+// customerId column) is the same customer-lookup.ts fallback chain
+// customerOrderNumber above already runs — see filter-change/page.tsx's own
+// rows memo. Used to make the Member Account cell clickable on the
+// standalone list page; undefined means no customer could be resolved for
+// this plan, and the cell just stays plain text.
+export type FilterChangeRow = FilterChangePlan & { customerOrderNumber: string; resolvedCustomerId?: string }
 
 // The plain address string, plus a best-effort recognized-area label
 // underneath (see city-label.ts) — the closest thing this table has to a
@@ -393,7 +400,7 @@ export function getFilterChangeFullColumns({
     {
       accessorKey: "memberAccount",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.memberAccount} />,
+      cell: ({ row }) => <CustomerNameCell name={row.original.memberAccount} customerId={row.original.resolvedCustomerId} />,
     },
     { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },

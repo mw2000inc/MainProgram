@@ -127,6 +127,7 @@ function RepairPlanPageContent() {
       return {
         id,
         memberAccountNumber,
+        customerId: linkedCustomer?.id,
         accountName: sorted[0].accountName,
         latestDate: sorted[0].issuedDate,
         records: sorted,

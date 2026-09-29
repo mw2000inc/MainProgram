@@ -7,6 +7,7 @@ import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
@@ -137,6 +138,12 @@ export function getRepairColumns({
 export interface RepairOrderGroup {
   id: string
   memberAccountNumber?: string
+  // The linked customer's own id, when toGroup() in repair-plan/page.tsx
+  // resolved one (repair_plans has no customer_id column of its own — see
+  // that file's own comment) — makes the Account Name cell clickable on the
+  // standalone list page. Undefined means no customer could be resolved for
+  // this group, and the cell just stays plain text.
+  customerId?: string
   accountName: string
   latestDate: string
   records: RepairPlan[]
@@ -174,7 +181,7 @@ export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknow
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+      cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.customerId} />,
     },
     {
       accessorKey: "memberAccountNumber",
