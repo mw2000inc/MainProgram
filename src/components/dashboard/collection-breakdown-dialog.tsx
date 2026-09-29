@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Download } from "lucide-react"
+import { Download, Plus } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -17,11 +17,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { InlineCurrencyCell, InlineDateCell, InlineSelectCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { COLLECTION_PAYMENT_TYPES, DEPOSITED_FUND_OPTIONS } from "@/lib/constants"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { exportToCsv } from "@/lib/export/csv"
-import { cn, todayIso } from "@/lib/utils"
+import { cn, formatDate, todayIso } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
 import {
   matchesActiveDateScope,
@@ -121,6 +122,7 @@ export function CollectionBreakdownDialog({
   // slow initial load, or this dialog someday gaining a call site that
   // doesn't already depend on the same data.
   const { data: collections = [], isPending } = useCollections()
+  const [addOpen, setAddOpen] = React.useState(false)
   // Only mutateAsync taken (not the whole mutation object) for the same
   // stable-identity reason all-collection-dialog.tsx's own
   // useCollectionRecordUpdaters already documents: useMutation returns a
@@ -157,6 +159,7 @@ export function CollectionBreakdownDialog({
       [t("modeOfPaymentColumn")]: c.paymentType ?? "",
       [tFields("amount")]: c.amount,
       [t("chequeDetailsColumn")]: c.chequeDetails ?? "",
+      [t("collectionDateColumn")]: c.collectionDate,
       [t("depositedDateColumn")]: c.depositedDate ?? "",
       [t("depositedFundColumn")]: c.depositedFund ?? "",
       [tFields("note")]: c.note ?? "",
@@ -228,6 +231,15 @@ export function CollectionBreakdownDialog({
             className="w-full min-w-[140px]"
           />
         ),
+      },
+      // Read-only on purpose: this is the record's own date (the same field
+      // the active date scope filters on), shown so it can be compared
+      // against Deposited Date — not a fallback value inside that picker,
+      // which would make an undeposited payment look deposited.
+      {
+        accessorKey: "collectionDate",
+        header: () => <ColumnHeader tKey="collectionDateColumn" ns="allCollection" />,
+        cell: ({ row }) => <span className="inline-block min-w-25 text-xs">{formatDate(row.original.collectionDate)}</span>,
       },
       {
         accessorKey: "depositedDate",
@@ -326,14 +338,31 @@ export function CollectionBreakdownDialog({
             // same placement the Collected/Not Collected badges use on
             // AllCollectionDialog's own table.
             toolbar={
-              <Button type="button" variant="outline" size="sm" onClick={handleExportCsv}>
-                <Download className="w-4 h-4 mr-2" />
-                {t("exportCsvButton")}
-              </Button>
+              <>
+                <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t("addCollectionButton")}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleExportCsv}>
+                  <Download className="w-4 h-4 mr-2" />
+                  {t("exportCsvButton")}
+                </Button>
+              </>
             }
           />
         )}
       </DialogContent>
+
+      {/* Reuses the same Add/Edit dialog the standalone /collection-plan
+          page's own "Add" button opens — this app has no customer
+          search-and-select picker anywhere; every other Add flow (Filter
+          Change, Install, Repair) already works by typing an order number,
+          which autofills the matching existing customer's account name on
+          blur (handleOrderNoBlur) if one is found, or stays free-text for a
+          brand-new one. Reusing it here keeps this one consistent with
+          every other "add a record" affordance in the app instead of
+          introducing a second, different pattern just for this dialog. */}
+      <CollectionsFormDialog open={addOpen} onOpenChange={setAddOpen} defaultDate={todayIso()} />
     </Dialog>
   )
 }

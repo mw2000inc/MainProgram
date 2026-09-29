@@ -34,7 +34,9 @@
   "descriptionColumn": "설명",
   "modeOfPaymentColumn": "결제 수단",
   "chequeDetailsColumn": "수표 정보",
+  "collectionDateColumn": "수금일",
   "depositedDateColumn": "입금일",
   "depositedFundColumn": "입금 계정",
-  "exportCsvButton": "CSV 내보내기"
+  "exportCsvButton": "CSV 내보내기",
+  "addCollectionButton": "수금 추가"
 }

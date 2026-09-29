@@ -34,7 +34,9 @@
   "descriptionColumn": "Description",
   "modeOfPaymentColumn": "Mode of Payment",
   "chequeDetailsColumn": "Cheque Details",
+  "collectionDateColumn": "Collection Date",
   "depositedDateColumn": "Deposited Date",
   "depositedFundColumn": "Deposited Fund",
-  "exportCsvButton": "Export CSV"
+  "exportCsvButton": "Export CSV",
+  "addCollectionButton": "Add Collection"
 }
