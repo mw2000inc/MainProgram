@@ -28,6 +28,7 @@ import { MonitoringViewStatusBadge, StatusBadge } from "@/components/shared/stat
 import { Logo } from "@/components/shared/logo"
 import { usePortalProfile } from "@/lib/hooks/use-portal"
 import { PushOptInBanner } from "@/components/portal/push-opt-in-banner"
+import { EditableMemberEmail } from "@/components/portal/editable-member-email"
 import { getFilterChangeCustomerPortalColumns } from "@/components/filter-change/filter-change-columns"
 import { getCollectionsColumns } from "@/components/collections/collections-columns"
 import { getRepairColumns } from "@/components/repair/repair-columns"
@@ -44,9 +45,12 @@ import {
 import { getServiceHistory } from "@/lib/service-history"
 import { pickCurrentOrder } from "@/lib/customer-lookup"
 
-// Shared, read-only customer profile shown after scanning a QR code. Rendered by
-// both /scan/[customerId] (the canonical public route) and /portal/[id] (kept
-// working for any QR codes printed before the rename). No auth, no edit controls.
+// Shared, mostly-read-only customer profile shown after scanning a QR code.
+// Rendered by both /scan/[customerId] (the canonical public route) and
+// /portal/[id] (kept working for any QR codes printed before the rename).
+// No auth — the one editable field (Member Information's email row) writes
+// through a security-definer RPC scoped to this exact customerId, the same
+// anonymous-write pattern get_portal_profile() itself relies on.
 export function CustomerScanView({ customerId }: { customerId: string }) {
   const { t } = useTranslation("portal")
   const { t: tFields } = useTranslation("fields")
@@ -238,7 +242,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                   label={tFields("installedDate")}
                   value={currentOrder?.installedDate ? formatDate(currentOrder.installedDate) : t("na")}
                 />
-                <InfoRow icon={Mail} label={tMember("emailAddress")} value={customer.email} />
+                <EditableMemberEmail customerId={customerId} email={customer.email} label={tMember("emailAddress")} />
                 <InfoRow icon={Phone} label={t("contactNumber")} value={customer.contactNumber} />
                 <InfoRow icon={MapPin} label={tFields("address")} value={customer.address} className="sm:col-span-2" />
                 <InfoRow icon={Droplet} label={t("waterPurificationType")} value={customer.dispenserType} />
