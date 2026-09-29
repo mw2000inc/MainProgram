@@ -58,6 +58,13 @@ function CommandDialog({
           className
         )}
         showCloseButton={showCloseButton}
+        // The one deliberate exception to DialogContent's default
+        // block-outside-click behavior (see dialog.tsx) — a command palette
+        // holds no data to lose, and every convention for one (Spotlight,
+        // VS Code, Linear, GitHub) expects an outside click to dismiss it
+        // instantly. It also renders with showCloseButton=false above, so
+        // without this it would have no way to dismiss via click at all.
+        closeOnOutsideClick
       >
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           {children}

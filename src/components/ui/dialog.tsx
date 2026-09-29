@@ -51,9 +51,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeOnOutsideClick = false,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  // Every dialog in the app defaults to staying open on an outside click —
+  // an admin mid-edit who fat-fingers the backdrop should never silently
+  // lose their place or unsaved input — so only the X button or Escape
+  // dismisses it. CommandDialog (the Cmd+K command palette) is the one
+  // legitimate, deliberate exception: it holds no data to lose and every
+  // command-palette convention (Spotlight, VS Code, Linear, GitHub) expects
+  // an outside click to dismiss it instantly, so it opts back in explicitly
+  // via this prop rather than being silently excluded.
+  closeOnOutsideClick?: boolean
 }) {
   return (
     <DialogPortal>
@@ -64,6 +76,14 @@ function DialogContent({
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        onPointerDownOutside={(event) => {
+          onPointerDownOutside?.(event)
+          if (!closeOnOutsideClick) event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          onInteractOutside?.(event)
+          if (!closeOnOutsideClick) event.preventDefault()
+        }}
         {...props}
       >
         {children}
