@@ -1054,23 +1054,19 @@ export function AllCollectionDialog({ open, onOpenChange }: { open: boolean; onO
             exitFullScreen()
           }
         }}
-        // The pencil action's own edit dialog (CollectionsFormDialog/
-        // InstallFormDialog/RepairFormDialog, rendered below) is a SEPARATE
-        // Radix Dialog, portaled outside this one's own DOM subtree — a
-        // click on ANYTHING inside it (its own X button, its own Cancel
-        // button, anywhere in its own content) registers as "outside" this
-        // dialog's content too, a known nested-Dialog gotcha, since Radix's
-        // outside-pointerdown detection only checks "was this outside MY OWN
-        // content," not "is there another dialog's content in the way."
-        // Escape doesn't have this problem (Radix's own layer stack already
-        // scopes it to the topmost dialog only — confirmed empirically
-        // before adding this at all), so only pointerdown needs the same
-        // "target is inside some OTHER dialog" guard the Maximize2 nested-
-        // dialog fix already uses elsewhere in this app.
-        onPointerDownOutside={(e) => {
-          const target = e.detail.originalEvent.target
-          if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) e.preventDefault()
-        }}
+        // A click anywhere outside this dialog's own content (the page
+        // backdrop, or the pencil action's own edit dialog — CollectionsFormDialog/
+        // InstallFormDialog/RepairFormDialog, rendered below as a SEPARATE
+        // Radix Dialog portaled outside this one's DOM subtree, which
+        // otherwise registers as "outside" this dialog too) must never close
+        // this dialog — only the X button or Escape may. Both handlers set
+        // for the same reason CollectionBreakdownDialog/CollectionsFormDialog/
+        // InstallFormDialog/RepairFormDialog already do this:
+        // onPointerDownOutside alone only covers pointer events,
+        // onInteractOutside also covers a focus-outside dismissal, and Radix
+        // fires whichever is relevant to how the outside interaction happened.
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center justify-between gap-3 pr-6">
