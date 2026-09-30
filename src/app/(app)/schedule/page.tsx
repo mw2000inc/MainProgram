@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { BulkTechnicianSuggestDialog } from "@/components/shared/bulk-technician-suggest-dialog"
+import { ScheduleAutoSuggestDialog } from "@/components/schedule/schedule-auto-suggest-dialog"
+import { TechnicianWorkloadStats } from "@/components/schedule/technician-workload-stats"
 import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -68,7 +69,6 @@ function ScheduleContent() {
   const { t: tNav } = useTranslation("nav")
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
-  const { t: tCommon } = useTranslation("common")
   const { data: jobs = [], isPending } = useScheduleJobs()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
@@ -185,13 +185,22 @@ function ScheduleContent() {
     () => activeJobs.filter((j) => !isAssignedTechnician(j.technician) && j.status === "pending"),
     [activeJobs]
   )
+  // The job's customer through the same fallback chain the table's own
+  // customerOrderNumber uses (resolveCustomerForPlan — the job's
+  // customer_id, else its order number via the Sale List), so a job with no
+  // customer_id still gets its customer's address pre-filled in the modal.
   const bulkSuggestItems = React.useMemo(
     () =>
-      unassignedInView.map((j) => ({
-        id: j.id,
-        label: `${formatDate(j.scheduledDate)} · ${JOB_TYPE_LABELS[j.jobType]} · ${j.orderNo || j.customerOrderNumber || "—"}`,
-      })),
-    [unassignedInView]
+      unassignedInView.map((j) => {
+        const customer = resolveCustomerForPlan(customers, saleListEntries, j.customerId, j.orderNo ?? "")
+        return {
+          job: j,
+          label: `${formatDate(j.scheduledDate)} · ${JOB_TYPE_LABELS[j.jobType]} · ${j.orderNo || j.customerOrderNumber || "—"}`,
+          customerId: customer?.id,
+          customerAddress: customer?.address?.trim() || undefined,
+        }
+      }),
+    [unassignedInView, customers, saleListEntries]
   )
 
   // Same computation ScheduleAgenda uses (see computeStopNumbers' own
@@ -378,6 +387,7 @@ function ScheduleContent() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <TechnicianWorkloadStats technician={technicianFilter} />
                     </>
                   }
                 />
@@ -469,24 +479,17 @@ function ScheduleContent() {
         }}
       />
 
-      <BulkTechnicianSuggestDialog
+      <ScheduleAutoSuggestDialog
         open={bulkConfirmOpen}
         onOpenChange={setBulkConfirmOpen}
         items={bulkSuggestItems}
-        title={t("autoSuggestConfirmTitle", { count: String(unassignedInView.length) })}
-        description={t("autoSuggestConfirmDescription")}
-        noItemsMessage={t("noUnassignedJobs")}
-        outsideCoverageLabel={t("outsideUsualCoverage")}
-        cancelLabel={tCommon("cancel")}
-        confirmLabel={t("autoSuggestTechnicians")}
-        applyingLabel={tCommon("saving")}
-        supportsSecondTechnician
+        defaultErrandDate={todayIso()}
         onPreview={async (ids) => {
           const results = await previewSuggestions.mutateAsync(ids)
           return results.map(({ jobId, result }) => ({ id: jobId, result }))
         }}
-        onApply={async (assignments) => {
-          await applyAssignments.mutateAsync(assignments.map(({ id, technician, technician2 }) => ({ jobId: id, technician, technician2 })))
+        onApply={async ({ assignments, newJobs }) => {
+          await applyAssignments.mutateAsync({ assignments, newJobs })
         }}
       />
     </div>

@@ -460,6 +460,11 @@ export interface ScheduleJob {
   // from the install address) — see the technician2 comment above for why
   // this is a second field on the one row rather than a second job.
   secondaryAddress?: string
+  // Filters the technician should bring, as Filter Change's own
+  // comma-separated codes ("011, 012, 013") — set from the Auto-suggest
+  // modal (schedule_job_filter_codes migration). A plan, not a record of
+  // what was used: that's ScheduleJobFilterItem below.
+  filterCodes?: string
   // The following three only apply to jobType "filter_change" — which
   // Inventory item + how many units to deduct once this job is marked
   // completed, and when that deduction actually happened (the idempotency

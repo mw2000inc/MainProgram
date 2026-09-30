@@ -38,6 +38,53 @@ export function normalizeTechnicianPair(
   return { primary: first, secondary: secondaryStands ? second : "" }
 }
 
+// A schedule job only shows up in a technician's own Daily Report when its
+// technician_user_id / technician_2_user_id points at their login (RLS and
+// ScheduleAgenda both key on that, not on the name). The name fields are
+// free text picked from the TECHNICIANS roster, and the roster's spellings
+// don't always match the accounts' own (live: roster "Joselito Compereso" vs
+// account "Joselito Camperoso", "Jerson Capellon" vs "Jerson Capellan"). So
+// a name links to an account when it matches exactly (ignoring case and
+// spacing), or when the first names match and the surnames are at most 2
+// letters apart. Either way exactly one account must fit, or nothing is
+// linked — a wrong link would show a job to the wrong technician.
+export interface TechnicianAccount {
+  id: string
+  name: string
+}
+
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase()
+}
+
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = row
+  }
+  return prev[b.length]
+}
+
+export function matchTechnicianAccount<A extends TechnicianAccount>(name: string, accounts: A[]): A | undefined {
+  if (!isAssignedTechnician(name)) return undefined
+  const target = normalizeName(name)
+  const exact = accounts.filter((a) => normalizeName(a.name) === target)
+  if (exact.length > 0) return exact.length === 1 ? exact[0] : undefined
+  const [first, ...rest] = target.split(" ")
+  const surname = rest.join(" ")
+  if (!surname) return undefined
+  const close = accounts.filter((a) => {
+    const [aFirst, ...aRest] = normalizeName(a.name).split(" ")
+    const aSurname = aRest.join(" ")
+    return aFirst === first && !!aSurname && editDistance(aSurname, surname) <= 2
+  })
+  return close.length === 1 ? close[0] : undefined
+}
+
 // InlineTechnicianPairCell reports what changed as { primary?, secondary? };
 // each table's own field names differ (serviceman/serviceman2, th/th2), so this
 // maps that patch onto them. Only the keys that actually changed are included.

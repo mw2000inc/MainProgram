@@ -2,7 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveViaCustomer, pickBestTechnician, computeRouteSequence, type SameDayJobRow, type TechnicianPick } from "./smart-schedule"
 import type { GeoPoint } from "@/lib/nominatim-server"
-import { isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians"
+import { isAssignedTechnician, matchTechnicianAccount, normalizeTechnicianPair, type TechnicianAccount } from "@/lib/technicians"
 
 // The Schedule page's own "Auto-suggest technicians" toolbar button — same
 // preview-then-apply design as filter-change-suggest.ts (previewSuggestionsForJobs
@@ -22,6 +22,7 @@ import { isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians
 // no per-record single-suggest UI on this page to expose it to, unlike
 // Filter Change's own edit-form Sparkles button.
 import type { TechnicianSuggestion } from "./filter-change-suggest"
+import type { ScheduleJobType } from "@/lib/types"
 
 // Same threshold filter-change-suggest.ts uses for its own outsideCoverage
 // flag — kept as a local constant rather than a shared export since it's a
@@ -252,8 +253,66 @@ export async function previewSuggestionsForJobs(admin: SupabaseClient, jobIds: s
   return results
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+const JOB_TYPES = new Set<ScheduleJobType>(["installation", "filter_change", "repair", "collection", "monitoring", "other"])
+
+// Job details an admin can change in the Auto-suggest modal before
+// confirming. Only the keys present are written; each is checked here at
+// the write boundary rather than trusted from the client.
+export interface JobEdits {
+  jobType?: ScheduleJobType
+  scheduledDate?: string
+  scheduledTime?: string
+  secondaryAddress?: string
+  notes?: string
+  filterCodes?: string
+  // A repair job's issue ("Leaking fittings"). Already folded into notes by
+  // the client; sent separately only so a linked repair record with a blank
+  // Problem can be given it too.
+  repairIssue?: string
+}
+
+export interface JobAssignment {
+  jobId: string
+  technician: string
+  technician2?: string
+  changes?: JobEdits
+}
+
+// A job created in the modal: a custom errand ("Pick up filters from the
+// warehouse" — jobType "other", no customer, notes is the task so it's
+// required), or an additional task bundled onto an existing job's visit
+// (e.g. a Collection alongside a Filter Change — same customer, order, date,
+// address and technicians as that job, its own type/notes/filters).
+export interface NewScheduleJob {
+  jobType?: ScheduleJobType
+  customerId?: string
+  orderNo?: string
+  technician: string
+  technician2?: string
+  scheduledDate: string
+  scheduledTime?: string
+  address?: string
+  notes: string
+  filterCodes?: string
+}
+
+function jobEditColumns(changes: JobEdits | undefined): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (!changes) return row
+  if (changes.jobType !== undefined && JOB_TYPES.has(changes.jobType)) row.job_type = changes.jobType
+  if (changes.scheduledDate !== undefined && ISO_DATE.test(changes.scheduledDate)) row.scheduled_date = changes.scheduledDate
+  if (changes.scheduledTime !== undefined) row.scheduled_time = changes.scheduledTime.trim() || null
+  if (changes.secondaryAddress !== undefined) row.secondary_address = changes.secondaryAddress.trim() || null
+  if (changes.notes !== undefined) row.notes = changes.notes.trim() || null
+  if (changes.filterCodes !== undefined) row.filter_codes = changes.filterCodes.trim()
+  return row
+}
+
 // Writes exactly what's given — no scoring, no recomputation. Called only
 // after the admin has reviewed (and possibly overridden) the preview above.
+// Also saves any job details edited in the modal, and creates any custom
+// errands added there, in the same Confirm & Assign.
 //
 // Same two-phase split as previewSuggestionsForJobs above, for the same
 // reason: resolving each job's row/point (a DB read, and possibly a
@@ -265,12 +324,21 @@ export async function previewSuggestionsForJobs(admin: SupabaseClient, jobIds: s
 // in the right spot in *that* technician's day. That part stays sequential.
 export async function applyTechnicianAssignmentsToJobs(
   admin: SupabaseClient,
-  assignments: { jobId: string; technician: string; technician2?: string }[]
-): Promise<{ applied: number }> {
+  assignments: JobAssignment[],
+  newJobs: NewScheduleJob[] = []
+): Promise<{ applied: number; jobsCreated: number; failed: string[]; unlinked: string[] }> {
+  // Each technician's login, so the job reaches their own Daily Report (see
+  // matchTechnicianAccount) — the name alone never did.
+  const { data: accountRows } = await admin.from("profiles").select("id, name").eq("role", "technician")
+  const accounts = (accountRows ?? []) as TechnicianAccount[]
+  const unlinked = new Set<string>()
+  // Real database errors (not the silent "someone else assigned it first"
+  // no-op), so a failed save is reported instead of counted as nothing.
+  const failed: string[] = []
   const resolved = await Promise.all(
     assignments
       .filter(({ technician }) => technician.trim())
-      .map(async ({ jobId, technician, technician2 }) => {
+      .map(async ({ jobId, technician, technician2, changes }) => {
         const { data: job } = await admin
           .from("schedule_jobs")
           .select("id, technician, technician_2, customer_id, scheduled_date, latitude, longitude, job_type")
@@ -283,14 +351,14 @@ export async function applyTechnicianAssignmentsToJobs(
         // other "is this job assigned" check in this feature (isAssignedTechnician,
         // unassignedInView) — the second technician is always supplementary,
         // never itself what decides whether a job counts as assigned.
-        if (!job || isAssignedTechnician(job.technician)) return { jobId, technician, technician2, job: null }
+        if (!job || isAssignedTechnician(job.technician)) return { jobId, technician, technician2, changes, job: null }
         const { point, source } = await resolveJobPoint(admin, job as JobRow)
-        return { jobId, technician, technician2, job: job as JobRow, point, source }
+        return { jobId, technician, technician2, changes, job: job as JobRow, point, source }
       })
   )
 
   let applied = 0
-  for (const { jobId, technician, technician2, job, point, source } of resolved) {
+  for (const { jobId, technician, technician2, changes, job, point, source } of resolved) {
     if (!job) continue
 
     // Same normalization every other technician-pair write path in this app
@@ -303,9 +371,18 @@ export async function applyTechnicianAssignmentsToJobs(
     // rather than trusting whatever the client last sent.
     const { primary: normalizedTechnician, secondary: normalizedTechnician2 } = normalizeTechnicianPair(technician, technician2 ?? "")
 
-    const update: Record<string, unknown> = { technician: normalizedTechnician, technician_2: normalizedTechnician2 }
+    const account = matchTechnicianAccount(normalizedTechnician, accounts)
+    const account2 = normalizedTechnician2 ? matchTechnicianAccount(normalizedTechnician2, accounts) : undefined
+    const update: Record<string, unknown> = {
+      technician: normalizedTechnician,
+      technician_2: normalizedTechnician2,
+      technician_user_id: account?.id ?? null,
+      technician_2_user_id: account2?.id ?? null,
+      ...jobEditColumns(changes),
+    }
+    const scheduledDate = changes?.scheduledDate ?? job.scheduled_date
     if (point) {
-      const sameDayJobs = await fetchSameDayJobs(admin, jobId, job.scheduled_date)
+      const sameDayJobs = await fetchSameDayJobs(admin, jobId, scheduledDate)
       const technicianJobsThatDay = sameDayJobs.filter(
         (j) => j.technician === normalizedTechnician || j.technician_2 === normalizedTechnician
       )
@@ -329,17 +406,67 @@ export async function applyTechnicianAssignmentsToJobs(
     // covering the field this update newly writes. .select() + checking the
     // returned row makes `applied` reflect what actually changed, not just
     // "no error."
-    const { data: updated, error } = await admin
-      .from("schedule_jobs")
-      .update(update)
-      .eq("id", jobId)
-      .eq("technician", job.technician)
-      .eq("technician_2", job.technician_2 ?? "")
-      .select("id")
+    // technician_2 is NULL (not '') on every cron-generated job — confirmed
+    // live: all 26 unassigned pending jobs. `.eq("technician_2", "")` never
+    // matches NULL in SQL, so the guard has to test for NULL explicitly or
+    // Confirm & Assign silently saves nothing for those jobs.
+    let guarded = admin.from("schedule_jobs").update(update).eq("id", jobId).eq("technician", job.technician)
+    guarded = job.technician_2 == null ? guarded.is("technician_2", null) : guarded.eq("technician_2", job.technician_2)
+    const { data: updated, error } = await guarded.select("id")
+    if (error) failed.push(`job ${jobId}: ${error.message}`)
     if (!error && updated && updated.length > 0) {
       applied += 1
+      if (!account) unlinked.add(normalizedTechnician)
+      if (normalizedTechnician2 && !account2) unlinked.add(normalizedTechnician2)
       await syncTechnicianToSourcePlan(admin, job.job_type, jobId, normalizedTechnician, normalizedTechnician2)
+      // A job created for a Filter Change visit keeps that visit's own
+      // Filter in step with what was just set here.
+      if (changes?.filterCodes !== undefined) {
+        await admin.from("filter_change_plans").update({ filter_type: changes.filterCodes }).eq("schedule_job_id", jobId)
+      }
+      // The repair record this job was created for keeps its own Problem
+      // (what the customer reported) — only filled when it's still blank.
+      if (changes?.repairIssue?.trim()) {
+        await admin.from("repair_plans").update({ problem: changes.repairIssue.trim() }).eq("schedule_job_id", jobId).eq("problem", "")
+      }
     }
   }
-  return { applied }
+
+  // New jobs (errands and additional tasks) — live straight away
+  // ('pending', not 'pending_approval', since the admin is confirming them
+  // right here) and linked to the technician's login the same way, so they
+  // land on their Daily Report. No route stop: there's no geocoded point
+  // for them yet.
+  let jobsCreated = 0
+  for (const errand of newJobs) {
+    const jobType = errand.jobType && JOB_TYPES.has(errand.jobType) ? errand.jobType : "other"
+    const { primary, secondary } = normalizeTechnicianPair(errand.technician, errand.technician2 ?? "")
+    if (!isAssignedTechnician(primary) || !ISO_DATE.test(errand.scheduledDate)) continue
+    if (jobType === "other" && !errand.notes.trim()) continue
+    const account = matchTechnicianAccount(primary, accounts)
+    const account2 = secondary ? matchTechnicianAccount(secondary, accounts) : undefined
+    const { error } = await admin.from("schedule_jobs").insert({
+      job_type: jobType,
+      customer_id: errand.customerId || null,
+      order_no: errand.orderNo?.trim() || null,
+      status: "pending",
+      technician: primary,
+      technician_2: secondary || null,
+      technician_user_id: account?.id ?? null,
+      technician_2_user_id: account2?.id ?? null,
+      scheduled_date: errand.scheduledDate,
+      scheduled_time: errand.scheduledTime?.trim() || null,
+      secondary_address: errand.address?.trim() || null,
+      notes: errand.notes.trim() || null,
+      filter_codes: errand.filterCodes?.trim() ?? "",
+    })
+    if (error) {
+      failed.push(`new ${jobType} job${errand.orderNo ? ` for ${errand.orderNo}` : ""}: ${error.message}`)
+      continue
+    }
+    jobsCreated += 1
+    if (!account) unlinked.add(primary)
+    if (secondary && !account2) unlinked.add(secondary)
+  }
+  return { applied, jobsCreated, failed, unlinked: [...unlinked] }
 }

@@ -61,11 +61,31 @@ export function usePreviewTechnicianSuggestionsForJobs() {
 export function useApplyTechnicianAssignmentsToJobs() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (assignments: { jobId: string; technician: string; technician2?: string }[]) =>
-      api.applyTechnicianAssignmentsToJobs(assignments),
+    mutationFn: ({
+      assignments,
+      newJobs = [],
+    }: {
+      assignments: { jobId: string; technician: string; technician2?: string; changes?: api.ScheduleJobEdits }[]
+      newJobs?: api.ScheduleNewJob[]
+    }) => api.applyTechnicianAssignmentsToJobs(assignments, newJobs),
+    // The apply also copies each technician onto the job's Filter Change/
+    // Collection/Repair row (syncTechnicianToSourcePlan), which the Daily
+    // Report's own panels read — refetch those too so the assignment shows
+    // there straight away, not on the next page load.
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: scheduleJobsKey })
-      toast.success(`Assigned ${result.applied} job(s)`)
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      const parts = [`Assigned ${result.applied} job(s)`]
+      if (result.jobsCreated) parts.push(`added ${result.jobsCreated} task(s)/errand(s)`)
+      if (result.applied || result.jobsCreated) toast.success(`${parts.join(" and ")} — published to the Daily Report`)
+      if (result.failed?.length) toast.error(`${result.failed.length} could not be saved: ${result.failed.join("; ")}`)
+      if (result.unlinked?.length) {
+        toast.warning(
+          `No technician login matches ${result.unlinked.join(", ")} — admins see these jobs in the Daily Report, but that technician won't until a login is linked (edit the job's Technician Account).`
+        )
+      }
     },
     onError: (error: Error) => toast.error(error.message),
   })

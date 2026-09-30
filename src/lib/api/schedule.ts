@@ -26,6 +26,7 @@ type ScheduleJobRow = {
   longitude: number | null
   location_source: ScheduleJob["locationSource"] | null
   route_sequence: number | null
+  filter_codes?: string | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -53,6 +54,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     longitude: row.longitude ?? undefined,
     locationSource: row.location_source ?? undefined,
     routeSequence: row.route_sequence ?? undefined,
+    filterCodes: row.filter_codes || undefined,
   }
 }
 
@@ -74,6 +76,7 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
   if (input.secondaryAddress !== undefined) row.secondary_address = input.secondaryAddress || null
   if (input.technicianUserId !== undefined) row.technician_user_id = input.technicianUserId || null
   if (input.technician2UserId !== undefined) row.technician_2_user_id = input.technician2UserId || null
+  if (input.filterCodes !== undefined) row.filter_codes = input.filterCodes
   return row
 }
 
@@ -141,17 +144,48 @@ export async function previewTechnicianSuggestionsForJobs(jobIds: string[]): Pro
   return data.results as BulkSuggestionResult[]
 }
 
+// Job details editable in the Auto-suggest modal, and custom errands added
+// there — same shapes as schedule-job-suggest.ts's own (server-only, so
+// redeclared here rather than imported).
+export interface ScheduleJobEdits {
+  jobType?: ScheduleJobType
+  scheduledDate?: string
+  scheduledTime?: string
+  secondaryAddress?: string
+  notes?: string
+  filterCodes?: string
+  repairIssue?: string
+}
+
+// A custom errand (jobType "other") or an additional task bundled onto a
+// job's visit — see schedule-job-suggest.ts's NewScheduleJob.
+export interface ScheduleNewJob {
+  jobType?: ScheduleJobType
+  customerId?: string
+  orderNo?: string
+  technician: string
+  technician2?: string
+  scheduledDate: string
+  scheduledTime?: string
+  address?: string
+  notes: string
+  filterCodes?: string
+}
+
+export type ApplyAssignmentsResult = { applied: number; jobsCreated: number; failed: string[]; unlinked: string[] }
+
 export async function applyTechnicianAssignmentsToJobs(
-  assignments: { jobId: string; technician: string; technician2?: string }[]
-): Promise<{ applied: number }> {
+  assignments: { jobId: string; technician: string; technician2?: string; changes?: ScheduleJobEdits }[],
+  newJobs: ScheduleNewJob[] = []
+): Promise<ApplyAssignmentsResult> {
   const res = await fetch("/api/schedule-jobs/suggest-technician-apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ assignments }),
+    body: JSON.stringify({ assignments, newJobs }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to assign technicians")
-  return data as { applied: number }
+  return data as ApplyAssignmentsResult
 }
 
 // "Clear Schedule" / "Unassign All" for a date — deletes every schedule_jobs

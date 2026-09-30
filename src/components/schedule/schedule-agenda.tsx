@@ -384,7 +384,23 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     {/* One scheduledDate on the shared job — shown explicitly (even
                         though every row here is already scoped to this same day)
                         so a two-technician job visibly reads as one date, not two. */}
-                    <p className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(job.scheduledDate)}
+                      {job.scheduledTime && <span> · {job.scheduledTime}</span>}
+                    </p>
+                    {/* What the technician needs on the day — set from the
+                        Auto-suggest modal (or the job form): where to go,
+                        which filters to bring, and the task itself (a custom
+                        errand's description lives in notes). */}
+                    {job.secondaryAddress && (
+                      <p className="text-xs text-muted-foreground wrap-break-word">{job.secondaryAddress}</p>
+                    )}
+                    {job.filterCodes && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("editFilters")}: <span className="font-medium text-foreground">{job.filterCodes}</span>
+                      </p>
+                    )}
+                    {job.notes && <p className="text-xs wrap-break-word">{job.notes}</p>}
                     <p className="text-xs text-muted-foreground truncate">
                       {formatTechnicians(job.technician, job.technician2, t("and"))}
                       {stopNumberByJobId.has(job.id) && (
