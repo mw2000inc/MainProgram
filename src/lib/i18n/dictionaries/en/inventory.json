@@ -109,6 +109,8 @@
   "approveAllInView": "Approve All ({count})",
   "approveAllInViewTitle": "Approve all pending items in this list?",
   "approveAllInViewDescription": "{count} pending item(s) shown in this list will be approved and their stock updated now.",
+  "approveAllNoPending": "No pending items to approve",
+  "approveAllNeedsMapping": "Pending items need a stock item mapped first (Pending Inventory Approval)",
   "nothingPendingApproval": "Nothing is waiting on inventory approval right now.",
   "historyButton": "History",
   "historyTitle": "Inventory Approval History",

@@ -778,10 +778,25 @@ export function DailyReportSection() {
         data={dayStockMovementRows}
         expandedData={dayStockItemTotals}
         expandedToolbar={
-          isAdmin && viewPending.length > 0 ? (
-            <Button className="h-9 gap-1.5" disabled={viewApprovable.length === 0} onClick={() => setApproveViewOpen(true)}>
-              <CheckCheck className="h-4 w-4" /> {tInventory("approveAllInView", { count: String(viewApprovable.length) })}
-            </Button>
+          // Always there for an admin, next to search; disabled (with the
+          // reason on hover) when nothing in this list can be approved. The
+          // hint sits on a wrapper because a disabled button gets no pointer
+          // events, so its own title would never show.
+          isAdmin ? (
+            <span
+              className="inline-flex"
+              title={
+                viewPending.length === 0
+                  ? tInventory("approveAllNoPending")
+                  : viewApprovable.length === 0
+                    ? tInventory("approveAllNeedsMapping")
+                    : undefined
+              }
+            >
+              <Button className="h-9 gap-1.5" disabled={viewApprovable.length === 0} onClick={() => setApproveViewOpen(true)}>
+                <CheckCheck className="h-4 w-4" /> {tInventory("approveAllInView", { count: String(viewApprovable.length) })}
+              </Button>
+            </span>
           ) : undefined
         }
         headerActions={
