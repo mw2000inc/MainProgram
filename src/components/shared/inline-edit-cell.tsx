@@ -51,10 +51,15 @@ export function InlineDateCell({
   value,
   onCommit,
   className,
+  clearLabel,
 }: {
   value: string | undefined
   onCommit: (next: string) => void
   className?: string
+  // Opt-in: shows a button under the calendar that commits "" (no date) —
+  // for a date that can legitimately be taken back off, like Filter
+  // Change's Acc D. Only shown while there's a date to clear.
+  clearLabel?: string
 }) {
   const [open, setOpen] = React.useState(false)
   const selectedDate = value ? parseISO(value) : undefined
@@ -168,6 +173,22 @@ export function InlineDateCell({
               onCommit(format(date, "yyyy-MM-dd"))
             }}
           />
+          {clearLabel && value && (
+            <div className="border-t p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-full text-xs"
+                onClick={() => {
+                  setOpen(false)
+                  onCommit("")
+                }}
+              >
+                {clearLabel}
+              </Button>
+            </div>
+          )}
         </PopoverContent>
       </Popover>
     </div>

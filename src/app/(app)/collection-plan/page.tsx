@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
-import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
+import { DetailField, DetailPanel, SplitViewLayout, useLatestRow, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
 import { getCollectionsFullColumns, COLLECTIONS_EXPORT_COLUMNS, type CollectionRow } from "@/components/collections/collections-columns"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
@@ -67,6 +67,9 @@ function CollectionPlanPageContent() {
   )
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  // Current copy of the selected row, not the one filteredRows may still
+  // hold from before a save (see useLatestRow).
+  const latestSelected = useLatestRow(selection.selected, rows)
   useDeepLinkNotFoundToast(initialId, isPending, entries.some((e) => e.id === initialId))
 
   const monthGroups = React.useMemo(() => {
@@ -107,7 +110,7 @@ function CollectionPlanPageContent() {
     )
   }
 
-  const selected = selection.selected
+  const selected = latestSelected
 
   return (
     // h-full so this page's own share of <main> (already the app's one real

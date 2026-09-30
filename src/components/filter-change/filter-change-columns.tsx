@@ -67,6 +67,14 @@ function NoteCell({ plan }: { plan: FilterChangePlan }) {
 
 export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
 
+// A visit's Acc D is the day it was actually done, so setting it marks the
+// visit Completed and clearing it puts it back to Pending — applied wherever
+// Acc D is edited (the inline cell below and FilterChangeFormDialog), always
+// in the same update as the date itself.
+export function statusForAccD(accD: string | undefined): "Completed" | "Pending" {
+  return accD?.trim() ? "Completed" : "Pending"
+}
+
 // A single interactive Status column when onStatusChange is provided
 // (Daily Report + the standalone /filter-change page, admin-only) —
 // replaces the old read-only badge plus the separate one-click "Mark
@@ -156,7 +164,9 @@ export function getFilterChangeCustomerPortalColumns(): ColumnDef<FilterChangePl
 
 // Plan D (planDate) is deliberately not in this list: on a recurring row it's
 // re-written by the sale-list sync, so the one-off-visit override is Pre D.
-export type FilterChangeDailyReportPatch = Partial<Pick<FilterChangePlan, "preD" | "accD" | "serviceman" | "serviceman2" | "filterType">>
+// status is only ever sent alongside accD (see statusForAccD); the Status
+// column itself still saves through onStatusChange.
+export type FilterChangeDailyReportPatch = Partial<Pick<FilterChangePlan, "preD" | "accD" | "status" | "serviceman" | "serviceman2" | "filterType">>
 
 interface FilterChangeDailyReportColumnParams {
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
@@ -190,6 +200,27 @@ function FilterCell({
       customPlaceholder={t("filterPickerCustomPlaceholder")}
       addLabel={t("filterPickerAddCustom")}
       onCommit={(next) => onFieldChange(plan, { filterType: next })}
+    />
+  )
+}
+
+// Named component so it can use the translation hook for the Clear label.
+function AccDCell({
+  plan,
+  onFieldChange,
+}: {
+  plan: FilterChangePlan
+  onFieldChange: (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => void
+}) {
+  const { t } = useTranslation("common")
+  return (
+    <InlineDateCell
+      value={plan.accD}
+      clearLabel={t("clearDate")}
+      onCommit={(next) => {
+        if (next === (plan.accD ?? "")) return
+        onFieldChange(plan, { accD: next, status: statusForAccD(next) })
+      }}
     />
   )
 }
@@ -258,7 +289,7 @@ function dailyReportColumnDefs({
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) return <span className="inline-block min-w-[100px]">{plan.accD ? formatDate(plan.accD) : "—"}</span>
-        return <InlineDateCell value={plan.accD} onCommit={(next) => onFieldChange(plan, { accD: next })} />
+        return <AccDCell plan={plan} onFieldChange={onFieldChange} />
       },
     },
     serviceman: {

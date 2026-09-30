@@ -22,16 +22,36 @@ export function useCreateFilterChangePlan() {
   })
 }
 
+const DATE_FIELDS = new Set(["preD", "accD", "planDate"])
+
 export function useUpdateFilterChangePlan() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<Omit<FilterChangePlan, "id" | "createdAt">> }) =>
       api.updateFilterChangePlan(id, input),
+    // Shown straight away (e.g. setting Acc D flips the Status badge to
+    // Completed in the same click) and rolled back if the save fails; the
+    // refetch below then confirms what the database actually holds.
+    onMutate: async ({ id, input }) => {
+      await qc.cancelQueries({ queryKey: filterChangePlansKey })
+      const previous = qc.getQueryData<FilterChangePlan[]>(filterChangePlansKey)
+      if (previous) {
+        // A cleared date is sent as "" but held as undefined once read back.
+        const cleared = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v === "" && DATE_FIELDS.has(k) ? undefined : v]))
+        qc.setQueryData<FilterChangePlan[]>(filterChangePlansKey, previous.map((p) => (p.id === id ? { ...p, ...cleared } : p)))
+      }
+      return { previous }
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: filterChangePlansKey })
       toast.success("Filter change plan updated")
     },
-    onError: () => toast.error("Failed to update filter change plan"),
+    onError: (_error, _vars, context) => {
+      if (context?.previous) qc.setQueryData(filterChangePlansKey, context.previous)
+      toast.error("Failed to update filter change plan")
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+    },
   })
 }
 

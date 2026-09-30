@@ -11,7 +11,7 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { BulkTechnicianSuggestDialog } from "@/components/shared/bulk-technician-suggest-dialog"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
-import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
+import { DetailField, DetailPanel, SplitViewLayout, useLatestRow, useSplitViewSelection } from "@/components/data-table/split-view"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getFilterChangeFullColumns, FILTER_CHANGE_EXPORT_COLUMNS, type FilterChangeRow } from "@/components/filter-change/filter-change-columns"
 import {
@@ -149,6 +149,9 @@ function FilterChangePageContent() {
   const [suggestionCache, setSuggestionCache] = React.useState<Record<string, TechnicianSuggestion | null>>({})
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  // Current copy of the selected row, not the one filteredRows may still
+  // hold from before a save (see useLatestRow).
+  const latestSelected = useLatestRow(selection.selected, rows)
   useDeepLinkNotFoundToast(initialId, isPending, plans.some((p) => p.id === initialId))
 
   // Fetches a comparison suggestion for whichever plan is open in the detail
@@ -158,7 +161,7 @@ function FilterChangePageContent() {
   // this is a planning aid for whoever assigns technicians, not something a
   // read-only viewer needs to trigger a network call for.
   React.useEffect(() => {
-    const plan = selection.selected
+    const plan = latestSelected
     if (!isAdmin || !plan || !plan.serviceman.trim() || !plan.customerId) return
     if (plan.id in suggestionCache) return
     let cancelled = false
@@ -179,7 +182,7 @@ function FilterChangePageContent() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection.selected?.id, isAdmin])
+  }, [latestSelected?.id, isAdmin])
 
   const monthGroups = React.useMemo(() => {
     const counts = new Map<string, number>()
@@ -220,7 +223,7 @@ function FilterChangePageContent() {
     )
   }
 
-  const selected = selection.selected
+  const selected = latestSelected
 
   return (
     // h-full so this page's own share of <main> (already the app's one real

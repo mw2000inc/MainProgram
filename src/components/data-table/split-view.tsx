@@ -102,6 +102,18 @@ export function useSplitViewSelection<T extends { id: string }>(rows: T[], initi
   }
 }
 
+// The current copy of the selected row. DataTable hands filteredRows back
+// only when the row count or search text changes, so after a save the
+// selection (looked up in those rows) can still be the pre-save object — a
+// detail panel then showed old values, and an edit form opened with them
+// wrote them back over the save (seen live on Filter Change: a just-saved
+// Acc D cleared by the next edit). Looks the row up by id in the page's own
+// up-to-date rows instead.
+export function useLatestRow<T extends { id: string }>(selected: T | null, rows: T[]): T | null {
+  const byId = React.useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
+  return selected ? (byId.get(selected.id) ?? selected) : null
+}
+
 // Grid shell: list + panel side by side once something is selected; the
 // panel takes over the full width when expanded (the list is unmounted, not
 // hidden, while expanded — cheap since it re-syncs from the query cache).

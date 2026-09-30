@@ -17,7 +17,7 @@ import { DataTable } from "@/components/data-table/data-table"
 import { MonthYearFilter, type MonthYearValue } from "@/components/data-table/month-year-filter"
 import { ExportButtons } from "@/components/shared/export-buttons"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { DetailField, DetailPanel, useSplitViewSelection } from "@/components/data-table/split-view"
+import { DetailField, DetailPanel, useLatestRow, useSplitViewSelection } from "@/components/data-table/split-view"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { MemberMapPanel } from "@/components/customers/member-map-panel"
 import { MemberDirectionsDialog } from "@/components/customers/member-directions-dialog"
@@ -98,6 +98,9 @@ export default function CustomersPage() {
   }, [rows, statusFilter, monthYear])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
+  // Current copy of the selected member, not the one filteredRows may still
+  // hold from before a save (see useLatestRow).
+  const selectedMember = useLatestRow(selection.selected, rows)
 
   // Only set while the search box actually has text — filteredRows alone
   // can't tell "no search" apart from "search matched every row", and the
@@ -112,13 +115,13 @@ export default function CustomersPage() {
   // selected member changes, so drilling into an order for one member never
   // leaks into another's Previous/Next stepping.
   const relatedSaleRows: SaleListRow[] = React.useMemo(() => {
-    const member = selection.selected
+    const member = selectedMember
     if (!member) return []
     const accountLabel = member.companyName || member.fullName
     return saleListEntries
       .filter((e) => (e.customerId ? e.customerId === member.id : e.orderNumber === member.orderNumber))
       .map((e) => ({ ...e, accountLabel }))
-  }, [saleListEntries, selection.selected])
+  }, [saleListEntries, selectedMember])
 
   const orderSelection = useSplitViewSelection(relatedSaleRows)
 
@@ -158,7 +161,7 @@ export default function CustomersPage() {
   // read-only fields plus Related Sales_Lists) — not the fuller exportColumns
   // set above, which includes fields the panel itself doesn't display.
   function handlePrint() {
-    const member = selection.selected
+    const member = selectedMember
     if (!member) return
     printFieldsAndTable({
       title: member.companyName || member.fullName,
@@ -216,7 +219,7 @@ export default function CustomersPage() {
     // available height instead — this page never adds its own competing
     // overflow-y-auto/min-h-screen on top of that single scroll region.
     <div className="flex h-full flex-col gap-6">
-      {!selection.selected ? (
+      {!selectedMember ? (
         // Everything above the table (heading row, map) is shrink-0 —
         // fixed to its own natural or assigned height — so the table's
         // flex-1 share is exactly "whatever's left," not an estimate. See
@@ -341,7 +344,7 @@ export default function CustomersPage() {
         </div>
       ) : orderSelection.selected ? (
         <MemberOrderDetail
-          customer={selection.selected}
+          customer={selectedMember}
           entry={orderSelection.selected}
           rows={relatedSaleRows}
           onSelectOrder={orderSelection.open}
@@ -369,24 +372,24 @@ export default function CustomersPage() {
           <BreadcrumbTrail
             items={[
               { label: tNav("member"), onClick: selection.close },
-              { label: selection.selected.companyName || selection.selected.fullName },
+              { label: selectedMember.companyName || selectedMember.fullName },
             ]}
           />
           <div className="flex-1 min-h-0">
             <DetailPanel
               fillHeight
-              title={selection.selected.companyName || selection.selected.fullName}
+              title={selectedMember.companyName || selectedMember.fullName}
               icon={Users}
-              subtitle={selection.selected.memberAccountNumber}
+              subtitle={selectedMember.memberAccountNumber}
               onEdit={
                 can("customers:edit")
                   ? () => {
-                      setEditing(selection.selected ?? undefined)
+                      setEditing(selectedMember ?? undefined)
                       setFormOpen(true)
                     }
                   : undefined
               }
-              onDelete={can("customers:delete") ? () => setDeleting(selection.selected ?? undefined) : undefined}
+              onDelete={can("customers:delete") ? () => setDeleting(selectedMember ?? undefined) : undefined}
               headerActions={
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
                   <Printer className="h-3.5 w-3.5" /> {tCommon("print")}
@@ -399,11 +402,11 @@ export default function CustomersPage() {
               expanded={selection.expanded}
               // Expand goes to the full profile page (QR code, service history,
               // related sales) instead of a generic fullscreen field dump.
-              onToggleExpand={() => router.push(`/customers/${selection.selected!.id}`)}
+              onToggleExpand={() => router.push(`/customers/${selectedMember!.id}`)}
               onClose={selection.close}
               extra={
                 <MemberRelatedSalesTable
-                  customer={selection.selected}
+                  customer={selectedMember}
                   rows={relatedSaleRows}
                   can={can}
                   onSelectOrder={orderSelection.open}
@@ -416,40 +419,40 @@ export default function CustomersPage() {
                   just aren't shown in this read-only view. */}
               <DetailField
                 label={tFields("memberAccount")}
-                value={selection.selected.memberAccountNumber}
+                value={selectedMember.memberAccountNumber}
                 className="sm:col-span-2"
               />
               <DetailField
                 label={tFields("accountName")}
-                value={selection.selected.companyName}
+                value={selectedMember.companyName}
                 className="sm:col-span-2"
               />
               <DetailField
                 label={t("accountContactPerson")}
-                value={selection.selected.fullName}
+                value={selectedMember.fullName}
                 className="sm:col-span-2"
               />
               <DetailField
                 label={t("contactNumber1MainHeader")}
-                value={selection.selected.contactNumber}
+                value={selectedMember.contactNumber}
                 className="sm:col-span-2"
               />
               <DetailField
                 label={t("contactNumber2SubHeader")}
-                value={selection.selected.contactNumber2}
+                value={selectedMember.contactNumber2}
                 className="sm:col-span-2"
               />
               <div className="sm:col-span-2">
                 <p className="mb-1.5 text-sm text-muted-foreground">{tFields("address")}</p>
-                {selection.selected.address ? (
+                {selectedMember.address ? (
                   <button
                     type="button"
-                    onClick={() => setDirectionsTarget(selection.selected ?? undefined)}
+                    onClick={() => setDirectionsTarget(selectedMember ?? undefined)}
                     title={t("getDirectionsTitle")}
                     className="inline-flex items-start gap-1.5 text-left text-base font-medium wrap-break-word text-primary hover:underline"
                   >
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {selection.selected.address}
+                    {selectedMember.address}
                   </button>
                 ) : (
                   <div className="text-base font-medium">—</div>
@@ -457,7 +460,7 @@ export default function CustomersPage() {
               </div>
               <DetailField
                 label={t("emailAddress1Main")}
-                value={selection.selected.email}
+                value={selectedMember.email}
                 className="sm:col-span-2"
               />
             </DetailPanel>
@@ -486,7 +489,7 @@ export default function CustomersPage() {
           // The mutation's onError already toasts the reason — catch here so that
           // rejection doesn't also surface as an unhandled-error dev overlay.
           try {
-            const wasSelected = selection.selected?.id === deleting.id
+            const wasSelected = selectedMember?.id === deleting.id
             await deleteCustomer.mutateAsync(deleting.id)
             setDeleting(undefined)
             if (wasSelected) selection.close()

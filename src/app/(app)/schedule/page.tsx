@@ -20,7 +20,7 @@ import { TechnicianWorkloadStats } from "@/components/schedule/technician-worklo
 import { LastEditedIndicator } from "@/components/shared/last-edited-indicator"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
+import { DetailField, DetailPanel, SplitViewLayout, useLatestRow, useSplitViewSelection } from "@/components/data-table/split-view"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
 import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers, JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS } from "@/components/schedule/schedule-columns"
@@ -209,6 +209,9 @@ function ScheduleContent() {
   const stopNumberByJobId = React.useMemo(() => computeStopNumbers(scopedJobs), [scopedJobs])
 
   const selection = useSplitViewSelection(filteredRows, initialId)
+  // Current copy of the selected row, not the one filteredRows may still
+  // hold from before a save (see useLatestRow).
+  const latestSelected = useLatestRow(selection.selected, jobsWithOrder)
   useDeepLinkNotFoundToast(initialId, isPending, jobs.some((j) => j.id === initialId))
 
   // Same {header,key} shape every other panel's export uses — swap in the
@@ -253,7 +256,7 @@ function ScheduleContent() {
     )
   }
 
-  const selected = selection.selected
+  const selected = latestSelected
 
   return (
     <div className="space-y-6">

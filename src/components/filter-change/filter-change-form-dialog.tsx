@@ -44,6 +44,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
+import { statusForAccD } from "@/components/filter-change/filter-change-columns"
 
 // A factory, not a module-scope constant — validation messages need t(),
 // which only exists once useTranslation() has run inside the component (see
@@ -251,6 +252,10 @@ export function FilterChangeFormDialog({
       // No second technician without a real first, and never the same person twice.
       serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
       serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,
+      // Acc D set -> Completed, cleared -> Pending (statusForAccD) — only
+      // when this save actually changes Acc D, so saving e.g. a Cancelled
+      // visit without touching Acc D leaves its status alone.
+      ...(isEdit && (values.accD ?? "") !== (plan.accD ?? "") ? { status: statusForAccD(values.accD) } : {}),
     }
     const saved = isEdit
       ? await updatePlan.mutateAsync({ id: plan.id, input })
@@ -258,7 +263,7 @@ export function FilterChangeFormDialog({
         // unlike auto-generated recurring-schedule/C/T-completion rows, which
         // stay at the 'Confirmed' default set at the database layer (see the
         // dispatch_confirmation_workflow migration).
-        await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+        await createPlan.mutateAsync({ ...input, status: statusForAccD(values.accD), dispatchStatus: "Draft" })
     onSaved?.(saved)
     onOpenChange(false)
   }
