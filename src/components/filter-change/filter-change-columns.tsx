@@ -4,7 +4,7 @@ import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { PlanStatusBadge, StatusBadge } from "@/components/shared/status-badge"
+import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineGridPickerCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
@@ -66,21 +66,6 @@ function NoteCell({ plan }: { plan: FilterChangePlan }) {
 }
 
 export const FILTER_CHANGE_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
-
-// 'ct_completion' rows were auto-created/updated by a completed job
-// recording its required filters (see the
-// ct_filter_change_collection_inventory_link migration); 'recurring_schedule'
-// rows were auto-generated from the sale list entry's Plan D — every 3
-// months by default, or on the linked CP System's own shortest component
-// interval once one is set (see the filter_change_recurring_schedule and
-// filter_change_cp_system_interval migrations) — 'manual' (the default) is
-// anything typed in directly on this page, same as always.
-function SourceCell({ source }: { source: FilterChangePlan["source"] }) {
-  const { t } = useTranslation("fields")
-  if (source === "ct_completion") return <StatusBadge tone="secondary" label={t("autoCT")} />
-  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label={t("recurringSchedule")} />
-  return <span className="text-muted-foreground">{t("manual")}</span>
-}
 
 // A single interactive Status column when onStatusChange is provided
 // (Daily Report + the standalone /filter-change page, admin-only) —
@@ -368,11 +353,6 @@ export function getFilterChangeExpandedColumns(
       cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
     },
     {
-      accessorKey: "source",
-      header: () => <ColumnHeader tKey="source" ns="fields" />,
-      cell: ({ row }) => <SourceCell source={row.original.source} />,
-    },
-    {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell plan={row.original} />,
@@ -435,11 +415,6 @@ export function getFilterChangeFullColumns({
       cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
     },
     {
-      accessorKey: "source",
-      header: () => <ColumnHeader tKey="source" ns="fields" />,
-      cell: ({ row }) => <SourceCell source={row.original.source} />,
-    },
-    {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell plan={row.original} />,
@@ -487,7 +462,6 @@ export const FILTER_CHANGE_EXPORT_COLUMNS = [
   { header: "Product #", key: "productNo" },
   { header: "Serviceman", key: "serviceman" },
   { header: "Serviceman 2", key: "serviceman2" },
-  { header: "Source", key: "source" },
   { header: "Note", key: "note" },
   { header: "Status", key: "status" },
 ]
