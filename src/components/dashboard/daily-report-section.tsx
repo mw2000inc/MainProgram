@@ -50,6 +50,7 @@ import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/s
 import {
   getInventoryListExpandedColumns,
   groupInventoryListRows,
+  aggregateInventoryRowsByItem,
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
@@ -628,8 +629,16 @@ export function DailyReportSection() {
       ),
     [stockMovements, reportDate]
   )
-  // One row per item per job (see groupInventoryListRows).
+  // One row per item per job (see groupInventoryListRows); the expanded
+  // modal instead totals each item across all jobs (aggregateInventoryRowsByItem).
   const dayStockMovementRows = React.useMemo(() => groupInventoryListRows(dayStockMovements), [dayStockMovements])
+  const dayStockItemTotals = React.useMemo(() => aggregateInventoryRowsByItem(dayStockMovementRows), [dayStockMovementRows])
+  // The modal's Approve All: the pending items in this view (this day's
+  // list), not every pending item app-wide like the header button — items
+  // still to be mapped to a stock item are skipped, as there.
+  const [approveViewOpen, setApproveViewOpen] = React.useState(false)
+  const viewPending = React.useMemo(() => dayStockMovements.filter((m) => m.status === "pending"), [dayStockMovements])
+  const viewApprovable = React.useMemo(() => viewPending.filter((m) => !!m.productId), [viewPending])
 
   // Approve All Pending: every pending movement across all jobs and days,
   // not just this day's — except one still waiting to be mapped to a stock
@@ -767,6 +776,14 @@ export function DailyReportSection() {
         // this same tableClassName.
         columns={inventoryListExpandedColumns}
         data={dayStockMovementRows}
+        expandedData={dayStockItemTotals}
+        expandedToolbar={
+          isAdmin && viewPending.length > 0 ? (
+            <Button className="h-9 gap-1.5" disabled={viewApprovable.length === 0} onClick={() => setApproveViewOpen(true)}>
+              <CheckCheck className="h-4 w-4" /> {tInventory("approveAllInView", { count: String(viewApprovable.length) })}
+            </Button>
+          ) : undefined
+        }
         headerActions={
           // Shown whenever anything is pending — even if all of it still needs
           // mapping, so the admin is pointed to the queue rather than the
@@ -848,6 +865,25 @@ export function DailyReportSection() {
               {tInventory("pendingApprovalButton")}{pendingStockMovementCount > 0 ? ` (${pendingStockMovementCount})` : ""}
             </Button>
             <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />
+            <ConfirmDialog
+              open={approveViewOpen}
+              onOpenChange={setApproveViewOpen}
+              title={tInventory("approveAllInViewTitle")}
+              description={
+                tInventory("approveAllInViewDescription", { count: String(viewApprovable.length) }) +
+                (viewPending.length > viewApprovable.length
+                  ? " " + tInventory("approveAllPendingSkipped", { count: String(viewPending.length - viewApprovable.length) })
+                  : "")
+              }
+              confirmLabel={tInventory("approveAllPendingConfirm")}
+              destructive={false}
+              loading={approveAll.isPending}
+              onConfirm={async () => {
+                if (!user) return
+                await approveAll.mutateAsync({ ids: viewApprovable.map((m) => m.id), approvedBy: user.id }).catch(() => {})
+                setApproveViewOpen(false)
+              }}
+            />
             <ConfirmDialog
               open={approveAllOpen}
               onOpenChange={setApproveAllOpen}

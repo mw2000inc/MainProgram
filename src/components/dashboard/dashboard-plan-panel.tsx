@@ -37,6 +37,11 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // Extra buttons shown in the panel header, before +Add (e.g. the
   // Inventory List's Approve All Pending).
   headerActions?: React.ReactNode
+  // Optional: different rows for the expanded (Maximize2) dialog than the
+  // compact panel, e.g. the Inventory List's per-item totals across jobs.
+  expandedData?: TData[]
+  // Extra controls in the expanded dialog's table toolbar, next to search.
+  expandedToolbar?: React.ReactNode
   onAdd?: () => void
   canDelete?: boolean
   onDeleteSelected?: (ids: string[]) => Promise<void>
@@ -130,6 +135,8 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   canAdd,
   addLabel,
   headerActions,
+  expandedData,
+  expandedToolbar,
   onAdd,
   canDelete,
   onDeleteSelected,
@@ -166,6 +173,11 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     if (statusFilter === "all") return data
     return data.filter((d) => d.status === statusFilter)
   }, [data, statusFilter])
+  const filteredExpandedData = React.useMemo(() => {
+    const rows = expandedData ?? data
+    if (statusFilter === "all") return rows
+    return rows.filter((d) => d.status === statusFilter)
+  }, [expandedData, data, statusFilter])
 
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
@@ -322,7 +334,8 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     >
       <DataTable
         columns={cols}
-        data={filteredData}
+        data={isExpanded ? filteredExpandedData : filteredData}
+        toolbar={isExpanded ? expandedToolbar : undefined}
         emptyMessage={resolvedEmptyMessage}
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
@@ -392,7 +405,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {statusRow}
             {selectionBar}
-            {table(dialogColumns, Math.max(filteredData.length, 1), true)}
+            {table(dialogColumns, Math.max(filteredExpandedData.length, 1), true)}
           </div>
         </DialogContent>
       </Dialog>

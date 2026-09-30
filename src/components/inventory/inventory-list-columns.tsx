@@ -113,7 +113,8 @@ export function getInventoryListExpandedColumns({
     {
       accessorKey: "relatedJobOrderNo",
       header: () => <ColumnHeader tKey="relatedJob" ns="inventory" />,
-      cell: ({ row }) => row.original.relatedJobOrderNo || "—",
+      // A per-item total (aggregateInventoryRowsByItem) lists every order.
+      cell: ({ row }) => <span className="whitespace-normal">{row.original.relatedJobOrderNo || "—"}</span>,
     },
     {
       accessorKey: "status",
@@ -172,6 +173,41 @@ export function groupInventoryListRows(rows: StockMovementRow[]): StockMovementR
     existing.quantityAdded += r.quantityAdded
     existing.quantityRemoved += r.quantityRemoved
     existing.mergedIds = [...(existing.mergedIds ?? [existing.id]), r.id]
+    if (r.createdAt > existing.createdAt) existing.createdAt = r.createdAt
+  }
+  return out
+}
+
+// The Inventory List modal's per-item totals: every row for the same item
+// moving the same way with the same status is combined into one, across
+// jobs — e.g. three 012 Pre-Carbon filters used on three visits become one
+// "-3" row whose Related Job lists all three orders. Pending and approved
+// rows are never combined (a total must be all one or the other), nor IN
+// with OUT. Reason, Created By and Approved By list each distinct value.
+export function aggregateInventoryRowsByItem(rows: StockMovementRow[]): StockMovementRow[] {
+  const out: StockMovementRow[] = []
+  const byKey = new Map<string, StockMovementRow>()
+  const joinDistinct = (a: string | undefined, b: string | undefined) => {
+    const parts = [...new Set([...(a ?? "").split(", "), ...(b ?? "").split(", ")].map((x) => x.trim()).filter(Boolean))]
+    return parts.length > 0 ? parts.join(", ") : undefined
+  }
+  for (const r of rows) {
+    const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
+    const key = [r.productId || `label:${r.itemLabel}`, direction, r.status].join("|")
+    const existing = byKey.get(key)
+    if (!existing) {
+      const copy = { ...r, mergedIds: r.mergedIds ?? [r.id] }
+      byKey.set(key, copy)
+      out.push(copy)
+      continue
+    }
+    existing.quantityAdded += r.quantityAdded
+    existing.quantityRemoved += r.quantityRemoved
+    existing.mergedIds = [...(existing.mergedIds ?? [existing.id]), ...(r.mergedIds ?? [r.id])]
+    existing.relatedJobOrderNo = joinDistinct(existing.relatedJobOrderNo, r.relatedJobOrderNo)
+    existing.reason = (joinDistinct(existing.reason, r.reason) ?? existing.reason) as StockMovementRow["reason"]
+    existing.userName = joinDistinct(existing.userName, r.userName) ?? existing.userName
+    existing.approvedByName = joinDistinct(existing.approvedByName, r.approvedByName)
     if (r.createdAt > existing.createdAt) existing.createdAt = r.createdAt
   }
   return out
