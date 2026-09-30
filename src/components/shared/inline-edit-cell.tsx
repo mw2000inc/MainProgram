@@ -174,6 +174,36 @@ export function InlineDateCell({
   )
 }
 
+// Keyboard shortcuts shared by the blur-commit cells below: Enter saves
+// (by blurring, so it goes through the exact same onBlur save/validation
+// path as clicking away), Escape discards the typed change and leaves the
+// field showing the saved value. Escape also blurs, so onBlur must skip its
+// save for that one blur — consumeCancel() tells it to. Enter is ignored
+// mid-composition (Korean/IME input), where it confirms a syllable rather
+// than finishing the edit.
+function useCommitKeys(revert: () => void) {
+  const cancelledRef = React.useRef(false)
+  const onKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.nativeEvent.isComposing) return
+    const target = e.target as HTMLElement
+    if (e.key === "Enter") {
+      e.preventDefault()
+      e.stopPropagation()
+      target.blur()
+    } else if (e.key === "Escape") {
+      cancelledRef.current = true
+      revert()
+      target.blur()
+    }
+  }
+  const consumeCancel = () => {
+    const cancelled = cancelledRef.current
+    cancelledRef.current = false
+    return cancelled
+  }
+  return { onKeyDown, consumeCancel }
+}
+
 // Free-text field (Notes, etc.) — committed on blur rather than per
 // keystroke, so typing a sentence doesn't fire a save (and a toast) on
 // every character. Keeps its own draft state so the field stays
@@ -207,6 +237,7 @@ export function InlineTextCell({
     setLastSeenValue(value)
     setDraft(value ?? "")
   }
+  const keys = useCommitKeys(() => setDraft(value ?? ""))
   return (
     <Input
       className={cn("h-7 text-xs", className)}
@@ -214,7 +245,9 @@ export function InlineTextCell({
       placeholder={placeholder}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={keys.onKeyDown}
       onBlur={() => {
+        if (keys.consumeCancel()) return
         if (required && !draft.trim()) {
           setDraft(value ?? "")
           return
@@ -245,6 +278,7 @@ export function InlineNumberCell({
     setLastSeenValue(value)
     setDraft(String(value))
   }
+  const keys = useCommitKeys(() => setDraft(String(value)))
   return (
     <Input
       type="number"
@@ -254,7 +288,9 @@ export function InlineNumberCell({
       value={draft}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={keys.onKeyDown}
       onBlur={() => {
+        if (keys.consumeCancel()) return
         const next = Number(draft)
         if (!Number.isNaN(next) && next >= 0 && next !== value) onCommit(next)
         else setDraft(String(value))
@@ -286,13 +322,16 @@ export function InlineCurrencyCell({
     setLastSeenValue(value)
     setDraft(String(value))
   }
+  const keys = useCommitKeys(() => setDraft(String(value)))
   return (
-    <div onClick={(e) => e.stopPropagation()} className="inline-block">
+    // Keys caught here, as they bubble up from CurrencyInput's own input.
+    <div onClick={(e) => e.stopPropagation()} onKeyDown={keys.onKeyDown} className="inline-block">
       <CurrencyInput
         value={draft}
         onChange={setDraft}
         className={cn("h-7 w-24 text-xs", className)}
         onBlur={() => {
+          if (keys.consumeCancel()) return
           const next = Number(draft)
           if (!Number.isNaN(next) && next >= 0 && next !== value) onCommit(next)
           else setDraft(String(value))
