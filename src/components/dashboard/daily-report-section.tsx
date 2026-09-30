@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -45,9 +45,11 @@ import { CollectionsFormDialog } from "@/components/collections/collections-form
 import { DispatchApprovalQueue, useDispatchApprovalCount } from "@/components/dashboard/dispatch-approval-queue"
 import { AllCollectionDialog } from "@/components/dashboard/all-collection-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
   getInventoryListExpandedColumns,
+  groupInventoryListRows,
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
@@ -55,7 +57,7 @@ import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChange
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
+import { useApproveStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
@@ -626,6 +628,20 @@ export function DailyReportSection() {
       ),
     [stockMovements, reportDate]
   )
+  // One row per item per job (see groupInventoryListRows).
+  const dayStockMovementRows = React.useMemo(() => groupInventoryListRows(dayStockMovements), [dayStockMovements])
+
+  // Approve All Pending: every pending movement across all jobs and days,
+  // not just this day's — except one still waiting to be mapped to a stock
+  // item (an install model / hand-typed part), which needs the queue.
+  const approveAll = useApproveStockMovements()
+  const [approveAllOpen, setApproveAllOpen] = React.useState(false)
+  const allPending = React.useMemo(() => stockMovements.filter((m) => m.status === "pending"), [stockMovements])
+  const approvablePending = React.useMemo(() => allPending.filter((m) => !!m.productId), [allPending])
+  const approvableJobCount = React.useMemo(
+    () => new Set(approvablePending.map((m) => m.filterChangePlanId ?? m.installPlanId ?? m.scheduleJobId ?? m.referenceNumber)).size,
+    [approvablePending]
+  )
 
   // Raw panel content, unwrapped — always wrapped in SortablePanel +
   // ResizablePanel below (see resizable()). Titles come from the admin's
@@ -750,7 +766,17 @@ export function DailyReportSection() {
         // prop, the dialog renders the exact same columns and falls back to
         // this same tableClassName.
         columns={inventoryListExpandedColumns}
-        data={dayStockMovements}
+        data={dayStockMovementRows}
+        headerActions={
+          // Shown whenever anything is pending — even if all of it still needs
+          // mapping, so the admin is pointed to the queue rather than the
+          // button silently not being there.
+          isAdmin && allPending.length > 0 ? (
+            <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveAllOpen(true)}>
+              <CheckCheck className="h-3.5 w-3.5" /> {tInventory("approveAllPending", { count: String(allPending.length) })}
+            </Button>
+          ) : undefined
+        }
         loading={pInventory}
         emptyMessage={tInventory("noMovementsForDate")}
         exportColumns={INVENTORY_LIST_EXPORT_COLUMNS}
@@ -822,6 +848,32 @@ export function DailyReportSection() {
               {tInventory("pendingApprovalButton")}{pendingStockMovementCount > 0 ? ` (${pendingStockMovementCount})` : ""}
             </Button>
             <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />
+            <ConfirmDialog
+              open={approveAllOpen}
+              onOpenChange={setApproveAllOpen}
+              title={tInventory("approveAllPendingTitle")}
+              description={
+                approvablePending.length === 0
+                  ? tInventory("approveAllPendingNoneMapped", { count: String(allPending.length) })
+                  : tInventory("approveAllPendingDescription", { count: String(approvablePending.length), jobs: String(approvableJobCount) }) +
+                    (allPending.length > approvablePending.length
+                      ? " " + tInventory("approveAllPendingSkipped", { count: String(allPending.length - approvablePending.length) })
+                      : "")
+              }
+              confirmLabel={approvablePending.length === 0 ? tInventory("approveAllPendingOpenQueue") : tInventory("approveAllPendingConfirm")}
+              destructive={false}
+              loading={approveAll.isPending}
+              onConfirm={async () => {
+                if (approvablePending.length === 0) {
+                  setApproveAllOpen(false)
+                  setInventoryQueueOpen(true)
+                  return
+                }
+                if (!user) return
+                await approveAll.mutateAsync({ ids: approvablePending.map((m) => m.id), approvedBy: user.id }).catch(() => {})
+                setApproveAllOpen(false)
+              }}
+            />
             <Button
               type="button"
               size="sm"

@@ -40,6 +40,9 @@ export type StockMovementRow = StockMovement & {
   // that's a reliable signal) rather than a separate stored column, so it
   // can never drift out of sync with what actually wrote the row.
   source: "Manual" | "System"
+  // Set only on an Inventory List row that combines several movements of
+  // the same item on one job (see groupInventoryListRows).
+  mergedIds?: string[]
 }
 
 function warnIfLowStock(result: api.StockMovementResult) {
@@ -289,7 +292,7 @@ export function useUpdateStockMovement() {
 export function useApproveStockMovement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, approvedBy, adjust }: { id: string; approvedBy: string; adjust?: { productId?: string; quantityRemoved?: number } }) =>
+    mutationFn: ({ id, approvedBy, adjust }: { id: string; approvedBy: string; adjust?: { productId?: string; quantityRemoved?: number; quantityAdded?: number } }) =>
       api.approveStockMovement(id, approvedBy, adjust),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
@@ -307,6 +310,37 @@ export function useApproveStockMovement() {
 // rejecting never touches stock_quantity or raises a low/out-of-stock
 // notification (see rejectStockMovement's own comment), so there's nothing
 // there to refresh.
+// Approve All Pending — approves each movement in turn (one update each, the
+// same as a single approval, so the approval trigger applies every one), then
+// refreshes stock and movements once, with one summary toast instead of one
+// per item. Stops at the first failure and reports how many went through.
+export function useApproveStockMovements() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, approvedBy }: { ids: string[]; approvedBy: string }) => {
+      let approved = 0
+      try {
+        for (const id of ids) {
+          await api.approveStockMovement(id, approvedBy)
+          approved += 1
+        }
+      } catch (error) {
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { approved })
+      }
+      return { approved }
+    },
+    onSuccess: ({ approved }) => toast.success(`Approved ${approved} inventory item(s) — stock updated`),
+    onError: (error: Error & { approved?: number }) =>
+      toast.error(`Stopped after ${error.approved ?? 0} item(s): ${error.message || "Failed to approve"}`),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
+      qc.invalidateQueries({ queryKey: productsKey })
+      qc.invalidateQueries({ queryKey: ["notifications"] })
+      qc.invalidateQueries({ queryKey: ["activityLogs"] })
+    },
+  })
+}
+
 export function useRejectStockMovement() {
   const qc = useQueryClient()
   return useMutation({

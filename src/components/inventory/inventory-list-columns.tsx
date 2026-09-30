@@ -111,11 +111,6 @@ export function getInventoryListExpandedColumns({
       cell: ({ row }) => <ReasonCell row={row.original} />,
     },
     {
-      accessorKey: "relatedCustomerName",
-      header: () => <ColumnHeader tKey="relatedCustomer" ns="inventory" />,
-      cell: ({ row }) => row.original.relatedCustomerName || "—",
-    },
-    {
       accessorKey: "relatedJobOrderNo",
       header: () => <ColumnHeader tKey="relatedJob" ns="inventory" />,
       cell: ({ row }) => row.original.relatedJobOrderNo || "—",
@@ -141,10 +136,45 @@ export function getInventoryListExpandedColumns({
     columns.push({
       id: "edit",
       header: "",
-      cell: ({ row }) => <EditButtonCell movement={row.original} onEdit={onEdit} />,
+      // A row combining several movements (groupInventoryListRows) has no
+      // single movement to edit — edit those from Inventory > In & Out.
+      cell: ({ row }) => ((row.original.mergedIds?.length ?? 1) > 1 ? null : <EditButtonCell movement={row.original} onEdit={onEdit} />),
     })
   }
   return columns
+}
+
+// The Inventory List shows one row per item per job: several movements a job
+// queued for the same item (e.g. a repair with two part rows for 012, or a
+// schedule job's recorded filter items) are combined into a single row with
+// the total quantity. Only merges trigger-created job movements that agree
+// on job, item, direction, reason and status — a manual entry, or two jobs,
+// are never combined. Display only: the stored movements stay one per
+// recorded part/item, so each still links back to what created it.
+export function groupInventoryListRows(rows: StockMovementRow[]): StockMovementRow[] {
+  const out: StockMovementRow[] = []
+  const byKey = new Map<string, StockMovementRow>()
+  for (const r of rows) {
+    const job = r.filterChangePlanId ?? r.installPlanId ?? r.scheduleJobId ?? (r.repairPlanPartId ? `rep:${r.relatedJobOrderNo ?? r.referenceNumber}` : undefined)
+    if (!job) {
+      out.push(r)
+      continue
+    }
+    const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
+    const key = [job, r.productId || r.itemLabel, direction, r.reason, r.status].join("|")
+    const existing = byKey.get(key)
+    if (!existing) {
+      const copy = { ...r, mergedIds: [r.id] }
+      byKey.set(key, copy)
+      out.push(copy)
+      continue
+    }
+    existing.quantityAdded += r.quantityAdded
+    existing.quantityRemoved += r.quantityRemoved
+    existing.mergedIds = [...(existing.mergedIds ?? [existing.id]), r.id]
+    if (r.createdAt > existing.createdAt) existing.createdAt = r.createdAt
+  }
+  return out
 }
 
 // Print/export column headers stay in English regardless of interface

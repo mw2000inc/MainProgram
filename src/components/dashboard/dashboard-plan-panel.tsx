@@ -34,6 +34,9 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   emptyMessage?: string
   canAdd?: boolean
   addLabel?: string
+  // Extra buttons shown in the panel header, before +Add (e.g. the
+  // Inventory List's Approve All Pending).
+  headerActions?: React.ReactNode
   onAdd?: () => void
   canDelete?: boolean
   onDeleteSelected?: (ids: string[]) => Promise<void>
@@ -126,6 +129,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   emptyMessage,
   canAdd,
   addLabel,
+  headerActions,
   onAdd,
   canDelete,
   onDeleteSelected,
@@ -215,6 +219,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         <Icon className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-1">
+        {headerActions}
         {canAdd && (
           <Button size="sm" className="h-7 gap-1 px-2" onClick={onAdd}>
             <Plus className="h-3.5 w-3.5" /> {resolvedAddLabel}

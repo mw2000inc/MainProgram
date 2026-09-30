@@ -191,16 +191,22 @@ export function StockMovementApprovalQueue({
     [products]
   )
 
+  // An item either takes stock OUT (filters/parts fitted, units installed)
+  // or puts it back IN (a part removed from a unit during a repair) — its
+  // quantity is adjustable either way, on whichever side it moves.
+  const isAddition = (m: StockMovementRow) => m.quantityAdded > 0 && m.quantityRemoved === 0
+  const queuedQty = (m: StockMovementRow) => (isAddition(m) ? m.quantityAdded : m.quantityRemoved)
+
   const adjustedFor = (m: StockMovementRow) => {
     const a = adjustments[m.id] ?? {}
     const productId = a.productId && a.productId !== m.productId ? a.productId : undefined
     const qty = a.quantity !== undefined ? Number(a.quantity) : undefined
-    const quantityRemoved = qty !== undefined && Number.isInteger(qty) && qty > 0 && qty !== m.quantityRemoved ? qty : undefined
+    const quantity = qty !== undefined && Number.isInteger(qty) && qty > 0 && qty !== queuedQty(m) ? qty : undefined
     const invalid = a.quantity !== undefined && !(Number.isInteger(qty) && (qty as number) > 0)
     // An unmapped item (install model / hand-typed part) can't be approved
     // until a stock item is picked — approval needs a product.
     const needsMapping = !m.productId && !a.productId
-    return { productId, quantityRemoved, invalid, needsMapping, changed: productId !== undefined || quantityRemoved !== undefined }
+    return { productId, quantity, invalid, needsMapping, changed: productId !== undefined || quantity !== undefined }
   }
 
   async function approveItems(items: StockMovementRow[]) {
@@ -208,10 +214,10 @@ export function StockMovementApprovalQueue({
     setBusy(true)
     try {
       for (const m of items) {
-        const { productId, quantityRemoved, invalid, needsMapping } = adjustedFor(m)
+        const { productId, quantity, invalid, needsMapping } = adjustedFor(m)
         if (invalid || needsMapping) continue
-        // Only a removal's quantity is adjustable — every queued item is one.
-        await approve.mutateAsync({ id: m.id, approvedBy: user.id, adjust: m.quantityRemoved > 0 ? { productId, quantityRemoved } : { productId } })
+        const adjust = isAddition(m) ? { productId, quantityAdded: quantity } : { productId, quantityRemoved: quantity }
+        await approve.mutateAsync({ id: m.id, approvedBy: user.id, adjust })
       }
     } finally {
       setBusy(false)
@@ -319,22 +325,23 @@ export function StockMovementApprovalQueue({
                               ))}
                             </SelectContent>
                           </Select>
-                          {m.quantityRemoved > 0 ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-muted-foreground">−</span>
-                              <Input
-                                type="number"
-                                min={1}
-                                step={1}
-                                aria-label={t("queueQuantity")}
-                                className={cn("h-8 w-16 text-xs", adj.invalid && "border-danger")}
-                                value={a.quantity ?? String(m.quantityRemoved)}
-                                onChange={(e) => setAdjustments((old) => ({ ...old, [m.id]: { ...old[m.id], quantity: e.target.value } }))}
-                              />
-                            </div>
-                          ) : (
-                            m.quantityAdded > 0 && <span className="text-sm font-medium text-success">+{m.quantityAdded}</span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <span
+                              className={cn("text-xs font-medium", isAddition(m) ? "text-success" : "text-danger")}
+                              title={isAddition(m) ? t("queueTypeIn") : t("queueTypeOut")}
+                            >
+                              {isAddition(m) ? t("queueTypeIn") : t("queueTypeOut")}
+                            </span>
+                            <Input
+                              type="number"
+                              min={1}
+                              step={1}
+                              aria-label={t("queueQuantity")}
+                              className={cn("h-8 w-16 text-xs", adj.invalid && "border-danger")}
+                              value={a.quantity ?? String(queuedQty(m))}
+                              onChange={(e) => setAdjustments((old) => ({ ...old, [m.id]: { ...old[m.id], quantity: e.target.value } }))}
+                            />
+                          </div>
                           {adj.changed && <span className="text-[11px] text-primary">{t("queueAdjusted")}</span>}
                           <Button
                             variant="destructive"

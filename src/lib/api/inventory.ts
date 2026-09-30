@@ -283,7 +283,7 @@ export async function deleteStockMovement(id: string): Promise<void> {
 export async function approveStockMovement(
   id: string,
   approvedBy: string,
-  adjust?: { productId?: string; quantityRemoved?: number }
+  adjust?: { productId?: string; quantityRemoved?: number; quantityAdded?: number }
 ): Promise<StockMovementResult> {
   const { data, error } = await supabase
     .from("stock_movements")
@@ -293,6 +293,7 @@ export async function approveStockMovement(
       approved_by: approvedBy,
       ...(adjust?.productId ? { product_id: adjust.productId } : {}),
       ...(adjust?.quantityRemoved !== undefined ? { quantity_removed: adjust.quantityRemoved } : {}),
+      ...(adjust?.quantityAdded !== undefined ? { quantity_added: adjust.quantityAdded } : {}),
     })
     .eq("id", id)
     .select()
