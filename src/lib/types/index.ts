@@ -227,6 +227,7 @@ export type StockMovementReason =
   | "Adjustment"
   | "Filter Change"
   | "Repair"
+  | "Installation"
 
 export interface StockMovement {
   id: string
@@ -246,6 +247,17 @@ export interface StockMovement {
   // Traceability back to the schedule job that triggered this movement, when
   // applicable (the filter-change auto-deduction, old and new).
   scheduleJobId?: string
+  // The Filter Change visit whose completion queued this movement
+  // (filter_change_inventory_queue migration), or the repair part it was
+  // recorded for — both only ever set by triggers.
+  filterChangePlanId?: string
+  repairPlanPartId?: string
+  installPlanId?: string
+  // What the job recorded, for an item not yet mapped to a product (an
+  // install model or hand-typed repair part — see the
+  // inventory_queue_installs_repairs migration). productId is "" until an
+  // admin maps it in the queue; an approved movement always has a product.
+  itemLabel?: string
   // 'pending' rows (from a completed job's recorded filter items — see
   // ScheduleJobFilterItem) have NOT been applied to products.stockQuantity
   // yet; every other write path in this app (manual entries, sale

@@ -41,6 +41,15 @@ function fromRow(row: Row): RepairPlanPart {
   }
 }
 
+// part id -> its repair plan id, for the Inventory Approvals queue to show
+// which repair a pending part deduction belongs to.
+export async function listRepairPlanIdsForParts(partIds: string[]): Promise<Record<string, string>> {
+  if (partIds.length === 0) return {}
+  const { data, error } = await supabase.from("repair_plan_parts").select("id, repair_plan_id").in("id", partIds)
+  if (error) throw error
+  return Object.fromEntries((data as { id: string; repair_plan_id: string }[]).map((r) => [r.id, r.repair_plan_id]))
+}
+
 export async function listRepairPlanParts(repairPlanId: string): Promise<RepairPlanPart[]> {
   const { data, error } = await supabase
     .from("repair_plan_parts")

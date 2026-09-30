@@ -67,7 +67,7 @@ export const STOCK_MOVEMENT_REASONS = ["Restock", "Return", "Damaged", "Adjustme
 // every reason this app has ever written — so a row's own reason value
 // already tells you whether an admin typed it in directly (see
 // useStockMovementRows' own `source` field, which is exactly this check).
-export const AUTOMATED_STOCK_MOVEMENT_REASONS = ["Sale", "Filter Change", "Repair"] as const
+export const AUTOMATED_STOCK_MOVEMENT_REASONS = ["Sale", "Filter Change", "Repair", "Installation"] as const
 
 // The old AppSheet system's fixed product catalog, grouped by brand prefix —
 // used by the Sale List entry form's Product# dropdown. `name` is stored

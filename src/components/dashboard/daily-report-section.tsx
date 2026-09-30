@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { format } from "date-fns"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -615,8 +616,14 @@ export function DailyReportSection() {
   // (both inventory:edit-gated) do let an admin create or fix a pending
   // movement straight from here; see getInventoryListExpandedColumns and
   // the inventory panel's own canAdd/onAdd below.
+  // Also a movement approved that day, even if it's dated earlier (a job
+  // completed yesterday and verified in the Inventory Approvals queue
+  // today) — so an approval shows up here the day it changes stock.
   const dayStockMovements = React.useMemo(
-    () => stockMovements.filter((m) => m.date === reportDate),
+    () =>
+      stockMovements.filter(
+        (m) => m.date === reportDate || (!!m.approvedAt && format(new Date(m.approvedAt), "yyyy-MM-dd") === reportDate)
+      ),
     [stockMovements, reportDate]
   )
 

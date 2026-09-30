@@ -128,7 +128,7 @@ type StockMovementRow = {
   id: string
   date: string
   created_at: string
-  product_id: string
+  product_id: string | null
   quantity_added: number
   quantity_removed: number
   second_hand_ready_quantity: number
@@ -138,6 +138,10 @@ type StockMovementRow = {
   user_id: string | null
   reference_number: string
   schedule_job_id: string | null
+  filter_change_plan_id?: string | null
+  repair_plan_part_id?: string | null
+  install_plan_id?: string | null
+  item_label?: string | null
   status: string
   approved_at: string | null
   approved_by: string | null
@@ -150,7 +154,7 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     id: row.id,
     date: row.date,
     createdAt: row.created_at,
-    productId: row.product_id,
+    productId: row.product_id ?? "",
     quantityAdded: row.quantity_added,
     quantityRemoved: row.quantity_removed,
     secondHandReadyQuantity: row.second_hand_ready_quantity,
@@ -160,6 +164,10 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     userId: row.user_id ?? undefined,
     referenceNumber: row.reference_number,
     scheduleJobId: row.schedule_job_id ?? undefined,
+    filterChangePlanId: row.filter_change_plan_id ?? undefined,
+    repairPlanPartId: row.repair_plan_part_id ?? undefined,
+    installPlanId: row.install_plan_id ?? undefined,
+    itemLabel: row.item_label ?? undefined,
     status: (row.status as StockMovement["status"]) ?? "approved",
     approvedAt: row.approved_at ?? undefined,
     approvedBy: row.approved_by ?? undefined,
@@ -267,10 +275,25 @@ export async function deleteStockMovement(id: string): Promise<void> {
 // products.stock_quantity. approvedBy is the current admin's own id, a
 // real server-verified value the same way every other "who approved this"
 // field in this app is (see the admin-users API route's comment).
-export async function approveStockMovement(id: string, approvedBy: string): Promise<StockMovementResult> {
+//
+// adjust: what the admin changed in the queue before approving (a different
+// filter, or a different quantity) — written in the same update as the
+// approval, so the approval trigger deducts the adjusted amount, not the
+// originally queued one.
+export async function approveStockMovement(
+  id: string,
+  approvedBy: string,
+  adjust?: { productId?: string; quantityRemoved?: number }
+): Promise<StockMovementResult> {
   const { data, error } = await supabase
     .from("stock_movements")
-    .update({ status: "approved", approved_at: new Date().toISOString(), approved_by: approvedBy })
+    .update({
+      status: "approved",
+      approved_at: new Date().toISOString(),
+      approved_by: approvedBy,
+      ...(adjust?.productId ? { product_id: adjust.productId } : {}),
+      ...(adjust?.quantityRemoved !== undefined ? { quantity_removed: adjust.quantityRemoved } : {}),
+    })
     .eq("id", id)
     .select()
     .single()

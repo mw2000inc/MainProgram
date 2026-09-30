@@ -5,6 +5,10 @@ import { AUTOMATED_STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { listRepairPlanIdsForParts } from "@/lib/api/repair-plan-parts"
 import type { Product, StockMovement, Supplier } from "@/lib/types"
 import { getStockStatus } from "@/lib/utils"
 import { toast } from "sonner"
@@ -72,6 +76,18 @@ export function useStockMovementRows() {
   const { data: users = [], isPending: p3 } = useUsers()
   const { data: scheduleJobs = [], isPending: p4 } = useScheduleJobs()
   const { data: customers = [], isPending: p5 } = useCustomers()
+  const { data: filterChangePlans = [] } = useFilterChangePlans()
+  const { data: installPlans = [] } = useInstallPlans()
+  const { data: repairPlans = [] } = useRepairPlans()
+  const partIds = React.useMemo(
+    () => [...new Set(movements.map((m) => m.repairPlanPartId).filter((id): id is string => !!id))].sort(),
+    [movements]
+  )
+  const { data: repairPlanIdByPart = {} } = useQuery({
+    queryKey: ["repairPlanIdsForParts", partIds],
+    queryFn: () => listRepairPlanIdsForParts(partIds),
+    enabled: partIds.length > 0,
+  })
 
   const data = React.useMemo<StockMovementRow[]>(() => {
     // Group per product so we can walk each product's own history in true creation
@@ -126,14 +142,33 @@ export function useStockMovementRows() {
       }
     })
 
+    const fcById = new Map(filterChangePlans.map((p) => [p.id, p]))
+    const installById = new Map(installPlans.map((p) => [p.id, p]))
+    const repairById = new Map(repairPlans.map((p) => [p.id, p]))
     return movements.map((m) => {
       const product = products.find((p) => p.id === m.productId)
       const actualStock = actualStockByMovementId.get(m.id) ?? product?.stockQuantity ?? 0
       const job = m.scheduleJobId ? scheduleJobs.find((j) => j.id === m.scheduleJobId) : undefined
       const customer = job?.customerId ? customers.find((c) => c.id === job.customerId) : undefined
+      // The job a trigger-created movement came from, for Related Customer /
+      // Related Job: a schedule job, or else the Filter Change visit,
+      // install or repair that queued it.
+      const fc = !job && m.filterChangePlanId ? fcById.get(m.filterChangePlanId) : undefined
+      const install = !job && m.installPlanId ? installById.get(m.installPlanId) : undefined
+      const repairId = !job && m.repairPlanPartId ? repairPlanIdByPart[m.repairPlanPartId] : undefined
+      const repair = repairId ? repairById.get(repairId) : undefined
+      const related = job
+        ? { customer: customer ? customer.companyName || customer.fullName : undefined, order: job.orderNo }
+        : fc
+          ? { customer: fc.memberAccount, order: fc.orderNumber }
+          : install
+            ? { customer: install.name, order: install.orderNo }
+            : repair
+              ? { customer: repair.accountName, order: repair.orderNo }
+              : { customer: undefined, order: undefined }
       return {
         ...m,
-        productName: product?.name ?? "Unknown",
+        productName: product?.name ?? m.itemLabel ?? "Unknown",
         sku: product?.sku ?? "-",
         actualStock,
         currentStock: currentStockByMovementId.get(m.id) ?? actualStock,
@@ -142,11 +177,11 @@ export function useStockMovementRows() {
         approvedByName: m.approvedBy ? (users.find((u) => u.id === m.approvedBy)?.name ?? "Unknown") : undefined,
         rejectedByName: m.rejectedBy ? (users.find((u) => u.id === m.rejectedBy)?.name ?? "Unknown") : undefined,
         source: (AUTOMATED_STOCK_MOVEMENT_REASONS as readonly string[]).includes(m.reason) ? "System" : "Manual",
-        relatedCustomerName: customer ? customer.companyName || customer.fullName : undefined,
-        relatedJobOrderNo: job?.orderNo,
+        relatedCustomerName: related.customer || undefined,
+        relatedJobOrderNo: related.order || undefined,
       }
     })
-  }, [movements, products, users, scheduleJobs, customers])
+  }, [movements, products, users, scheduleJobs, customers, filterChangePlans, installPlans, repairPlans, repairPlanIdByPart])
 
   return { data, isPending: p1 || p2 || p3 || p4 || p5 }
 }
@@ -254,7 +289,8 @@ export function useUpdateStockMovement() {
 export function useApproveStockMovement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, approvedBy }: { id: string; approvedBy: string }) => api.approveStockMovement(id, approvedBy),
+    mutationFn: ({ id, approvedBy, adjust }: { id: string; approvedBy: string; adjust?: { productId?: string; quantityRemoved?: number } }) =>
+      api.approveStockMovement(id, approvedBy, adjust),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: productsKey })
