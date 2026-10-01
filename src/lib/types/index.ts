@@ -419,6 +419,10 @@ export type ScheduleJobType = "installation" | "filter_change" | "repair" | "col
 // approves it, which is the same row transitioning to 'pending' -- 'pending'
 // itself keeps its existing meaning ("active, not yet completed")
 // unchanged.
+// Where a schedule job came from (schedule_job_source migration) — the
+// Schedule views badge everything but "manual".
+export type ScheduleJobSource = "manual" | "automation" | "auto_suggest" | "customer_confirmed"
+
 export type ScheduleJobStatus = "pending" | "pending_approval" | "completed" | "cancelled"
 
 export interface ScheduleJob {
@@ -477,6 +481,7 @@ export interface ScheduleJob {
   // modal (schedule_job_filter_codes migration). A plan, not a record of
   // what was used: that's ScheduleJobFilterItem below.
   filterCodes?: string
+  source: ScheduleJobSource
   // The following three only apply to jobType "filter_change" — which
   // Inventory item + how many units to deduct once this job is marked
   // completed, and when that deduction actually happened (the idempotency

@@ -29,7 +29,7 @@ export function useScheduleJobs() {
 export function useCreateScheduleJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<ScheduleJob, "id" | "createdAt">) => api.createScheduleJob(input),
+    mutationFn: (input: Omit<ScheduleJob, "id" | "createdAt" | "source">) => api.createScheduleJob(input),
     onSuccess: () => {
       invalidateJobsAndModules(qc)
       toast.success("Job scheduled")
@@ -41,7 +41,7 @@ export function useCreateScheduleJob() {
 export function useUpdateScheduleJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: Partial<Omit<ScheduleJob, "id" | "createdAt">> }) =>
+    mutationFn: ({ id, input }: { id: string; input: Partial<Omit<ScheduleJob, "id" | "createdAt" | "source">> }) =>
       api.updateScheduleJob(id, input),
     onSuccess: () => {
       invalidateJobsAndModules(qc)

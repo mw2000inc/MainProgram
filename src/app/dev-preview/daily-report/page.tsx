@@ -91,6 +91,7 @@ const MOCK_SCHEDULE_JOBS: ScheduleJob[] = [
     scheduledDate: today,
     status: "pending",
     createdAt: now,
+    source: "manual",
   },
   {
     id: "s2",
@@ -102,6 +103,7 @@ const MOCK_SCHEDULE_JOBS: ScheduleJob[] = [
     status: "completed",
     remarks: "Replaced UV lamp and cleaned housing, unit tested and running normally.",
     createdAt: now,
+    source: "customer_confirmed",
   },
   {
     id: "s3",
@@ -112,6 +114,7 @@ const MOCK_SCHEDULE_JOBS: ScheduleJob[] = [
     scheduledDate: today,
     status: "pending",
     createdAt: now,
+    source: "automation",
   },
 ]
 

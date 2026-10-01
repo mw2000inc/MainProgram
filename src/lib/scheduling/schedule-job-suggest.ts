@@ -459,6 +459,7 @@ export async function applyTechnicianAssignmentsToJobs(
       secondary_address: errand.address?.trim() || null,
       notes: errand.notes.trim() || null,
       filter_codes: errand.filterCodes?.trim() ?? "",
+      source: "auto_suggest",
     })
     if (error) {
       failed.push(`new ${jobType} job${errand.orderNo ? ` for ${errand.orderNo}` : ""}: ${error.message}`)

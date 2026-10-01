@@ -115,6 +115,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       order_no: c.order_number,
       scheduled_date: today,
       status: "pending",
+      source: "automation",
       notes: `Auto-generated — filter change due ${dueDate}`,
     })
     if (insertError) {
@@ -217,6 +218,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       order_no: orderNo,
       scheduled_date: today,
       status: "pending",
+      source: "automation",
       notes: `Auto-generated — filter change due ${dueDate} (CP System)`,
     })
     if (insertError) {

@@ -45,7 +45,7 @@ import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell 
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 type FilterItemDraft = { key: number; productId: string; quantity: string }
 let filterItemDraftKey = 0
@@ -298,6 +298,30 @@ const STATUS_LABEL_KEY: Record<ScheduleJobStatus, string> = {
 }
 const VEHICLE_OPTIONS = VEHICLE_TYPES.map((v) => ({ value: v }))
 
+// Badge text / tooltip keys for jobs the system created (job.source).
+const SOURCE_BADGE: Record<Exclude<ScheduleJobSource, "manual">, { label: string; hint: string }> = {
+  automation: { label: "sourceAutomation", hint: "sourceAutomationHint" },
+  auto_suggest: { label: "sourceAutoSuggest", hint: "sourceAutoSuggestHint" },
+  customer_confirmed: { label: "sourceCustomerConfirmed", hint: "sourceCustomerConfirmedHint" },
+}
+
+// "Auto" / "Auto-suggest" / "Customer confirmed" next to a job's type; nothing
+// for a job an admin added by hand.
+function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: string) => string }) {
+  if (source === "manual") return null
+  const badge = SOURCE_BADGE[source]
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-job-source-badge"
+      title={t(badge.hint)}
+      className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+    >
+      {t(badge.label)}
+    </Badge>
+  )
+}
+
 export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -530,6 +554,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <span className="font-medium">{t(job.jobType)}</span>
+          <JobSourceBadge source={job.source} t={t} />
           {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
         </div>
         {/* One scheduledDate on the shared job — shown explicitly (even
@@ -607,6 +632,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         job.filterCodes,
         job.technician,
         job.technician2,
+        // So "auto" / "customer" finds the system-created jobs too.
+        job.source !== "manual" ? t(SOURCE_BADGE[job.source].label) : undefined,
       ]
         .filter(Boolean)
         .join(" ")
@@ -766,7 +793,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   />
                 </div>
               </EditableCell>
-              <EditableCell {...cellProps(job, "jobType")} className="whitespace-nowrap" display={t(job.jobType)}>
+              <EditableCell
+                {...cellProps(job, "jobType")}
+                className="whitespace-nowrap"
+                display={
+                  <span className="inline-flex items-center gap-1.5">
+                    {t(job.jobType)}
+                    <JobSourceBadge source={job.source} t={t} />
+                  </span>
+                }
+              >
                 <CellSelect
                   value={job.jobType}
                   options={JOB_TYPES.map((type) => ({ value: type, label: t(type) }))}

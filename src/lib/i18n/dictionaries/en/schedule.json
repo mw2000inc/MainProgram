@@ -160,5 +160,11 @@
   "outsideUsualCoverage": "Outside usual coverage",
   "doubleClickToEdit": "Double-click to edit",
   "editJob": "Edit job",
-  "vehicleCrewNote": "The {vehicle} goes out with {crew} — both filled in below; you can still change them."
+  "vehicleCrewNote": "The {vehicle} goes out with {crew} — both filled in below; you can still change them.",
+  "sourceAutomation": "Auto",
+  "sourceAutomationHint": "Created automatically by the daily filter-change automation",
+  "sourceAutoSuggest": "Auto-suggest",
+  "sourceAutoSuggestHint": "Added in the Auto-suggest technicians modal",
+  "sourceCustomerConfirmed": "Customer confirmed",
+  "sourceCustomerConfirmedHint": "Created when the customer confirmed the appointment"
 }

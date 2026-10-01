@@ -160,5 +160,11 @@
   "outsideUsualCoverage": "평소 담당 구역 밖",
   "doubleClickToEdit": "더블클릭하여 편집",
   "editJob": "작업 편집",
-  "vehicleCrewNote": "{vehicle} 차량은 {crew}이(가) 함께 운행합니다. 아래에 자동으로 입력되며, 변경할 수 있습니다."
+  "vehicleCrewNote": "{vehicle} 차량은 {crew}이(가) 함께 운행합니다. 아래에 자동으로 입력되며, 변경할 수 있습니다.",
+  "sourceAutomation": "자동",
+  "sourceAutomationHint": "일일 필터 교체 자동화로 자동 생성됨",
+  "sourceAutoSuggest": "자동 추천",
+  "sourceAutoSuggestHint": "기술자 자동 추천 창에서 추가됨",
+  "sourceCustomerConfirmed": "고객 확인",
+  "sourceCustomerConfirmedHint": "고객이 일정을 확인하여 생성됨"
 }

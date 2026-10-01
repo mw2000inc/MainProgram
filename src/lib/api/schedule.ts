@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { fetchAllRows } from "@/lib/supabase/fetch-all"
-import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 type ScheduleJobRow = {
   id: string
@@ -27,6 +27,7 @@ type ScheduleJobRow = {
   location_source: ScheduleJob["locationSource"] | null
   route_sequence: number | null
   filter_codes?: string | null
+  source?: ScheduleJobSource | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -55,10 +56,11 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     locationSource: row.location_source ?? undefined,
     routeSequence: row.route_sequence ?? undefined,
     filterCodes: row.filter_codes || undefined,
+    source: row.source ?? "manual",
   }
 }
 
-function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) {
+function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt" | "source">>) {
   const row: Record<string, unknown> = {}
   if (input.jobType !== undefined) row.job_type = input.jobType
   if (input.technician !== undefined) row.technician = input.technician
@@ -96,13 +98,13 @@ export async function listScheduleJobs(): Promise<ScheduleJob[]> {
   return data.map(fromRow)
 }
 
-export async function createScheduleJob(input: Omit<ScheduleJob, "id" | "createdAt">): Promise<ScheduleJob> {
+export async function createScheduleJob(input: Omit<ScheduleJob, "id" | "createdAt" | "source">): Promise<ScheduleJob> {
   const { data, error } = await supabase.from("schedule_jobs").insert(toRow(input)).select().single()
   if (error) throw error
   return fromRow(data as ScheduleJobRow)
 }
 
-export async function updateScheduleJob(id: string, input: Partial<Omit<ScheduleJob, "id" | "createdAt">>): Promise<ScheduleJob> {
+export async function updateScheduleJob(id: string, input: Partial<Omit<ScheduleJob, "id" | "createdAt" | "source">>): Promise<ScheduleJob> {
   const { data, error } = await supabase.from("schedule_jobs").update(toRow(input)).eq("id", id).select().single()
   if (error) throw error
   return fromRow(data as ScheduleJobRow)
