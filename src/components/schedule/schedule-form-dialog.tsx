@@ -32,11 +32,11 @@ import {
 } from "@/components/ui/select"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { TechnicianCombobox } from "@/components/shared/technician-combobox"
-import { normalizeTechnicianPair } from "@/lib/technicians"
+import { crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
-import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { isReasonableDateString } from "@/lib/form-schemas"
 import { tomorrowIso } from "@/lib/utils"
@@ -199,6 +199,18 @@ export function ScheduleFormDialog({
     if (open) form.reset(defaultValues(defaultDate, job))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, job])
+
+  // A vehicle with a fixed crew (VEHICLE_CREWS — the Liteace) fills in both
+  // technicians and links their logins; they can still be changed after.
+  function applyVehicleCrew(vehicle: string) {
+    const crew = crewForVehicle(vehicle)
+    if (!crew) return
+    const ids = technicianAccountIds(crew.primary, crew.secondary, technicianAccounts)
+    form.setValue("technician", crew.primary, { shouldDirty: true, shouldValidate: true })
+    form.setValue("technician2", crew.secondary, { shouldDirty: true })
+    form.setValue("technicianUserId", ids.technicianUserId || NONE_SENTINEL, { shouldDirty: true })
+    form.setValue("technician2UserId", ids.technician2UserId || NONE_SENTINEL, { shouldDirty: true })
+  }
 
   const jobType = form.watch("jobType")
   const isFilterChange = jobType === "filter_change"
@@ -368,7 +380,11 @@ export function ScheduleFormDialog({
                   <FormLabel>{t("vehicleOptional")}</FormLabel>
                   <Select
                     value={field.value || NONE_SENTINEL}
-                    onValueChange={(v) => field.onChange(v === NONE_SENTINEL ? "" : v)}
+                    onValueChange={(v) => {
+                      const vehicle = v === NONE_SENTINEL ? "" : v
+                      field.onChange(vehicle)
+                      applyVehicleCrew(vehicle)
+                    }}
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -394,6 +410,14 @@ export function ScheduleFormDialog({
                       )}
                     </SelectContent>
                   </Select>
+                  {crewForVehicle(field.value) && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("vehicleCrewNote", {
+                        vehicle: field.value ?? "",
+                        crew: formatTechnicians(crewForVehicle(field.value)!.primary, crewForVehicle(field.value)!.secondary, t("and")),
+                      })}
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

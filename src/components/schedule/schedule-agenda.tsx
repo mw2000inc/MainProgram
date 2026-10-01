@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, CheckCheck, LayoutGrid, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
+import { CalendarClock, CheckCheck, LayoutGrid, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -40,8 +40,12 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { isAssignedTechnician } from "@/lib/technicians"
-import type { ScheduleJob } from "@/lib/types"
+import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
+import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { useUsers } from "@/lib/hooks/use-misc"
+import { VEHICLE_TYPES } from "@/lib/constants"
+import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 type FilterItemDraft = { key: number; productId: string; quantity: string }
 let filterItemDraftKey = 0
@@ -197,6 +201,103 @@ const TABLE_COLUMN_LABEL = {
 } as const
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = { all: "statusFilterAll", pending: "statusFilterPending", completed: "statusFilterCompleted" }
 
+// Table View cells an admin can edit in place (double-click).
+type EditableField = "date" | "jobType" | "technician" | "vehicle" | "orderNo" | "status" | "notes" | "remarks"
+
+// Where a cell editor's own dropdowns render (Radix portals outside the
+// table) — focus moving into one of these is still "inside" the editor.
+const EDITOR_PORTAL_SELECTOR = "[data-radix-popper-content-wrapper], [data-slot=popover-content], [data-slot=select-content], [role=listbox]"
+
+// A Table View cell: shows its value, and for admins turns into its editor
+// on double-click. The editor saves on its own (blur, Enter or a pick); the
+// cell closes again once focus leaves it — clicking elsewhere, Tab, or
+// Escape — so a save never waits on an extra "done" step.
+function EditableCell({
+  enabled,
+  editing,
+  onStart,
+  onStop,
+  hint,
+  className,
+  display,
+  children,
+}: {
+  enabled: boolean
+  editing: boolean
+  onStart: () => void
+  onStop: () => void
+  hint: string
+  className?: string
+  display: React.ReactNode
+  children: React.ReactNode
+}) {
+  const ref = React.useRef<HTMLTableCellElement>(null)
+  React.useEffect(() => {
+    if (editing) ref.current?.querySelector<HTMLElement>("input, textarea, button")?.focus()
+  }, [editing])
+  // After the editor's own blur/keydown handling (its save) has run.
+  const stopSoon = () => setTimeout(onStop, 0)
+  return (
+    <td
+      ref={ref}
+      data-editing={editing || undefined}
+      className={cn("px-3 py-2", enabled && !editing && "cursor-text hover:bg-primary/5", className)}
+      title={enabled && !editing ? hint : undefined}
+      onDoubleClick={enabled && !editing ? onStart : undefined}
+      onKeyDown={editing ? (e) => e.key === "Escape" && stopSoon() : undefined}
+      onBlur={
+        editing
+          ? (e) => {
+              const next = e.relatedTarget as HTMLElement | null
+              if (next && (e.currentTarget.contains(next) || next.closest(EDITOR_PORTAL_SELECTOR))) return
+              stopSoon()
+            }
+          : undefined
+      }
+    >
+      {editing ? children : display}
+    </td>
+  )
+}
+
+// A small labelled select for a table cell (Job Type, Status) — saves the
+// moment a value is picked.
+function CellSelect<V extends string>({
+  value,
+  options,
+  onCommit,
+  className,
+}: {
+  value: V
+  options: { value: V; label: string }[]
+  onCommit: (next: V) => void
+  className?: string
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => v !== value && onCommit(v as V)}>
+      <SelectTrigger size="sm" className={cn("h-7 w-[150px] text-xs", className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+const JOB_TYPES: ScheduleJobType[] = ["installation", "filter_change", "repair", "collection", "monitoring", "other"]
+const STATUS_LABEL_KEY: Record<ScheduleJobStatus, string> = {
+  pending: "pending",
+  pending_approval: "pendingApproval",
+  completed: "completed",
+  cancelled: "cancelled",
+}
+const VEHICLE_OPTIONS = VEHICLE_TYPES.map((v) => ({ value: v }))
+
 export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -237,6 +338,43 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const completeJobs = useCompleteScheduleJobs()
   const [editingJob, setEditingJob] = React.useState<ScheduleJob | undefined>(undefined)
   const [markingDone, setMarkingDone] = React.useState<ScheduleJob | undefined>(undefined)
+  const { t: tStatus } = useTranslation("status")
+  const { t: tCommon } = useTranslation("common")
+
+  // Table View inline editing (admins). Each change saves straight away;
+  // the database then carries date / technician changes to the job's linked
+  // Filter Change / install / repair / collection record, and every open
+  // Daily Report refreshes through useLiveDataSync.
+  const { data: users = [] } = useUsers()
+  const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
+  const [editingCell, setEditingCell] = React.useState<{ jobId: string; field: EditableField } | null>(null)
+  const saveJob = (job: ScheduleJob, input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) => updateJob.mutate({ id: job.id, input })
+  // A technician change also re-links the technicians' logins by name, so the
+  // job shows in the right technician's own Daily Report (never the
+  // previous technician's).
+  const technicianInput = (primary: string, secondary: string) => {
+    const pair = normalizeTechnicianPair(primary, secondary)
+    return { technician: pair.primary, technician2: pair.secondary, ...technicianAccountIds(pair.primary, pair.secondary, technicianAccounts) }
+  }
+  // A vehicle with a fixed crew (the Liteace) brings its two technicians.
+  const saveVehicle = (job: ScheduleJob, vehicle: string) => {
+    const crew = crewForVehicle(vehicle)
+    saveJob(job, { vehicle, ...(crew ? technicianInput(crew.primary, crew.secondary) : {}) })
+  }
+  // Pending -> Completed goes through the same completion as the batch
+  // "Mark as Completed", so the linked record is completed (and its items
+  // queued for inventory approval) too; any other change is a plain save.
+  const saveStatus = (job: ScheduleJob, status: ScheduleJobStatus) => {
+    if (job.status === "pending" && status === "completed") completeJobs.mutate({ jobIds: [job.id], today: todayIso() })
+    else saveJob(job, { status })
+  }
+  const cellProps = (job: ScheduleJob, field: EditableField) => ({
+    enabled: isAdmin,
+    editing: editingCell?.jobId === job.id && editingCell.field === field,
+    onStart: () => setEditingCell({ jobId: job.id, field }),
+    onStop: () => setEditingCell((c) => (c?.jobId === job.id && c.field === field ? null : c)),
+    hint: t("doubleClickToEdit"),
+  })
 
   function openCreate() {
     setEditingJob(undefined)
@@ -587,6 +725,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 {t(TABLE_COLUMN_LABEL[key])}
               </th>
             ))}
+            {isAdmin && <th className="w-10 px-2 py-2" aria-label={tCommon("edit")} />}
           </tr>
         </thead>
         <tbody>
@@ -594,8 +733,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             <tr
               key={job.id}
               data-testid="schedule-table-row"
-              className={cn("border-t align-top", i % 2 === 1 && "bg-muted/40", isAdmin && "cursor-pointer hover:bg-muted")}
-              onClick={isAdmin ? () => openEdit(job) : undefined}
+              className={cn("border-t align-top", i % 2 === 1 && "bg-muted/40")}
             >
               {selectMode && (
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -608,19 +746,104 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   />
                 </td>
               )}
-              <td className="px-3 py-2 whitespace-nowrap">
-                {formatDate(job.scheduledDate)}
-                {job.scheduledTime && <div className="text-xs text-muted-foreground">{job.scheduledTime}</div>}
-              </td>
-              <td className="px-3 py-2 whitespace-nowrap">{t(job.jobType)}</td>
-              <td className="px-3 py-2">{isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : t("unassigned")}</td>
-              <td className="px-3 py-2">{job.vehicle || "—"}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{job.orderNo || "—"}</td>
-              <td className="px-3 py-2">
-                <PlanStatusBadge status={job.status} />
-              </td>
-              <td className="max-w-[28rem] px-3 py-2 whitespace-pre-line wrap-break-word">{job.notes || "—"}</td>
-              <td className="max-w-[20rem] px-3 py-2 whitespace-pre-line wrap-break-word">{job.remarks || "—"}</td>
+              <EditableCell
+                {...cellProps(job, "date")}
+                className="whitespace-nowrap"
+                display={
+                  <>
+                    {formatDate(job.scheduledDate)}
+                    {job.scheduledTime && <div className="text-xs text-muted-foreground">{job.scheduledTime}</div>}
+                  </>
+                }
+              >
+                <div className="flex flex-col gap-1">
+                  <InlineDateCell value={job.scheduledDate} onCommit={(next) => next && saveJob(job, { scheduledDate: next })} />
+                  <InlineTextCell
+                    value={job.scheduledTime}
+                    placeholder={t("timePlaceholder")}
+                    className="w-[136px]"
+                    onCommit={(next) => saveJob(job, { scheduledTime: next.trim() })}
+                  />
+                </div>
+              </EditableCell>
+              <EditableCell {...cellProps(job, "jobType")} className="whitespace-nowrap" display={t(job.jobType)}>
+                <CellSelect
+                  value={job.jobType}
+                  options={JOB_TYPES.map((type) => ({ value: type, label: t(type) }))}
+                  onCommit={(jobType) => {
+                    saveJob(job, { jobType })
+                    setEditingCell(null)
+                  }}
+                />
+              </EditableCell>
+              <EditableCell
+                {...cellProps(job, "technician")}
+                display={isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : t("unassigned")}
+              >
+                <InlineTechnicianPairCell
+                  primary={job.technician}
+                  secondary={job.technician2}
+                  onCommit={(patch) => saveJob(job, technicianInput(patch.primary ?? job.technician, patch.secondary ?? job.technician2 ?? ""))}
+                />
+              </EditableCell>
+              <EditableCell {...cellProps(job, "vehicle")} display={job.vehicle || "—"}>
+                <InlineComboboxCell
+                  value={job.vehicle}
+                  options={VEHICLE_OPTIONS}
+                  placeholder={t("selectVehicle")}
+                  commitOnSelect
+                  showAllOnExactMatch
+                  onCommit={(next) => {
+                    saveVehicle(job, next.trim())
+                    setEditingCell(null)
+                  }}
+                />
+              </EditableCell>
+              <EditableCell {...cellProps(job, "orderNo")} className="whitespace-nowrap" display={job.orderNo || "—"}>
+                <InlineTextCell value={job.orderNo} className="w-32" onCommit={(next) => saveJob(job, { orderNo: next.trim() })} />
+              </EditableCell>
+              <EditableCell {...cellProps(job, "status")} display={<PlanStatusBadge status={job.status} />}>
+                <CellSelect
+                  value={job.status}
+                  options={(["pending", "completed", "cancelled", ...(job.status === "pending_approval" ? ["pending_approval" as const] : [])] as ScheduleJobStatus[]).map(
+                    (status) => ({ value: status, label: tStatus(STATUS_LABEL_KEY[status]) })
+                  )}
+                  onCommit={(status) => {
+                    saveStatus(job, status)
+                    setEditingCell(null)
+                  }}
+                />
+              </EditableCell>
+              <EditableCell
+                {...cellProps(job, "notes")}
+                className="max-w-[28rem] whitespace-pre-line wrap-break-word"
+                display={job.notes || "—"}
+              >
+                <InlineTextAreaCell value={job.notes} className="w-72" onCommit={(next) => saveJob(job, { notes: next })} />
+              </EditableCell>
+              <EditableCell
+                {...cellProps(job, "remarks")}
+                className="max-w-[20rem] whitespace-pre-line wrap-break-word"
+                display={job.remarks || "—"}
+              >
+                <InlineTextAreaCell value={job.remarks} className="w-60" onCommit={(next) => saveJob(job, { remarks: next })} />
+              </EditableCell>
+              {isAdmin && (
+                <td className="px-2 py-1.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label={t("editJob")}
+                    title={t("editJob")}
+                    data-testid="schedule-edit-job"
+                    onClick={() => openEdit(job)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

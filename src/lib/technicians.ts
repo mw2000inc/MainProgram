@@ -1,4 +1,4 @@
-import { TECHNICIANS } from "@/lib/constants"
+import { TECHNICIANS, VEHICLE_CREWS } from "@/lib/constants"
 import type { ScheduleJob } from "@/lib/types"
 
 // Up to two technicians can be assigned wherever one could before (a plan's
@@ -83,6 +83,28 @@ export function matchTechnicianAccount<A extends TechnicianAccount>(name: string
     return aFirst === first && !!aSurname && editDistance(aSurname, surname) <= 2
   })
   return close.length === 1 ? close[0] : undefined
+}
+
+// The login accounts for a job's technician pair, by name (see
+// matchTechnicianAccount) — "" where no single account fits, so a changed
+// technician never keeps the previous person's link (which would show the
+// job to the wrong technician).
+export function technicianAccountIds(
+  primary: string,
+  secondary: string,
+  accounts: TechnicianAccount[]
+): { technicianUserId: string; technician2UserId: string } {
+  return {
+    technicianUserId: matchTechnicianAccount(primary, accounts)?.id ?? "",
+    technician2UserId: secondary ? (matchTechnicianAccount(secondary, accounts)?.id ?? "") : "",
+  }
+}
+
+// The fixed crew for a vehicle (VEHICLE_CREWS), or undefined for a vehicle
+// any technician can take.
+export function crewForVehicle(vehicle: string | null | undefined): { primary: string; secondary: string } | undefined {
+  const crew = vehicle ? VEHICLE_CREWS[vehicle.trim()] : undefined
+  return crew ? { primary: crew[0], secondary: crew[1] } : undefined
 }
 
 // InlineTechnicianPairCell reports what changed as { primary?, secondary? };

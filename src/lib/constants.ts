@@ -27,6 +27,13 @@ export const TECHNICIANS = [
 // storing the literal string "None" as if it were a real vehicle.
 export const VEHICLE_TYPES = ["Aerox Black", "Aerox Blue", "PCX", "Almera", "Liteace"] as const
 
+// The crew a vehicle always goes out with. Picking one of these vehicles in
+// the Schedule form or the Schedule table fills in both technicians (still
+// changeable afterwards) — see crewForVehicle in lib/technicians.ts.
+export const VEHICLE_CREWS: Partial<Record<string, readonly [string, string]>> = {
+  Liteace: ["Eubert Montalbo", "Jayson Sapitin"],
+}
+
 export const PRODUCT_CATEGORIES = [
   "Purifiers",
   "Filters",

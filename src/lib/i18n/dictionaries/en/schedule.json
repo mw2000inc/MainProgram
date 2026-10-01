@@ -157,5 +157,8 @@
   "autoSuggestConfirmTitle": "Auto-suggest technicians for {count} job(s)?",
   "autoSuggestConfirmDescription": "Suggests the nearest available technician for every job below, clustering nearby jobs on the same day together. Change any job's technician, companion, type, date, time, address, filters or notes, bundle extra tasks onto a visit, add custom errands, then Confirm & Assign to save everything and publish it to each technician's Daily Report.",
   "noUnassignedJobs": "Every job in this view already has a technician assigned.",
-  "outsideUsualCoverage": "Outside usual coverage"
+  "outsideUsualCoverage": "Outside usual coverage",
+  "doubleClickToEdit": "Double-click to edit",
+  "editJob": "Edit job",
+  "vehicleCrewNote": "The {vehicle} goes out with {crew} — both filled in below; you can still change them."
 }

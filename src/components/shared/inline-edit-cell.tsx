@@ -6,6 +6,7 @@ import { Calendar as CalendarIcon, Check, ChevronDown, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { CurrencyInput } from "@/components/shared/currency-input"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -273,6 +274,47 @@ export function InlineTextCell({
           setDraft(value ?? "")
           return
         }
+        if (draft !== (value ?? "")) onCommit(draft)
+      }}
+    />
+  )
+}
+
+// Multi-line counterpart of InlineTextCell (Notes, Remarks): same draft and
+// blur-commit, but Shift+Enter starts a new line — plain Enter still saves,
+// Escape still discards.
+export function InlineTextAreaCell({
+  value,
+  placeholder,
+  onCommit,
+  className,
+}: {
+  value: string | undefined
+  placeholder?: string
+  onCommit: (next: string) => void
+  className?: string
+}) {
+  // Same "adjust state during render" resync as InlineTextCell.
+  const [lastSeenValue, setLastSeenValue] = React.useState(value)
+  const [draft, setDraft] = React.useState(value ?? "")
+  if (value !== lastSeenValue) {
+    setLastSeenValue(value)
+    setDraft(value ?? "")
+  }
+  const keys = useCommitKeys(() => setDraft(value ?? ""))
+  return (
+    <Textarea
+      className={cn("min-h-16 text-xs", className)}
+      value={draft}
+      placeholder={placeholder}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && e.shiftKey) return
+        keys.onKeyDown(e)
+      }}
+      onBlur={() => {
+        if (keys.consumeCancel()) return
         if (draft !== (value ?? "")) onCommit(draft)
       }}
     />
