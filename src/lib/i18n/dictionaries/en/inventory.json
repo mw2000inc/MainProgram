@@ -128,5 +128,18 @@
   "editGroupedTitle": "Edit Grouped Items",
   "editGroupedDescription": "This row combines {count} entries. Change each job's quantity, or set one reason for all — each entry is saved separately.",
   "keepEachReason": "Keep each entry's reason",
-  "groupedTotal": "Total"
+  "groupedTotal": "Total",
+  "jobHistoryTitle": "Inventory History — {order}",
+  "jobHistoryDescription": "Every stock movement for this job — what was queued or used, who created it, and who approved or rejected it.",
+  "jobHistorySearchPlaceholder": "Search item, SKU, reason, or name...",
+  "jobHistoryEmpty": "No inventory movements for this job.",
+  "openJobRecord": "Open {order}",
+  "approveJobPending": "Approve pending ({count})",
+  "skuLabel": "SKU {sku}",
+  "notMappedYet": "not mapped yet",
+  "createdByAt": "Created by {name} · {time}",
+  "approvedByAt": "Approved by {name} · {time}",
+  "rejectedByAt": "Rejected by {name} · {time}",
+  "awaitingApproval": "Awaiting approval",
+  "recordedWithoutApproval": "Recorded directly (no approval step)"
 }

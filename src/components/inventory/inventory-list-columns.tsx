@@ -21,7 +21,7 @@ import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 // migration) are the three real statuses this app has (see
 // ApprovalStatusBadge on the In & Out page) — matches that badge's tones
 // exactly so a movement reads the same way in both places.
-function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }) {
+export function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }) {
   const { t } = useTranslation("status")
   if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
   if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
@@ -50,7 +50,7 @@ function ReasonCell({ row }: { row: StockMovementRow }) {
 // combining several movements acts on all of them. A row not yet mapped to
 // a stock item (an install model / hand-typed part) can't be approved until
 // it is, so it offers Map item instead, which opens the review queue.
-function ApprovalActionsCell({
+export function ApprovalActionsCell({
   movement,
   onApprove,
   onReject,

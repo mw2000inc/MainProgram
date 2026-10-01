@@ -23,6 +23,15 @@ export function useTechnicianActivityLogs(date?: string) {
   })
 }
 
+// Fetched only while `enabled` (e.g. the dialog showing it is open).
+export function useEntityTypeActivityLogs(entityType: string, enabled = true) {
+  return useQuery({
+    queryKey: [...activityLogsKey, "entityType", entityType],
+    queryFn: () => api.listActivityLogsForEntityType(entityType),
+    enabled,
+  })
+}
+
 export function useLatestActivityForEntity(entityType: string, entityId: string | undefined) {
   return useQuery({
     queryKey: [...activityLogsKey, "entity", entityType, entityId],

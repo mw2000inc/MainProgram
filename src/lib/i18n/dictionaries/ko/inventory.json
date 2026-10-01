@@ -128,5 +128,18 @@
   "editGroupedTitle": "묶음 항목 편집",
   "editGroupedDescription": "이 행은 {count}개 항목을 합친 것입니다. 작업별 수량을 변경하거나 모든 항목에 하나의 사유를 지정하세요. 각 항목은 개별적으로 저장됩니다.",
   "keepEachReason": "각 항목의 사유 유지",
-  "groupedTotal": "합계"
+  "groupedTotal": "합계",
+  "jobHistoryTitle": "재고 내역 — {order}",
+  "jobHistoryDescription": "이 작업의 모든 재고 이동 — 요청/사용 항목, 등록자, 승인 또는 반려한 관리자.",
+  "jobHistorySearchPlaceholder": "품목, SKU, 사유, 이름 검색...",
+  "jobHistoryEmpty": "이 작업의 재고 이동이 없습니다.",
+  "openJobRecord": "{order} 열기",
+  "approveJobPending": "대기 항목 승인 ({count})",
+  "skuLabel": "SKU {sku}",
+  "notMappedYet": "아직 매핑되지 않음",
+  "createdByAt": "{name} 등록 · {time}",
+  "approvedByAt": "{name} 승인 · {time}",
+  "rejectedByAt": "{name} 반려 · {time}",
+  "awaitingApproval": "승인 대기 중",
+  "recordedWithoutApproval": "직접 기록됨 (승인 단계 없음)"
 }

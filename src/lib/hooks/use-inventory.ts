@@ -43,6 +43,10 @@ export type StockMovementRow = StockMovement & {
   // Set only on an Inventory List row that combines several movements of
   // the same item on one job (see groupInventoryListRows).
   mergedIds?: string[]
+  // The schedule job this movement belongs to: its own scheduleJobId, or the
+  // job the Filter Change visit / install / repair that queued it is linked
+  // to. Used by the Schedule table's Inventory column.
+  relatedScheduleJobId?: string
 }
 
 function warnIfLowStock(result: api.StockMovementResult) {
@@ -182,6 +186,11 @@ export function useStockMovementRows() {
         source: (AUTOMATED_STOCK_MOVEMENT_REASONS as readonly string[]).includes(m.reason) ? "System" : "Manual",
         relatedCustomerName: related.customer || undefined,
         relatedJobOrderNo: related.order || undefined,
+        relatedScheduleJobId:
+          m.scheduleJobId ??
+          (m.filterChangePlanId ? fcById.get(m.filterChangePlanId)?.scheduleJobId : undefined) ??
+          (m.installPlanId ? installById.get(m.installPlanId)?.scheduleJobId : undefined) ??
+          (m.repairPlanPartId ? repairById.get(repairPlanIdByPart[m.repairPlanPartId] ?? "")?.scheduleJobId : undefined),
       }
     })
   }, [movements, products, users, scheduleJobs, customers, filterChangePlans, installPlans, repairPlans, repairPlanIdByPart])

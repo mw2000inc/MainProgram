@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, CheckCheck, LayoutGrid, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -43,6 +43,22 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
+import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-dialog"
+import {
+  SCHEDULE_TIMEFRAMES,
+  SCHEDULE_TIMEFRAME_LABEL,
+  isScheduleTimeframe,
+  scheduleTimeframeRange,
+  type ScheduleTimeframe,
+} from "@/lib/schedule-timeframe"
+import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
+import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useCollections } from "@/lib/hooks/use-collections"
+import { useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
@@ -189,6 +205,7 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
 type StatusFilter = "all" | "pending" | "completed"
 type ViewMode = "grid" | "table"
 const VIEW_MODE_KEY = "schedule-fullscreen-view"
+const TIMEFRAME_KEY = "schedule-timeframe"
 const TABLE_COLUMN_LABEL = {
   date: "tableDate",
   jobType: "tableJobType",
@@ -196,6 +213,7 @@ const TABLE_COLUMN_LABEL = {
   vehicle: "tableVehicle",
   orderNo: "tableOrderNo",
   status: "tableStatus",
+  inventory: "tableInventory",
   notes: "tableNotes",
   remarks: "tableRemarks",
 } as const
@@ -358,6 +376,28 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       // ignore — the choice just won't be remembered
     }
   }
+  // Timeframe (toolbar dropdown) — anchored on the report's date and
+  // remembered per browser like the view mode.
+  const [timeframe, setTimeframeState] = React.useState<ScheduleTimeframe>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem(TIMEFRAME_KEY) : null
+      return isScheduleTimeframe(saved) ? saved : "day"
+    } catch {
+      return "day"
+    }
+  })
+  const setTimeframe = (value: ScheduleTimeframe) => {
+    setTimeframeState(value)
+    try {
+      window.localStorage.setItem(TIMEFRAME_KEY, value)
+    } catch {
+      // ignore — the choice just won't be remembered
+    }
+  }
+  const range = React.useMemo(() => scheduleTimeframeRange(timeframe, date), [timeframe, date])
+  const multiDay = range.start !== range.end
+  const rangeLabel = multiDay ? `${formatDate(range.start)} – ${formatDate(range.end)}` : formatDate(range.start)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
   const { data: customers = [] } = useCustomers()
   const completeJobs = useCompleteScheduleJobs()
   const [editingJob, setEditingJob] = React.useState<ScheduleJob | undefined>(undefined)
@@ -369,6 +409,40 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // the database then carries date / technician changes to the job's linked
   // Filter Change / install / repair / collection record, and every open
   // Daily Report refreshes through useLiveDataSync.
+  // Each job's stock movements (queued or used items and their approvals),
+  // for the Table View's Inventory / Approved By column.
+  const { data: stockMovementRows = [] } = useStockMovementRows()
+  const movementsByJob = React.useMemo(() => {
+    const map = new Map<string, StockMovementRow[]>()
+    for (const m of stockMovementRows) {
+      if (!m.relatedScheduleJobId) continue
+      const list = map.get(m.relatedScheduleJobId) ?? []
+      list.push(m)
+      map.set(m.relatedScheduleJobId, list)
+    }
+    return map
+  }, [stockMovementRows])
+  // The job whose full Inventory History is open (clicked in that column),
+  // and the review queue it can hand an unmapped item to.
+  const [inventoryJob, setInventoryJob] = React.useState<ScheduleJob | undefined>(undefined)
+  const [inventoryQueueOpen, setInventoryQueueOpen] = React.useState(false)
+  // Link from that history to the job's own Filter Change / install / repair
+  // / collection record (each page opens a record from ?id=).
+  const { data: filterChangePlans = [] } = useFilterChangePlans()
+  const { data: installPlans = [] } = useInstallPlans()
+  const { data: repairPlans = [] } = useRepairPlans()
+  const { data: collectionRecords = [] } = useCollections()
+  const recordHrefFor = (job: ScheduleJob): string | undefined => {
+    const find = (rows: { id: string; scheduleJobId?: string }[], path: string) => {
+      const record = rows.find((r) => r.scheduleJobId === job.id)
+      return record ? `${path}?id=${record.id}` : undefined
+    }
+    if (job.jobType === "filter_change") return find(filterChangePlans, "/filter-change")
+    if (job.jobType === "installation") return find(installPlans, "/install")
+    if (job.jobType === "repair") return find(repairPlans, "/repair-plan")
+    if (job.jobType === "collection") return find(collectionRecords, "/collection-plan")
+    return undefined
+  }
   const { data: users = [] } = useUsers()
   const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
   const [editingCell, setEditingCell] = React.useState<{ jobId: string; field: EditableField } | null>(null)
@@ -441,18 +515,21 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     // technician's jobs, same as before.
     const filtered = jobs.filter(
       (j) =>
-        j.scheduledDate === date &&
+        j.scheduledDate >= range.start &&
+        j.scheduledDate <= range.end &&
         j.status !== "pending_approval" &&
         (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
     )
+    // Day first (a multi-day timeframe), then technician and route order.
     return [...filtered].sort((a, b) => {
+      if (a.scheduledDate !== b.scheduledDate) return a.scheduledDate.localeCompare(b.scheduledDate)
       if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
       if (a.routeSequence == null && b.routeSequence == null) return 0
       if (a.routeSequence == null) return 1
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobs, date, isAdmin, user?.id])
+  }, [jobs, range, isAdmin, user?.id])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
@@ -468,8 +545,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     const set = new Set<number>()
     let last: string | undefined
     todaysJobs.forEach((job, i) => {
-      if (job.technician !== last) set.add(i)
-      last = job.technician
+      // A new day starts a new group too (multi-day timeframes).
+      const key = `${job.scheduledDate}|${job.technician}`
+      if (key !== last) set.add(i)
+      last = key
     })
     return set
   }, [todaysJobs])
@@ -510,9 +589,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // already sorted by technician); the full-screen view groups differently,
   // see fullScreenSections.
   const technicianGroups = React.useMemo(() => {
-    const groups: { key: string; technician: string; jobs: typeof todaysJobs }[] = []
+    const groups: { key: string; technician: string; date: string; jobs: typeof todaysJobs }[] = []
     todaysJobs.forEach((job, i) => {
-      if (technicianHeaderAt.has(i) || groups.length === 0) groups.push({ key: `${job.technician}-${i}`, technician: job.technician, jobs: [] })
+      if (technicianHeaderAt.has(i) || groups.length === 0) groups.push({ key: `${job.technician}-${i}`, technician: job.technician, date: job.scheduledDate, jobs: [] })
       groups[groups.length - 1].jobs.push(job)
     })
     return groups
@@ -747,7 +826,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 )}
               </th>
             )}
-            {(["date", "jobType", "technician", "vehicle", "orderNo", "status", "notes", "remarks"] as const).map((key) => (
+            {(["date", "jobType", "technician", "vehicle", "orderNo", "status", "inventory", "notes", "remarks"] as const).map((key) => (
               <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
                 {t(TABLE_COLUMN_LABEL[key])}
               </th>
@@ -850,6 +929,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   }}
                 />
               </EditableCell>
+              <td className="px-3 py-2" data-testid="schedule-inventory-cell">
+                <JobInventoryCell movements={movementsByJob.get(job.id) ?? []} onOpen={() => setInventoryJob(job)} />
+              </td>
               <EditableCell
                 {...cellProps(job, "notes")}
                 className="max-w-[28rem] whitespace-pre-line wrap-break-word"
@@ -938,7 +1020,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       )}
       {!isPending && todaysJobs.length === 0 && (
         <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
-          {t("noJobsScheduled")}
+          {multiDay ? t("noJobsInTimeframe") : t("noJobsScheduled")}
         </p>
       )}
       {!isPending && todaysJobs.length > 0 && (
@@ -947,6 +1029,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             <div key={group.key} className={cn(g > 0 && "pt-3")}>
               <div className="flex items-center gap-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {group.technician || t("unassigned")}
+                {multiDay && <span className="font-normal normal-case tracking-normal">· {formatDate(group.date)}</span>}
               </div>
               {group.jobs.map((job, j) => (
                 <React.Fragment key={job.id}>{renderJob(job, j === 0)}</React.Fragment>
@@ -960,6 +1043,25 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
 
   const headerActions = (
     <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap sm:flex-row sm:flex-wrap sm:items-center">
+      <Select value={timeframe} onValueChange={(v) => isScheduleTimeframe(v) && setTimeframe(v)}>
+        <SelectTrigger
+          size="sm"
+          aria-label={t("timeframe")}
+          data-testid="schedule-timeframe"
+          className="h-8 gap-1.5 text-xs @xs/card-header:flex-1 @sm/card-header:w-auto @sm/card-header:flex-none"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SCHEDULE_TIMEFRAMES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {value === "day" && date !== todayIso() ? formatDate(date) : t(SCHEDULE_TIMEFRAME_LABEL[value])}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {isAdmin && (
         <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
@@ -978,6 +1080,17 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <Printer className="h-3.5 w-3.5" />
         </Button>
         <FullScreenToggleButton isFullScreen={expanded} onToggle={() => setExpanded((v) => !v)} />
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs"
+            data-testid="schedule-history-button"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <History className="h-3.5 w-3.5" /> {t("history")}
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -1021,7 +1134,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <DialogHeader className="flex flex-col gap-2 border-b p-4 pr-12 sm:flex-row sm:items-center sm:justify-between">
             <DialogTitle className="flex shrink-0 items-center gap-2 text-base whitespace-nowrap">
               <CalendarClock className="h-4 w-4 text-primary" /> {title}
-              <span className="text-sm font-normal text-muted-foreground">· {formatDate(date)}</span>
+              <span className="text-sm font-normal text-muted-foreground">· {rangeLabel}</span>
             </DialogTitle>
             <div className="flex flex-wrap items-center gap-2">
               <div role="group" aria-label={t("viewMode")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-view-mode">
@@ -1116,6 +1229,23 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           setConfirmComplete(false)
         }}
       />
+
+      {isAdmin && (
+        <ScheduleHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          jobIdsInView={todaysJobs.map((j) => j.id)}
+          rangeLabel={rangeLabel}
+        />
+      )}
+
+      <StockMovementHistoryDialog
+        open={!!inventoryJob}
+        onOpenChange={(o) => !o && setInventoryJob(undefined)}
+        job={inventoryJob ? { id: inventoryJob.id, orderNo: inventoryJob.orderNo, recordHref: recordHrefFor(inventoryJob) } : undefined}
+        onMap={() => setInventoryQueueOpen(true)}
+      />
+      {isAdmin && <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />}
 
       <ScheduleFormDialog
         open={formOpen}

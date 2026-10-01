@@ -69,6 +69,20 @@ export async function listTechnicianActivityLogs(date?: string): Promise<Activit
   return listActivityLogsByRole("technician", date)
 }
 
+// The newest audit entries for one table (e.g. the Schedule widget's
+// History of schedule_jobs changes), any actor. Admin-only via RLS, like the
+// rest of this table.
+export async function listActivityLogsForEntityType(entityType: string, limit = 300): Promise<ActivityLogEntry[]> {
+  const { data, error } = await supabase
+    .from("activity_logs")
+    .select("*, actor:profiles(name)")
+    .eq("entity_type", entityType)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data as unknown as Row[]).map(fromRow)
+}
+
 // Powers the inline "Last edited by X · date" indicator on a record's own
 // page — the single most recent audit entry for that entity, if any.
 export async function getLatestActivityForEntity(
