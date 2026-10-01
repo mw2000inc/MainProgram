@@ -1,7 +1,8 @@
 "use client"
 
+import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Pencil } from "lucide-react"
+import { Check, Link2, Pencil, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
@@ -40,6 +41,55 @@ function ReasonCell({ row }: { row: StockMovementRow }) {
       {row.reason}
       {row.source === "Manual" && <StatusBadge tone="neutral" label={t("manualEntry")} />}
     </span>
+  )
+}
+
+// Approve / Reject on a pending row, right in the Inventory List — approving
+// applies the stock change at once (the database's approval trigger takes it
+// OUT for fitted filters/parts/units, back IN for returned parts). A row
+// combining several movements acts on all of them. A row not yet mapped to
+// a stock item (an install model / hand-typed part) can't be approved until
+// it is, so it offers Map item instead, which opens the review queue.
+function ApprovalActionsCell({
+  movement,
+  onApprove,
+  onReject,
+  onMap,
+}: {
+  movement: StockMovementRow
+  onApprove: (movement: StockMovementRow) => void
+  onReject: (movement: StockMovementRow) => void
+  onMap: (movement: StockMovementRow) => void
+}) {
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  if (movement.status !== "pending") return null
+  const stop = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    fn()
+  }
+  return (
+    <div className="flex items-center gap-1">
+      {movement.productId ? (
+        <Button size="sm" className="h-7 gap-1 px-2" onClick={stop(() => onApprove(movement))}>
+          <Check className="h-3.5 w-3.5" /> {tCommon("approve")}
+        </Button>
+      ) : (
+        <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={stop(() => onMap(movement))}>
+          <Link2 className="h-3.5 w-3.5" /> {t("mapItem")}
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0 text-danger"
+        aria-label={tCommon("reject")}
+        title={tCommon("reject")}
+        onClick={stop(() => onReject(movement))}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   )
 }
 
@@ -98,8 +148,16 @@ function QtyCell({ row }: { row: StockMovementRow }) {
 // its own admin-only affordances.
 export function getInventoryListExpandedColumns({
   onEdit,
+  onApprove,
+  onReject,
+  onMap,
 }: {
   onEdit?: (movement: StockMovementRow) => void
+  // Admin-only approval actions on pending rows (see ApprovalActionsCell);
+  // omitted, there's no Approve column.
+  onApprove?: (movement: StockMovementRow) => void
+  onReject?: (movement: StockMovementRow) => void
+  onMap?: (movement: StockMovementRow) => void
 } = {}): ColumnDef<StockMovementRow, unknown>[] {
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
     { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
@@ -133,6 +191,13 @@ export function getInventoryListExpandedColumns({
       cell: ({ row }) => formatDateTime(row.original.createdAt),
     },
   ]
+  if (onApprove && onReject && onMap) {
+    columns.push({
+      id: "approve",
+      header: "",
+      cell: ({ row }) => <ApprovalActionsCell movement={row.original} onApprove={onApprove} onReject={onReject} onMap={onMap} />,
+    })
+  }
   if (onEdit) {
     columns.push({
       id: "edit",

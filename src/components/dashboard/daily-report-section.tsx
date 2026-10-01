@@ -58,7 +58,7 @@ import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChange
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useApproveStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
+import { useApproveStockMovements, useRejectStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
 import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-report-sections-config"
@@ -423,15 +423,11 @@ export function DailyReportSection() {
   const [dispatchQueueOpen, setDispatchQueueOpen] = React.useState(false)
   const dispatchApprovalCount = useDispatchApprovalCount()
 
-  // Same idea, for pending stock movement approvals (see
-  // StockMovementApprovalQueue's own comment) — reuses the same
-  // stockMovements already fetched for the Inventory List panel above, so
-  // this adds no extra query.
+  // The stock movement review queue (StockMovementApprovalQueue) — opened
+  // from the Inventory List panel (Review, or a row's Map item), which is
+  // where pending inventory items are approved now; there's no separate
+  // header button for it.
   const [inventoryQueueOpen, setInventoryQueueOpen] = React.useState(false)
-  const pendingStockMovementCount = React.useMemo(
-    () => stockMovements.filter((m) => m.status === "pending").length,
-    [stockMovements]
-  )
 
   // Same idea, for the unified Collection/Repair/Installation/Filter Change
   // Admin Approval queue (see pending-approvals-panel.tsx) — this hook reads
@@ -584,9 +580,26 @@ export function DailyReportSection() {
   // inventory panel's own comment below). onEdit gated by inventory:edit
   // specifically (not isAdmin) — matches the same permission the standalone
   // Inventory > In & Out page already gates its own Edit action behind.
+  // Approve / Reject right on a pending Inventory List row (admins) — a row
+  // combining several movements acts on all of them (mergedIds).
+  const approveAll = useApproveStockMovements()
+  const rejectMany = useRejectStockMovements()
   const inventoryListExpandedColumns = React.useMemo(
-    () => getInventoryListExpandedColumns({ onEdit: can("inventory:edit") ? setEditingStockMovement : undefined }),
-    [can, setEditingStockMovement]
+    () =>
+      getInventoryListExpandedColumns({
+        onEdit: can("inventory:edit") ? setEditingStockMovement : undefined,
+        ...(isAdmin && user
+          ? {
+              onApprove: (m: StockMovementRow) => approveAll.mutate({ ids: m.mergedIds ?? [m.id], approvedBy: user.id }),
+              onReject: (m: StockMovementRow) => rejectMany.mutate({ ids: m.mergedIds ?? [m.id], rejectedBy: user.id }),
+              onMap: () => setInventoryQueueOpen(true),
+            }
+          : {}),
+      }),
+    // approveAll/rejectMany.mutate are stable; listing the mutation objects
+    // would rebuild the columns on every pending-state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [can, setEditingStockMovement, isAdmin, user]
   )
 
   // Pre D, when set, is the record's actual (re)scheduled date — it wins
@@ -659,7 +672,6 @@ export function DailyReportSection() {
   // Approve All Pending: every pending movement across all jobs and days,
   // not just this day's — except one still waiting to be mapped to a stock
   // item (an install model / hand-typed part), which needs the queue.
-  const approveAll = useApproveStockMovements()
   const [approveAllOpen, setApproveAllOpen] = React.useState(false)
   const allPending = React.useMemo(() => stockMovements.filter((m) => m.status === "pending"), [stockMovements])
   const approvablePending = React.useMemo(() => allPending.filter((m) => !!m.productId), [allPending])
@@ -820,9 +832,20 @@ export function DailyReportSection() {
           // mapping, so the admin is pointed to the queue rather than the
           // button silently not being there.
           isAdmin && allPending.length > 0 ? (
-            <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveAllOpen(true)}>
-              <CheckCheck className="h-3.5 w-3.5" /> {tInventory("approveAllPending", { count: String(allPending.length) })}
-            </Button>
+            <>
+              <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveAllOpen(true)}>
+                <CheckCheck className="h-3.5 w-3.5" /> {tInventory("approveAllPending", { count: String(allPending.length) })}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 px-2"
+                title={tInventory("reviewQueueHint")}
+                onClick={() => setInventoryQueueOpen(true)}
+              >
+                <PackageCheck className="h-3.5 w-3.5" /> {tInventory("reviewQueue")}
+              </Button>
+            </>
           ) : undefined
         }
         loading={pInventory}
@@ -885,16 +908,6 @@ export function DailyReportSection() {
               {tDispatch("title")}{dispatchApprovalCount > 0 ? ` (${dispatchApprovalCount})` : ""}
             </Button>
             <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
-            <Button
-              type="button"
-              size="sm"
-              variant={pendingStockMovementCount > 0 ? "default" : "outline"}
-              className="gap-1.5"
-              onClick={() => setInventoryQueueOpen(true)}
-            >
-              <PackageCheck className="h-3.5 w-3.5" />
-              {tInventory("pendingApprovalButton")}{pendingStockMovementCount > 0 ? ` (${pendingStockMovementCount})` : ""}
-            </Button>
             <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />
             <ConfirmDialog
               open={approveViewOpen}

@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { parseISO } from "date-fns"
-import { ArrowLeftRight, ClipboardCheck, Package, Plus } from "lucide-react"
+import { ArrowLeftRight, Package, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -22,7 +22,6 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DateControl } from "@/components/dashboard/date-control"
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
-import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { getInventoryColumns, type ProductRow } from "@/components/inventory/inventory-columns"
 import { useDeleteProduct, useProducts, useStockMovements, useSuppliers } from "@/lib/hooks/use-inventory"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -44,10 +43,6 @@ function InventoryContent() {
   const { data: movements = [], isPending: p3 } = useStockMovements()
   const deleteProduct = useDeleteProduct()
   const isAdmin = user?.role === "admin"
-  // Pending stock movements (completed jobs' filters/parts) awaiting an
-  // admin — same queue as the Daily Report's Inventory Approvals button.
-  const [approvalQueueOpen, setApprovalQueueOpen] = React.useState(false)
-  const pendingApprovalCount = movements.filter((m) => m.status === "pending").length
 
   // Deep link from the Activity Log (?id=<productId>) — opens that product's
   // edit dialog directly, the only "view" a product has in this app.
@@ -261,13 +256,6 @@ function InventoryContent() {
             </Button>
           </Link>
           <PanelExportMenu columns={exportColumns} rows={filteredRows} fileName="inventory" />
-          {isAdmin && (
-            <Button variant={pendingApprovalCount > 0 ? "default" : "outline"} className="gap-1.5" onClick={() => setApprovalQueueOpen(true)}>
-              <ClipboardCheck className="h-4 w-4" />
-              {t("pendingApprovalButton")}
-              {pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : ""}
-            </Button>
-          )}
           {/* Files the entry under this page's own Date field (selectedDate),
               not necessarily today — the dialog's Date stays editable. Gated
               inventory:edit like the Daily Report's own +Add for the same
@@ -398,7 +386,6 @@ function InventoryContent() {
           }
         }}
       />
-      {isAdmin && <StockMovementApprovalQueue open={approvalQueueOpen} onOpenChange={setApprovalQueueOpen} />}
     </div>
   )
 }

@@ -341,6 +341,24 @@ export function useApproveStockMovements() {
   })
 }
 
+// Reject several pending movements (a combined Inventory List row) — no stock
+// effect, one toast.
+export function useRejectStockMovements() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, rejectedBy }: { ids: string[]; rejectedBy: string }) => {
+      for (const id of ids) await api.rejectStockMovement(id, rejectedBy)
+      return { rejected: ids.length }
+    },
+    onSuccess: ({ rejected }) => toast.success(`Rejected ${rejected} inventory item(s)`),
+    onError: (error: Error) => toast.error(error.message || "Failed to reject"),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
+      qc.invalidateQueries({ queryKey: ["activityLogs"] })
+    },
+  })
+}
+
 export function useRejectStockMovement() {
   const qc = useQueryClient()
   return useMutation({
