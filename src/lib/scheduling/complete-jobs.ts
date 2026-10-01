@@ -6,6 +6,7 @@ export interface CompleteJobsResult {
   filterChangeVisits: number
   installs: number
   repairs: number
+  collections: number
   // Pending inventory movements queued for unlinked Filter Change jobs'
   // own filter codes (linked records queue through their own triggers).
   queuedFromJobs: number
@@ -22,6 +23,12 @@ export interface CompleteJobsResult {
 //      a visit's filters and an install's unit are queued as pending stock
 //      movements. A date someone already entered is kept. (Repairs queue
 //      their parts when the parts are recorded, so nothing extra there.)
+//   2b. a Collection job's linked collection -> collected (status Collected,
+//      collected = true, Collected by = this admin, Collected at = now, Acc D
+//      = today — each only if still empty, the same rule the All Collection
+//      view's own Collected toggle follows). Only for Collection jobs: a
+//      payment linked to a filter change / repair visit isn't proof the money
+//      was received just because the visit was done, so it's left as is.
 //   3. a Filter Change job linked to no visit but carrying its own filter
 //      codes (set from the Auto-suggest modal) -> those filters queued as
 //      pending movements on the job, one per code (quantity = times listed),
@@ -35,12 +42,15 @@ export async function completeScheduleJobs(
   // Recorded as who created any movements queued here.
   actorId: string
 ): Promise<CompleteJobsResult> {
-  const result: CompleteJobsResult = { completed: 0, filterChangeVisits: 0, installs: 0, repairs: 0, queuedFromJobs: 0 }
+  const result: CompleteJobsResult = { completed: 0, filterChangeVisits: 0, installs: 0, repairs: 0, collections: 0, queuedFromJobs: 0 }
   if (jobIds.length === 0) return result
 
   const { data: updated, error } = await admin
     .from("schedule_jobs")
-    .update({ status: "completed" })
+    // updated_by: this runs with the service-role client (no auth.uid()), so
+    // the admin is recorded explicitly — otherwise the jobs show no "updated
+    // by" at all and a batch can't be traced back to who ran it.
+    .update({ status: "completed", updated_by: actorId })
     .in("id", jobIds)
     .eq("status", "pending")
     .select("id, job_type, order_no, filter_codes")
@@ -56,7 +66,7 @@ export async function completeScheduleJobs(
     for (const r of targets) {
       await admin
         .from(table)
-        .update({ status: "Completed", ...(r[dateColumn] ? {} : { [dateColumn]: today }) })
+        .update({ status: "Completed", updated_by: actorId, ...(r[dateColumn] ? {} : { [dateColumn]: today }) })
         .eq("id", r.id as string)
     }
     return targets.length
@@ -64,6 +74,30 @@ export async function completeScheduleJobs(
   result.filterChangeVisits = await completeLinked("filter_change_plans", "acc_d")
   result.installs = await completeLinked("install_plans", "installed_date")
   result.repairs = await completeLinked("repair_plans", "acc_d")
+
+  const collectionJobIds = done.filter((j) => j.job_type === "collection").map((j) => j.id)
+  if (collectionJobIds.length > 0) {
+    const { data: rows } = await admin
+      .from("collections")
+      .select("id, status, collected_by, collected_at, acc_d")
+      .in("schedule_job_id", collectionJobIds)
+    const nowIso = new Date().toISOString()
+    for (const r of (rows ?? []) as { id: string; status: string; collected_by: string | null; collected_at: string | null; acc_d: string | null }[]) {
+      if (r.status === "Cancelled") continue
+      await admin
+        .from("collections")
+        .update({
+          status: "Collected",
+          updated_by: actorId,
+          collected: true,
+          collected_by: r.collected_by ?? actorId,
+          collected_at: r.collected_at ?? nowIso,
+          ...(r.acc_d ? {} : { acc_d: today }),
+        })
+        .eq("id", r.id)
+      result.collections += 1
+    }
+  }
 
   const { data: linkedVisits } = await admin.from("filter_change_plans").select("schedule_job_id").in("schedule_job_id", ids)
   const hasVisit = new Set((linkedVisits ?? []).map((r: { schedule_job_id: string }) => r.schedule_job_id))

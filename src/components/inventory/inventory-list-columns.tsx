@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDateTime } from "@/lib/utils"
+import { cn, formatDateTime } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
 // Otherwise a pure history/view — no add/delete/approve affordances anywhere
@@ -93,12 +93,21 @@ function ApprovalActionsCell({
   )
 }
 
-function EditButtonCell({ movement, onEdit }: { movement: StockMovementRow; onEdit: (movement: StockMovementRow) => void }) {
+function EditButtonCell({
+  movement,
+  onEdit,
+  className,
+}: {
+  movement: StockMovementRow
+  onEdit: (movement: StockMovementRow) => void
+  className?: string
+}) {
   const { t } = useTranslation("common")
   return (
     <Button
       size="sm"
       variant="ghost"
+      className={className}
       aria-label={t("edit")}
       onClick={(e) => {
         e.stopPropagation()
@@ -146,12 +155,45 @@ function QtyCell({ row }: { row: StockMovementRow }) {
 // back to the plain column set with no trailing Edit column at all — same
 // on/off convention every other Daily Report column set already uses for
 // its own admin-only affordances.
+// How much of the Inventory List fits the panel's width (see
+// inventoryListDensityForWidth): "full" every column; "medium" drops
+// Created By / Approved By / Time; "compact" folds Type, Quantity, Reason
+// and Status under the item name and puts Edit beside Approve, leaving
+// Item | Related Job | actions — so a narrow panel never scrolls sideways.
+export type InventoryListDensity = "full" | "medium" | "compact"
+
+export function inventoryListDensityForWidth(width: number): InventoryListDensity {
+  if (width >= 1180) return "full"
+  if (width >= 760) return "medium"
+  return "compact"
+}
+
+function CompactItemCell({ row }: { row: StockMovementRow }) {
+  const { t } = useTranslation("inventory")
+  const { type, qty } = movementTypeAndQty(row)
+  return (
+    <div className="min-w-0 max-w-[16rem]">
+      <div className="truncate font-medium" title={row.productName}>
+        {row.productName}
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+        <span className={type === "deduct" ? "text-danger" : "text-success"}>{t(TYPE_KEYS[type])}</span>
+        <span className="font-medium text-foreground">{type === "deduct" ? `-${qty}` : `+${qty}`}</span>
+        <span>· {row.reason}</span>
+        <InventoryStatusBadge status={row.status} />
+      </div>
+    </div>
+  )
+}
+
 export function getInventoryListExpandedColumns({
   onEdit,
   onApprove,
   onReject,
   onMap,
+  density = "full",
 }: {
+  density?: InventoryListDensity
   onEdit?: (movement: StockMovementRow) => void
   // Admin-only approval actions on pending rows (see ApprovalActionsCell);
   // omitted, there's no Approve column.
@@ -159,8 +201,38 @@ export function getInventoryListExpandedColumns({
   onReject?: (movement: StockMovementRow) => void
   onMap?: (movement: StockMovementRow) => void
 } = {}): ColumnDef<StockMovementRow, unknown>[] {
+  const actionsCell = (movement: StockMovementRow) => (
+    <div className="flex items-center gap-1">
+      {onApprove && onReject && onMap && <ApprovalActionsCell movement={movement} onApprove={onApprove} onReject={onReject} onMap={onMap} />}
+      {onEdit && <EditButtonCell movement={movement} onEdit={onEdit} className="h-7 w-7 p-0" />}
+    </div>
+  )
+  if (density === "compact") {
+    return [
+      { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" />, cell: ({ row }) => <CompactItemCell row={row.original} /> },
+      {
+        accessorKey: "relatedJobOrderNo",
+        header: () => <ColumnHeader tKey="relatedJob" ns="inventory" />,
+        cell: ({ row }) => (
+          <span className="block max-w-[8rem] truncate" title={row.original.relatedJobOrderNo}>
+            {row.original.relatedJobOrderNo || "—"}
+          </span>
+        ),
+      },
+      ...(onApprove || onEdit ? [{ id: "actions", header: "", cell: ({ row }) => actionsCell(row.original) } as ColumnDef<StockMovementRow, unknown>] : []),
+    ]
+  }
+
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
-    { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" /> },
+    {
+      accessorKey: "productName",
+      header: () => <ColumnHeader tKey="item" ns="inventory" />,
+      cell: ({ row }) => (
+        <span className={cn("block truncate", density === "medium" ? "max-w-[14rem]" : "max-w-[22rem]")} title={row.original.productName}>
+          {row.original.productName}
+        </span>
+      ),
+    },
     { id: "type", header: () => <ColumnHeader tKey="type" ns="inventory" />, cell: ({ row }) => <TypeCell row={row.original} /> },
     { id: "qty", header: () => <ColumnHeader tKey="quantity" ns="fields" />, cell: ({ row }) => <QtyCell row={row.original} /> },
     {
@@ -172,24 +244,26 @@ export function getInventoryListExpandedColumns({
       accessorKey: "relatedJobOrderNo",
       header: () => <ColumnHeader tKey="relatedJob" ns="inventory" />,
       // A per-item total (aggregateInventoryRowsByItem) lists every order.
-      cell: ({ row }) => <span className="whitespace-normal">{row.original.relatedJobOrderNo || "—"}</span>,
+      cell: ({ row }) => <span className="block max-w-[18rem] whitespace-normal">{row.original.relatedJobOrderNo || "—"}</span>,
     },
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <InventoryStatusBadge status={row.original.status} />,
     },
-    { accessorKey: "userName", header: () => <ColumnHeader tKey="createdBy" ns="inventory" /> },
+    ...(density === "medium" ? [] : [
+    { accessorKey: "userName", header: () => <ColumnHeader tKey="createdBy" ns="inventory" /> } as ColumnDef<StockMovementRow, unknown>,
     {
       accessorKey: "approvedByName",
       header: () => <ColumnHeader tKey="approvedBy" ns="inventory" />,
       cell: ({ row }) => row.original.approvedByName || "—",
-    },
+    } as ColumnDef<StockMovementRow, unknown>,
     {
       accessorKey: "createdAt",
       header: () => <ColumnHeader tKey="time" ns="inventory" />,
       cell: ({ row }) => formatDateTime(row.original.createdAt),
-    },
+    } as ColumnDef<StockMovementRow, unknown>,
+    ]),
   ]
   if (onApprove && onReject && onMap) {
     columns.push({
@@ -202,9 +276,9 @@ export function getInventoryListExpandedColumns({
     columns.push({
       id: "edit",
       header: "",
-      // A row combining several movements (groupInventoryListRows) has no
-      // single movement to edit — edit those from Inventory > In & Out.
-      cell: ({ row }) => ((row.original.mergedIds?.length ?? 1) > 1 ? null : <EditButtonCell movement={row.original} onEdit={onEdit} />),
+      // A row combining several movements (mergedIds) opens the grouped edit
+      // form, which edits each combined entry (StockMovementFormDialog).
+      cell: ({ row }) => <EditButtonCell movement={row.original} onEdit={onEdit} />,
     })
   }
   return columns

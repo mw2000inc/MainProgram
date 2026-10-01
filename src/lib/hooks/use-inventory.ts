@@ -289,6 +289,33 @@ export function useUpdateStockMovement() {
   })
 }
 
+// The grouped edit of an Inventory List row combining several movements:
+// each changed entry is saved on its own, in turn, so every one keeps its own
+// job link and stock effect.
+export function useUpdateStockMovements() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (updates: { id: string; input: Parameters<typeof api.updateStockMovement>[1] }[]) => {
+      const results: api.StockMovementResult[] = []
+      for (const u of updates) results.push(await api.updateStockMovement(u.id, u.input))
+      return results
+    },
+    onSuccess: (results) => {
+      toast.success(`Updated ${results.length} stock movement(s)`)
+      const last = results.at(-1)
+      if (last) warnIfLowStock(last)
+    },
+    onError: (error: Error) => toast.error(error.message || "Failed to update stock movements"),
+    // Also after a partial failure — some entries may already be saved.
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
+      qc.invalidateQueries({ queryKey: productsKey })
+      qc.invalidateQueries({ queryKey: ["notifications"] })
+      qc.invalidateQueries({ queryKey: ["activityLogs"] })
+    },
+  })
+}
+
 export function useApproveStockMovement() {
   const qc = useQueryClient()
   return useMutation({

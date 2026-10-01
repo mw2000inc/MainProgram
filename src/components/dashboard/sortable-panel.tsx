@@ -61,12 +61,18 @@ export function SortablePanel({
   height,
   defaultWidthClassName,
   onResizeEnd,
+  growToFit,
   children,
 }: {
   id: string
   isAdmin: boolean
   width?: number
   height?: number
+  // Treat the saved height as a minimum instead of a fixed size: the panel
+  // grows to fit its content (e.g. a full page of table rows) rather than
+  // clipping it and scrolling inside. Its child should flex-grow to fill
+  // the panel when the content is shorter than that minimum.
+  growToFit?: boolean
   // Fallback width class applied only until this panel has an explicit
   // saved/live width — once one exists, the inline `width` below always
   // wins over a class.
@@ -166,7 +172,9 @@ export function SortablePanel({
     transform: CSS.Transform.toString(transform),
     transition,
     width: currentWidth ? `${currentWidth}px` : undefined,
-    height: currentHeight ? `${currentHeight}px` : undefined,
+    ...(growToFit
+      ? { minHeight: currentHeight ? `${currentHeight}px` : undefined }
+      : { height: currentHeight ? `${currentHeight}px` : undefined }),
     maxWidth: "100%",
   }
 
@@ -181,6 +189,7 @@ export function SortablePanel({
       style={style}
       className={cn(
         "relative min-w-0",
+        growToFit && "flex flex-col",
         !currentWidth && defaultWidthClassName,
         isDragging && "z-10 opacity-60",
         resizingEdge && "select-none"
@@ -201,7 +210,12 @@ export function SortablePanel({
           table) has its own dedicated overflow-x-auto wrapper. If this
           scrolled horizontally too, dragging that inner scrollbar would
           drag the header out of view along with it. */}
-      <div className="h-full min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
+      <div
+        className={cn(
+          "min-w-0 w-full max-w-full overflow-x-hidden",
+          growToFit ? "flex flex-1 flex-col" : "h-full overflow-y-auto"
+        )}
+      >
         <DragHandleContext.Provider value={dragHandleProps}>{children}</DragHandleContext.Provider>
       </div>
 

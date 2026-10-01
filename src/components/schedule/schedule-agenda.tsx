@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, CheckCheck, Plus, ArrowRight, Printer, Trash2 } from "lucide-react"
+import { CalendarClock, CheckCheck, LayoutGrid, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -35,6 +35,7 @@ import { useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useCustomers } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
@@ -181,6 +182,21 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
   return isAdmin || (!!userId && (job.technicianUserId === userId || job.technician2UserId === userId))
 }
 
+type StatusFilter = "all" | "pending" | "completed"
+type ViewMode = "grid" | "table"
+const VIEW_MODE_KEY = "schedule-fullscreen-view"
+const TABLE_COLUMN_LABEL = {
+  date: "tableDate",
+  jobType: "tableJobType",
+  technician: "tableTechnician",
+  vehicle: "tableVehicle",
+  orderNo: "tableOrderNo",
+  status: "tableStatus",
+  notes: "tableNotes",
+  remarks: "tableRemarks",
+} as const
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = { all: "statusFilterAll", pending: "statusFilterPending", completed: "statusFilterCompleted" }
+
 export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -195,6 +211,29 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // and the confirmation. Cleared whenever the full-screen view closes.
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [confirmComplete, setConfirmComplete] = React.useState(false)
+  // Full-screen search (cleared when the view closes).
+  const [search, setSearch] = React.useState("")
+  // Full-screen status filter — Pending by default, so the grid shows the
+  // jobs still to do (reset to it whenever the view closes).
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("pending")
+  // Grid (cards) or Table — remembered per browser; storage can be blocked,
+  // in which case it just starts on Grid every time.
+  const [viewMode, setViewModeState] = React.useState<ViewMode>(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(VIEW_MODE_KEY) === "table" ? "table" : "grid"
+    } catch {
+      return "grid"
+    }
+  })
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode)
+    try {
+      window.localStorage.setItem(VIEW_MODE_KEY, mode)
+    } catch {
+      // ignore — the choice just won't be remembered
+    }
+  }
+  const { data: customers = [] } = useCustomers()
   const completeJobs = useCompleteScheduleJobs()
   const [editingJob, setEditingJob] = React.useState<ScheduleJob | undefined>(undefined)
   const [markingDone, setMarkingDone] = React.useState<ScheduleJob | undefined>(undefined)
@@ -401,10 +440,60 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // unassigned ones, are tiled across the whole width instead of stacking in
   // one narrow column. Every layout is the same auto-fill grid of 320px+
   // tracks, so it fills whatever width the screen has.
+  // Full-screen search: case-insensitive, matching any word typed against the
+  // job's customer (name, account / order numbers), type, address, notes,
+  // remarks, filters and technicians. Everything below the search — the
+  // sections, their counts, select-all and Complete All Pending — works off
+  // this filtered list (after the status filter too), so a batch only ever
+  // covers jobs that are visible.
+  const customerById = React.useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers])
+  const searchedJobs = React.useMemo(() => {
+    const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (terms.length === 0) return todaysJobs
+    return todaysJobs.filter((job) => {
+      const customer = job.customerId ? customerById.get(job.customerId) : undefined
+      const haystack = [
+        customer?.companyName,
+        customer?.fullName,
+        customer?.memberAccountNumber,
+        customer?.orderNumber,
+        customer?.address,
+        job.orderNo,
+        job.id,
+        job.jobType,
+        t(job.jobType),
+        JOB_TYPE_LABELS[job.jobType],
+        job.secondaryAddress,
+        job.notes,
+        job.remarks,
+        job.filterCodes,
+        job.technician,
+        job.technician2,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [search, todaysJobs, customerById, t])
+  // Per-tab counts follow the search; "All" also covers cancelled jobs.
+  const statusCounts = React.useMemo(
+    () => ({
+      all: searchedJobs.length,
+      pending: searchedJobs.filter((j) => j.status === "pending").length,
+      completed: searchedJobs.filter((j) => j.status === "completed").length,
+    }),
+    [searchedJobs]
+  )
+  const visibleJobs = React.useMemo(
+    () => (statusFilter === "all" ? searchedJobs : searchedJobs.filter((j) => j.status === statusFilter)),
+    [searchedJobs, statusFilter]
+  )
+
   const fullScreenSections = React.useMemo(() => {
     const byTechnician = new Map<string, typeof todaysJobs>()
     const unassigned: typeof todaysJobs = []
-    for (const job of todaysJobs) {
+    for (const job of visibleJobs) {
       if (!isAssignedTechnician(job.technician)) {
         unassigned.push(job)
         continue
@@ -415,11 +504,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       byTechnician.set(name, list)
     }
     return { assigned: [...byTechnician.entries()].map(([technician, jobs]) => ({ technician, jobs })), unassigned }
-  }, [todaysJobs])
+  }, [visibleJobs])
 
   const gridClass = "grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]"
   const selectMode = isAdmin
-  const pendingInView = React.useMemo(() => todaysJobs.filter((j) => j.status === "pending"), [todaysJobs])
+  const pendingInView = React.useMemo(() => visibleJobs.filter((j) => j.status === "pending"), [visibleJobs])
   const toggleSelected = (id: string) =>
     setSelected((old) => {
       const next = new Set(old)
@@ -442,8 +531,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     const n = ids.filter((id) => selected.has(id)).length
     return n === 0 ? false : n === ids.length ? true : "indeterminate"
   }
-  // Selected jobs if any, else every pending job in view.
-  const completionTargets = selected.size > 0 ? pendingInView.filter((j) => selected.has(j.id)) : pendingInView
+  // The visible selected jobs if any, else every visible pending job — a
+  // selection the search is currently hiding is never acted on.
+  const visibleSelected = pendingInView.filter((j) => selected.has(j.id))
+  const completionTargets = visibleSelected.length > 0 ? visibleSelected : pendingInView
 
   const sectionHeader = (label: string, count: number, testId: string, jobs?: typeof todaysJobs) => (
     <div data-testid={testId} className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -470,8 +561,83 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     </div>
   )
 
+  // Table View: the print layout's columns and blue header, one row per job
+  // in the same order and with the same filters as the grid. Admins get a
+  // selection column (pending rows only) feeding the same batch Mark as
+  // Completed; clicking a row opens the job, as a card does.
+  const jobTable = () => (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm" data-testid="schedule-job-table">
+        <thead>
+          <tr className="bg-primary text-left text-primary-foreground">
+            {selectMode && (
+              <th className="w-10 px-3 py-2">
+                {pendingInView.length > 0 && (
+                  <Checkbox
+                    checked={selectAllState(visibleJobs)}
+                    onCheckedChange={() => toggleSelectAll(visibleJobs)}
+                    aria-label={t("selectAllPending")}
+                    className="border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary"
+                  />
+                )}
+              </th>
+            )}
+            {(["date", "jobType", "technician", "vehicle", "orderNo", "status", "notes", "remarks"] as const).map((key) => (
+              <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
+                {t(TABLE_COLUMN_LABEL[key])}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {visibleJobs.map((job, i) => (
+            <tr
+              key={job.id}
+              data-testid="schedule-table-row"
+              className={cn("border-t align-top", i % 2 === 1 && "bg-muted/40", isAdmin && "cursor-pointer hover:bg-muted")}
+              onClick={isAdmin ? () => openEdit(job) : undefined}
+            >
+              {selectMode && (
+                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={job.status === "completed" || selected.has(job.id)}
+                    onCheckedChange={() => toggleSelected(job.id)}
+                    disabled={job.status !== "pending"}
+                    aria-label={t("selectJob")}
+                    data-testid="schedule-select-job"
+                  />
+                </td>
+              )}
+              <td className="px-3 py-2 whitespace-nowrap">
+                {formatDate(job.scheduledDate)}
+                {job.scheduledTime && <div className="text-xs text-muted-foreground">{job.scheduledTime}</div>}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap">{t(job.jobType)}</td>
+              <td className="px-3 py-2">{isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : t("unassigned")}</td>
+              <td className="px-3 py-2">{job.vehicle || "—"}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{job.orderNo || "—"}</td>
+              <td className="px-3 py-2">
+                <PlanStatusBadge status={job.status} />
+              </td>
+              <td className="max-w-[28rem] px-3 py-2 whitespace-pre-line wrap-break-word">{job.notes || "—"}</td>
+              <td className="max-w-[20rem] px-3 py-2 whitespace-pre-line wrap-break-word">{job.remarks || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
   const fullScreenJobs = () => {
     if (isPending || todaysJobs.length === 0) return jobList()
+    if (visibleJobs.length === 0) {
+      return (
+        <p data-testid="schedule-no-matches" className="py-16 text-center text-sm text-muted-foreground">
+          {t("noMatchingJobs")}
+        </p>
+      )
+    }
+    if (viewMode === "table") return jobTable()
     const { assigned, unassigned } = fullScreenSections
     return (
       <div className="space-y-6">
@@ -583,27 +749,84 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         open={expanded}
         onOpenChange={(open) => {
           setExpanded(open)
-          if (!open) setSelected(new Set())
+          if (!open) {
+            setSelected(new Set())
+            setSearch("")
+            setStatusFilter("pending")
+          }
         }}
       >
         <DialogContent
           className="inset-0 top-0 left-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-none"
         >
           <DialogHeader className="flex flex-col gap-2 border-b p-4 pr-12 sm:flex-row sm:items-center sm:justify-between">
-            <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogTitle className="flex shrink-0 items-center gap-2 text-base whitespace-nowrap">
               <CalendarClock className="h-4 w-4 text-primary" /> {title}
               <span className="text-sm font-normal text-muted-foreground">· {formatDate(date)}</span>
             </DialogTitle>
             <div className="flex flex-wrap items-center gap-2">
+              <div role="group" aria-label={t("viewMode")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-view-mode">
+                {(["grid", "table"] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={viewMode === mode}
+                    onClick={() => setViewMode(mode)}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1 rounded px-2.5 text-xs font-medium transition-colors",
+                      viewMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {mode === "grid" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Rows3 className="h-3.5 w-3.5" />}
+                    {t(mode === "grid" ? "gridView" : "tableView")}
+                  </button>
+                ))}
+              </div>
+              <div role="group" aria-label={t("statusFilter")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-status-filter">
+                {(["all", "pending", "completed"] as StatusFilter[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={statusFilter === value}
+                    onClick={() => setStatusFilter(value)}
+                    className={cn(
+                      "h-7 rounded px-2.5 text-xs font-medium transition-colors",
+                      statusFilter === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {t(STATUS_FILTER_LABEL[value])} ({statusCounts[value]})
+                  </button>
+                ))}
+              </div>
+              <div className="relative w-full sm:w-72">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("fullScreenSearchPlaceholder")}
+                  aria-label={t("fullScreenSearchPlaceholder")}
+                  className="h-8 pr-8 pl-8 text-sm"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label={t("clearSearch")}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               {selectMode && pendingInView.length > 0 && (
                 <>
                   <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={selectAllState(todaysJobs)} onCheckedChange={() => toggleSelectAll(todaysJobs)} aria-label={t("selectAllPending")} />
+                    <Checkbox checked={selectAllState(visibleJobs)} onCheckedChange={() => toggleSelectAll(visibleJobs)} aria-label={t("selectAllPending")} />
                     {t("selectAllPending")}
                   </label>
                   <Button size="sm" className="gap-1.5" disabled={completeJobs.isPending} onClick={() => setConfirmComplete(true)}>
                     <CheckCheck className="h-3.5 w-3.5" />
-                    {selected.size > 0
+                    {visibleSelected.length > 0
                       ? t("markSelectedCompleted", { count: String(completionTargets.length) })
                       : t("completeAllPending", { count: String(pendingInView.length) })}
                   </Button>

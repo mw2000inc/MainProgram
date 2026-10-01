@@ -206,7 +206,7 @@ export async function clearScheduleForDate(targetDate: string): Promise<{ jobsCl
 // Batch "Mark as Completed" (Schedule full-screen view) — see
 // src/lib/scheduling/complete-jobs.ts for what it does to linked records
 // and the inventory queue.
-export type CompleteJobsResult = { completed: number; filterChangeVisits: number; installs: number; repairs: number; queuedFromJobs: number }
+export type CompleteJobsResult = { completed: number; filterChangeVisits: number; installs: number; repairs: number; collections: number; queuedFromJobs: number }
 
 export async function completeScheduleJobs(jobIds: string[], today: string): Promise<CompleteJobsResult> {
   const res = await fetch("/api/schedule-jobs/complete", {

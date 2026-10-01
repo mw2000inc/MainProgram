@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/schedule"
 import type { ScheduleJob } from "@/lib/types"
 import { toast } from "sonner"
@@ -9,6 +9,19 @@ import { installPlansKey } from "@/lib/hooks/use-install-plans"
 
 export const scheduleJobsKey = ["scheduleJobs"] as const
 
+// Saving a job can create, link or re-date its Filter Change / install /
+// repair / collection record (the schedule_job_module_sync migration's
+// triggers, which finish before the save returns), so those queries are
+// refetched with the jobs. Other open browsers get the same through
+// useLiveDataSync.
+function invalidateJobsAndModules(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: scheduleJobsKey })
+  qc.invalidateQueries({ queryKey: filterChangePlansKey })
+  qc.invalidateQueries({ queryKey: installPlansKey })
+  qc.invalidateQueries({ queryKey: repairPlansKey })
+  qc.invalidateQueries({ queryKey: collectionsKey })
+}
+
 export function useScheduleJobs() {
   return useQuery({ queryKey: scheduleJobsKey, queryFn: api.listScheduleJobs })
 }
@@ -18,7 +31,7 @@ export function useCreateScheduleJob() {
   return useMutation({
     mutationFn: (input: Omit<ScheduleJob, "id" | "createdAt">) => api.createScheduleJob(input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      invalidateJobsAndModules(qc)
       toast.success("Job scheduled")
     },
     onError: () => toast.error("Failed to schedule job"),
@@ -31,7 +44,7 @@ export function useUpdateScheduleJob() {
     mutationFn: ({ id, input }: { id: string; input: Partial<Omit<ScheduleJob, "id" | "createdAt">> }) =>
       api.updateScheduleJob(id, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      invalidateJobsAndModules(qc)
       toast.success("Job updated")
     },
     onError: () => toast.error("Failed to update job"),
@@ -43,7 +56,7 @@ export function useDeleteScheduleJob() {
   return useMutation({
     mutationFn: (id: string) => api.deleteScheduleJob(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      invalidateJobsAndModules(qc)
       toast.success("Job removed")
     },
     onError: () => toast.error("Failed to remove job"),
@@ -74,10 +87,7 @@ export function useApplyTechnicianAssignmentsToJobs() {
     // Report's own panels read — refetch those too so the assignment shows
     // there straight away, not on the next page load.
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: scheduleJobsKey })
-      qc.invalidateQueries({ queryKey: filterChangePlansKey })
-      qc.invalidateQueries({ queryKey: collectionsKey })
-      qc.invalidateQueries({ queryKey: repairPlansKey })
+      invalidateJobsAndModules(qc)
       const parts = [`Assigned ${result.applied} job(s)`]
       if (result.jobsCreated) parts.push(`added ${result.jobsCreated} task(s)/errand(s)`)
       if (result.applied || result.jobsCreated) toast.success(`${parts.join(" and ")} — published to the Daily Report`)
@@ -112,8 +122,9 @@ export function useClearScheduleForDate() {
 }
 
 // Batch completion from the Schedule full-screen view. Refreshes everything
-// it can change: the jobs, their linked Filter Change / install / repair
-// records, and the inventory movements their completion queued.
+// it can change — the jobs, their linked Filter Change / install / repair /
+// collection records, and the inventory movements their completion queued —
+// so every Daily Report widget updates in place, no page reload.
 export function useCompleteScheduleJobs() {
   const qc = useQueryClient()
   return useMutation({
@@ -123,6 +134,7 @@ export function useCompleteScheduleJobs() {
         result.filterChangeVisits ? `${result.filterChangeVisits} Filter Change visit(s)` : "",
         result.installs ? `${result.installs} install(s)` : "",
         result.repairs ? `${result.repairs} repair(s)` : "",
+        result.collections ? `${result.collections} collection(s)` : "",
       ].filter(Boolean)
       toast.success(
         `Completed ${result.completed} job(s)` +
@@ -136,6 +148,7 @@ export function useCompleteScheduleJobs() {
       qc.invalidateQueries({ queryKey: filterChangePlansKey })
       qc.invalidateQueries({ queryKey: installPlansKey })
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: collectionsKey })
       qc.invalidateQueries({ queryKey: ["stockMovements"] })
     },
   })

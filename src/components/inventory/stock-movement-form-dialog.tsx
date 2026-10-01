@@ -33,7 +33,14 @@ import {
 import { AUTOMATED_STOCK_MOVEMENT_REASONS, STOCK_MOVEMENT_REASONS } from "@/lib/constants"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { useAuth } from "@/lib/auth/auth-context"
-import { useAddStockMovement, useProducts, useUpdateStockMovement } from "@/lib/hooks/use-inventory"
+import {
+  useAddStockMovement,
+  useProducts,
+  useStockMovementRows,
+  useUpdateStockMovement,
+  useUpdateStockMovements,
+  type StockMovementRow,
+} from "@/lib/hooks/use-inventory"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { generateId, todayIso } from "@/lib/utils"
 import type { StockMovement } from "@/lib/types"
@@ -105,7 +112,9 @@ export function StockMovementFormDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  movement?: StockMovement
+  // An Inventory List row combining several movements (mergedIds) opens the
+  // grouped edit form instead, which edits each combined entry.
+  movement?: StockMovement & { mergedIds?: string[] }
   // Which direction the Add form should default to (e.g. opening it from the
   // In & Out Summary's "Out Stock" panel should default to Stock Out). Ignored
   // in edit mode.
@@ -117,18 +126,25 @@ export function StockMovementFormDialog({
   defaultDate?: string
 }) {
   const isEdit = !!movement
+  const isGrouped = (movement?.mergedIds?.length ?? 1) > 1
   const { t } = useTranslation("inventory")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? t("editStockMovementTitle") : t("addStockMovementTitle")}</DialogTitle>
+          <DialogTitle>{isGrouped ? t("editGroupedTitle") : isEdit ? t("editStockMovementTitle") : t("addStockMovementTitle")}</DialogTitle>
           <DialogDescription>
-            {isEdit ? t("editStockMovementDescription") : t("addStockMovementDescription")}
+            {isGrouped
+              ? t("editGroupedDescription", { count: String(movement?.mergedIds?.length ?? 0) })
+              : isEdit
+                ? t("editStockMovementDescription")
+                : t("addStockMovementDescription")}
           </DialogDescription>
         </DialogHeader>
-        {isEdit ? (
+        {isGrouped && movement?.mergedIds ? (
+          <GroupedEditForm key={movement.mergedIds.join(",")} mergedIds={movement.mergedIds} onOpenChange={onOpenChange} />
+        ) : isEdit ? (
           <EditMovementForm movement={movement} open={open} onOpenChange={onOpenChange} />
         ) : (
           <AddMovementForm
@@ -534,5 +550,145 @@ function EditMovementForm({
         </DialogFooter>
       </form>
     </Form>
+  )
+}
+
+const KEEP_REASON = "__keep"
+
+// Edits every movement an Inventory List row combines (several of one item on
+// a job, or the modal's cross-job totals): one quantity per entry, labelled
+// with its job, and optionally one reason for all. Only entries that actually
+// change are saved, each on its own, so every one keeps its own job link and
+// its own stock effect (an approved entry adjusts stock the same way the
+// single edit does).
+function GroupedEditForm({
+  mergedIds,
+  onOpenChange,
+}: {
+  mergedIds: string[]
+  onOpenChange: (open: boolean) => void
+}) {
+  const { data: rows = [] } = useStockMovementRows()
+  const updateMany = useUpdateStockMovements()
+  const { t } = useTranslation("inventory")
+  const { t: tCommon } = useTranslation("common")
+  const { t: tFields } = useTranslation("fields")
+  const { t: tStatus } = useTranslation("status")
+
+  const members = React.useMemo(() => {
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    return mergedIds.map((id) => byId.get(id)).filter((r): r is StockMovementRow => !!r)
+  }, [rows, mergedIds])
+  // A grouped row always shares one direction (see the grouping functions).
+  const isIn = members.length > 0 && members.every((m) => m.quantityAdded > 0 && m.quantityRemoved === 0)
+  const qtyOf = (m: StockMovementRow) => (isIn ? m.quantityAdded : m.quantityRemoved)
+
+  // Fresh for each opening: the dialog unmounts its content when closed, and
+  // the form is keyed by the row it edits.
+  const [quantities, setQuantities] = React.useState<Record<string, number>>({})
+  const [reason, setReason] = React.useState<string>(KEEP_REASON)
+
+  const valueOf = (m: StockMovementRow) => quantities[m.id] ?? qtyOf(m)
+  const total = members.reduce((sum, m) => sum + valueOf(m), 0)
+  const invalid = members.some((m) => !Number.isInteger(valueOf(m)) || valueOf(m) < 0)
+  const jobOf = (m: StockMovementRow) => m.relatedJobOrderNo || m.referenceNumber || "—"
+
+  async function onSave() {
+    const updates = members.flatMap((m) => {
+      const qty = valueOf(m)
+      const qtyChanged = qty !== qtyOf(m)
+      const reasonChanged = reason !== KEEP_REASON && reason !== m.reason
+      if (!qtyChanged && !reasonChanged) return []
+      return [
+        {
+          id: m.id,
+          input: {
+            quantityAdded: isIn ? qty : m.quantityAdded,
+            quantityRemoved: isIn ? m.quantityRemoved : qty,
+            secondHandReadyQuantity: m.secondHandReadyQuantity,
+            secondHandRepairQuantity: m.secondHandRepairQuantity,
+            demoQuantity: m.demoQuantity,
+            reason: (reasonChanged ? reason : m.reason) as StockMovement["reason"],
+          },
+        },
+      ]
+    })
+    if (updates.length > 0) await updateMany.mutateAsync(updates)
+    onOpenChange(false)
+  }
+
+  const qtyLabel = isIn ? t("qtyAdded") : t("qtyRemoved")
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2">
+        <Label>{t("product")}</Label>
+        <Input value={members[0]?.productName ?? t("unknownProduct")} disabled />
+      </div>
+      <div className="grid gap-2">
+        <Label>{t("reason")}</Label>
+        <Select value={reason} onValueChange={setReason}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={KEEP_REASON}>{t("keepEachReason")}</SelectItem>
+            {STOCK_MOVEMENT_REASONS.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="max-h-72 overflow-y-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">{t("relatedJob")}</th>
+              <th className="px-3 py-2 font-medium">{tFields("status")}</th>
+              <th className="w-28 px-3 py-2 font-medium">{qtyLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => (
+              <tr key={m.id} className="border-t">
+                <td className="px-3 py-1.5">
+                  <div className="font-medium">{jobOf(m)}</div>
+                  <div className="text-xs text-muted-foreground">{m.reason}</div>
+                </td>
+                <td className="px-3 py-1.5 text-muted-foreground">{tStatus(m.status ?? "approved")}</td>
+                <td className="px-3 py-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    aria-label={`${qtyLabel} ${jobOf(m)}`}
+                    className="h-8"
+                    value={Number.isNaN(valueOf(m)) ? "" : valueOf(m)}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setQuantities((q) => ({ ...q, [m.id]: e.target.valueAsNumber }))}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/30 font-medium">
+              <td className="px-3 py-2" colSpan={2}>
+                {t("groupedTotal")}
+              </td>
+              <td className="px-3 py-2">{Number.isNaN(total) ? "—" : total}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {tCommon("cancel")}
+        </Button>
+        <Button type="button" onClick={onSave} disabled={invalid || members.length === 0 || updateMany.isPending}>
+          {updateMany.isPending ? tCommon("saving") : tCommon("saveChanges")}
+        </Button>
+      </DialogFooter>
+    </div>
   )
 }

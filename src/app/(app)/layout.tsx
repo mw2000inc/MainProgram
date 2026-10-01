@@ -9,12 +9,15 @@ import { Logo } from "@/components/shared/logo"
 import { isTechnicianAllowedPath } from "@/components/layout/nav-items"
 import { useSidebarCollapse } from "@/lib/sidebar-collapse-context"
 import { cn } from "@/lib/utils"
+import { useLiveDataSync } from "@/lib/hooks/use-live-data-sync"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const { collapsed } = useSidebarCollapse()
+  // Live refresh of schedule / module / inventory data while signed in.
+  useLiveDataSync(!!user)
 
   React.useEffect(() => {
     if (!loading && !user) router.replace("/login")

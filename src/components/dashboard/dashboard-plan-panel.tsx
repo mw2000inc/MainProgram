@@ -42,6 +42,13 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   expandedData?: TData[]
   // Extra controls in the expanded dialog's table toolbar, next to search.
   expandedToolbar?: React.ReactNode
+  // Pick the compact table's columns from its measured width (e.g. fewer,
+  // merged columns on a narrow panel) so it never needs a sideways scroll.
+  // Falls back to `columns` until the width is known.
+  columnsForWidth?: (width: number) => ColumnDef<TData, unknown>[]
+  // Pair with SortablePanel's growToFit: the card fills the panel and grows
+  // to show every row of the current page — no scrolling inside the table.
+  growToFit?: boolean
   onAdd?: () => void
   canDelete?: boolean
   onDeleteSelected?: (ids: string[]) => Promise<void>
@@ -137,6 +144,8 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   headerActions,
   expandedData,
   expandedToolbar,
+  columnsForWidth,
+  growToFit,
   onAdd,
   canDelete,
   onDeleteSelected,
@@ -207,7 +216,21 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     [selectMode, selected, t]
   )
 
-  const compactColumns = React.useMemo(() => withSelectColumn(columns), [withSelectColumn, columns])
+  // Width of the compact table area, for columnsForWidth.
+  const contentRef = React.useRef<HTMLDivElement | null>(null)
+  const [contentWidth, setContentWidth] = React.useState<number | null>(null)
+  React.useEffect(() => {
+    if (!columnsForWidth || !contentRef.current) return
+    const el = contentRef.current
+    const observer = new ResizeObserver(([entry]) => setContentWidth(Math.round(entry.contentRect.width)))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [columnsForWidth])
+  const baseCompactColumns = React.useMemo(
+    () => (columnsForWidth && contentWidth ? columnsForWidth(contentWidth) : columns),
+    [columnsForWidth, contentWidth, columns]
+  )
+  const compactColumns = React.useMemo(() => withSelectColumn(baseCompactColumns), [withSelectColumn, baseCompactColumns])
   const dialogColumns = React.useMemo(
     () => withSelectColumn(expandedColumns ?? columns),
     [withSelectColumn, expandedColumns, columns]
@@ -227,10 +250,12 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           : "flex-col @sm/card-header:flex-row @sm/card-header:items-center @sm/card-header:justify-between"
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-        <Icon className="h-4 w-4 shrink-0 text-primary" /> <span className="truncate">{title}</span>
+      {/* shrink-0: the title keeps its full width — the buttons beside it
+          give way first (shorter labels via container queries, then wrap). */}
+      <div className="flex shrink-0 items-center gap-2 text-sm font-medium">
+        <Icon className="h-4 w-4 shrink-0 text-primary" /> <span className="whitespace-nowrap">{title}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
         {headerActions}
         {canAdd && (
           <Button size="sm" className="h-7 gap-1 px-2" onClick={onAdd}>
@@ -326,11 +351,11 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     // admin resizes the panel, SortablePanel's own explicit height + scroll
     // takes over completely and this cap no longer applies.
     <div
-      className="min-h-0 flex-1 flex flex-col"
+      className={cn("flex-1 flex flex-col", !(growToFit && !isExpanded) && "min-h-0")}
       // Inline, not a Tailwind arbitrary-value class -- DEFAULT_MAX_HEIGHT_PX
       // is a computed JS value, and Tailwind's build-time scanner can't
       // discover a class name assembled at runtime via string interpolation.
-      style={!isExpanded && !panelHeight ? { maxHeight: DEFAULT_MAX_HEIGHT_PX } : undefined}
+      style={!isExpanded && !panelHeight && !growToFit ? { maxHeight: DEFAULT_MAX_HEIGHT_PX } : undefined}
     >
       <DataTable
         columns={cols}
@@ -351,14 +376,16 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
         // app has already fixed once elsewhere. The compact (non-expanded)
         // case keeps the default — it's the one genuinely relying on
         // DataTable's own scroll.
-        scrollContainerClassName={isExpanded ? "overflow-y-visible" : undefined}
+        // growToFit's compact view never scrolls vertically either — the
+        // card grows to the page's rows instead.
+        scrollContainerClassName={isExpanded || growToFit ? "overflow-y-visible" : undefined}
       />
     </div>
   )
 
   return (
     <>
-      <Card className="h-full flex flex-col">
+      <Card className={cn("flex flex-col", growToFit ? "flex-1" : "h-full")}>
         <CardHeader
           {...dragHandle}
           className={cn("gap-2 pb-2", dragHandle && "touch-none cursor-grab select-none active:cursor-grabbing")}
@@ -372,7 +399,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
             the parent) — DataTable's own pageSize scales with that same
             height (see computePageSize) so a taller panel shows more rows
             instead of just more blank space below a fixed-size table. */}
-        <CardContent className="flex-1 min-h-0 flex flex-col space-y-2">
+        <CardContent ref={contentRef} className={cn("flex-1 flex flex-col space-y-2", !growToFit && "min-h-0")}>
           {selectionBar}
           {loading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">{t("loading")}</div>

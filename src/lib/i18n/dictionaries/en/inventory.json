@@ -114,6 +114,7 @@
   "mapItem": "Map item",
   "reviewQueue": "Review",
   "reviewQueueHint": "Review pending items: map items to stock, change quantities, approve or reject",
+  "approveAllShort": "Approve all ({count})",
   "nothingPendingApproval": "Nothing is waiting on inventory approval right now.",
   "historyButton": "History",
   "historyTitle": "Inventory Approval History",
@@ -123,5 +124,9 @@
   "noHistoryMatches": "No history matches that search.",
   "requestedBy": "Requested by {name}",
   "historyApprovedBy": "Approved by {name}",
-  "historyRejectedBy": "Rejected by {name}"
+  "historyRejectedBy": "Rejected by {name}",
+  "editGroupedTitle": "Edit Grouped Items",
+  "editGroupedDescription": "This row combines {count} entries. Change each job's quantity, or set one reason for all — each entry is saved separately.",
+  "keepEachReason": "Keep each entry's reason",
+  "groupedTotal": "Total"
 }

@@ -49,6 +49,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
   getInventoryListExpandedColumns,
+  inventoryListDensityForWidth,
   groupInventoryListRows,
   aggregateInventoryRowsByItem,
   INVENTORY_LIST_EXPORT_COLUMNS,
@@ -584,22 +585,28 @@ export function DailyReportSection() {
   // combining several movements acts on all of them (mergedIds).
   const approveAll = useApproveStockMovements()
   const rejectMany = useRejectStockMovements()
-  const inventoryListExpandedColumns = React.useMemo(
-    () =>
-      getInventoryListExpandedColumns({
-        onEdit: can("inventory:edit") ? setEditingStockMovement : undefined,
-        ...(isAdmin && user
-          ? {
-              onApprove: (m: StockMovementRow) => approveAll.mutate({ ids: m.mergedIds ?? [m.id], approvedBy: user.id }),
-              onReject: (m: StockMovementRow) => rejectMany.mutate({ ids: m.mergedIds ?? [m.id], rejectedBy: user.id }),
-              onMap: () => setInventoryQueueOpen(true),
-            }
-          : {}),
-      }),
+  const inventoryColumnOptions = React.useMemo(
+    () => ({
+      onEdit: can("inventory:edit") ? setEditingStockMovement : undefined,
+      ...(isAdmin && user
+        ? {
+            onApprove: (m: StockMovementRow) => approveAll.mutate({ ids: m.mergedIds ?? [m.id], approvedBy: user.id }),
+            onReject: (m: StockMovementRow) => rejectMany.mutate({ ids: m.mergedIds ?? [m.id], rejectedBy: user.id }),
+            onMap: () => setInventoryQueueOpen(true),
+          }
+        : {}),
+    }),
     // approveAll/rejectMany.mutate are stable; listing the mutation objects
     // would rebuild the columns on every pending-state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [can, setEditingStockMovement, isAdmin, user]
+  )
+  // The expanded modal always has every column; the panel itself picks a
+  // column set that fits its current width (inventoryListDensityForWidth).
+  const inventoryListExpandedColumns = React.useMemo(() => getInventoryListExpandedColumns(inventoryColumnOptions), [inventoryColumnOptions])
+  const inventoryColumnsForWidth = React.useCallback(
+    (width: number) => getInventoryListExpandedColumns({ ...inventoryColumnOptions, density: inventoryListDensityForWidth(width) }),
+    [inventoryColumnOptions]
   )
 
   // Pre D, when set, is the record's actual (re)scheduled date — it wins
@@ -803,6 +810,8 @@ export function DailyReportSection() {
         // prop, the dialog renders the exact same columns and falls back to
         // this same tableClassName.
         columns={inventoryListExpandedColumns}
+        columnsForWidth={inventoryColumnsForWidth}
+        growToFit
         data={dayStockMovementRows}
         expandedData={dayStockItemTotals}
         expandedToolbar={
@@ -833,17 +842,24 @@ export function DailyReportSection() {
           // button silently not being there.
           isAdmin && allPending.length > 0 ? (
             <>
+              {/* Full labels when the panel is wide; "Approve all (N)" and an
+                  icon-only Review when it's narrow (container queries on the
+                  card header), so the header stays on one row. */}
               <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveAllOpen(true)}>
-                <CheckCheck className="h-3.5 w-3.5" /> {tInventory("approveAllPending", { count: String(allPending.length) })}
+                <CheckCheck className="h-3.5 w-3.5" />
+                <span className="hidden @2xl/card-header:inline">{tInventory("approveAllPending", { count: String(allPending.length) })}</span>
+                <span className="@2xl/card-header:hidden">{tInventory("approveAllShort", { count: String(allPending.length) })}</span>
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 gap-1 px-2"
                 title={tInventory("reviewQueueHint")}
+                aria-label={tInventory("reviewQueue")}
                 onClick={() => setInventoryQueueOpen(true)}
               >
-                <PackageCheck className="h-3.5 w-3.5" /> {tInventory("reviewQueue")}
+                <PackageCheck className="h-3.5 w-3.5" />
+                <span className="hidden @2xl/card-header:inline">{tInventory("reviewQueue")}</span>
               </Button>
             </>
           ) : undefined
@@ -854,8 +870,8 @@ export function DailyReportSection() {
         exportFileName="inventory-list"
         onRowClick={() => router.push("/inventory/in-and-out")}
         panelHeight={sizes.inventory?.height}
-        tableContainerClassName="overflow-x-auto scrollbar-always-visible"
-        tableClassName="min-w-max"
+        tableContainerClassName="overflow-x-auto"
+        expandedTableClassName="min-w-max"
       />
     ),
   }
@@ -1003,6 +1019,9 @@ export function DailyReportSection() {
                 height={sizes[id]?.height}
                 defaultWidthClassName={defaultWidthClassName(id, isGrid, isAdmin)}
                 onResizeEnd={(size) => handleResizeEnd(id, size)}
+                // The Inventory List grows to show its whole page of rows
+                // (no scrolling inside it); other panels keep a fixed height.
+                growToFit={id === "inventory"}
               >
                 {rawContent[id]}
               </SortablePanel>

@@ -114,6 +114,7 @@
   "mapItem": "품목 선택",
   "reviewQueue": "검토",
   "reviewQueueHint": "대기 항목 검토: 재고 품목 선택, 수량 수정, 승인 또는 거부",
+  "approveAllShort": "모두 승인 ({count})",
   "nothingPendingApproval": "현재 재고 승인 대기 중인 항목이 없습니다.",
   "historyButton": "이력",
   "historyTitle": "재고 승인 이력",
@@ -123,5 +124,9 @@
   "noHistoryMatches": "검색 결과와 일치하는 이력이 없습니다.",
   "requestedBy": "{name}님이 요청함",
   "historyApprovedBy": "{name}님이 승인함",
-  "historyRejectedBy": "{name}님이 거절함"
+  "historyRejectedBy": "{name}님이 거절함",
+  "editGroupedTitle": "묶음 항목 편집",
+  "editGroupedDescription": "이 행은 {count}개 항목을 합친 것입니다. 작업별 수량을 변경하거나 모든 항목에 하나의 사유를 지정하세요. 각 항목은 개별적으로 저장됩니다.",
+  "keepEachReason": "각 항목의 사유 유지",
+  "groupedTotal": "합계"
 }
