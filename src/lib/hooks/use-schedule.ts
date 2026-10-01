@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
+import { installPlansKey } from "@/lib/hooks/use-install-plans"
 
 export const scheduleJobsKey = ["scheduleJobs"] as const
 
@@ -107,5 +108,35 @@ export function useClearScheduleForDate() {
       toast.success(`Cleared ${result.jobsCleared} job(s)`)
     },
     onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+// Batch completion from the Schedule full-screen view. Refreshes everything
+// it can change: the jobs, their linked Filter Change / install / repair
+// records, and the inventory movements their completion queued.
+export function useCompleteScheduleJobs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobIds, today }: { jobIds: string[]; today: string }) => api.completeScheduleJobs(jobIds, today),
+    onSuccess: (result) => {
+      const extra = [
+        result.filterChangeVisits ? `${result.filterChangeVisits} Filter Change visit(s)` : "",
+        result.installs ? `${result.installs} install(s)` : "",
+        result.repairs ? `${result.repairs} repair(s)` : "",
+      ].filter(Boolean)
+      toast.success(
+        `Completed ${result.completed} job(s)` +
+          (extra.length ? ` and ${extra.join(", ")}` : "") +
+          (result.queuedFromJobs ? ` — ${result.queuedFromJobs} item(s) queued for inventory approval` : "")
+      )
+    },
+    onError: (error: Error) => toast.error(error.message),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      qc.invalidateQueries({ queryKey: installPlansKey })
+      qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: ["stockMovements"] })
+    },
   })
 }
