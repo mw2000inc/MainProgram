@@ -32,6 +32,7 @@ import { cn, formatDate, todayIso } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import { suggestTechnician as fetchSuggestedTechnician, type TechnicianSuggestion } from "@/lib/api/filter-change-plans"
 import type { Customer, FilterChangePlan, SaleListEntry } from "@/lib/types"
+import { completionDateFor } from "@/lib/completion-date"
 
 function yearMonth(dateStr: string) {
   return dateStr.slice(0, 7)
@@ -209,7 +210,12 @@ function FilterChangePageContent() {
       getFilterChangeFullColumns({
         canDelete: isAdmin,
         onDelete: (p) => setDeleting(p),
-        onStatusChange: isAdmin ? (p, status) => updatePlan({ id: p.id, input: { status } }) : undefined,
+        onStatusChange: isAdmin
+          ? (p, status) => {
+              const accD = completionDateFor(status, p.status, p.accD)
+              updatePlan({ id: p.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
+            }
+          : undefined,
       }),
     [isAdmin, updatePlan]
   )

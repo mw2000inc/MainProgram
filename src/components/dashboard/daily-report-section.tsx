@@ -67,6 +67,7 @@ import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
+import { completionDateFor } from "@/lib/completion-date"
 
 // Every panel this section can render. "date" used to be one of these (a
 // full draggable/resizable card) — it's now a compact button in the toolbar
@@ -495,7 +496,12 @@ export function DailyReportSection() {
   // split left to protect).
   const filterChangeColumnParams = React.useMemo(
     () => ({
-      onStatusChange: isAdmin ? (plan: FilterChangePlan, status: string) => updateFilterChangePlan.mutate({ id: plan.id, input: { status } }) : undefined,
+      onStatusChange: isAdmin
+        ? (plan: FilterChangePlan, status: string) => {
+            const accD = completionDateFor(status, plan.status, plan.accD)
+            updateFilterChangePlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
+          }
+        : undefined,
       // Filter/Pre D/Acc D/Serviceman edited straight from the cell
       // (compact or expanded — both share the same cell renderers, see
       // dailyReportColumnDefs) — same mutate-and-invalidate hook the status
@@ -525,7 +531,12 @@ export function DailyReportSection() {
       withDispatchStatusColumn(
         filterColumnsByVisibility(
           getInstallColumns({
-            onStatusChange: isAdmin ? (plan, status) => updateInstallPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+            onStatusChange: isAdmin
+              ? (plan, status) => {
+                  const installedDate = completionDateFor(status, plan.status, plan.installedDate)
+                  updateInstallPlan.mutate({ id: plan.id, input: { status, ...(installedDate !== undefined ? { installedDate } : {}) } })
+                }
+              : undefined,
             onFieldChange: isAdmin ? (plan, patch) => updateInstallPlan.mutate({ id: plan.id, input: patch }) : undefined,
           }),
           visibleFieldsFor("installation")
@@ -538,7 +549,12 @@ export function DailyReportSection() {
       withDispatchStatusColumn(
         filterColumnsByVisibility(
           getRepairColumns({
-            onStatusChange: isAdmin ? (plan, status) => updateRepairPlan.mutate({ id: plan.id, input: { status } }) : undefined,
+            onStatusChange: isAdmin
+              ? (plan, status) => {
+                  const accD = completionDateFor(status, plan.status, plan.accD)
+                  updateRepairPlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
+                }
+              : undefined,
           }),
           visibleFieldsFor("repair")
         )
