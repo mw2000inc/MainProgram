@@ -1,6 +1,7 @@
 import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getCustomerFilterChangeDueDate, getCpSystemFilterChangeDueDate } from "@/lib/utils"
+import { getCpSystemMinIntervalMonths, getMonitoringIntervalMonths } from "@/lib/utils"
+import { AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS, autoFilterChangeDecision } from "@/lib/filter-change-cycle"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import type { AutomationResult } from "../types"
 import type { CpSystemComponent } from "@/lib/types"
@@ -20,8 +21,11 @@ function assignedTechnicianPair(
   return { technician: pair.primary || "N/A", technician_2: pair.secondary || null }
 }
 
-// For every customer whose next filter change is due (installed date/
-// contract start + monitoring interval <= today) and doesn't already have
+// For every customer whose CURRENT filter-change cycle came due within the
+// last AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS days (installed date / contract
+// start + interval × k — see autoFilterChangeDecision; older backlogs and
+// cycles already done are skipped, as are cancelled (INACTIVE) orders) and
+// doesn't already have
 // an unresolved auto-generated entry, creates a normal "filter_change"
 // schedule_jobs row scheduled for today (never in the past — a job overdue
 // by weeks still needs to be handled now, not backdated to whenever it
@@ -64,9 +68,37 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
 
   const today = new Date().toISOString().slice(0, 10)
 
+  // The latest completed visit (Acc D) per order — a cycle already done isn't
+  // scheduled again — and the cancelled orders, which get nothing.
+  const lastDoneByOrder = new Map<string, string>()
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin
+      .from("filter_change_plans")
+      .select("order_number, acc_d")
+      .not("acc_d", "is", null)
+      .neq("status", "Cancelled")
+      .range(from, from + 999)
+    if (error) return { ok: false, message: error.message }
+    for (const r of data as { order_number: string; acc_d: string }[]) {
+      const order = r.order_number?.trim()
+      if (order && r.acc_d > (lastDoneByOrder.get(order) ?? "")) lastDoneByOrder.set(order, r.acc_d)
+    }
+    if (data.length < 1000) break
+  }
+  const inactiveOrders = new Set<string>()
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin.from("sale_list_entries").select("order_number").eq("status", "INACTIVE").range(from, from + 999)
+    if (error) return { ok: false, message: error.message }
+    for (const r of data as { order_number: string | null }[]) if (r.order_number?.trim()) inactiveOrders.add(r.order_number.trim())
+    if (data.length < 1000) break
+  }
+
   let created = 0
   let alreadyPending = 0
   let notYetDue = 0
+  let tooOld = 0
+  let doneThisCycle = 0
+  let skippedInactive = 0
   let skippedNoAnchor = 0
   const errors: string[] = []
 
@@ -77,15 +109,24 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       continue
     }
 
-    const due = getCustomerFilterChangeDueDate(
-      { installedDate: c.installed_date ?? undefined, contractStart: c.contract_start, dispenserType: c.dispenser_type },
-      settings
-    )
-    const dueDate = due.toISOString().slice(0, 10)
-    if (dueDate > today) {
-      notYetDue++
+    const customerOrder = c.order_number?.trim()
+    if (customerOrder && inactiveOrders.has(customerOrder)) {
+      skippedInactive++
       continue
     }
+    const decision = autoFilterChangeDecision(
+      anchor,
+      getMonitoringIntervalMonths(c.dispenser_type, settings),
+      today,
+      customerOrder ? lastDoneByOrder.get(customerOrder) : undefined
+    )
+    if ("skip" in decision) {
+      if (decision.skip === "notYetDue") notYetDue++
+      else if (decision.skip === "tooOld") tooOld++
+      else doneThisCycle++
+      continue
+    }
+    const dueDate = decision.due
 
     // Idempotency: skip if this customer already has an unresolved
     // filter_change job (any date — an admin may have already rescheduled
@@ -145,6 +186,8 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   let cpCreated = 0
   let cpAlreadyPending = 0
   let cpNotYetDue = 0
+  let cpTooOld = 0
+  let cpDoneThisCycle = 0
   let cpSkipped = 0
   const cpErrors: string[] = []
 
@@ -178,16 +221,19 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       continue
     }
 
-    const due = getCpSystemFilterChangeDueDate(entry.installed_date, components)
-    if (!due) {
+    const intervalMonths = getCpSystemMinIntervalMonths(components)
+    if (!intervalMonths) {
       cpSkipped++
       continue
     }
-    const dueDate = due.toISOString().slice(0, 10)
-    if (dueDate > today) {
-      cpNotYetDue++
+    const decision = autoFilterChangeDecision(entry.installed_date, intervalMonths, today, lastDoneByOrder.get(orderNo))
+    if ("skip" in decision) {
+      if (decision.skip === "notYetDue") cpNotYetDue++
+      else if (decision.skip === "tooOld") cpTooOld++
+      else cpDoneThisCycle++
       continue
     }
+    const dueDate = decision.due
 
     // Idempotency: skip if this exact order already has an unresolved
     // filter_change job — same "any date, not just an exact match" reasoning
@@ -237,13 +283,19 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       created,
       alreadyPending,
       notYetDue,
+      tooOld,
+      doneThisCycle,
+      skippedInactive,
       skippedNoAnchor,
+      maxOverdueDays: AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS,
       errors,
       cpSystem: {
         checked: linkedEntries?.length ?? 0,
         created: cpCreated,
         alreadyPending: cpAlreadyPending,
         notYetDue: cpNotYetDue,
+        tooOld: cpTooOld,
+        doneThisCycle: cpDoneThisCycle,
         skipped: cpSkipped,
         errors: cpErrors,
       },
