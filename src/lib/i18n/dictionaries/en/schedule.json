@@ -191,5 +191,13 @@
   "scheduleHistorySearch": "Search order, name, or field...",
   "scheduleHistoryEmpty": "No changes recorded yet.",
   "scheduleHistoryNoMatches": "No changes match your search.",
-  "scheduleHistoryChanged": "Changed: {fields}"
+  "scheduleHistoryChanged": "Changed: {fields}",
+  "unscheduledVisits": "Unscheduled Visits",
+  "unscheduledVisitsHint": "Confirmed Filter Change, Installation, Repair and Collection visits in this timeframe that no schedule job covers yet. Create a job to assign a technician and vehicle.",
+  "unscheduledVisitsCount": "{count} unscheduled visit(s) in this timeframe — open to schedule",
+  "createJob": "Create Job",
+  "tableCustomerOrder": "Customer / Order",
+  "tableAddress": "Address",
+  "tablePlannedTechnician": "Planned Technician",
+  "tableDetails": "Details"
 }

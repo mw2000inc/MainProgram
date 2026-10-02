@@ -110,6 +110,18 @@ export async function updateScheduleJob(id: string, input: Partial<Omit<Schedule
   return fromRow(data as ScheduleJobRow)
 }
 
+// Links a Filter Change / install / repair / collection record to the job
+// just created for it from the Schedule's Unscheduled Visits — only while
+// it's still unlinked, so it never steals a record another job already has.
+export async function linkVisitToScheduleJob(
+  table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections",
+  recordId: string,
+  jobId: string
+): Promise<void> {
+  const { error } = await supabase.from(table).update({ schedule_job_id: jobId }).eq("id", recordId).is("schedule_job_id", null)
+  if (error) throw error
+}
+
 export async function deleteScheduleJob(id: string): Promise<void> {
   const { error } = await supabase.from("schedule_jobs").delete().eq("id", id)
   if (error) throw error

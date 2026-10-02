@@ -28,7 +28,15 @@ import {
 } from "@/components/ui/dialog"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
-import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
+import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
+import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
+import { linkVisitToScheduleJob } from "@/lib/api/schedule"
+import { useQueryClient } from "@tanstack/react-query"
+import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
+import { installPlansKey } from "@/lib/hooks/use-install-plans"
+import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
+import { collectionsKey } from "@/lib/hooks/use-collections"
+import { toast } from "sonner"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
 import { useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
@@ -442,6 +450,43 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (job.jobType === "repair") return find(repairPlans, "/repair-plan")
     if (job.jobType === "collection") return find(collectionRecords, "/collection-plan")
     return undefined
+  }
+  // Unscheduled Visits (admins): Confirmed module visits in the timeframe
+  // that no job covers yet, each schedulable with "Create Job".
+  const qc = useQueryClient()
+  const unscheduledVisits = React.useMemo(
+    () =>
+      isAdmin
+        ? buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, range)
+        : [],
+    [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range]
+  )
+  const [visitToSchedule, setVisitToSchedule] = React.useState<UnscheduledVisit | undefined>(undefined)
+  const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(
+    () =>
+      visitToSchedule && {
+        jobType: visitToSchedule.jobType,
+        scheduledDate: visitToSchedule.date,
+        orderNo: visitToSchedule.orderNo,
+        customerId: visitToSchedule.customerId,
+        technician: visitToSchedule.technician,
+        technician2: visitToSchedule.technician2,
+        secondaryAddress: visitToSchedule.address,
+        notes: [visitToSchedule.name, visitToSchedule.detail].filter(Boolean).join(" — "),
+        filterCodes: visitToSchedule.filterCodes,
+      },
+    [visitToSchedule]
+  )
+  // The new job takes over the visit (the database's own sync would usually
+  // link it too; this makes sure it's exactly this visit).
+  const linkScheduledVisit = async (visit: UnscheduledVisit, job: ScheduleJob) => {
+    try {
+      await linkVisitToScheduleJob(visit.table, visit.recordId, job.id)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+    const key = { filter_change_plans: filterChangePlansKey, install_plans: installPlansKey, repair_plans: repairPlansKey, collections: collectionsKey }[visit.table]
+    qc.invalidateQueries({ queryKey: key })
   }
   const { data: users = [] } = useUsers()
   const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
@@ -969,7 +1014,98 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     </div>
   )
 
-  const fullScreenJobs = () => {
+  // Search narrows the visits too; they're all pending, so the Completed
+  // tab hides them.
+  const visibleVisits = React.useMemo(() => {
+    if (statusFilter === "completed") return []
+    const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (terms.length === 0) return unscheduledVisits
+    return unscheduledVisits.filter((v) => {
+      const haystack = [v.name, v.orderNo, v.address, v.detail, v.technician, v.technician2, t(v.jobType)].filter(Boolean).join(" ").toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [unscheduledVisits, statusFilter, search, t])
+
+  const createJobButton = (visit: UnscheduledVisit) => (
+    <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" data-testid="unscheduled-create-job" onClick={() => setVisitToSchedule(visit)}>
+      <Plus className="h-3.5 w-3.5" /> {t("createJob")}
+    </Button>
+  )
+  const unscheduledSection = () =>
+    visibleVisits.length === 0 ? null : (
+      <section data-testid="unscheduled-visits" className="mt-6 rounded-md border border-dashed border-warning/50 bg-warning/5 p-3">
+        <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("unscheduledVisits")}
+          <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-semibold">
+            {visibleVisits.length}
+          </Badge>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">{t("unscheduledVisitsHint")}</p>
+        {viewMode === "table" ? (
+          <div className="overflow-x-auto rounded-md border bg-background">
+            <table className="w-full text-sm" data-testid="unscheduled-table">
+              <thead>
+                <tr className="bg-muted text-left text-xs text-muted-foreground">
+                  {(["tableDate", "tableJobType", "tableCustomerOrder", "tableAddress", "tablePlannedTechnician", "tableDetails"] as const).map((key) => (
+                    <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
+                      {t(key)}
+                    </th>
+                  ))}
+                  <th className="w-28 px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleVisits.map((v) => (
+                  <tr key={v.key} data-testid="unscheduled-row" className="border-t align-top">
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.date)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{t(v.jobType)}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{v.name}</div>
+                      <div className="text-xs text-muted-foreground">{v.orderNo}</div>
+                    </td>
+                    <td className="max-w-[18rem] px-3 py-2 text-xs">{v.address || "—"}</td>
+                    <td className="px-3 py-2">{isAssignedTechnician(v.technician) ? formatTechnicians(v.technician, v.technician2, t("and")) : "—"}</td>
+                    <td className="max-w-[16rem] px-3 py-2 text-xs">{v.detail || "—"}</td>
+                    <td className="px-3 py-2 text-right">{createJobButton(v)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={gridClass}>
+            {visibleVisits.map((v) => (
+              <div key={v.key} data-testid="unscheduled-tile" className="rounded-md border bg-background p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium">
+                      {t(v.jobType)} <span className="text-muted-foreground">· {v.orderNo}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{formatDate(v.date)}</div>
+                  </div>
+                  {createJobButton(v)}
+                </div>
+                <div className="mt-1.5 space-y-0.5 text-xs">
+                  <div className="font-medium">{v.name}</div>
+                  {v.address && <div className="text-muted-foreground">{v.address}</div>}
+                  {v.detail && <div>{v.detail}</div>}
+                  {isAssignedTechnician(v.technician) && <div className="text-muted-foreground">{formatTechnicians(v.technician, v.technician2, t("and"))}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    )
+
+  const fullScreenJobs = () => (
+    <>
+      {scheduledJobsBody()}
+      {unscheduledSection()}
+    </>
+  )
+
+  const scheduledJobsBody = () => {
     if (isPending || todaysJobs.length === 0) return jobList()
     if (visibleJobs.length === 0) {
       return (
@@ -1022,6 +1158,17 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
           {multiDay ? t("noJobsInTimeframe") : t("noJobsScheduled")}
         </p>
+      )}
+      {!isPending && unscheduledVisits.length > 0 && !expanded && (
+        <button
+          type="button"
+          data-testid="unscheduled-visits-link"
+          onClick={() => setExpanded(true)}
+          className="mb-3 flex w-full items-center justify-between rounded-md border border-dashed border-warning/50 bg-warning/5 px-3 py-2 text-left text-xs font-medium hover:bg-warning/10"
+        >
+          {t("unscheduledVisitsCount", { count: unscheduledVisits.length })}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
       )}
       {!isPending && todaysJobs.length > 0 && (
         <div>
@@ -1255,6 +1402,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         }}
         defaultDate={date}
         job={editingJob}
+      />
+      <ScheduleFormDialog
+        open={!!visitToSchedule}
+        onOpenChange={(o) => !o && setVisitToSchedule(undefined)}
+        defaultDate={visitToSchedule?.date ?? date}
+        prefill={visitPrefill}
+        onCreated={(job) => visitToSchedule && linkScheduledVisit(visitToSchedule, job)}
       />
       <MarkJobDoneDialog key={markingDone?.id ?? "none"} job={markingDone} onOpenChange={(o) => !o && setMarkingDone(undefined)} />
     </Card>

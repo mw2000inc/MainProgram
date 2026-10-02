@@ -191,5 +191,13 @@
   "scheduleHistorySearch": "주문, 이름, 항목 검색...",
   "scheduleHistoryEmpty": "기록된 변경 사항이 없습니다.",
   "scheduleHistoryNoMatches": "검색과 일치하는 변경 사항이 없습니다.",
-  "scheduleHistoryChanged": "변경: {fields}"
+  "scheduleHistoryChanged": "변경: {fields}",
+  "unscheduledVisits": "미배정 방문",
+  "unscheduledVisitsHint": "이 기간에 확정되었지만 아직 일정 작업이 없는 필터 교체, 설치, 수리, 수금 방문입니다. 작업을 생성하여 기술자와 차량을 배정하세요.",
+  "unscheduledVisitsCount": "이 기간의 미배정 방문 {count}건 — 열어서 일정 잡기",
+  "createJob": "작업 생성",
+  "tableCustomerOrder": "고객 / 주문",
+  "tableAddress": "주소",
+  "tablePlannedTechnician": "예정 기술자",
+  "tableDetails": "세부 정보"
 }

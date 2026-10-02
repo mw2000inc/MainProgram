@@ -116,7 +116,39 @@ function createSchema(
 
 type FormValues = z.infer<ReturnType<typeof createSchema>>
 
-function defaultValues(defaultDate: string, job?: ScheduleJob): FormValues {
+// What "Create Job" on an Unscheduled Visit fills in (the visit's own
+// type, order, customer, date, planned technicians, address and details).
+export interface ScheduleJobPrefill {
+  jobType: ScheduleJobType
+  scheduledDate: string
+  orderNo?: string
+  customerId?: string
+  technician?: string
+  technician2?: string
+  secondaryAddress?: string
+  notes?: string
+  filterCodes?: string
+}
+
+function defaultValues(defaultDate: string, job?: ScheduleJob, prefill?: ScheduleJobPrefill): FormValues {
+  if (prefill && !job) {
+    return {
+      jobType: prefill.jobType,
+      technician: prefill.technician ?? "",
+      vehicle: "",
+      technician2: prefill.technician2 || NONE_SENTINEL,
+      orderNo: prefill.orderNo ?? "",
+      scheduledDate: prefill.scheduledDate,
+      scheduledTime: "",
+      status: "pending",
+      notes: prefill.notes ?? "",
+      productId: "",
+      quantity: "",
+      secondaryAddress: prefill.secondaryAddress ?? "",
+      technicianUserId: NONE_SENTINEL,
+      technician2UserId: NONE_SENTINEL,
+    }
+  }
   if (job) {
     return {
       jobType: job.jobType,
@@ -172,12 +204,20 @@ export function ScheduleFormDialog({
   onOpenChange,
   defaultDate,
   job,
+  prefill,
+  onCreated,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
   // Editing an existing job instead of scheduling a new one.
   job?: ScheduleJob
+  // A new job for an existing visit (the Schedule's Unscheduled Visits).
+  // The visit was already dispatch-confirmed, so this job starts active
+  // ('pending') rather than awaiting a second approval, and its date may be
+  // the visit's own date even when that's today.
+  prefill?: ScheduleJobPrefill
+  onCreated?: (job: ScheduleJob) => void
 }) {
   const isEdit = !!job
   const createJob = useCreateScheduleJob()
@@ -189,16 +229,16 @@ export function ScheduleFormDialog({
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
   const { t: tStatus } = useTranslation("status")
-  const schema = React.useMemo(() => createSchema(t, tCommon, job?.scheduledDate), [t, tCommon, job?.scheduledDate])
+  const schema = React.useMemo(() => createSchema(t, tCommon, job?.scheduledDate ?? prefill?.scheduledDate), [t, tCommon, job?.scheduledDate, prefill?.scheduledDate])
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues(defaultDate, job),
+    defaultValues: defaultValues(defaultDate, job, prefill),
   })
 
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, job))
+    if (open) form.reset(defaultValues(defaultDate, job, prefill))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate, job])
+  }, [open, defaultDate, job, prefill])
 
   // A vehicle with a fixed crew (VEHICLE_CREWS — the Liteace) fills in both
   // technicians and links their logins; they can still be changed after.
@@ -261,12 +301,14 @@ export function ScheduleFormDialog({
       // still forced here rather than trusted from `values`. Editing an
       // existing job is unaffected — values.status is whatever the (visible,
       // for edits) dropdown has, unchanged.
-      status: isEdit ? values.status : "pending_approval",
+      status: isEdit ? values.status : prefill ? "pending" : "pending_approval",
     }
     if (isEdit) {
       await updateJob.mutateAsync({ id: job.id, input })
     } else {
-      await createJob.mutateAsync(input)
+      // Not form fields — carried over from the visit being scheduled.
+      const created = await createJob.mutateAsync({ ...input, customerId: prefill?.customerId, filterCodes: prefill?.filterCodes })
+      onCreated?.(created)
     }
     onOpenChange(false)
   }
