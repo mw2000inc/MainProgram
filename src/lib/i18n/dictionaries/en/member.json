@@ -95,5 +95,19 @@
   "waterFilterInstalled": "Water Filter Installed",
   "noServiceVisits": "No service visits recorded yet.",
   "memberIdLabel": "Member ID:",
-  "registered": "Registered"
+  "registered": "Registered",
+  "serviceInstallation": "Installation",
+  "serviceFilterChange": "Filter Change",
+  "serviceRepair": "Repair",
+  "serviceCollection": "Collection",
+  "servicePlannedDate": "planned",
+  "serviceModel": "Model",
+  "serviceFilters": "Filters",
+  "serviceIssue": "Issue",
+  "serviceSolution": "Solution",
+  "serviceParts": "Parts",
+  "serviceTerm": "C/T",
+  "serviceAmount": "Amount",
+  "serviceNote": "Note",
+  "serviceOpenRecord": "Open record"
 }

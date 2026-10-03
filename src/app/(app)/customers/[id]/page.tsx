@@ -15,6 +15,10 @@ import {
   Droplet,
   Hash,
   Download,
+  Filter,
+  Package,
+  Banknote,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,14 +51,39 @@ import { useSettings } from "@/lib/hooks/use-misc"
 import { updateSettingsCoordinates } from "@/lib/api/misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, getContractStatus, initials } from "@/lib/utils"
-import { getServiceHistory } from "@/lib/service-history"
+import { formatDate, getContractStatus, initials, todayIso } from "@/lib/utils"
+import { buildServiceTimeline, type ServiceEventKind } from "@/lib/service-history"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useCollections } from "@/lib/hooks/use-collections"
+import { PlanStatusBadge } from "@/components/shared/status-badge"
+import Link from "next/link"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { TechnicianPairCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 
 const TECHNICIAN_NA = "N/A"
+
+const SERVICE_ICON: Record<ServiceEventKind, typeof Wrench> = {
+  installation: Package,
+  filter_change: Filter,
+  repair: Wrench,
+  collection: Banknote,
+}
+const SERVICE_TONE: Record<ServiceEventKind, string> = {
+  installation: "bg-primary/10 text-primary",
+  filter_change: "bg-success/10 text-success",
+  repair: "bg-warning/10 text-warning",
+  collection: "bg-muted text-muted-foreground",
+}
+const SERVICE_LABEL: Record<ServiceEventKind, string> = {
+  installation: "serviceInstallation",
+  filter_change: "serviceFilterChange",
+  repair: "serviceRepair",
+  collection: "serviceCollection",
+}
 
 export default function CustomerProfilePage() {
   const params = useParams<{ id: string }>()
@@ -66,6 +95,13 @@ export default function CustomerProfilePage() {
   const { data: customer, isPending } = useCustomer(params.id)
   const { data: settings } = useSettings()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  // Service History: the member's real Installation / Filter Change / Repair /
+  // Collection records (see buildServiceTimeline).
+  const { data: filterChangePlans = [], isPending: pServiceFc } = useFilterChangePlans()
+  const { data: installPlans = [], isPending: pServiceIn } = useInstallPlans()
+  const { data: repairPlans = [], isPending: pServiceRe } = useRepairPlans()
+  const { data: collectionRecords = [], isPending: pServiceCo } = useCollections()
+  const serviceLoading = pServiceFc || pServiceIn || pServiceRe || pServiceCo
   const updateCustomer = useUpdateCustomer()
   const [editOpen, setEditOpen] = React.useState(false)
   const [qrOpen, setQrOpen] = React.useState(false)
@@ -118,11 +154,15 @@ export default function CustomerProfilePage() {
   }
 
   const status = getContractStatus(customer.contractEnd)
-  const serviceHistory = getServiceHistory(customer)
-
   const relatedSales: SaleListRow[] = saleListEntries
     .filter((e) => e.customerId === customer.id || e.orderNumber === customer.orderNumber)
     .map((e) => ({ ...e, accountLabel: customer.companyName || customer.fullName }))
+  const serviceHistory = buildServiceTimeline(
+    customer,
+    relatedSales.map((e) => e.orderNumber),
+    { filterChangePlans, installPlans, repairPlans, collections: collectionRecords },
+    todayIso()
+  )
   const saleListColumns = getSaleListColumns({
     canEdit: can("sales:edit"),
     canDelete: can("sales:delete"),
@@ -469,23 +509,46 @@ export default function CustomerProfilePage() {
               <CardTitle className="text-base">{t("serviceHistory")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {serviceHistory.length === 0 && (
+              {serviceLoading && (
+                <div className="space-y-3">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              )}
+              {!serviceLoading && serviceHistory.length === 0 && (
                 <p className="text-sm text-muted-foreground">{t("noServiceVisits")}</p>
               )}
-              {serviceHistory.map((visit, i) => (
-                <div key={i} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Wrench className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{visit.type}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(visit.date)} &middot; {visit.technician}
-                    </p>
-                    <p className="text-sm mt-1">{visit.notes}</p>
-                  </div>
-                </div>
-              ))}
+              {!serviceLoading &&
+                serviceHistory.map((event) => {
+                  const Icon = SERVICE_ICON[event.kind]
+                  return (
+                    <div key={event.key} data-testid="service-event" data-kind={event.kind} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${SERVICE_TONE[event.kind]}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{t(SERVICE_LABEL[event.kind])}</p>
+                          <PlanStatusBadge status={event.status} />
+                          <span className="text-xs text-muted-foreground">{event.orderNo}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(event.date)}
+                          {!event.completed && ` · ${t("servicePlannedDate")}`}
+                          {event.technician && event.technician !== "N/A" && ` · ${formatTechnicians(event.technician, event.technician2, "&")}`}
+                        </p>
+                        {event.details.map(([label, value]) => (
+                          <p key={label} className="mt-1 text-sm wrap-break-word">
+                            <span className="text-muted-foreground">{t(label)}:</span> {value}
+                          </p>
+                        ))}
+                      </div>
+                      <Link href={event.href} className="shrink-0 self-start text-muted-foreground hover:text-primary" title={t("serviceOpenRecord")} aria-label={t("serviceOpenRecord")}>
+                        <ExternalLink className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  )
+                })}
             </CardContent>
           </Card>
         </TabsContent>

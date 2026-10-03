@@ -95,5 +95,19 @@
   "waterFilterInstalled": "정수 필터 설치 여부",
   "noServiceVisits": "기록된 서비스 방문 내역이 없습니다.",
   "memberIdLabel": "회원 ID:",
-  "registered": "등록일"
+  "registered": "등록일",
+  "serviceInstallation": "설치",
+  "serviceFilterChange": "필터 교체",
+  "serviceRepair": "수리",
+  "serviceCollection": "수금",
+  "servicePlannedDate": "예정",
+  "serviceModel": "모델",
+  "serviceFilters": "필터",
+  "serviceIssue": "문제",
+  "serviceSolution": "조치",
+  "serviceParts": "부품",
+  "serviceTerm": "C/T",
+  "serviceAmount": "금액",
+  "serviceNote": "메모",
+  "serviceOpenRecord": "기록 열기"
 }
