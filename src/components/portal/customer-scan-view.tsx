@@ -26,7 +26,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MonitoringViewStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { Logo } from "@/components/shared/logo"
-import { usePortalProfile } from "@/lib/hooks/use-portal"
+import { usePortalInstallations, usePortalProfile } from "@/lib/hooks/use-portal"
 import { PushOptInBanner } from "@/components/portal/push-opt-in-banner"
 import { EditableMemberEmail } from "@/components/portal/editable-member-email"
 import { getFilterChangeCustomerPortalColumns } from "@/components/filter-change/filter-change-columns"
@@ -42,7 +42,8 @@ import {
   initials,
   todayIso,
 } from "@/lib/utils"
-import { getServiceHistory } from "@/lib/service-history"
+import { buildServiceTimeline } from "@/lib/service-history"
+import { ServiceTimeline } from "@/components/shared/service-timeline"
 import { pickCurrentOrder } from "@/lib/customer-lookup"
 
 // Shared, mostly-read-only customer profile shown after scanning a QR code.
@@ -58,6 +59,8 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
   const { t: tDispatch } = useTranslation("dispatch")
   const { locale, setLocale } = usePreAuthLocale()
   const { data: profile, isPending } = usePortalProfile(customerId)
+  // Service History's installations (the profile RPC has the other three types).
+  const { data: portalInstallations = [], isPending: installationsPending } = usePortalInstallations(customerId)
   const customer = profile?.customer
   const settings = profile?.settings
   const filterChanges = profile?.filterChanges ?? []
@@ -145,7 +148,15 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
     const intervalMonths = getMonitoringIntervalMonths(customer.dispenserType, settings)
     const endDate = getMonitoringEndDate(anchor, intervalMonths)
     const status = getMonitoringStatus(endDate)
-    const serviceHistory = getServiceHistory(customer)
+    // Real records, newest first (see buildServiceTimeline) — without the
+    // internal notes and admin links the member page shows.
+    const serviceHistory = buildServiceTimeline(
+      customer,
+      profile.saleList.map((e) => e.orderNumber),
+      { filterChangePlans: profile.filterChanges, installPlans: portalInstallations, repairPlans: profile.repairs, collections: profile.collections },
+      todayIso(),
+      { publicView: true }
+    )
 
     return (
       <>
@@ -262,23 +273,7 @@ export function CustomerScanView({ customerId }: { customerId: string }) {
                 <CardTitle className="text-base">{t("serviceHistory")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {serviceHistory.length === 0 && (
-                  <p className="text-sm text-muted-foreground">{t("noServiceVisits")}</p>
-                )}
-                {serviceHistory.map((visit, i) => (
-                  <div key={i} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Wrench className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{visit.type}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(visit.date)} &middot; {visit.technician}
-                      </p>
-                      <p className="text-sm mt-1">{visit.notes}</p>
-                    </div>
-                  </div>
-                ))}
+                <ServiceTimeline events={serviceHistory} loading={installationsPending} />
               </CardContent>
             </Card>
           </TabsContent>

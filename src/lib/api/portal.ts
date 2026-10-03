@@ -179,6 +179,50 @@ type RpcRow = {
   } | null
 }
 
+// The customer's installation records for the portal's Service History —
+// the one service type get_portal_profile() doesn't return (see
+// /api/portal/[customerId]/installations). Service fields only.
+export interface PortalInstallation {
+  id: string
+  orderNo: string
+  status: string
+  inputDate: string
+  preInstalledDate?: string
+  installedDate?: string
+  model?: string
+  serviceman: string
+  serviceman2?: string
+}
+
+export async function getPortalInstallations(customerId: string): Promise<PortalInstallation[]> {
+  const res = await fetch(`/api/portal/${encodeURIComponent(customerId)}/installations`, { cache: "no-store" })
+  if (!res.ok) throw new Error(`Couldn't load installations (${res.status})`)
+  const body = (await res.json()) as {
+    installations: {
+      id: string
+      order_no: string
+      status: string
+      input_date: string
+      pre_installed_date: string | null
+      installed_date: string | null
+      model: string | null
+      serviceman: string | null
+      serviceman_2: string | null
+    }[]
+  }
+  return body.installations.map((r) => ({
+    id: r.id,
+    orderNo: r.order_no,
+    status: r.status,
+    inputDate: r.input_date,
+    preInstalledDate: r.pre_installed_date ?? undefined,
+    installedDate: r.installed_date ?? undefined,
+    model: r.model ?? undefined,
+    serviceman: r.serviceman ?? "",
+    serviceman2: r.serviceman_2 ?? undefined,
+  }))
+}
+
 // Reached anonymously by scanning a customer's QR code — no session exists, so this
 // goes through a security-definer RPC scoped to exactly one customer's own data
 // rather than relying on table RLS (see the migration for why).

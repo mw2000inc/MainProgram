@@ -1,49 +1,14 @@
-import { addDays, isBefore, parseISO } from "date-fns"
 import type { CollectionPlan, Customer, FilterChangePlan, InstallPlan, RepairPlan } from "@/lib/types"
 
-export interface ServiceVisit {
-  date: string
-  type: string
-  technician: string
-  notes: string
-}
-
-const VISIT_TYPES = [
-  "Installation & Setup",
-  "Routine Maintenance",
-  "Filter Replacement",
-  "Water Quality Check",
-  "Repair Visit",
-]
-
-type ServiceHistoryCustomer = Pick<Customer, "contractStart" | "contractEnd" | "assignedTechnician" | "dispenserType">
-
-// Deterministic, derived service schedule (every ~90 days since contract start) — not a persisted entity.
-export function getServiceHistory(customer: ServiceHistoryCustomer, now: Date = new Date()): ServiceVisit[] {
-  const start = parseISO(customer.contractStart)
-  const end = isBefore(now, parseISO(customer.contractEnd)) ? now : parseISO(customer.contractEnd)
-  const visits: ServiceVisit[] = []
-  let cursor = start
-  let i = 0
-  while (!isBefore(end, cursor)) {
-    visits.push({
-      date: cursor.toISOString().slice(0, 10),
-      type: i === 0 ? "Installation & Setup" : VISIT_TYPES[i % VISIT_TYPES.length],
-      technician: customer.assignedTechnician,
-      notes: i === 0 ? `${customer.dispenserType} unit installed.` : "Standard service completed, no issues reported.",
-    })
-    cursor = addDays(cursor, 90)
-    i++
-  }
-  return visits.reverse()
-}
-
 // ---------------------------------------------------------------------------
-// The member page's real Service History: the customer's actual Installation,
-// Filter Change, Repair and Collection records (matched by customer id or by
-// any of the customer's order numbers), dated on or before today, newest
-// first. Future recurring visits (the schedule runs years ahead) are left
-// out — this is history, not the plan.
+// Service History (the member page and the public QR-scan portal): the
+// customer's real Installation, Filter Change, Repair and Collection records
+// (matched by customer id or by any of the customer's order numbers), dated on
+// or before today, newest first. Future recurring visits (the schedule runs
+// years ahead) are left out — this is history, not the plan.
+//
+// This replaced a generated placeholder history (a made-up visit every 90
+// days with canned notes) that read no records at all.
 // ---------------------------------------------------------------------------
 export type ServiceEventKind = "installation" | "filter_change" | "repair" | "collection"
 
@@ -60,8 +25,19 @@ export interface ServiceEvent {
   technician2?: string
   // Kind-specific lines, as [label key, value] for the page to translate.
   details: [string, string][]
-  href: string
+  // The record's own page — omitted for the public portal.
+  href?: string
 }
+
+// Only the fields the timeline reads, so the portal's slimmer records fit too.
+type TimelineInstall = Pick<InstallPlan, "id" | "orderNo" | "status" | "inputDate" | "serviceman"> &
+  Partial<Pick<InstallPlan, "preInstalledDate" | "installedDate" | "serviceman2" | "model" | "note">>
+type TimelineFilterChange = Pick<FilterChangePlan, "id" | "orderNumber" | "status" | "planDate" | "serviceman"> &
+  Partial<Pick<FilterChangePlan, "customerId" | "preD" | "accD" | "serviceman2" | "filterType" | "note">>
+type TimelineRepair = Pick<RepairPlan, "id" | "orderNo" | "status" | "issuedDate" | "th"> &
+  Partial<Pick<RepairPlan, "preD" | "accD" | "th2" | "problem" | "solutionStatus" | "partNo" | "note">>
+type TimelineCollection = Pick<CollectionPlan, "id" | "orderNo" | "status" | "collectionDate"> &
+  Partial<Pick<CollectionPlan, "customerId" | "preD" | "accD" | "collected" | "serviceman" | "serviceman2" | "ct" | "amount" | "note">>
 
 type Line = [string, string | number | undefined | null]
 const lines = (...entries: Line[]): [string, string][] =>
@@ -71,15 +47,20 @@ export function buildServiceTimeline(
   customer: Pick<Customer, "id" | "orderNumber">,
   orderNumbers: Iterable<string>,
   data: {
-    filterChangePlans: FilterChangePlan[]
-    installPlans: InstallPlan[]
-    repairPlans: RepairPlan[]
-    collections: CollectionPlan[]
+    filterChangePlans: TimelineFilterChange[]
+    installPlans: TimelineInstall[]
+    repairPlans: TimelineRepair[]
+    collections: TimelineCollection[]
   },
-  today: string
+  today: string,
+  // The public portal leaves out internal notes and links to admin pages.
+  options: { publicView?: boolean } = {}
 ): ServiceEvent[] {
+  const { publicView = false } = options
   const orders = new Set([customer.orderNumber, ...orderNumbers].map((o) => o?.trim()).filter(Boolean))
   const mine = (orderNo: string | undefined, customerId?: string) => customerId === customer.id || orders.has(orderNo?.trim() ?? "")
+  const note = (value: string | undefined): Line => ["serviceNote", publicView ? undefined : value]
+  const link = (href: string) => (publicView ? undefined : href)
   const events: ServiceEvent[] = []
   const push = (e: ServiceEvent) => {
     if (e.date && e.date <= today) events.push(e)
@@ -91,8 +72,8 @@ export function buildServiceTimeline(
       key: `in:${p.id}`, kind: "installation", recordId: p.id, orderNo: p.orderNo, status: p.status,
       date: p.installedDate || p.preInstalledDate || p.inputDate, completed: !!p.installedDate,
       technician: p.serviceman, technician2: p.serviceman2,
-      details: lines(["serviceModel", p.model], ["serviceNote", p.note]),
-      href: `/install?id=${p.id}`,
+      details: lines(["serviceModel", p.model], note(p.note)),
+      href: link(`/install?id=${p.id}`),
     })
   }
   for (const p of data.filterChangePlans) {
@@ -101,8 +82,8 @@ export function buildServiceTimeline(
       key: `fc:${p.id}`, kind: "filter_change", recordId: p.id, orderNo: p.orderNumber, status: p.status,
       date: p.accD || p.preD || p.planDate, completed: !!p.accD || p.status === "Completed",
       technician: p.serviceman, technician2: p.serviceman2,
-      details: lines(["serviceFilters", p.filterType], ["serviceNote", p.note]),
-      href: `/filter-change?id=${p.id}`,
+      details: lines(["serviceFilters", p.filterType], note(p.note)),
+      href: link(`/filter-change?id=${p.id}`),
     })
   }
   for (const p of data.repairPlans) {
@@ -111,8 +92,8 @@ export function buildServiceTimeline(
       key: `re:${p.id}`, kind: "repair", recordId: p.id, orderNo: p.orderNo, status: p.status,
       date: p.accD || p.preD || p.issuedDate, completed: !!p.accD || p.status === "Completed",
       technician: p.th, technician2: p.th2,
-      details: lines(["serviceIssue", p.problem], ["serviceSolution", p.solutionStatus], ["serviceParts", p.partNo], ["serviceNote", p.note]),
-      href: `/repair-plan?id=${p.id}`,
+      details: lines(["serviceIssue", p.problem], ["serviceSolution", p.solutionStatus], ["serviceParts", p.partNo], note(p.note)),
+      href: link(`/repair-plan?id=${p.id}`),
     })
   }
   for (const p of data.collections) {
@@ -120,9 +101,9 @@ export function buildServiceTimeline(
     push({
       key: `co:${p.id}`, kind: "collection", recordId: p.id, orderNo: p.orderNo, status: p.status,
       date: p.accD || p.preD || p.collectionDate, completed: !!p.collected || p.status === "Collected",
-      technician: p.serviceman, technician2: p.serviceman2,
-      details: lines(["serviceTerm", p.ct], ["serviceAmount", p.amount ? `₱${p.amount.toLocaleString()}` : undefined], ["serviceNote", p.note]),
-      href: `/collection-plan?id=${p.id}`,
+      technician: p.serviceman ?? "", technician2: p.serviceman2,
+      details: lines(["serviceTerm", p.ct], ["serviceAmount", p.amount ? `₱${p.amount.toLocaleString()}` : undefined], note(p.note)),
+      href: link(`/collection-plan?id=${p.id}`),
     })
   }
   return events.sort((a, b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind))

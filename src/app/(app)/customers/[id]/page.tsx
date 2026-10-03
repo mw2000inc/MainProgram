@@ -15,10 +15,6 @@ import {
   Droplet,
   Hash,
   Download,
-  Filter,
-  Package,
-  Banknote,
-  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -52,38 +48,18 @@ import { updateSettingsCoordinates } from "@/lib/api/misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, getContractStatus, initials, todayIso } from "@/lib/utils"
-import { buildServiceTimeline, type ServiceEventKind } from "@/lib/service-history"
+import { buildServiceTimeline } from "@/lib/service-history"
+import { ServiceTimeline } from "@/components/shared/service-timeline"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
-import { PlanStatusBadge } from "@/components/shared/status-badge"
-import Link from "next/link"
 import { DISPENSER_TYPES } from "@/lib/constants"
 import { TechnicianPairCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 
 const TECHNICIAN_NA = "N/A"
-
-const SERVICE_ICON: Record<ServiceEventKind, typeof Wrench> = {
-  installation: Package,
-  filter_change: Filter,
-  repair: Wrench,
-  collection: Banknote,
-}
-const SERVICE_TONE: Record<ServiceEventKind, string> = {
-  installation: "bg-primary/10 text-primary",
-  filter_change: "bg-success/10 text-success",
-  repair: "bg-warning/10 text-warning",
-  collection: "bg-muted text-muted-foreground",
-}
-const SERVICE_LABEL: Record<ServiceEventKind, string> = {
-  installation: "serviceInstallation",
-  filter_change: "serviceFilterChange",
-  repair: "serviceRepair",
-  collection: "serviceCollection",
-}
 
 export default function CustomerProfilePage() {
   const params = useParams<{ id: string }>()
@@ -508,47 +484,8 @@ export default function CustomerProfilePage() {
             <CardHeader>
               <CardTitle className="text-base">{t("serviceHistory")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {serviceLoading && (
-                <div className="space-y-3">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              )}
-              {!serviceLoading && serviceHistory.length === 0 && (
-                <p className="text-sm text-muted-foreground">{t("noServiceVisits")}</p>
-              )}
-              {!serviceLoading &&
-                serviceHistory.map((event) => {
-                  const Icon = SERVICE_ICON[event.kind]
-                  return (
-                    <div key={event.key} data-testid="service-event" data-kind={event.kind} className="flex gap-3 border-b pb-4 last:border-0 last:pb-0">
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${SERVICE_TONE[event.kind]}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium">{t(SERVICE_LABEL[event.kind])}</p>
-                          <PlanStatusBadge status={event.status} />
-                          <span className="text-xs text-muted-foreground">{event.orderNo}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(event.date)}
-                          {!event.completed && ` · ${t("servicePlannedDate")}`}
-                          {event.technician && event.technician !== "N/A" && ` · ${formatTechnicians(event.technician, event.technician2, "&")}`}
-                        </p>
-                        {event.details.map(([label, value]) => (
-                          <p key={label} className="mt-1 text-sm wrap-break-word">
-                            <span className="text-muted-foreground">{t(label)}:</span> {value}
-                          </p>
-                        ))}
-                      </div>
-                      <Link href={event.href} className="shrink-0 self-start text-muted-foreground hover:text-primary" title={t("serviceOpenRecord")} aria-label={t("serviceOpenRecord")}>
-                        <ExternalLink className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  )
-                })}
+            <CardContent>
+              <ServiceTimeline events={serviceHistory} loading={serviceLoading} />
             </CardContent>
           </Card>
         </TabsContent>
