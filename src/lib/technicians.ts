@@ -41,9 +41,10 @@ export function normalizeTechnicianPair(
 // A schedule job only shows up in a technician's own Daily Report when its
 // technician_user_id / technician_2_user_id points at their login (RLS and
 // ScheduleAgenda both key on that, not on the name). The name fields are
-// free text picked from the TECHNICIANS roster, and the roster's spellings
-// don't always match the accounts' own (live: roster "Joselito Compereso" vs
-// account "Joselito Camperoso", "Jerson Capellon" vs "Jerson Capellan"). So
+// free text — picked from the TECHNICIANS roster or typed — and a name on a
+// record doesn't always match the account's own spelling (the roster itself
+// had "Joselito Compereso" / "Jerson Capellon" against the accounts'
+// "Joselito Camperoso" / "Jerson Capellan" until Oct 2026). So
 // a name links to an account when it matches exactly (ignoring case and
 // spacing), or when the first names match and the surnames are at most 2
 // letters apart. Either way exactly one account must fit, or nothing is

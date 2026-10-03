@@ -6,8 +6,8 @@ export const DISPENSER_TYPES = [
 ] as const
 
 export const TECHNICIANS = [
-  "Joselito Compereso",
-  "Jerson Capellon",
+  "Joselito Camperoso",
+  "Jerson Capellan",
   "Jayson Sapitin",
   "Eubert Montalbo",
   "Jeric Salirio",

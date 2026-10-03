@@ -72,7 +72,7 @@ const MOCK_COMMENTS: Record<string, AnnouncementComment[]> = {
       id: "c1",
       announcementId: "a1",
       authorId: "mock-admin-id",
-      authorName: "Jerson Capellon",
+      authorName: "Jerson Capellan",
       body: "Noted, will finish the Makati route adjustments by Friday morning.",
       createdAt: now,
       updatedAt: now,
@@ -85,7 +85,7 @@ const MOCK_SCHEDULE_JOBS: ScheduleJob[] = [
   {
     id: "s1",
     jobType: "installation",
-    technician: "Joselito Compereso",
+    technician: "Joselito Camperoso",
     vehicle: "Motorcycle",
     orderNo: "SK001-0142",
     scheduledDate: today,
@@ -96,7 +96,7 @@ const MOCK_SCHEDULE_JOBS: ScheduleJob[] = [
   {
     id: "s2",
     jobType: "repair",
-    technician: "Jerson Capellon",
+    technician: "Jerson Capellan",
     vehicle: "Car",
     orderNo: "SK001-0098",
     scheduledDate: today,
