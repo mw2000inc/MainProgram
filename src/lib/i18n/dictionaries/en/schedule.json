@@ -203,5 +203,20 @@
   "carriedFromFriday": "Carried from {date}",
   "carriedFromFridayHint": "Friday's unfinished work carries over to Saturday and Monday until it's done.",
   "noCompletedJobsInView": "No completed jobs in this timeframe.",
-  "noPendingJobsInView": "No pending jobs in this timeframe."
+  "noPendingJobsInView": "No pending jobs in this timeframe.",
+  "bulkCreateJobs": "Bulk Create Jobs ({count})",
+  "selectAllVisits": "Select all visits",
+  "selectVisit": "Select visit",
+  "bulkCreateTitle": "Create jobs for {count} visit(s)",
+  "bulkCreateDescription": "One schedule job per selected visit, linked to it. The vehicle, technician and date below apply to all of them.",
+  "bulkTechnicianPlaceholder": "Each visit's planned technician",
+  "bulkTechnicianHint": "Leave blank to use each visit's own planned technician.",
+  "bulkDate": "Date",
+  "bulkDateOwn": "Each visit's own date (Friday visits go on Saturday)",
+  "bulkDateFixed": "One date for all",
+  "bulkMissingTechnician": "{count} selected visit(s) have no planned technician — pick a technician above, or they'll be skipped.",
+  "bulkCreateConfirm": "Create {count} job(s)",
+  "bulkCreating": "Creating {done} / {total}…",
+  "bulkCreated": "Created {count} job(s) from unscheduled visits",
+  "bulkFailed": "{count} job(s) couldn't be created: {details}"
 }

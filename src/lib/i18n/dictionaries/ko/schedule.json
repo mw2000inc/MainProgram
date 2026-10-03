@@ -203,5 +203,20 @@
   "carriedFromFriday": "{date}에서 이월",
   "carriedFromFridayHint": "금요일에 끝나지 않은 작업은 완료될 때까지 토요일과 월요일로 이월됩니다.",
   "noCompletedJobsInView": "이 기간에 완료된 작업이 없습니다.",
-  "noPendingJobsInView": "이 기간에 대기 중인 작업이 없습니다."
+  "noPendingJobsInView": "이 기간에 대기 중인 작업이 없습니다.",
+  "bulkCreateJobs": "일괄 작업 생성 ({count})",
+  "selectAllVisits": "모든 방문 선택",
+  "selectVisit": "방문 선택",
+  "bulkCreateTitle": "방문 {count}건의 작업 생성",
+  "bulkCreateDescription": "선택한 방문마다 일정 작업을 하나씩 만들어 연결합니다. 아래 차량, 기술자, 날짜가 모두에 적용됩니다.",
+  "bulkTechnicianPlaceholder": "각 방문의 예정 기술자",
+  "bulkTechnicianHint": "비워 두면 각 방문의 예정 기술자를 사용합니다.",
+  "bulkDate": "날짜",
+  "bulkDateOwn": "각 방문의 날짜 (금요일 방문은 토요일로)",
+  "bulkDateFixed": "모두 같은 날짜",
+  "bulkMissingTechnician": "선택한 방문 중 {count}건은 예정 기술자가 없습니다 — 위에서 기술자를 선택하지 않으면 건너뜁니다.",
+  "bulkCreateConfirm": "작업 {count}건 생성",
+  "bulkCreating": "생성 중 {done} / {total}…",
+  "bulkCreated": "미배정 방문에서 작업 {count}건을 생성했습니다",
+  "bulkFailed": "작업 {count}건을 생성하지 못했습니다: {details}"
 }

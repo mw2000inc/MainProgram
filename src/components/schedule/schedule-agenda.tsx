@@ -53,6 +53,7 @@ import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell 
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
 import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-dialog"
+import { BulkCreateJobsDialog } from "@/components/schedule/bulk-create-jobs-dialog"
 import {
   SCHEDULE_TIMEFRAMES,
   SCHEDULE_TIMEFRAME_LABEL,
@@ -503,13 +504,20 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range, carriedFridays]
   )
   const [visitToSchedule, setVisitToSchedule] = React.useState<UnscheduledVisit | undefined>(undefined)
+  // The date a visit's job goes on by default: a carried Friday visit on the
+  // day being viewed, one due on a Friday on Saturday, otherwise its own date.
+  const visitDispatchDate = React.useCallback(
+    (v: UnscheduledVisit) => (v.date < range.start ? range.start : dispatchDateFor(v.date)),
+    [range.start]
+  )
+  // Bulk Create Jobs: which visits are ticked, and the dialog.
+  const [selectedVisitKeys, setSelectedVisitKeys] = React.useState<Set<string>>(new Set())
+  const [bulkOpen, setBulkOpen] = React.useState(false)
   const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(
     () =>
       visitToSchedule && {
         jobType: visitToSchedule.jobType,
-        // A carried Friday visit goes on the day being viewed; one due on a
-        // Friday is dispatched for Saturday.
-        scheduledDate: visitToSchedule.date < range.start ? range.start : dispatchDateFor(visitToSchedule.date),
+        scheduledDate: visitDispatchDate(visitToSchedule),
         orderNo: visitToSchedule.orderNo,
         customerId: visitToSchedule.customerId,
         technician: visitToSchedule.technician,
@@ -518,7 +526,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         notes: [visitToSchedule.name, visitToSchedule.detail].filter(Boolean).join(" — "),
         filterCodes: visitToSchedule.filterCodes,
       },
-    [visitToSchedule, range.start]
+    [visitToSchedule, visitDispatchDate]
   )
   // The new job takes over the visit (the database's own sync would usually
   // link it too; this makes sure it's exactly this visit).
@@ -1084,6 +1092,22 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     })
   }, [unscheduledVisits, statusFilter, search, t])
 
+  // Only visits still on screen count as selected (search / timeframe can
+  // hide ticked ones).
+  const selectedVisits = visibleVisits.filter((v) => selectedVisitKeys.has(v.key))
+  const allVisitsSelected = visibleVisits.length > 0 && selectedVisits.length === visibleVisits.length
+  const toggleVisit = (key: string) =>
+    setSelectedVisitKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const toggleAllVisits = () => setSelectedVisitKeys(allVisitsSelected ? new Set() : new Set(visibleVisits.map((v) => v.key)))
+  const visitCheckbox = (v: UnscheduledVisit) => (
+    <Checkbox checked={selectedVisitKeys.has(v.key)} onCheckedChange={() => toggleVisit(v.key)} aria-label={t("selectVisit")} data-testid="unscheduled-select" />
+  )
+
   const createJobButton = (visit: UnscheduledVisit) => (
     <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" data-testid="unscheduled-create-job" onClick={() => setVisitToSchedule(visit)}>
       <Plus className="h-3.5 w-3.5" /> {t("createJob")}
@@ -1092,11 +1116,26 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const unscheduledSection = () =>
     visibleVisits.length === 0 ? null : (
       <section data-testid="unscheduled-visits" className="mt-6 rounded-md border border-dashed border-warning/50 bg-warning/5 p-3">
-        <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("unscheduledVisits")}
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <Checkbox
+            checked={allVisitsSelected ? true : selectedVisits.length > 0 ? "indeterminate" : false}
+            onCheckedChange={toggleAllVisits}
+            aria-label={t("selectAllVisits")}
+            data-testid="unscheduled-select-all"
+          />
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("unscheduledVisits")}</span>
           <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-semibold">
             {visibleVisits.length}
           </Badge>
+          <Button
+            size="sm"
+            className="ml-auto h-7 gap-1.5 text-xs"
+            disabled={selectedVisits.length === 0}
+            onClick={() => setBulkOpen(true)}
+            data-testid="unscheduled-bulk-create"
+          >
+            <CheckCheck className="h-3.5 w-3.5" /> {t("bulkCreateJobs", { count: selectedVisits.length })}
+          </Button>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">{t("unscheduledVisitsHint")}</p>
         {viewMode === "table" ? (
@@ -1104,6 +1143,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             <table className="w-full text-sm" data-testid="unscheduled-table">
               <thead>
                 <tr className="bg-muted text-left text-xs text-muted-foreground">
+                  <th className="w-10 px-3 py-2" />
                   {(["tableDate", "tableJobType", "tableCustomerOrder", "tableAddress", "tablePlannedTechnician", "tableDetails"] as const).map((key) => (
                     <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
                       {t(key)}
@@ -1115,6 +1155,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
               <tbody>
                 {visibleVisits.map((v) => (
                   <tr key={v.key} data-testid="unscheduled-row" className="border-t align-top">
+                    <td className="px-3 py-2">{visitCheckbox(v)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.date)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {t(v.jobType)}
@@ -1142,7 +1183,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             {visibleVisits.map((v) => (
               <div key={v.key} data-testid="unscheduled-tile" className="rounded-md border bg-background p-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="pt-0.5">{visitCheckbox(v)}</div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium">
                       {t(v.jobType)} <span className="text-muted-foreground">· {v.orderNo}</span>
                     </div>
@@ -1494,6 +1536,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         defaultDate={date}
         job={editingJob}
       />
+      {isAdmin && (
+        <BulkCreateJobsDialog
+          key={bulkOpen ? "open" : "closed"}
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          visits={selectedVisits}
+          ownDateFor={visitDispatchDate}
+          onDone={() => setSelectedVisitKeys(new Set())}
+        />
+      )}
       <ScheduleFormDialog
         open={!!visitToSchedule}
         onOpenChange={(o) => !o && setVisitToSchedule(undefined)}
