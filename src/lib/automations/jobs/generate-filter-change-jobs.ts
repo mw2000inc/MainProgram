@@ -2,6 +2,7 @@ import "server-only"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCpSystemMinIntervalMonths, getMonitoringIntervalMonths } from "@/lib/utils"
 import { AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS, autoFilterChangeDecision } from "@/lib/filter-change-cycle"
+import { dispatchDateFor } from "@/lib/schedule-timeframe"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import type { AutomationResult } from "../types"
 import type { CpSystemComponent } from "@/lib/types"
@@ -67,6 +68,8 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   }
 
   const today = new Date().toISOString().slice(0, 10)
+  // A job generated on a Friday is dispatched for Saturday (Friday roll-forward).
+  const dispatchDate = dispatchDateFor(today)
 
   // The latest completed visit (Acc D) per order — a cycle already done isn't
   // scheduled again — and the cancelled orders, which get nothing.
@@ -154,7 +157,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       ...technicians,
       customer_id: c.id,
       order_no: c.order_number,
-      scheduled_date: today,
+      scheduled_date: dispatchDate,
       status: "pending",
       source: "automation",
       notes: `Auto-generated — filter change due ${dueDate}`,
@@ -262,7 +265,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       ...technicians,
       customer_id: entry.customer_id,
       order_no: orderNo,
-      scheduled_date: today,
+      scheduled_date: dispatchDate,
       status: "pending",
       source: "automation",
       notes: `Auto-generated — filter change due ${dueDate} (CP System)`,

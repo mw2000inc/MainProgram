@@ -199,5 +199,9 @@
   "tableCustomerOrder": "고객 / 주문",
   "tableAddress": "주소",
   "tablePlannedTechnician": "예정 기술자",
-  "tableDetails": "세부 정보"
+  "tableDetails": "세부 정보",
+  "carriedFromFriday": "{date}에서 이월",
+  "carriedFromFridayHint": "금요일에 끝나지 않은 작업은 완료될 때까지 토요일과 월요일로 이월됩니다.",
+  "noCompletedJobsInView": "이 기간에 완료된 작업이 없습니다.",
+  "noPendingJobsInView": "이 기간에 대기 중인 작업이 없습니다."
 }

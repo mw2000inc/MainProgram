@@ -199,5 +199,9 @@
   "tableCustomerOrder": "Customer / Order",
   "tableAddress": "Address",
   "tablePlannedTechnician": "Planned Technician",
-  "tableDetails": "Details"
+  "tableDetails": "Details",
+  "carriedFromFriday": "Carried from {date}",
+  "carriedFromFridayHint": "Friday's unfinished work carries over to Saturday and Monday until it's done.",
+  "noCompletedJobsInView": "No completed jobs in this timeframe.",
+  "noPendingJobsInView": "No pending jobs in this timeframe."
 }

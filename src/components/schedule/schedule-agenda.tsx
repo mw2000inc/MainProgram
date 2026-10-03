@@ -56,6 +56,8 @@ import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-di
 import {
   SCHEDULE_TIMEFRAMES,
   SCHEDULE_TIMEFRAME_LABEL,
+  carriedFridaysInRange,
+  dispatchDateFor,
   isScheduleTimeframe,
   scheduleTimeframeRange,
   type ScheduleTimeframe,
@@ -214,6 +216,7 @@ type StatusFilter = "all" | "pending" | "completed"
 type ViewMode = "grid" | "table"
 const VIEW_MODE_KEY = "schedule-fullscreen-view"
 const TIMEFRAME_KEY = "schedule-timeframe"
+const CARD_STATUS_KEY = "schedule-card-status"
 const TABLE_COLUMN_LABEL = {
   date: "tableDate",
   jobType: "tableJobType",
@@ -333,6 +336,21 @@ const SOURCE_BADGE: Record<Exclude<ScheduleJobSource, "manual">, { label: string
 
 // "Auto" / "Auto-suggest" / "Customer confirmed" next to a job's type; nothing
 // for a job an admin added by hand.
+// "Carried from Fri, Oct 2" — Friday work still pending, shown on the
+// Saturday / Monday after it (carriedFridaysInRange).
+function CarriedBadge({ date, t }: { date: string; t: (key: string, params?: Record<string, string>) => string }) {
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-carried-badge"
+      title={t("carriedFromFridayHint")}
+      className="h-5 border-warning/40 bg-warning/10 px-1.5 text-[10px] font-semibold text-warning"
+    >
+      {t("carriedFromFriday", { date: formatDate(date) })}
+    </Badge>
+  )
+}
+
 function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: string) => string }) {
   if (source === "manual") return null
   const badge = SOURCE_BADGE[source]
@@ -367,6 +385,24 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // Full-screen status filter — Pending by default, so the grid shows the
   // jobs still to do (reset to it whenever the view closes).
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("pending")
+  // The widget card's own All / Pending / Completed toggle (the full-screen
+  // view has its tabs above) — remembered per browser, All by default.
+  const [cardStatus, setCardStatusState] = React.useState<StatusFilter>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem(CARD_STATUS_KEY) : null
+      return saved === "pending" || saved === "completed" ? saved : "all"
+    } catch {
+      return "all"
+    }
+  })
+  const setCardStatus = (value: StatusFilter) => {
+    setCardStatusState(value)
+    try {
+      window.localStorage.setItem(CARD_STATUS_KEY, value)
+    } catch {
+      // ignore — the choice just won't be remembered
+    }
+  }
   // Grid (cards) or Table — remembered per browser; storage can be blocked,
   // in which case it just starts on Grid every time.
   const [viewMode, setViewModeState] = React.useState<ViewMode>(() => {
@@ -404,6 +440,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   }
   const range = React.useMemo(() => scheduleTimeframeRange(timeframe, date), [timeframe, date])
   const multiDay = range.start !== range.end
+  // Friday roll-forward: Friday's still-pending jobs and unscheduled visits
+  // also show on the Saturday and Monday after it, until they're done.
+  const carriedFridays = React.useMemo(() => carriedFridaysInRange(range), [range])
   const rangeLabel = multiDay ? `${formatDate(range.start)} – ${formatDate(range.end)}` : formatDate(range.start)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const { data: customers = [] } = useCustomers()
@@ -457,16 +496,20 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const unscheduledVisits = React.useMemo(
     () =>
       isAdmin
-        ? buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, range)
+        ? [range, ...carriedFridays.map((friday) => ({ start: friday, end: friday }))]
+            .flatMap((r) => buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, r))
+            .sort((a, b) => a.date.localeCompare(b.date) || a.jobType.localeCompare(b.jobType) || a.name.localeCompare(b.name))
         : [],
-    [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range]
+    [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range, carriedFridays]
   )
   const [visitToSchedule, setVisitToSchedule] = React.useState<UnscheduledVisit | undefined>(undefined)
   const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(
     () =>
       visitToSchedule && {
         jobType: visitToSchedule.jobType,
-        scheduledDate: visitToSchedule.date,
+        // A carried Friday visit goes on the day being viewed; one due on a
+        // Friday is dispatched for Saturday.
+        scheduledDate: visitToSchedule.date < range.start ? range.start : dispatchDateFor(visitToSchedule.date),
         orderNo: visitToSchedule.orderNo,
         customerId: visitToSchedule.customerId,
         technician: visitToSchedule.technician,
@@ -475,7 +518,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         notes: [visitToSchedule.name, visitToSchedule.detail].filter(Boolean).join(" — "),
         filterCodes: visitToSchedule.filterCodes,
       },
-    [visitToSchedule]
+    [visitToSchedule, range.start]
   )
   // The new job takes over the visit (the database's own sync would usually
   // link it too; this makes sure it's exactly this visit).
@@ -560,8 +603,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     // technician's jobs, same as before.
     const filtered = jobs.filter(
       (j) =>
-        j.scheduledDate >= range.start &&
-        j.scheduledDate <= range.end &&
+        ((j.scheduledDate >= range.start && j.scheduledDate <= range.end) ||
+          (j.status === "pending" && carriedFridays.includes(j.scheduledDate))) &&
         j.status !== "pending_approval" &&
         (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
     )
@@ -574,7 +617,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobs, range, isAdmin, user?.id])
+  }, [jobs, range, carriedFridays, isAdmin, user?.id])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
@@ -586,17 +629,30 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // just the index of each first-of-a-technician row, so the list below can
   // drop a "TECHNICIAN" header exactly there without a second data
   // structure duplicating todaysJobs itself.
+  // What the card lists: the timeframe's jobs, narrowed by its status toggle.
+  const cardJobs = React.useMemo(
+    () => (cardStatus === "all" ? todaysJobs : todaysJobs.filter((j) => j.status === cardStatus)),
+    [todaysJobs, cardStatus]
+  )
+  const cardCounts = React.useMemo(
+    () => ({
+      all: todaysJobs.length,
+      pending: todaysJobs.filter((j) => j.status === "pending").length,
+      completed: todaysJobs.filter((j) => j.status === "completed").length,
+    }),
+    [todaysJobs]
+  )
   const technicianHeaderAt = React.useMemo(() => {
     const set = new Set<number>()
     let last: string | undefined
-    todaysJobs.forEach((job, i) => {
+    cardJobs.forEach((job, i) => {
       // A new day starts a new group too (multi-day timeframes).
       const key = `${job.scheduledDate}|${job.technician}`
       if (key !== last) set.add(i)
       last = key
     })
     return set
-  }, [todaysJobs])
+  }, [cardJobs])
 
   // Export/print read jobType and technician off the row directly (same
   // {header,key} pattern as every other panel's export), so swap in the
@@ -635,12 +691,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // see fullScreenSections.
   const technicianGroups = React.useMemo(() => {
     const groups: { key: string; technician: string; date: string; jobs: typeof todaysJobs }[] = []
-    todaysJobs.forEach((job, i) => {
+    cardJobs.forEach((job, i) => {
       if (technicianHeaderAt.has(i) || groups.length === 0) groups.push({ key: `${job.technician}-${i}`, technician: job.technician, date: job.scheduledDate, jobs: [] })
       groups[groups.length - 1].jobs.push(job)
     })
     return groups
-  }, [todaysJobs, technicianHeaderAt])
+  }, [cardJobs, technicianHeaderAt])
 
   // selectMode (the full-screen view, for an admin): a pending job's box
   // selects it for the batch Mark as Completed instead of opening the
@@ -679,6 +735,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <span className="font-medium">{t(job.jobType)}</span>
           <JobSourceBadge source={job.source} t={t} />
+          {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
           {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
         </div>
         {/* One scheduledDate on the shared job — shown explicitly (even
@@ -924,6 +981,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   <span className="inline-flex items-center gap-1.5">
                     {t(job.jobType)}
                     <JobSourceBadge source={job.source} t={t} />
+                    {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
                   </span>
                 }
               >
@@ -1058,7 +1116,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 {visibleVisits.map((v) => (
                   <tr key={v.key} data-testid="unscheduled-row" className="border-t align-top">
                     <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.date)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{t(v.jobType)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {t(v.jobType)}
+                      {v.date < range.start && (
+                        <div className="mt-1">
+                          <CarriedBadge date={v.date} t={t} />
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="font-medium">{v.name}</div>
                       <div className="text-xs text-muted-foreground">{v.orderNo}</div>
@@ -1081,7 +1146,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     <div className="font-medium">
                       {t(v.jobType)} <span className="text-muted-foreground">· {v.orderNo}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground">{formatDate(v.date)}</div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      {formatDate(v.date)}
+                      {v.date < range.start && <CarriedBadge date={v.date} t={t} />}
+                    </div>
                   </div>
                   {createJobButton(v)}
                 </div>
@@ -1171,12 +1239,35 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </button>
       )}
       {!isPending && todaysJobs.length > 0 && (
+        <div role="group" aria-label={t("statusFilter")} className="mb-3 inline-flex self-start rounded-md border p-0.5" data-testid="schedule-card-status">
+          {(["all", "pending", "completed"] as StatusFilter[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={cardStatus === value}
+              onClick={() => setCardStatus(value)}
+              className={cn(
+                "h-6 rounded px-2 text-xs font-medium transition-colors",
+                cardStatus === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {t(STATUS_FILTER_LABEL[value])} ({cardCounts[value]})
+            </button>
+          ))}
+        </div>
+      )}
+      {!isPending && todaysJobs.length > 0 && cardJobs.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground" data-testid="schedule-card-status-empty">
+          {t(cardStatus === "completed" ? "noCompletedJobsInView" : "noPendingJobsInView")}
+        </p>
+      )}
+      {!isPending && cardJobs.length > 0 && (
         <div>
           {technicianGroups.map((group, g) => (
             <div key={group.key} className={cn(g > 0 && "pt-3")}>
               <div className="flex items-center gap-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {group.technician || t("unassigned")}
-                {multiDay && <span className="font-normal normal-case tracking-normal">· {formatDate(group.date)}</span>}
+                {(multiDay || group.date !== date) && <span className="font-normal normal-case tracking-normal">· {formatDate(group.date)}</span>}
               </div>
               {group.jobs.map((job, j) => (
                 <React.Fragment key={job.id}>{renderJob(job, j === 0)}</React.Fragment>
