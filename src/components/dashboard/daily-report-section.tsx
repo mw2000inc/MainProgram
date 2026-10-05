@@ -332,7 +332,9 @@ export function DailyReportSection() {
   // A technician never fetches or saves a layout at all (the query is
   // disabled below) — they always render the hardcoded grid default
   // order/sizes.
-  const { data: myLayout } = useMyDailyReportLayout(isAdmin ? user?.id : undefined)
+  // Every user's own layout (sizes, order, mode) — RLS scopes the row to
+  // them; technicians resize their panels too, only admins reorder.
+  const { data: myLayout } = useMyDailyReportLayout(user?.id)
   const saveLayout = useSaveMyDailyReportLayout(user?.id)
 
   // Same saved-layout pattern as order/sizes below. The mode toggle itself
@@ -352,6 +354,12 @@ export function DailyReportSection() {
   }
 
   const isGrid = layoutMode === "grid"
+  // A user's first save (a resize or reorder) creates their layout row, whose
+  // layout_mode column defaults to 'stacked' in the database — while the
+  // page shows grid until a row exists. Saving the mode they're looking at
+  // along with it keeps that first change from flipping the whole report to
+  // stacked (and re-ordering every panel).
+  const firstSaveMode = myLayout ? {} : { layoutMode }
   const canArrange = isAdmin
 
   // The saved order, derived straight from the fetched layout — no effect
@@ -384,7 +392,7 @@ export function DailyReportSection() {
     const newIndex = order.indexOf(over.id as PanelId)
     const next = arrayMove(order, oldIndex, newIndex)
     setLocalOrder(next)
-    saveLayout.mutate({ layout: next })
+    saveLayout.mutate({ layout: next, ...firstSaveMode })
   }
 
   // Same saved-layout pattern as the order above, but keyed per panel — a
@@ -397,7 +405,7 @@ export function DailyReportSection() {
 
   function handleResizeEnd(panelId: string, size: PanelSize) {
     setLocalSizes((prev) => ({ ...prev, [panelId]: size }))
-    saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size } })
+    saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size }, ...firstSaveMode })
   }
 
   const [reportDate, setReportDate] = React.useState(todayIso)
@@ -1024,6 +1032,7 @@ export function DailyReportSection() {
                 key={id}
                 id={id}
                 isAdmin={canArrange}
+                canResize={!!user}
                 width={sizes[id]?.width}
                 height={sizes[id]?.height}
                 defaultWidthClassName={defaultWidthClassName(id, isGrid, isAdmin)}

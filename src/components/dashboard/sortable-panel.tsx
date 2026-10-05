@@ -57,6 +57,7 @@ type ResizeEdge = "left" | "right" | "top" | "bottom" | "corner"
 export function SortablePanel({
   id,
   isAdmin,
+  canResize = isAdmin,
   width,
   height,
   defaultWidthClassName,
@@ -66,6 +67,9 @@ export function SortablePanel({
 }: {
   id: string
   isAdmin: boolean
+  // Resize handles (edges + corner). Defaults to isAdmin; the Daily Report
+  // lets every user resize their own panels while reordering stays admin-only.
+  canResize?: boolean
   width?: number
   height?: number
   // Treat the saved height as a minimum instead of a fixed size: the panel
@@ -108,7 +112,7 @@ export function SortablePanel({
   // onPointerDown instead of being closed over.
   const handleResizePointerDown = React.useCallback(
     (edge: ResizeEdge, e: React.PointerEvent) => {
-      if (!isAdmin) return
+      if (!canResize) return
       const el = rootRef.current
       if (!el) return
       // Stop this from also being picked up as a drag-to-reorder gesture —
@@ -165,7 +169,7 @@ export function SortablePanel({
       window.addEventListener("pointermove", handleMove)
       window.addEventListener("pointerup", handleUp)
     },
-    [isAdmin, onResizeEnd]
+    [canResize, onResizeEnd]
   )
 
   const style: React.CSSProperties = {
@@ -219,7 +223,7 @@ export function SortablePanel({
         <DragHandleContext.Provider value={dragHandleProps}>{children}</DragHandleContext.Provider>
       </div>
 
-      {isAdmin && (
+      {canResize && (
         <>
           <div
             onPointerDown={(e) => handleResizePointerDown("left", e)}

@@ -157,6 +157,14 @@ export function DataTable<TData>({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize })
+  // A changed pageSize prop (e.g. a Daily Report panel resized taller, which
+  // fits more rows) applies straight away — the state above only used it as
+  // the initial value. Adjusted during render, same as pageResetKey below.
+  const [lastPageSizeProp, setLastPageSizeProp] = React.useState(pageSize)
+  if (pageSize !== lastPageSizeProp) {
+    setLastPageSizeProp(pageSize)
+    setPagination({ pageIndex: 0, pageSize })
+  }
   const keepPageOnRefresh = pageResetKey !== undefined
   const goToFirstPage = () => setPagination((p) => ({ ...p, pageIndex: 0 }))
 
