@@ -80,5 +80,8 @@
   "secondTechnicianOptional": "두 번째 기술자 (선택)",
   "addSecondTechnician": "두 번째 기술자 추가",
   "secondTechnicianNeedsFirst": "먼저 기술자를 지정하세요",
-  "technicianAlreadyAssigned": "이미 첫 번째 기술자로 지정된 분입니다."
+  "technicianAlreadyAssigned": "이미 첫 번째 기술자로 지정된 분입니다.",
+  "refreshData": "데이터 새로고침",
+  "refreshDone": "페이지가 업데이트되었습니다",
+  "refreshFailed": "새로고침하지 못했습니다 — 연결을 확인하고 다시 시도하세요."
 }

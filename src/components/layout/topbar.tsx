@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarNav } from "@/components/layout/sidebar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { RefreshButton } from "@/components/layout/refresh-button"
 import { NotificationsMenu } from "@/components/layout/notifications-menu"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { InstallAppMenuItem } from "@/components/pwa/install-app-menu-item"
@@ -52,6 +53,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-1.5">
+        <RefreshButton />
         <ThemeToggle />
         <NotificationsMenu />
         <DropdownMenu>

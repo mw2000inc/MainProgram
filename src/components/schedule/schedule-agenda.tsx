@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, RefreshCw, Rows3, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -43,7 +43,7 @@ import { scheduleJobsKey, useCompleteScheduleJobs, useScheduleJobs, useUpdateSch
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
-import { customersKey, useCustomers } from "@/lib/hooks/use-customers"
+import { useCustomers } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
@@ -77,7 +77,7 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
-import { stockMovementsKey, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
+import { useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
@@ -1410,20 +1410,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (approved) toast.success(t("draftsApproved", { count: approved }))
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
   }
-  // Refresh: re-fetch everything this view is built from — the jobs, the
-  // four module tables (unscheduled visits), stock movements (Inventory
-  // column) and customers (names, addresses) — without a page reload.
-  const [refreshing, setRefreshing] = React.useState(false)
-  const refreshSchedule = async () => {
-    if (refreshing) return
-    setRefreshing(true)
-    const keys = [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey, stockMovementsKey, customersKey]
-    await Promise.all(keys.map((queryKey) => qc.refetchQueries({ queryKey, type: "active" })))
-    const failed = keys.some((queryKey) => qc.getQueryState(queryKey)?.status === "error")
-    setRefreshing(false)
-    if (failed) toast.error(t("scheduleRefreshFailed"))
-    else toast.success(t("scheduleRefreshed"))
-  }
   const generateDrafts = async () => {
     setGeneratingDrafts(true)
     try {
@@ -1650,18 +1636,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <Printer className="h-3.5 w-3.5" />
         </Button>
         <FullScreenToggleButton isFullScreen={expanded} onToggle={() => setExpanded((v) => !v)} />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-xs"
-          disabled={refreshing}
-          onClick={refreshSchedule}
-          title={t("refreshScheduleHint")}
-          aria-busy={refreshing}
-          data-testid="schedule-refresh-button"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> {t("refresh")}
-        </Button>
         {isAdmin && (
           <Button
             variant="outline"

@@ -80,5 +80,8 @@
   "secondTechnicianOptional": "Second technician (optional)",
   "addSecondTechnician": "Add a second technician",
   "secondTechnicianNeedsFirst": "Assign a technician first",
-  "technicianAlreadyAssigned": "That person is already the first technician."
+  "technicianAlreadyAssigned": "That person is already the first technician.",
+  "refreshData": "Refresh data",
+  "refreshDone": "Page updated",
+  "refreshFailed": "Couldn't refresh — check your connection and try again."
 }
