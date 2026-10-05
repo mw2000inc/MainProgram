@@ -257,5 +257,9 @@
   "coverageCurrently": "현재: {name}",
   "coverageConfirm": "{count}건 배정 및 배차",
   "coverageProgress": "배정 중 {done} / {total}…",
-  "coverageDone": "{date} 작업 {count}건을 배정했습니다 — 이제 담당 기술자에게 보입니다"
+  "coverageDone": "{date} 작업 {count}건을 배정했습니다 — 이제 담당 기술자에게 보입니다",
+  "refresh": "새로고침",
+  "refreshScheduleHint": "데이터베이스에서 일정, 방문, 재고를 다시 불러옵니다",
+  "scheduleRefreshed": "일정이 업데이트되었습니다",
+  "scheduleRefreshFailed": "일정을 새로고침하지 못했습니다 — 연결을 확인하고 다시 시도하세요."
 }

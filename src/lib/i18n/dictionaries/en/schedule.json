@@ -257,5 +257,9 @@
   "coverageCurrently": "Currently: {name}",
   "coverageConfirm": "Assign & Dispatch {count}",
   "coverageProgress": "Assigning {done} / {total}…",
-  "coverageDone": "Assigned {count} job(s) for {date} — now visible to their technicians"
+  "coverageDone": "Assigned {count} job(s) for {date} — now visible to their technicians",
+  "refresh": "Refresh",
+  "refreshScheduleHint": "Reload the schedule, visits and inventory from the database",
+  "scheduleRefreshed": "Schedule updated",
+  "scheduleRefreshFailed": "Couldn't refresh the schedule — check your connection and try again."
 }
