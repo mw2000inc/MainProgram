@@ -820,7 +820,6 @@ export function DailyReportSection() {
         // this same tableClassName.
         columns={inventoryListExpandedColumns}
         columnsForWidth={inventoryColumnsForWidth}
-        growToFit
         data={dayStockMovementRows}
         expandedData={dayStockItemTotals}
         expandedToolbar={
@@ -1037,9 +1036,6 @@ export function DailyReportSection() {
                 height={sizes[id]?.height}
                 defaultWidthClassName={defaultWidthClassName(id, isGrid, isAdmin)}
                 onResizeEnd={(size) => handleResizeEnd(id, size)}
-                // The Inventory List grows to show its whole page of rows
-                // (no scrolling inside it); other panels keep a fixed height.
-                growToFit={id === "inventory"}
               >
                 {rawContent[id]}
               </SortablePanel>
