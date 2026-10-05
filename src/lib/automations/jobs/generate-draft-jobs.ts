@@ -93,7 +93,10 @@ export async function runGenerateDraftJobs(): Promise<AutomationResult> {
         address: String(r.address || customer?.address || "") || undefined,
         technician,
         technician2,
-        detail: String((src.table === "filter_change_plans" ? r.filter_type : src.table === "repair_plans" ? r.problem : src.table === "install_plans" ? r.model : r.c_t) ?? "") || undefined,
+        detail:
+          src.table === "collections"
+            ? [r.c_t, Number(r.amount) ? `₱${Number(r.amount).toLocaleString()}` : ""].filter(Boolean).join(" · ") || undefined
+            : String((src.table === "filter_change_plans" ? r.filter_type : src.table === "repair_plans" ? r.problem : r.model) ?? "") || undefined,
         filterCodes: src.table === "filter_change_plans" ? String(r.filter_type ?? "") || undefined : undefined,
       })
     }

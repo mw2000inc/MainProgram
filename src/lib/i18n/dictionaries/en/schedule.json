@@ -257,5 +257,7 @@
   "coverageCurrently": "Currently: {name}",
   "coverageConfirm": "Assign & Dispatch {count}",
   "coverageProgress": "Assigning {done} / {total}…",
-  "coverageDone": "Assigned {count} job(s) for {date} — now visible to their technicians"
+  "coverageDone": "Assigned {count} job(s) for {date} — now visible to their technicians",
+  "paymentCollected": "Collected",
+  "paymentDue": "To collect"
 }

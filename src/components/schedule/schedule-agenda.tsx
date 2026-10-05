@@ -538,6 +538,22 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { data: installPlans = [] } = useInstallPlans()
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: collectionRecords = [] } = useCollections()
+  // A Collection job's payment details, read live from its linked collection.
+  const collectionByJobId = React.useMemo(
+    () => new Map(collectionRecords.filter((c) => c.scheduleJobId).map((c) => [c.scheduleJobId as string, c])),
+    [collectionRecords]
+  )
+  const paymentLine = (job: ScheduleJob) => {
+    if (job.jobType !== "collection") return null
+    const c = collectionByJobId.get(job.id)
+    if (!c) return null
+    const collected = c.collected || c.status === "Collected"
+    return (
+      <span data-testid="schedule-payment" className={cn("text-xs", collected ? "text-success" : "text-muted-foreground")}>
+        {[c.amount ? `₱${c.amount.toLocaleString()}` : "", c.ct, collected ? t("paymentCollected") : t("paymentDue")].filter(Boolean).join(" · ")}
+      </span>
+    )
+  }
   const recordHrefFor = (job: ScheduleJob): string | undefined => {
     const find = (rows: { id: string; scheduleJobId?: string }[], path: string) => {
       const record = rows.find((r) => r.scheduleJobId === job.id)
@@ -834,6 +850,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <JobSourceBadge source={job.source} t={t} />
           {isDraftJob(job) && <DraftBadge t={t} />}
           {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
+          {paymentLine(job)}
           {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
           {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
           {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
@@ -1086,6 +1103,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     <JobSourceBadge source={job.source} t={t} />
                     {isDraftJob(job) && <DraftBadge t={t} />}
                     {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
+                    {paymentLine(job)}
                     {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
                     {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
                   </span>

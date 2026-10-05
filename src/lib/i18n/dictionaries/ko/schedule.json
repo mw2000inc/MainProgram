@@ -257,5 +257,7 @@
   "coverageCurrently": "현재: {name}",
   "coverageConfirm": "{count}건 배정 및 배차",
   "coverageProgress": "배정 중 {done} / {total}…",
-  "coverageDone": "{date} 작업 {count}건을 배정했습니다 — 이제 담당 기술자에게 보입니다"
+  "coverageDone": "{date} 작업 {count}건을 배정했습니다 — 이제 담당 기술자에게 보입니다",
+  "paymentCollected": "수금 완료",
+  "paymentDue": "수금 예정"
 }
