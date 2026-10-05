@@ -1,0 +1,9 @@
+{
+  "name": "mw2000-desktop",
+  "productName": "MW2000",
+  "version": "0.1.0",
+  "description": "MW2000 — Customer, Sales & Inventory Management (desktop)",
+  "author": "MW2000",
+  "main": "main.js",
+  "private": true
+}
