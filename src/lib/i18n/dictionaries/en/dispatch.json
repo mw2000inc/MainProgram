@@ -122,5 +122,11 @@
   "approvedSectionTitle": "Approved ({count})",
   "noApprovalsOnDate": "No approvals on this date.",
   "editedSectionTitle": "Edited ({count})",
-  "noEditsOnDate": "No edits on this date."
+  "noEditsOnDate": "No edits on this date.",
+  "downloadReport": "Download Report",
+  "downloadReportFor": "{date} · {count} record(s)",
+  "downloadExcel": "Excel (.xlsx) — summary + a sheet per section",
+  "downloadCsv": "CSV — all records",
+  "downloadPdf": "PDF — all records",
+  "reportDownloaded": "Daily Report downloaded ({count} record(s))"
 }

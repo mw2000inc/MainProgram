@@ -21,5 +21,7 @@ export function exportToCsv(rows: Record<string, unknown>[], fileName: string) {
     headers.map(escapeCsvValue).join(","),
     ...rows.map((row) => headers.map((h) => escapeCsvValue(row[h])).join(",")),
   ]
-  downloadBlob(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" }), `${fileName}.csv`)
+  // Leading BOM so Excel reads the file as UTF-8 (ñ, ₱, Korean) instead of the
+  // system code page.
+  downloadBlob(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" }), `${fileName}.csv`)
 }

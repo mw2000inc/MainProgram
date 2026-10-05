@@ -55,6 +55,7 @@ import {
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
+import { DailyReportExportMenu } from "@/components/dashboard/daily-report-export-menu"
 import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
@@ -911,6 +912,14 @@ export function DailyReportSection() {
           </>
         )}
         <DailyReportDateButton value={reportDate} onChange={setReportDate} className={isAdmin ? "ml-auto" : undefined} />
+        <DailyReportExportMenu
+          reportDate={reportDate}
+          filterChanges={dayFilterChangePlans}
+          installs={dayInstallPlans}
+          repairs={dayRepairPlans}
+          collections={dayCollectionPlans}
+          stockMovements={dayStockMovements}
+        />
         {isAdmin && (
           <>
             <Button

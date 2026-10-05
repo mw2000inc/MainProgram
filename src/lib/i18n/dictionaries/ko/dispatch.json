@@ -122,5 +122,11 @@
   "approvedSectionTitle": "승인됨 ({count})",
   "noApprovalsOnDate": "이 날짜에 승인된 항목이 없습니다.",
   "editedSectionTitle": "수정됨 ({count})",
-  "noEditsOnDate": "이 날짜에 수정된 항목이 없습니다."
+  "noEditsOnDate": "이 날짜에 수정된 항목이 없습니다.",
+  "downloadReport": "보고서 다운로드",
+  "downloadReportFor": "{date} · {count}건",
+  "downloadExcel": "Excel (.xlsx) — 요약 + 섹션별 시트",
+  "downloadCsv": "CSV — 전체 기록",
+  "downloadPdf": "PDF — 전체 기록",
+  "reportDownloaded": "일일 보고서를 다운로드했습니다 ({count}건)"
 }
