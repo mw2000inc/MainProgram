@@ -3,24 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCpSystemMinIntervalMonths, getMonitoringIntervalMonths } from "@/lib/utils"
 import { AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS, autoFilterChangeDecision } from "@/lib/filter-change-cycle"
 import { dispatchDateFor } from "@/lib/schedule-timeframe"
-import { normalizeTechnicianPair } from "@/lib/technicians"
+import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
+import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
+import type { ScheduleJobStatus } from "@/lib/types"
 import type { AutomationResult } from "../types"
 import type { CpSystemComponent } from "@/lib/types"
-
-// A customer's Assigned technician(s) are pick-or-type now (any name, not only the
-// TECHNICIANS roster) and there can be two, so the generated job gets whatever
-// pair is there — as schedule_jobs.technician + technician_2. "N/A" only when the
-// first is blank. This used to fall back to "N/A" for any name not on the roster,
-// which made sense while the field was a locked Select and would now silently
-// discard a typed name. Goes through the same pair rules as every other surface
-// (no second without a real first, never the same person twice).
-function assignedTechnicianPair(
-  primary: string | null | undefined,
-  secondary: string | null | undefined
-): { technician: string; technician_2: string | null } {
-  const pair = normalizeTechnicianPair(primary, secondary)
-  return { technician: pair.primary || "N/A", technician_2: pair.secondary || null }
-}
 
 // For every customer whose CURRENT filter-change cycle came due within the
 // last AUTO_FILTER_CHANGE_MAX_OVERDUE_DAYS days (installed date / contract
@@ -70,6 +57,45 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   const today = new Date().toISOString().slice(0, 10)
   // A job generated on a Friday is dispatched for Saturday (Friday roll-forward).
   const dispatchDate = dispatchDateFor(today)
+  // Every generated job is a DRAFT ('pending_approval', source 'automation')
+  // for an admin to review — technicians don't see it until it's approved
+  // ("Approve & Dispatch All Drafts" in the Schedule). That also covers
+  // Saturday jobs, whose coverage an admin confirms anyway.
+  const dispatchStatus = "pending_approval"
+  // Technician (customer's assigned, else the least-busy field technician
+  // that day), vehicle and logins — the same assignment as the other drafts.
+  const [{ data: accountRows }, { data: jobRows }] = await Promise.all([
+    admin.from("profiles").select("id, name, role"),
+    admin.from("schedule_jobs").select("technician, technician_2, scheduled_date, status, vehicle, created_at").gte("scheduled_date", today),
+  ])
+  const accounts = assignmentAccounts((accountRows ?? []).map((a) => ({ id: a.id as string, name: (a.name as string) ?? "", role: a.role as string })))
+  const assigner = createDispatchAssigner({
+    jobs: (jobRows ?? []).map((j) => ({
+      technician: j.technician ?? "",
+      technician2: j.technician_2 ?? undefined,
+      scheduledDate: j.scheduled_date,
+      status: j.status as ScheduleJobStatus,
+      vehicle: j.vehicle ?? "",
+      createdAt: j.created_at,
+    })),
+    customers: (customers ?? []).map((c) => ({ id: c.id, assignedTechnician: c.assigned_technician ?? "", assignedTechnician2: c.assigned_technician_2 ?? undefined })),
+    accounts,
+  })
+  const draftAssignment = (customerId: string | null, orderNo: string) => {
+    const a = assigner(
+      { key: orderNo, table: "filter_change_plans", recordId: "", jobType: "filter_change", date: dispatchDate, orderNo, customerId: customerId ?? undefined, name: orderNo, technician: "", technician2: "" },
+      dispatchDate
+    )
+    const ids = technicianAccountIds(a.pair.primary, a.pair.secondary, accounts)
+    return {
+      // Saturday drafts stay Unassigned until an admin picks that Saturday's technicians.
+      technician: a.pair.primary || (a.source === "saturday" ? "" : "N/A"),
+      technician_2: a.pair.secondary || null,
+      technician_user_id: ids.technicianUserId || null,
+      technician_2_user_id: ids.technician2UserId || null,
+      vehicle: a.vehicle,
+    }
+  }
 
   // The latest completed visit (Acc D) per order — a cycle already done isn't
   // scheduled again — and the cancelled orders, which get nothing.
@@ -140,7 +166,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       .select("id")
       .eq("customer_id", c.id)
       .eq("job_type", "filter_change")
-      .eq("status", "pending")
+      .in("status", ["pending", "pending_approval"])
       .maybeSingle()
     if (existingError) {
       errors.push(`${c.id}: ${existingError.message}`)
@@ -151,14 +177,14 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       continue
     }
 
-    const technicians = assignedTechnicianPair(c.assigned_technician, c.assigned_technician_2)
+    const technicians = draftAssignment(c.id, c.order_number ?? "")
     const { error: insertError } = await admin.from("schedule_jobs").insert({
       job_type: "filter_change",
       ...technicians,
       customer_id: c.id,
       order_no: c.order_number,
       scheduled_date: dispatchDate,
-      status: "pending",
+      status: dispatchStatus,
       source: "automation",
       notes: `Auto-generated — filter change due ${dueDate}`,
     })
@@ -184,7 +210,6 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
     .not("cp_system_id", "is", null)
   if (linkedEntriesError) return { ok: false, message: linkedEntriesError.message }
 
-  const customerById = new Map((customers ?? []).map((c) => [c.id, c]))
 
   let cpCreated = 0
   let cpAlreadyPending = 0
@@ -246,7 +271,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       .select("id")
       .eq("order_no", orderNo)
       .eq("job_type", "filter_change")
-      .eq("status", "pending")
+      .in("status", ["pending", "pending_approval"])
       .maybeSingle()
     if (existingError) {
       cpErrors.push(`${entry.id}: ${existingError.message}`)
@@ -257,8 +282,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       continue
     }
 
-    const customer = entry.customer_id ? customerById.get(entry.customer_id) : undefined
-    const technicians = assignedTechnicianPair(customer?.assigned_technician, customer?.assigned_technician_2)
+    const technicians = draftAssignment(entry.customer_id, orderNo)
 
     const { error: insertError } = await admin.from("schedule_jobs").insert({
       job_type: "filter_change",
@@ -266,7 +290,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       customer_id: entry.customer_id,
       order_no: orderNo,
       scheduled_date: dispatchDate,
-      status: "pending",
+      status: dispatchStatus,
       source: "automation",
       notes: `Auto-generated — filter change due ${dueDate} (CP System)`,
     })

@@ -77,3 +77,30 @@ export function dispatchDateFor(day: string): string {
   const d = parseISO(day)
   return d.getDay() === FRIDAY ? format(addDays(d, 1), "yyyy-MM-dd") : day
 }
+
+// Saturday coverage is confirmed by an admin: a job dispatched for a Saturday
+// starts as 'pending_approval' (hidden from technicians until approved).
+export function isSaturday(day: string): boolean {
+  return parseISO(day).getDay() === SATURDAY
+}
+
+export function requiresSaturdayApproval(day: string): boolean {
+  return isSaturday(day)
+}
+
+// Where a cancelled Saturday's queue is spread: the Monday, Tuesday and
+// Wednesday after it.
+export function businessDaysAfterSaturday(saturday: string): string[] {
+  const d = parseISO(saturday)
+  return [2, 3, 4].map((n) => format(addDays(d, n), "yyyy-MM-dd"))
+}
+
+// The Saturdays inside a timeframe.
+export function saturdaysInRange(range: { start: string; end: string }): string[] {
+  const out: string[] = []
+  const end = parseISO(range.end)
+  for (let d = parseISO(range.start), n = 0; d <= end && n < 62; d = addDays(d, 1), n++) {
+    if (d.getDay() === SATURDAY) out.push(format(d, "yyyy-MM-dd"))
+  }
+  return out
+}

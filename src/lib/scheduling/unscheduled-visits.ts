@@ -22,6 +22,8 @@ export interface UnscheduledVisit {
   // What the visit is for, for the row and the new job's notes.
   detail?: string
   filterCodes?: string
+  // Set when "Cancel & Auto-Distribute Saturday Queue" moved it here.
+  rescheduledFrom?: string
 }
 
 // Only what the Daily Report itself would show for the day: still Pending,
@@ -61,6 +63,7 @@ export function buildUnscheduledVisits(
       address: p.address || customer?.address,
       technician: p.serviceman,
       technician2: p.serviceman2 ?? "",
+      rescheduledFrom: p.rescheduledFrom,
       detail: p.filterType || undefined,
       filterCodes: p.filterType || undefined,
     })
@@ -81,6 +84,7 @@ export function buildUnscheduledVisits(
       address: p.address || customer?.address,
       technician: p.serviceman,
       technician2: p.serviceman2 ?? "",
+      rescheduledFrom: p.rescheduledFrom,
       detail: p.model || undefined,
     })
   }
@@ -100,6 +104,7 @@ export function buildUnscheduledVisits(
       address: p.address || customer?.address,
       technician: p.th,
       technician2: p.th2 ?? "",
+      rescheduledFrom: p.rescheduledFrom,
       detail: p.problem || undefined,
     })
   }
@@ -119,6 +124,7 @@ export function buildUnscheduledVisits(
       address: customer?.address,
       technician: p.serviceman,
       technician2: p.serviceman2 ?? "",
+      rescheduledFrom: p.rescheduledFrom,
       detail: [p.ct, p.amount ? `₱${p.amount.toLocaleString()}` : ""].filter(Boolean).join(" · ") || undefined,
     })
   }

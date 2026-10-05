@@ -12,6 +12,7 @@ export const AUTOMATION_DEFAULTS: Record<AutomationId, boolean> = {
   generateFilterChangeJobs: true,
   filterChangeInventoryDeduction: true,
   sendScheduleReminders: true,
+  generateDraftJobs: true,
 }
 
 // overrides is company_settings.automation_settings as-is (a plain jsonb

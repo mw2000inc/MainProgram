@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { TechnicianCombobox } from "@/components/shared/technician-combobox"
-import { createScheduleJob, linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
+import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
 import { installPlansKey } from "@/lib/hooks/use-install-plans"
@@ -18,8 +18,9 @@ import { collectionsKey } from "@/lib/hooks/use-collections"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians"
 import { todayIso } from "@/lib/utils"
+import { isSaturday } from "@/lib/schedule-timeframe"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 
 const NONE = "__none"
@@ -28,11 +29,7 @@ const NONE = "__none"
 // vehicle / date applied to every selected visit, a schedule job created
 // for each and linked to that exact visit (so it leaves the list).
 //
-// Each job is created as 'pending_approval', linked to its visit, then set to
-// 'pending' (active) — so the database's job→record sync, which runs when a
-// job becomes active, finds the visit already linked and never attaches the
-// job to a different visit of the same order. The visits were already
-// dispatch-confirmed, so the jobs don't wait for a second approval.
+// (See createJobsFromVisits for how each job is created and linked.)
 export function BulkCreateJobsDialog({
   open,
   onOpenChange,
@@ -52,7 +49,7 @@ export function BulkCreateJobsDialog({
   const { t: tCommon } = useTranslation("common")
   const qc = useQueryClient()
   const { data: users = [] } = useUsers()
-  const accounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
+  const accounts = React.useMemo(() => assignmentAccounts(users), [users])
 
   const [technician, setTechnician] = React.useState("")
   const [technician2, setTechnician2] = React.useState("")
@@ -72,41 +69,29 @@ export function BulkCreateJobsDialog({
     }
   }
 
+  const dateOf = (visit: UnscheduledVisit) => (dateMode === "fixed" ? fixedDate : ownDateFor(visit))
+  // An explicitly chosen technician applies everywhere; left blank, each
+  // visit keeps its planned technician — except on a Saturday, which is
+  // never auto-assigned and stays Unassigned (held for approval) instead.
   const pairFor = (visit: UnscheduledVisit) =>
-    technician.trim() ? normalizeTechnicianPair(technician, technician2) : normalizeTechnicianPair(visit.technician, visit.technician2)
-  const missingTechnician = visits.filter((v) => !isAssignedTechnician(pairFor(v).primary))
-  const creatable = visits.filter((v) => isAssignedTechnician(pairFor(v).primary))
+    technician.trim()
+      ? normalizeTechnicianPair(technician, technician2)
+      : isSaturday(dateOf(visit))
+        ? { primary: "", secondary: "" }
+        : normalizeTechnicianPair(visit.technician, visit.technician2)
+  const missingTechnician = visits.filter((v) => !isAssignedTechnician(pairFor(v).primary) && !isSaturday(dateOf(v)))
+  const creatable = visits.filter((v) => isAssignedTechnician(pairFor(v).primary) || isSaturday(dateOf(v)))
   const invalidDate = dateMode === "fixed" && (!fixedDate || fixedDate < todayIso())
 
   async function create() {
     setProgress({ done: 0, total: creatable.length })
-    let created = 0
-    const failed: string[] = []
-    for (const visit of creatable) {
-      const pair = pairFor(visit)
-      try {
-        const job = await createScheduleJob({
-          jobType: visit.jobType,
-          status: "pending_approval",
-          scheduledDate: dateMode === "fixed" ? fixedDate : ownDateFor(visit),
-          orderNo: visit.orderNo,
-          customerId: visit.customerId,
-          technician: pair.primary,
-          technician2: pair.secondary,
-          ...technicianAccountIds(pair.primary, pair.secondary, accounts),
-          vehicle,
-          secondaryAddress: visit.address,
-          notes: [visit.name, visit.detail].filter(Boolean).join(" — "),
-          filterCodes: visit.filterCodes,
-        })
-        await linkVisitToScheduleJob(visit.table, visit.recordId, job.id)
-        await updateScheduleJob(job.id, { status: "pending" })
-        created += 1
-      } catch (error) {
-        failed.push(`${visit.orderNo}: ${error instanceof Error ? error.message : String(error)}`)
-      }
-      setProgress((p) => (p ? { ...p, done: p.done + 1 } : p))
-    }
+    const { created, failed } = await createJobsFromVisits(creatable, {
+      pairFor,
+      dateFor: dateOf,
+      vehicle: technician.trim() ? vehicle : undefined,
+      accounts,
+      onProgress: (done) => setProgress((p) => (p ? { ...p, done } : p)),
+    })
     for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
     setProgress(null)
     if (created) toast.success(t("bulkCreated", { count: created }))

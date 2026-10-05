@@ -11,6 +11,7 @@ export type AutomationId =
   | "generateFilterChangeJobs"
   | "filterChangeInventoryDeduction"
   | "sendScheduleReminders"
+  | "generateDraftJobs"
 
 // What actually invoked this run — surfaced in automation_runs.detail so
 // "who/what triggered this" is answerable from the log alone, without

@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/select"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { TechnicianCombobox } from "@/components/shared/technician-combobox"
-import { crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
@@ -224,7 +225,8 @@ export function ScheduleFormDialog({
   const updateJob = useUpdateScheduleJob()
   const { data: products = [] } = useProducts()
   const { data: users = [] } = useUsers()
-  const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
+  // Technician logins, plus the fixed crews' members whatever their role (see assignmentAccounts).
+  const technicianAccounts = React.useMemo(() => assignmentAccounts(users), [users])
   const { t } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -301,7 +303,9 @@ export function ScheduleFormDialog({
       // still forced here rather than trusted from `values`. Editing an
       // existing job is unaffected — values.status is whatever the (visible,
       // for edits) dropdown has, unchanged.
-      status: isEdit ? values.status : prefill ? "pending" : "pending_approval",
+      // A visit's job (prefill) starts active — unless it's for a Saturday,
+      // whose coverage an admin confirms first.
+      status: isEdit ? values.status : prefill && !requiresSaturdayApproval(values.scheduledDate) ? "pending" : "pending_approval",
     }
     if (isEdit) {
       await updateJob.mutateAsync({ id: job.id, input })

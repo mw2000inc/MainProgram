@@ -20,6 +20,7 @@ type Row = {
   created_at: string
   customer_id: string | null
   schedule_job_id: string | null
+  rescheduled_from?: string | null
   source: string
   filter_change_required: boolean
   sale_list_entry_id: string | null
@@ -64,6 +65,7 @@ function fromRow(row: Row): CollectionPlan {
     createdAt: row.created_at,
     customerId: row.customer_id ?? undefined,
     scheduleJobId: row.schedule_job_id ?? undefined,
+    rescheduledFrom: row.rescheduled_from ?? undefined,
     source: (row.source as CollectionPlan["source"]) ?? "manual",
     filterChangeRequired: row.filter_change_required ?? false,
     saleListEntryId: row.sale_list_entry_id ?? undefined,

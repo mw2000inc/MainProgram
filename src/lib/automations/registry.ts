@@ -6,6 +6,7 @@ import { runExtendFilterChangeSchedule } from "./jobs/extend-filter-change-sched
 import { runGenerateFilterChangeJobs } from "./jobs/generate-filter-change-jobs"
 import { runFilterChangeInventoryDeduction } from "./jobs/filter-change-inventory-deduction"
 import { runSendScheduleReminders } from "./jobs/send-schedule-reminders"
+import { runGenerateDraftJobs } from "./jobs/generate-draft-jobs"
 
 // One entry per automated background task in this app — the single place
 // that maps an AutomationId to what it actually does. Every existing cron
@@ -49,6 +50,13 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
     description: "Emails and pushes a reminder to customers with a Confirmed Filter Change or Collection scheduled exactly 2 days out.",
     defaultEnabled: AUTOMATION_DEFAULTS.sendScheduleReminders,
     run: runSendScheduleReminders,
+  },
+  generateDraftJobs: {
+    id: "generateDraftJobs",
+    label: "Generate Draft Schedule Jobs",
+    description: "Pre-schedules the next week's confirmed visits as auto-assigned draft jobs (technician, vehicle, login) for an admin to review and approve.",
+    defaultEnabled: AUTOMATION_DEFAULTS.generateDraftJobs,
+    run: runGenerateDraftJobs,
   },
 }
 

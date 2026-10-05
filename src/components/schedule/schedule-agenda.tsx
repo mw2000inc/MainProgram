@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -39,7 +39,7 @@ import { collectionsKey } from "@/lib/hooks/use-collections"
 import { toast } from "sonner"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
-import { useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { scheduleJobsKey, useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -48,17 +48,25 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
 import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-dialog"
 import { BulkCreateJobsDialog } from "@/components/schedule/bulk-create-jobs-dialog"
+import { SaturdayRedistributeDialog } from "@/components/schedule/saturday-redistribute-dialog"
+import { SaturdayCoverageDialog } from "@/components/schedule/saturday-coverage-dialog"
+import { updateScheduleJob } from "@/lib/api/schedule"
+import { triggerAutomation } from "@/lib/api/automations"
+import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
+import { createDispatchAssigner, type AssignmentSource } from "@/lib/scheduling/dispatch-assignment"
 import {
   SCHEDULE_TIMEFRAMES,
   SCHEDULE_TIMEFRAME_LABEL,
   carriedFridaysInRange,
   dispatchDateFor,
+  isSaturday,
+  saturdaysInRange,
   isScheduleTimeframe,
   scheduleTimeframeRange,
   type ScheduleTimeframe,
@@ -352,6 +360,56 @@ function CarriedBadge({ date, t }: { date: string; t: (key: string, params?: Rec
   )
 }
 
+// "Rescheduled from Sat, Oct 10" — moved off a cancelled Saturday by
+// "Cancel & Auto-Distribute Saturday Queue".
+function RescheduledBadge({ date, t }: { date: string; t: (key: string, params?: Record<string, string>) => string }) {
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-rescheduled-badge"
+      className="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] font-semibold text-primary"
+    >
+      {t("rescheduledFromSaturday", { date: formatDate(date) })}
+    </Badge>
+  )
+}
+
+// An auto-generated job still awaiting an admin's review (the draft job
+// automation and the filter-change automation create these).
+const isDraftJob = (job: Pick<ScheduleJob, "status" | "source">) => job.status === "pending_approval" && job.source === "automation"
+
+// "Draft · Auto-assigned (pending review)".
+function DraftBadge({ t }: { t: (key: string) => string }) {
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-draft-badge"
+      title={t("draftBadgeHint")}
+      className="h-5 border-warning/50 bg-warning/15 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-warning"
+    >
+      {t("draftBadge")}
+    </Badge>
+  )
+}
+
+// "Requires Technician Selection" — a Saturday job / visit nobody is
+// assigned to yet (Saturday is never auto-assigned).
+function NeedsTechnicianBadge({ t }: { t: (key: string) => string }) {
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-needs-technician-badge"
+      title={t("needsTechnicianHint")}
+      className="h-5 border-destructive/40 bg-destructive/10 px-1.5 text-[10px] font-semibold text-destructive"
+    >
+      {t("needsTechnician")}
+    </Badge>
+  )
+}
+
+// Still to do: active, or a Saturday job awaiting coverage approval.
+const isOpenStatus = (status: ScheduleJobStatus) => status === "pending" || status === "pending_approval"
+
 function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: string) => string }) {
   if (source === "manual") return null
   const badge = SOURCE_BADGE[source]
@@ -513,6 +571,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // Bulk Create Jobs: which visits are ticked, and the dialog.
   const [selectedVisitKeys, setSelectedVisitKeys] = React.useState<Set<string>>(new Set())
   const [bulkOpen, setBulkOpen] = React.useState(false)
+  // Approve All & Dispatch: progress while it runs (null when idle).
+  const [dispatching, setDispatching] = React.useState<{ done: number; total: number } | null>(null)
   const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(
     () =>
       visitToSchedule && {
@@ -520,8 +580,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         scheduledDate: visitDispatchDate(visitToSchedule),
         orderNo: visitToSchedule.orderNo,
         customerId: visitToSchedule.customerId,
-        technician: visitToSchedule.technician,
-        technician2: visitToSchedule.technician2,
+        // Saturday is never pre-filled — the admin picks who's working.
+        technician: isSaturday(visitDispatchDate(visitToSchedule)) ? undefined : visitToSchedule.technician,
+        technician2: isSaturday(visitDispatchDate(visitToSchedule)) ? undefined : visitToSchedule.technician2,
         secondaryAddress: visitToSchedule.address,
         notes: [visitToSchedule.name, visitToSchedule.detail].filter(Boolean).join(" — "),
         filterCodes: visitToSchedule.filterCodes,
@@ -540,7 +601,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     qc.invalidateQueries({ queryKey: key })
   }
   const { data: users = [] } = useUsers()
-  const technicianAccounts = React.useMemo(() => users.filter((u) => u.role === "technician"), [users])
+  // Technician logins, plus the fixed crews' members whatever their role (see assignmentAccounts).
+  const technicianAccounts = React.useMemo(() => assignmentAccounts(users), [users])
   const [editingCell, setEditingCell] = React.useState<{ jobId: string; field: EditableField } | null>(null)
   const saveJob = (job: ScheduleJob, input: Partial<Omit<ScheduleJob, "id" | "createdAt">>) => updateJob.mutate({ id: job.id, input })
   // A technician change also re-links the technicians' logins by name, so the
@@ -549,6 +611,27 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const technicianInput = (primary: string, secondary: string) => {
     const pair = normalizeTechnicianPair(primary, secondary)
     return { technician: pair.primary, technician2: pair.secondary, ...technicianAccountIds(pair.primary, pair.secondary, technicianAccounts) }
+  }
+  // Saturday is assigned by hand only: moving a job onto a Saturday clears
+  // its technicians and vehicle and holds it for an admin; picking a
+  // technician for a held Saturday job (explicitly, here) makes it active.
+  const dateChange = (job: ScheduleJob, scheduledDate: string): Partial<ScheduleJob> =>
+    isSaturday(scheduledDate) && !isSaturday(job.scheduledDate)
+      ? {
+          scheduledDate,
+          technician: "",
+          technician2: "",
+          technicianUserId: "",
+          technician2UserId: "",
+          vehicle: "",
+          ...(job.status === "pending" ? { status: "pending_approval" as const } : {}),
+        }
+      : { scheduledDate }
+  const technicianChange = (job: ScheduleJob, primary: string, secondary: string): Partial<ScheduleJob> => {
+    const input = technicianInput(primary, secondary)
+    return isSaturday(job.scheduledDate) && job.status === "pending_approval" && isAssignedTechnician(input.technician)
+      ? { ...input, status: "pending" }
+      : input
   }
   // A vehicle with a fixed crew (the Liteace) brings its two technicians.
   const saveVehicle = (job: ScheduleJob, vehicle: string) => {
@@ -613,7 +696,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       (j) =>
         ((j.scheduledDate >= range.start && j.scheduledDate <= range.end) ||
           (j.status === "pending" && carriedFridays.includes(j.scheduledDate))) &&
-        j.status !== "pending_approval" &&
+        // Jobs awaiting approval stay hidden — except, for admins, auto-
+        // assigned drafts and Saturday jobs, which are there to be reviewed.
+        // (Technicians never receive these: RLS hides pending_approval.)
+        (j.status !== "pending_approval" || (isAdmin && (isDraftJob(j) || isSaturday(j.scheduledDate)))) &&
         (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
     )
     // Day first (a multi-day timeframe), then technician and route order.
@@ -639,13 +725,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // structure duplicating todaysJobs itself.
   // What the card lists: the timeframe's jobs, narrowed by its status toggle.
   const cardJobs = React.useMemo(
-    () => (cardStatus === "all" ? todaysJobs : todaysJobs.filter((j) => j.status === cardStatus)),
+    () =>
+      cardStatus === "all"
+        ? todaysJobs
+        : todaysJobs.filter((j) => (cardStatus === "pending" ? isOpenStatus(j.status) : j.status === cardStatus)),
     [todaysJobs, cardStatus]
   )
   const cardCounts = React.useMemo(
     () => ({
       all: todaysJobs.length,
-      pending: todaysJobs.filter((j) => j.status === "pending").length,
+      pending: todaysJobs.filter((j) => isOpenStatus(j.status)).length,
       completed: todaysJobs.filter((j) => j.status === "completed").length,
     }),
     [todaysJobs]
@@ -743,7 +832,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <span className="font-medium">{t(job.jobType)}</span>
           <JobSourceBadge source={job.source} t={t} />
+          {isDraftJob(job) && <DraftBadge t={t} />}
+          {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
           {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
+          {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
           {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
         </div>
         {/* One scheduledDate on the shared job — shown explicitly (even
@@ -834,13 +926,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const statusCounts = React.useMemo(
     () => ({
       all: searchedJobs.length,
-      pending: searchedJobs.filter((j) => j.status === "pending").length,
+      pending: searchedJobs.filter((j) => isOpenStatus(j.status)).length,
       completed: searchedJobs.filter((j) => j.status === "completed").length,
     }),
     [searchedJobs]
   )
   const visibleJobs = React.useMemo(
-    () => (statusFilter === "all" ? searchedJobs : searchedJobs.filter((j) => j.status === statusFilter)),
+    () =>
+      statusFilter === "all"
+        ? searchedJobs
+        : searchedJobs.filter((j) => (statusFilter === "pending" ? isOpenStatus(j.status) : j.status === statusFilter)),
     [searchedJobs, statusFilter]
   )
 
@@ -973,7 +1068,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 }
               >
                 <div className="flex flex-col gap-1">
-                  <InlineDateCell value={job.scheduledDate} onCommit={(next) => next && saveJob(job, { scheduledDate: next })} />
+                  <InlineDateCell value={job.scheduledDate} onCommit={(next) => next && saveJob(job, dateChange(job, next))} />
                   <InlineTextCell
                     value={job.scheduledTime}
                     placeholder={t("timePlaceholder")}
@@ -989,7 +1084,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   <span className="inline-flex items-center gap-1.5">
                     {t(job.jobType)}
                     <JobSourceBadge source={job.source} t={t} />
+                    {isDraftJob(job) && <DraftBadge t={t} />}
+                    {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
                     {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
+                    {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
                   </span>
                 }
               >
@@ -1009,7 +1107,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 <InlineTechnicianPairCell
                   primary={job.technician}
                   secondary={job.technician2}
-                  onCommit={(patch) => saveJob(job, technicianInput(patch.primary ?? job.technician, patch.secondary ?? job.technician2 ?? ""))}
+                  onCommit={(patch) => saveJob(job, technicianChange(job, patch.primary ?? job.technician, patch.secondary ?? job.technician2 ?? ""))}
                 />
               </EditableCell>
               <EditableCell {...cellProps(job, "vehicle")} display={job.vehicle || "—"}>
@@ -1104,6 +1202,41 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       return next
     })
   const toggleAllVisits = () => setSelectedVisitKeys(allVisitsSelected ? new Set() : new Set(visibleVisits.map((v) => v.key)))
+  // One click: an active job for every visit on screen, no dialog — each on
+  // its own dispatch date (carried Friday visits on the day being viewed,
+  // Friday visits on Saturday), with its planned technician, else the
+  // customer's assigned technician, else the least-busy field technician
+  // that day, plus a matching vehicle (createDispatchAssigner). Technician
+  // logins are linked, so each job shows on that technician's own widget.
+  const approveAllAndDispatch = async () => {
+    const targets = visibleVisits
+    if (targets.length === 0 || dispatching) return
+    setDispatching({ done: 0, total: targets.length })
+    const accounts = assignmentAccounts(users)
+    const assigner = createDispatchAssigner({ jobs, customers, accounts })
+    const bySource: Record<AssignmentSource, number> = { planned: 0, customer: 0, balanced: 0, none: 0, saturday: 0 }
+    const { created, failed, awaitingApproval } = await createJobsFromVisits(targets, {
+      dateFor: visitDispatchDate,
+      assignFor: (visit, date) => {
+        const assignment = assigner(visit, date)
+        bySource[assignment.source] += 1
+        return assignment
+      },
+      accounts,
+      onProgress: (done) => setDispatching((p) => (p ? { ...p, done } : p)),
+    })
+    for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
+    setDispatching(null)
+    setSelectedVisitKeys(new Set())
+    if (created) {
+      toast.success(t("dispatchAllDone", { count: created }), {
+        description: t("dispatchAllSources", { planned: bySource.planned, customer: bySource.customer, balanced: bySource.balanced, none: bySource.none, saturday: bySource.saturday }),
+      })
+    }
+    if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
+    if (awaitingApproval) toast.warning(t("saturdayJobsAwaiting", { count: awaitingApproval }))
+  }
+
   const visitCheckbox = (v: UnscheduledVisit) => (
     <Checkbox checked={selectedVisitKeys.has(v.key)} onCheckedChange={() => toggleVisit(v.key)} aria-label={t("selectVisit")} data-testid="unscheduled-select" />
   )
@@ -1129,12 +1262,32 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           </Badge>
           <Button
             size="sm"
+            variant="outline"
             className="ml-auto h-7 gap-1.5 text-xs"
-            disabled={selectedVisits.length === 0}
+            disabled={selectedVisits.length === 0 || !!dispatching}
             onClick={() => setBulkOpen(true)}
             data-testid="unscheduled-bulk-create"
           >
             <CheckCheck className="h-3.5 w-3.5" /> {t("bulkCreateJobs", { count: selectedVisits.length })}
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            disabled={visibleVisits.length === 0 || !!dispatching}
+            onClick={approveAllAndDispatch}
+            title={t("dispatchAllHint")}
+            data-testid="unscheduled-dispatch-all"
+          >
+            {dispatching ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t("dispatchAllProgress", { done: dispatching.done, total: dispatching.total })}
+              </>
+            ) : (
+              <>
+                <Send className="h-3.5 w-3.5" /> {t("dispatchAll", { count: visibleVisits.length })}
+              </>
+            )}
           </Button>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">{t("unscheduledVisitsHint")}</p>
@@ -1164,6 +1317,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                           <CarriedBadge date={v.date} t={t} />
                         </div>
                       )}
+                      {v.rescheduledFrom && (
+                        <div className="mt-1">
+                          <RescheduledBadge date={v.rescheduledFrom} t={t} />
+                        </div>
+                      )}
+                      {isSaturday(visitDispatchDate(v)) && (
+                        <div className="mt-1">
+                          <NeedsTechnicianBadge t={t} />
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <div className="font-medium">{v.name}</div>
@@ -1191,6 +1354,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {formatDate(v.date)}
                       {v.date < range.start && <CarriedBadge date={v.date} t={t} />}
+                      {v.rescheduledFrom && <RescheduledBadge date={v.rescheduledFrom} t={t} />}
+                      {isSaturday(visitDispatchDate(v)) && <NeedsTechnicianBadge t={t} />}
                     </div>
                   </div>
                   {createJobButton(v)}
@@ -1208,8 +1373,92 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       </section>
     )
 
+  // Saturday coverage: Saturday is never auto-assigned (technician
+  // availability changes each Saturday). Its jobs wait, Unassigned, until an
+  // admin ticks who's working ("Assign Saturday Coverage"); a Saturday's
+  // queue can instead be cancelled and spread over Mon–Wed by area.
+  const saturdays = React.useMemo(() => saturdaysInRange(range), [range])
+  const singleSaturday = range.start === range.end && isSaturday(range.start) ? range.start : undefined
+  const [redistributeOpen, setRedistributeOpen] = React.useState(false)
+  const [coverageSaturday, setCoverageSaturday] = React.useState<string | undefined>(undefined)
+  // A Saturday's open jobs and the unscheduled visits that would go on it.
+  const saturdayJobsOn = (saturday: string) => todaysJobs.filter((j) => isOpenStatus(j.status) && j.scheduledDate === saturday)
+  const saturdayVisitsOn = (saturday: string) => unscheduledVisits.filter((v) => visitDispatchDate(v) === saturday)
+  const needsTechnician = (job: ScheduleJob) => isSaturday(job.scheduledDate) && isOpenStatus(job.status) && !isAssignedTechnician(job.technician)
+  const awaitingSaturday = todaysJobs.filter((j) => isSaturday(j.scheduledDate) && (j.status === "pending_approval" || needsTechnician(j)))
+  const saturdayQueueJobs = todaysJobs.filter((j) => isOpenStatus(j.status))
+
+  // Drafts in view: approve them all at once, or ask the automation for more.
+  // (Saturday drafts are left to "Assign Saturday Coverage".)
+  const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && !isSaturday(j.scheduledDate))
+  const [approvingDrafts, setApprovingDrafts] = React.useState(false)
+  const [generatingDrafts, setGeneratingDrafts] = React.useState(false)
+  const approveAllDrafts = async () => {
+    setApprovingDrafts(true)
+    let approved = 0
+    const failed: string[] = []
+    for (const job of draftJobs) {
+      try {
+        await updateScheduleJob(job.id, { status: "pending" })
+        approved += 1
+      } catch (error) {
+        failed.push(`${job.orderNo ?? job.id}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
+    setApprovingDrafts(false)
+    if (approved) toast.success(t("draftsApproved", { count: approved }))
+    if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
+  }
+  const generateDrafts = async () => {
+    setGeneratingDrafts(true)
+    try {
+      const result = await triggerAutomation("generateDraftJobs")
+      const drafted = Number((result.detail as { drafted?: number } | undefined)?.drafted ?? 0)
+      if (result.ok) toast.success(t("draftsGenerated", { count: drafted }))
+      else toast.error(result.message)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+    for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
+    setGeneratingDrafts(false)
+  }
+  const saturdayBanner = () =>
+    !isAdmin || saturdays.length === 0 ? null : (
+      <div data-testid="saturday-banner" className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+        <p className="font-medium text-warning">{t("saturdayBannerTitle")}</p>
+        <p className="mt-0.5 text-muted-foreground">
+          {awaitingSaturday.length > 0 ? t("saturdayBannerAwaiting", { count: awaitingSaturday.length }) : t("saturdayBannerNone")}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {saturdays.map((saturday) => {
+            const count = saturdayJobsOn(saturday).length + saturdayVisitsOn(saturday).length
+            return (
+              <Button
+                key={saturday}
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={count === 0}
+                onClick={() => setCoverageSaturday(saturday)}
+                data-testid="saturday-coverage-open"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                {saturdays.length > 1 ? t("coverageOpenFor", { date: formatDate(saturday), count }) : t("coverageOpen", { count })}
+              </Button>
+            )
+          })}
+          {singleSaturday && (
+            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => setRedistributeOpen(true)} data-testid="saturday-redistribute-open">
+              <CalendarRange className="h-3.5 w-3.5" /> {t("redistributeOpen")}
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+
   const fullScreenJobs = () => (
     <>
+      {saturdayBanner()}
       {scheduledJobsBody()}
       {unscheduledSection()}
     </>
@@ -1269,6 +1518,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           {multiDay ? t("noJobsInTimeframe") : t("noJobsScheduled")}
         </p>
       )}
+      {!isPending && !expanded && saturdayBanner()}
       {!isPending && unscheduledVisits.length > 0 && !expanded && (
         <button
           type="button"
@@ -1345,6 +1595,32 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       {isAdmin && (
         <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
+        </Button>
+      )}
+      {isAdmin && draftJobs.length > 0 && (
+        <Button
+          size="sm"
+          className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 @xs/card-header:flex-1 @sm/card-header:flex-none"
+          disabled={approvingDrafts}
+          onClick={approveAllDrafts}
+          data-testid="drafts-approve-all"
+        >
+          {approvingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          {t("draftsApproveAll", { count: draftJobs.length })}
+        </Button>
+      )}
+      {isAdmin && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none"
+          disabled={generatingDrafts}
+          onClick={generateDrafts}
+          title={t("draftsGenerateHint")}
+          data-testid="drafts-generate"
+        >
+          {generatingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
+          {t("draftsGenerate")}
         </Button>
       )}
       {isAdmin && (
@@ -1536,6 +1812,29 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         defaultDate={date}
         job={editingJob}
       />
+      {isAdmin && coverageSaturday && (
+        <SaturdayCoverageDialog
+          key={coverageSaturday}
+          open={!!coverageSaturday}
+          onOpenChange={(o) => !o && setCoverageSaturday(undefined)}
+          saturday={coverageSaturday}
+          jobs={saturdayJobsOn(coverageSaturday)}
+          visits={saturdayVisitsOn(coverageSaturday)}
+          accounts={technicianAccounts}
+          addressOfJob={(job) => job.secondaryAddress || (job.customerId ? customerById.get(job.customerId)?.address : undefined)}
+        />
+      )}
+      {isAdmin && singleSaturday && (
+        <SaturdayRedistributeDialog
+          key={redistributeOpen ? "open" : "closed"}
+          open={redistributeOpen}
+          onOpenChange={setRedistributeOpen}
+          saturday={singleSaturday}
+          jobs={saturdayQueueJobs}
+          visits={unscheduledVisits}
+          addressOfJob={(job) => job.secondaryAddress || (job.customerId ? customerById.get(job.customerId)?.address : undefined)}
+        />
+      )}
       {isAdmin && (
         <BulkCreateJobsDialog
           key={bulkOpen ? "open" : "closed"}

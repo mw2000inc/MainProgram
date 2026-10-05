@@ -28,6 +28,7 @@ type ScheduleJobRow = {
   route_sequence: number | null
   filter_codes?: string | null
   source?: ScheduleJobSource | null
+  rescheduled_from?: string | null
 }
 
 function fromRow(row: ScheduleJobRow): ScheduleJob {
@@ -57,6 +58,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     routeSequence: row.route_sequence ?? undefined,
     filterCodes: row.filter_codes || undefined,
     source: row.source ?? "manual",
+    rescheduledFrom: row.rescheduled_from ?? undefined,
   }
 }
 
@@ -79,6 +81,7 @@ function toRow(input: Partial<Omit<ScheduleJob, "id" | "createdAt" | "source">>)
   if (input.technicianUserId !== undefined) row.technician_user_id = input.technicianUserId || null
   if (input.technician2UserId !== undefined) row.technician_2_user_id = input.technician2UserId || null
   if (input.filterCodes !== undefined) row.filter_codes = input.filterCodes
+  if (input.rescheduledFrom !== undefined) row.rescheduled_from = input.rescheduledFrom || null
   return row
 }
 
@@ -119,6 +122,28 @@ export async function linkVisitToScheduleJob(
   jobId: string
 ): Promise<void> {
   const { error } = await supabase.from(table).update({ schedule_job_id: jobId }).eq("id", recordId).is("schedule_job_id", null)
+  if (error) throw error
+}
+
+// Moves an unscheduled visit (no job yet) to another day — its planned date
+// (Pre D / Pre Installed Date) — and records the Saturday it came from.
+const VISIT_DATE_COLUMN = {
+  filter_change_plans: "pre_d",
+  install_plans: "pre_installed_date",
+  repair_plans: "pre_d",
+  collections: "pre_d",
+} as const
+
+export async function rescheduleVisit(
+  table: keyof typeof VISIT_DATE_COLUMN,
+  recordId: string,
+  date: string,
+  rescheduledFrom: string
+): Promise<void> {
+  const { error } = await supabase
+    .from(table)
+    .update({ [VISIT_DATE_COLUMN[table]]: date, rescheduled_from: rescheduledFrom })
+    .eq("id", recordId)
   if (error) throw error
 }
 

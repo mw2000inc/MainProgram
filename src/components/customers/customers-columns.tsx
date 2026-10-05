@@ -78,7 +78,15 @@ export function getCustomerColumns({
 }): ColumnDef<CustomerRow, unknown>[] {
   return [
     {
-      accessorKey: "memberAccountNumber",
+      // Sorted on the trimmed value with a natural (numeric-aware) compare:
+      // some imported account numbers carry leading spaces or trailing tabs
+      // (" 3106-000-0000-0024", "0001-000-0000-0796\t"), which otherwise sort
+      // ahead of every digit. Blank ones (undefined here) always go last.
+      id: "memberAccountNumber",
+      accessorFn: (row) => row.memberAccountNumber?.trim() || undefined,
+      sortUndefined: "last",
+      sortingFn: (a, b, id) =>
+        String(a.getValue(id)).localeCompare(String(b.getValue(id)), undefined, { numeric: true, sensitivity: "base" }),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       meta: { headerClassName: "w-[150px] max-w-[150px] truncate", cellClassName: "w-[150px] max-w-[150px] truncate" },
       cell: ({ row }) => (

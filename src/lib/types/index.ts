@@ -482,6 +482,8 @@ export interface ScheduleJob {
   // what was used: that's ScheduleJobFilterItem below.
   filterCodes?: string
   source: ScheduleJobSource
+  // See FilterChangePlan.rescheduledFrom.
+  rescheduledFrom?: string
   // The following three only apply to jobType "filter_change" — which
   // Inventory item + how many units to deduct once this job is marked
   // completed, and when that deduction actually happened (the idempotency
@@ -593,6 +595,9 @@ export interface FilterChangePlan extends DispatchFields {
   // whenever it's omitted.
   customerId?: string
   scheduleJobId?: string
+  // The Saturday this was moved from by "Cancel & Auto-Distribute Saturday
+  // Queue" (saturday_reschedule migration).
+  rescheduledFrom?: string
   // 'ct_completion' for a plan auto-created/updated by a job completion;
   // 'recurring_schedule' for one generated automatically from the sale list
   // entry's Plan D, every 3 months by default, or on the linked CP
@@ -657,6 +662,9 @@ export interface InstallPlan extends DispatchFields {
   // auto_create_schedule_job_on_confirm migration) -- links to the
   // Schedule panel entry (schedule_jobs) auto-created/reused for it.
   scheduleJobId?: string
+  // The Saturday this was moved from by "Cancel & Auto-Distribute Saturday
+  // Queue" (saturday_reschedule migration).
+  rescheduledFrom?: string
   // Whether this record's money has actually been collected — separate
   // from `status` above (that's dispatch/visit status, not a payment
   // signal — see the all_collection_collected_flag migration). Only ever
@@ -721,6 +729,9 @@ export interface RepairPlan extends DispatchFields {
   // auto_create_schedule_job_on_confirm migration) -- links to the
   // Schedule panel entry (schedule_jobs) auto-created/reused for it.
   scheduleJobId?: string
+  // The Saturday this was moved from by "Cancel & Auto-Distribute Saturday
+  // Queue" (saturday_reschedule migration).
+  rescheduledFrom?: string
   // See InstallPlan.collected's own comment — same field, same purpose,
   // same all_collection_collected_flag migration.
   collected?: boolean
@@ -791,6 +802,9 @@ export interface CollectionPlan extends DispatchFields {
   // column defaults ('manual' / false) apply whenever they're omitted.
   customerId?: string
   scheduleJobId?: string
+  // The Saturday this was moved from by "Cancel & Auto-Distribute Saturday
+  // Queue" (saturday_reschedule migration).
+  rescheduledFrom?: string
   source?: "manual" | "ct_completion" | "recurring_schedule"
   // Set true the moment a completed job records filter items for this
   // customer — the actual filter list lives on schedule_job_filter_items

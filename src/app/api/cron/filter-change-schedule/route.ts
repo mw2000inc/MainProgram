@@ -17,5 +17,8 @@ export async function GET(request: Request) {
   }
 
   const result = await runAutomation("generateFilterChangeJobs", { triggeredBy: "cron" })
-  return NextResponse.json(result)
+  // Then draft the week's remaining visits for admin review (same cron, so
+  // no extra Vercel schedule; toggleable separately in Settings).
+  const drafts = await runAutomation("generateDraftJobs", { triggeredBy: "cron" })
+  return NextResponse.json({ ...result, drafts })
 }

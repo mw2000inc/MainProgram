@@ -38,6 +38,7 @@ type Row = {
   requested_date: string | null
   requested_time: string | null
   schedule_job_id: string | null
+  rescheduled_from?: string | null
   customer_notified_at: string | null
   customer_responded_at: string | null
   rejected_by: string | null
@@ -82,6 +83,7 @@ function fromRow(row: Row): InstallPlan {
     requestedDate: row.requested_date ?? undefined,
     requestedTime: row.requested_time ?? undefined,
     scheduleJobId: row.schedule_job_id ?? undefined,
+    rescheduledFrom: row.rescheduled_from ?? undefined,
     customerNotifiedAt: row.customer_notified_at ?? undefined,
     customerRespondedAt: row.customer_responded_at ?? undefined,
     rejectedBy: row.rejected_by ?? undefined,

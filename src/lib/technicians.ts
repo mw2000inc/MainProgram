@@ -101,6 +101,25 @@ export function technicianAccountIds(
   }
 }
 
+// The vehicle and crew a technician belongs to (VEHICLE_CREWS), if any —
+// e.g. Eubert Montalbo → the Liteace with Eubert + Jayson Sapitin.
+export function crewOfTechnician(name: string | null | undefined): { vehicle: string; primary: string; secondary: string } | undefined {
+  const target = (name ?? "").trim().toLowerCase()
+  if (!target) return undefined
+  for (const [vehicle, crew] of Object.entries(VEHICLE_CREWS)) {
+    if (crew?.some((member) => member.toLowerCase() === target)) return { vehicle, primary: crew[0], secondary: crew[1] }
+  }
+  return undefined
+}
+
+// The login accounts automatic assignment can link: every technician
+// account, plus the fixed crews' members whatever their account role — a crew
+// always goes out together, so both members' logins are linked even when one
+// of them is set up as an admin.
+export function assignmentAccounts<A extends TechnicianAccount & { role?: string }>(profiles: A[]): A[] {
+  return profiles.filter((p) => p.role === "technician" || !!crewOfTechnician(p.name))
+}
+
 // The fixed crew for a vehicle (VEHICLE_CREWS), or undefined for a vehicle
 // any technician can take.
 export function crewForVehicle(vehicle: string | null | undefined): { primary: string; secondary: string } | undefined {
