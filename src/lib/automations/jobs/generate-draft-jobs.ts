@@ -35,11 +35,11 @@ export async function runGenerateDraftJobs(): Promise<AutomationResult> {
   const end = format(addDays(parseISO(today), LOOKAHEAD_DAYS), "yyyy-MM-dd")
 
   const [customersRes, accountsRes, jobsRes] = await Promise.all([
-    admin.from("customers").select("id, order_number, address, full_name, company_name, assigned_technician, assigned_technician_2"),
+    admin.from("customers").select("id, order_number, address, full_name, company_name, member_account_number, latitude, longitude, assigned_technician, assigned_technician_2"),
     admin.from("profiles").select("id, name, role"),
     admin
       .from("schedule_jobs")
-      .select("job_type, order_no, technician, technician_2, scheduled_date, status, vehicle, created_at")
+      .select("job_type, order_no, customer_id, secondary_address, latitude, longitude, technician, technician_2, scheduled_date, status, vehicle, created_at")
       .gte("scheduled_date", format(addDays(parseISO(start), -30), "yyyy-MM-dd")),
   ])
   for (const r of [customersRes, accountsRes, jobsRes]) if (r.error) return { ok: false, message: r.error.message }
@@ -110,8 +110,19 @@ export async function runGenerateDraftJobs(): Promise<AutomationResult> {
       status: j.status as ScheduleJobStatus,
       vehicle: j.vehicle ?? "",
       createdAt: j.created_at,
+      customerId: j.customer_id ?? undefined,
+      secondaryAddress: j.secondary_address ?? undefined,
+      latitude: j.latitude ?? undefined,
+      longitude: j.longitude ?? undefined,
     })),
-    customers: customers.map((c) => ({ id: c.id as string, assignedTechnician: c.assigned_technician ?? "", assignedTechnician2: c.assigned_technician_2 ?? undefined })),
+    customers: customers.map((c) => ({
+      id: c.id as string,
+      assignedTechnician: c.assigned_technician ?? "",
+      assignedTechnician2: c.assigned_technician_2 ?? undefined,
+      memberAccountNumber: c.member_account_number ?? undefined,
+      latitude: c.latitude ?? undefined,
+      longitude: c.longitude ?? undefined,
+    })),
     accounts,
   })
 

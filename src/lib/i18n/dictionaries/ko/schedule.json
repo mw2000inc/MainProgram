@@ -225,7 +225,7 @@
   "dispatchAllHint": "표시된 모든 방문에 작업을 생성합니다 — 예정 기술자, 없으면 고객 담당 기술자, 없으면 그날 가장 한가한 기술자와 맞는 차량을 배정합니다.",
   "dispatchAllProgress": "방문 {done} / {total}건 배정 중…",
   "dispatchAllDone": "방문 {count}건을 배정했습니다 — 작업 생성 완료",
-  "dispatchAllSources": "예정 기술자 {planned}건 · 고객 담당 기술자 {customer}건 · 가장 한가한 기술자 {balanced}건 · 미배정 {none}건 · 기술자 선택 대기(토요일) {saturday}건",
+  "dispatchAllSources": "예정 기술자 {planned}건 · 같은 장소 담당 팀 {location}건 · 고객 담당 기술자 {customer}건 · 인근 담당 팀 {nearby}건 · 가장 한가한 기술자 {balanced}건 · 미배정 {none}건 · 기술자 선택 대기(토요일) {saturday}건",
   "saturdayBannerTitle": "토요일 근무는 직접 배정합니다",
   "saturdayBannerAwaiting": "토요일 작업 {count}건이 기술자 배정을 기다립니다 — 토요일은 자동 배정되지 않으며, 배정 전까지 기술자에게 보이지 않습니다.",
   "saturdayBannerNone": "기술자 배정을 기다리는 토요일 작업이 없습니다.",

@@ -1232,7 +1232,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     setDispatching({ done: 0, total: targets.length })
     const accounts = assignmentAccounts(users)
     const assigner = createDispatchAssigner({ jobs, customers, accounts })
-    const bySource: Record<AssignmentSource, number> = { planned: 0, customer: 0, balanced: 0, none: 0, saturday: 0 }
+    const bySource: Record<AssignmentSource, number> = { planned: 0, location: 0, customer: 0, nearby: 0, balanced: 0, none: 0, saturday: 0 }
     const { created, failed, awaitingApproval } = await createJobsFromVisits(targets, {
       dateFor: visitDispatchDate,
       assignFor: (visit, date) => {
@@ -1248,7 +1248,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     setSelectedVisitKeys(new Set())
     if (created) {
       toast.success(t("dispatchAllDone", { count: created }), {
-        description: t("dispatchAllSources", { planned: bySource.planned, customer: bySource.customer, balanced: bySource.balanced, none: bySource.none, saturday: bySource.saturday }),
+        description: t("dispatchAllSources", { planned: bySource.planned, location: bySource.location, customer: bySource.customer, nearby: bySource.nearby, balanced: bySource.balanced, none: bySource.none, saturday: bySource.saturday }),
       })
     }
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))

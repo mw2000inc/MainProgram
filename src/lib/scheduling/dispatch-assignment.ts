@@ -3,17 +3,27 @@ import { crewOfTechnician, isAssignedTechnician, matchTechnicianAccount, normali
 import type { Customer, ScheduleJob } from "@/lib/types"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { isSaturday } from "@/lib/schedule-timeframe"
+import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@/lib/scheduling/proximity"
 
 // Who "Approve All & Dispatch" assigns to each visit, and with which vehicle.
 //
 // Technician, first match wins:
 //   1. "planned"  — the visit's own planned technician(s);
-//   2. "customer" — the customer's assigned technician(s);
-//   3. "balanced" — the field technician (a TECHNICIANS roster name that has a
+//   2. "location" — the team already going to the same place that day: a
+//      job or visit with the same Member Account Number or the same address
+//      (five units in one dorm, a member's filter change and collection), so
+//      one team and vehicle covers the whole stop;
+//   3. "customer" — the customer's assigned technician(s);
+//   4. "nearby"   — the team already working in the same neighborhood that
+//      day: the closest stop within NEARBY_KM (1 km) on the map when both
+//      places have coordinates, otherwise one sharing a barangay, a named
+//      building / compound / village, or a local street in the same city
+//      (see proximity.ts);
+//   5. "balanced" — the field technician (a TECHNICIANS roster name that has a
 //      login account, so the job reaches their own Daily Report) with the
 //      fewest jobs that day, counting both existing jobs and the ones this
 //      batch has already handed out, so a batch is spread evenly;
-//   4. "none"     — unassigned, only when there's no such technician at all.
+//   6. "none"     — unassigned, only when there's no such technician at all.
 // Vehicle: a fixed crew's vehicle when the pair is that crew (the Liteace for
 // Eubert + Jayson), otherwise the vehicle that technician took on their most
 // recent job, otherwise none.
@@ -25,7 +35,7 @@ import { isSaturday } from "@/lib/schedule-timeframe"
 // changes every Saturday, so a Saturday job is always left Unassigned, with
 // no vehicle — not even the visit's planned technician — until an admin picks
 // that Saturday's technicians ("Assign Saturday Coverage").
-export type AssignmentSource = "planned" | "customer" | "balanced" | "none" | "saturday"
+export type AssignmentSource = "planned" | "location" | "customer" | "nearby" | "balanced" | "none" | "saturday"
 
 export interface DispatchAssignment {
   pair: { primary: string; secondary: string }
@@ -50,9 +60,18 @@ export function fieldTechnicianNames(accounts: TechnicianAccount[]): string[] {
     .sort((a, b) => a.localeCompare(b))
 }
 
+// Address compared ignoring case, spacing and punctuation.
+const normalizeAddress = (address: string | undefined) =>
+  (address ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+
 export function createDispatchAssigner(input: {
-  jobs: Pick<ScheduleJob, "technician" | "technician2" | "scheduledDate" | "status" | "vehicle" | "createdAt">[]
-  customers: Pick<Customer, "id" | "assignedTechnician" | "assignedTechnician2">[]
+  jobs: (Pick<ScheduleJob, "technician" | "technician2" | "scheduledDate" | "status" | "vehicle" | "createdAt"> &
+    Partial<Pick<ScheduleJob, "customerId" | "secondaryAddress" | "latitude" | "longitude">>)[]
+  customers: (Pick<Customer, "id" | "assignedTechnician" | "assignedTechnician2"> &
+    Partial<Pick<Customer, "memberAccountNumber" | "latitude" | "longitude">>)[]
   accounts: TechnicianAccount[]
 }): (visit: UnscheduledVisit, date: string) => DispatchAssignment {
   // Field technicians eligible for balancing: accounts that are on the roster.
@@ -83,15 +102,78 @@ export function createDispatchAssigner(input: {
 
   const customerById = new Map(input.customers.map((c) => [c.id, c]))
 
+  // The team (technicians + vehicle) already going to each place on each
+  // day, keyed by Member Account Number and by address (addresses shorter
+  // than 8 characters are too vague to group on).
+  const placeKeys = (date: string, customerId: string | undefined, address: string | undefined) => {
+    const keys: string[] = []
+    const account = customerId ? customerById.get(customerId)?.memberAccountNumber?.trim() : ""
+    if (account) keys.push(`${date}|account:${account.toLowerCase()}`)
+    const place = normalizeAddress(address)
+    if (place.length >= 8) keys.push(`${date}|address:${place}`)
+    return keys
+  }
+  type Team = { pair: { primary: string; secondary: string }; vehicle: string }
+  const teamAt = new Map<string, Team>()
+  const rememberTeam = (keys: string[], team: Team) => {
+    if (!isAssignedTechnician(team.pair.primary)) return
+    for (const k of keys) if (!teamAt.has(k)) teamAt.set(k, team)
+  }
+  // Every assigned stop per day, for the neighborhood match: its map point
+  // (the job's own, else its customer's) and its neighborhood keys.
+  const stops: { date: string; point?: Point; keys: string[]; team: Team }[] = []
+  const pointOf = (customerId: string | undefined, lat?: number, lon?: number) => {
+    const customer = customerId ? customerById.get(customerId) : undefined
+    return toPoint(lat, lon) ?? toPoint(customer?.latitude, customer?.longitude)
+  }
+  const rememberStop = (date: string, point: Point | undefined, address: string | undefined, team: Team) => {
+    if (isAssignedTechnician(team.pair.primary)) stops.push({ date, point, keys: neighborhoodKeys(address), team })
+  }
+  // The closest same-day team within NEARBY_KM; without coordinates on
+  // either side, the first one sharing a neighborhood key.
+  const nearbyTeam = (date: string, point: Point | undefined, keys: string[]) => {
+    let best: { team: Team; km: number } | undefined
+    for (const stop of stops) {
+      if (stop.date !== date) continue
+      if (point && stop.point) {
+        const km = haversineKm(point, stop.point)
+        if (km <= NEARBY_KM && (!best || km < best.km)) best = { team: stop.team, km }
+      } else if (!best && stop.keys.some((k) => keys.includes(k))) {
+        best = { team: stop.team, km: NEARBY_KM }
+      }
+    }
+    return best?.team
+  }
+
+  for (const job of [...input.jobs].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (job.status === "cancelled") continue
+    const team = { pair: normalizeTechnicianPair(job.technician, job.technician2), vehicle: job.vehicle?.trim() ?? "" }
+    rememberTeam(placeKeys(job.scheduledDate, job.customerId, job.secondaryAddress), team)
+    rememberStop(job.scheduledDate, pointOf(job.customerId, job.latitude, job.longitude), job.secondaryAddress, team)
+  }
+
   return (visit, date) => {
     if (isSaturday(date)) return { pair: { primary: "", secondary: "" }, vehicle: "", source: "saturday" }
+    const keys = placeKeys(date, visit.customerId, visit.address)
+    const point = pointOf(visit.customerId)
     let pair = normalizeTechnicianPair(isAssignedTechnician(visit.technician) ? visit.technician : "", visit.technician2)
     let source: AssignmentSource = "planned"
-    if (!isAssignedTechnician(pair.primary)) {
+    let teamVehicle = ""
+    let nearby: Team | undefined
+    const team = keys.map((k) => teamAt.get(k)).find(Boolean)
+    if (!isAssignedTechnician(pair.primary) && team) {
+      pair = team.pair
+      teamVehicle = team.vehicle
+      source = "location"
+    } else if (!isAssignedTechnician(pair.primary)) {
       const customer = visit.customerId ? customerById.get(visit.customerId) : undefined
       if (customer && isAssignedTechnician(customer.assignedTechnician)) {
         pair = normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2)
         source = "customer"
+      } else if ((nearby = nearbyTeam(date, point, neighborhoodKeys(visit.address)))) {
+        pair = nearby.pair
+        teamVehicle = nearby.vehicle
+        source = "nearby"
       } else if (fieldTechnicians.length > 0) {
         const least = fieldTechnicians.reduce((best, name) => ((load.get(key(date, name)) ?? 0) < (load.get(key(date, best)) ?? 0) ? name : best))
         pair = { primary: least, secondary: "" }
@@ -100,7 +182,7 @@ export function createDispatchAssigner(input: {
         source = "none"
       }
     }
-    let vehicle = vehicleFor(pair)
+    let vehicle = teamVehicle || vehicleFor(pair)
     const crew = crewOfTechnician(pair.primary) ?? crewOfTechnician(pair.secondary) ?? crewOfVehicle(vehicle)
     if (crew) {
       pair = { primary: crew.primary, secondary: crew.secondary }
@@ -108,6 +190,8 @@ export function createDispatchAssigner(input: {
     }
     addLoad(date, pair.primary)
     addLoad(date, pair.secondary)
+    rememberTeam(keys, { pair, vehicle })
+    rememberStop(date, point, visit.address, { pair, vehicle })
     return { pair, vehicle, source }
   }
 }

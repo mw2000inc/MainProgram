@@ -43,7 +43,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   const admin = createAdminClient()
 
   const [{ data: customers, error: customersError }, { data: settingsRow, error: settingsError }] = await Promise.all([
-    admin.from("customers").select("id, order_number, installed_date, contract_start, dispenser_type, assigned_technician, assigned_technician_2"),
+    admin.from("customers").select("id, order_number, address, member_account_number, latitude, longitude, installed_date, contract_start, dispenser_type, assigned_technician, assigned_technician_2"),
     admin.from("company_settings").select("monitoring_default_months, monitoring_intervals").eq("id", 1).maybeSingle(),
   ])
   if (customersError) return { ok: false, message: customersError.message }
@@ -66,7 +66,7 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
   // that day), vehicle and logins — the same assignment as the other drafts.
   const [{ data: accountRows }, { data: jobRows }] = await Promise.all([
     admin.from("profiles").select("id, name, role"),
-    admin.from("schedule_jobs").select("technician, technician_2, scheduled_date, status, vehicle, created_at").gte("scheduled_date", today),
+    admin.from("schedule_jobs").select("customer_id, secondary_address, latitude, longitude, technician, technician_2, scheduled_date, status, vehicle, created_at").gte("scheduled_date", today),
   ])
   const accounts = assignmentAccounts((accountRows ?? []).map((a) => ({ id: a.id as string, name: (a.name as string) ?? "", role: a.role as string })))
   const assigner = createDispatchAssigner({
@@ -77,13 +77,37 @@ export async function runGenerateFilterChangeJobs(): Promise<AutomationResult> {
       status: j.status as ScheduleJobStatus,
       vehicle: j.vehicle ?? "",
       createdAt: j.created_at,
+      customerId: j.customer_id ?? undefined,
+      secondaryAddress: j.secondary_address ?? undefined,
+      latitude: j.latitude ?? undefined,
+      longitude: j.longitude ?? undefined,
     })),
-    customers: (customers ?? []).map((c) => ({ id: c.id, assignedTechnician: c.assigned_technician ?? "", assignedTechnician2: c.assigned_technician_2 ?? undefined })),
+    customers: (customers ?? []).map((c) => ({
+      id: c.id,
+      assignedTechnician: c.assigned_technician ?? "",
+      assignedTechnician2: c.assigned_technician_2 ?? undefined,
+      memberAccountNumber: c.member_account_number ?? undefined,
+      latitude: c.latitude ?? undefined,
+      longitude: c.longitude ?? undefined,
+    })),
     accounts,
   })
+  const addressByCustomer = new Map((customers ?? []).map((c) => [c.id, c.address ?? ""]))
   const draftAssignment = (customerId: string | null, orderNo: string) => {
     const a = assigner(
-      { key: orderNo, table: "filter_change_plans", recordId: "", jobType: "filter_change", date: dispatchDate, orderNo, customerId: customerId ?? undefined, name: orderNo, technician: "", technician2: "" },
+      {
+        key: orderNo,
+        table: "filter_change_plans",
+        recordId: "",
+        jobType: "filter_change",
+        date: dispatchDate,
+        orderNo,
+        customerId: customerId ?? undefined,
+        name: orderNo,
+        address: (customerId && addressByCustomer.get(customerId)) || undefined,
+        technician: "",
+        technician2: "",
+      },
       dispatchDate
     )
     const ids = technicianAccountIds(a.pair.primary, a.pair.secondary, accounts)

@@ -2,6 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { geocodeWithFallback, type GeoPoint } from "@/lib/nominatim-server"
 import { TECHNICIANS } from "@/lib/constants"
+import { haversineKm } from "./proximity"
 
 // Smart Automatic Scheduling System.
 //
@@ -84,16 +85,7 @@ export interface ResolvedLocation {
   source: LocationSource
 }
 
-export function haversineKm(a: GeoPoint, b: GeoPoint): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180
-  const R = 6371
-  const dLat = toRad(b.lat - a.lat)
-  const dLon = toRad(b.lon - a.lon)
-  const lat1 = toRad(a.lat)
-  const lat2 = toRad(b.lat)
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
+export { haversineKm }
 
 // Resolves a customer's point, geocoding + caching onto customers.latitude/
 // longitude (the same write-path the Member List map panel already uses,
