@@ -309,6 +309,7 @@ export default function CustomersPage() {
                     onSearchChange={setSearchQuery}
                     emptyMessage={t("noMembersFound")}
                     onRowClick={(row) => selection.open(row)}
+                    virtualize
                     tableClassName="table-fixed min-w-[1360px] w-full"
                     tableContainerClassName="overflow-x-auto"
                     scrollContainerClassName="overflow-x-auto"

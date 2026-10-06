@@ -201,6 +201,8 @@ function CollectionPlanPageContent() {
                     emptyMessage={t("noPlansFound")}
                     onFilteredRowsChange={setFilteredRows}
                     onRowClick={(row) => selection.open(row)}
+                    // 1,000+ entries on one page: render only the rows in view.
+                    virtualize
                   />
                 </div>
               </CardContent>

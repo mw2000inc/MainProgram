@@ -230,6 +230,7 @@ function RepairPlanPageContent() {
                 emptyMessage={t("noPlansFound")}
                 onFilteredRowsChange={setFilteredGroups}
                 onRowClick={orderSelection.open}
+                virtualize
               />
             </div>
           </CardContent>

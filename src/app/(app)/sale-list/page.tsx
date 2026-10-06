@@ -211,6 +211,7 @@ export default function SaleListPage() {
                     emptyMessage={t("noEntriesFound")}
                     getRowClassName={getSaleListRowClassName}
                     onRowClick={(row) => selection.open(row)}
+                    virtualize
                   />
                 </div>
               </CardContent>
@@ -333,6 +334,7 @@ export default function SaleListPage() {
                 emptyMessage={t("noEntriesFound")}
                 getRowClassName={getSaleListRowClassName}
                 onRowClick={(row) => selection.open(row)}
+                virtualize
               />
             </div>
           </CardContent>

@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   type ColumnDef,
+  type Row,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -126,7 +127,55 @@ interface DataTableProps<TData> {
   // unset and gets the plain base padding as before.
   headerCellClassName?: string
   bodyCellClassName?: string
+  // Opt-in — render only the rows scrolled into view (plus a buffer above
+  // and below) instead of every row, for long lists shown on one page (the
+  // Collection Plan's 1,000+ entries). Needs a height-bounded scroll
+  // container (a fillHeight page, or scrollContainerClassName); ignored with
+  // groupBy, and below VIRTUALIZE_MIN_ROWS rows where it wouldn't help.
+  virtualize?: boolean
 }
+
+const VIRTUALIZE_MIN_ROWS = 100
+// Rows rendered beyond each edge of the visible area, so fast scrolling
+// doesn't show blank space before the next frame fills it in.
+const VIRTUALIZE_OVERSCAN = 12
+
+// One body row, memoized: a parent re-render that leaves this row's data and
+// the columns unchanged (opening the detail panel, a month tab, typing in
+// another field) skips it entirely instead of re-rendering every cell.
+function DataTableBodyRowImpl<TData>({
+  row,
+  columns,
+  clickable,
+  onRowClick,
+  className,
+  bodyCellClassName,
+}: {
+  row: Row<TData>
+  columns: ColumnDef<TData, unknown>[]
+  clickable: boolean
+  onRowClick: (row: TData) => void
+  className?: string
+  bodyCellClassName?: string
+}) {
+  // columns is only a memo key: new column definitions must re-render the
+  // cells even when the row object itself is unchanged.
+  void columns
+  return (
+    <TableRow
+      data-row-index={row.index}
+      className={cn(clickable && "cursor-pointer hover:bg-muted/50", className)}
+      onClick={() => onRowClick(row.original)}
+    >
+      {row.getVisibleCells().map((cell) => (
+        <TableCell key={cell.id} className={cn(bodyCellClassName, cell.column.columnDef.meta?.cellClassName)}>
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </TableCell>
+      ))}
+    </TableRow>
+  )
+}
+const DataTableBodyRow = React.memo(DataTableBodyRowImpl) as typeof DataTableBodyRowImpl
 
 export function DataTable<TData>({
   columns,
@@ -152,8 +201,16 @@ export function DataTable<TData>({
   scrollContainerClassName,
   headerCellClassName,
   bodyCellClassName,
+  virtualize = false,
 }: DataTableProps<TData>) {
   const { t } = useTranslation("dataTable")
+  // A stable click handler for the memoized rows — the caller's own
+  // onRowClick is usually a fresh inline function every render.
+  const onRowClickRef = React.useRef(onRowClick)
+  React.useLayoutEffect(() => {
+    onRowClickRef.current = onRowClick
+  })
+  const handleRowClick = React.useCallback((row: TData) => onRowClickRef.current?.(row), [])
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize })
@@ -220,6 +277,56 @@ export function DataTable<TData>({
     onFilteredRowsChange?.(filteredRows)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRowsKey])
+
+  // Windowing (virtualize): which slice of the page's rows is in view, from
+  // the scroll container's position and the rows' measured average height.
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+  const bodyRef = React.useRef<HTMLTableSectionElement>(null)
+  const [viewport, setViewport] = React.useState({ top: 0, height: 900 })
+  const [rowHeight, setRowHeight] = React.useState(48)
+  const pageRows = table.getRowModel().rows
+  const windowed = virtualize && !groupBy && pageRows.length > VIRTUALIZE_MIN_ROWS
+  React.useEffect(() => {
+    const scroller = scrollRef.current
+    const body = bodyRef.current
+    if (!windowed || !scroller || !body) return
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        setViewport((v) => (v.top === scroller.scrollTop && v.height === scroller.clientHeight ? v : { top: scroller.scrollTop, height: scroller.clientHeight }))
+        const rendered = body.querySelectorAll<HTMLTableRowElement>("tr[data-row-index]")
+        if (rendered.length > 0) {
+          let total = 0
+          rendered.forEach((r) => (total += r.offsetHeight))
+          const average = total / rendered.length
+          setRowHeight((h) => (Math.abs(h - average) > 1 ? average : h))
+        }
+      })
+    }
+    measure()
+    scroller.addEventListener("scroll", measure, { passive: true })
+    const observer = new ResizeObserver(measure)
+    observer.observe(scroller)
+    observer.observe(body)
+    return () => {
+      cancelAnimationFrame(frame)
+      scroller.removeEventListener("scroll", measure)
+      observer.disconnect()
+    }
+  }, [windowed])
+  let windowStart = 0
+  let windowEnd = pageRows.length
+  if (windowed) {
+    windowEnd = Math.min(pageRows.length, Math.ceil((viewport.top + viewport.height) / rowHeight) + VIRTUALIZE_OVERSCAN)
+    windowStart = Math.max(0, Math.min(Math.floor(viewport.top / rowHeight) - VIRTUALIZE_OVERSCAN, windowEnd - VIRTUALIZE_OVERSCAN))
+  }
+  const spacer = (height: number, key: string) =>
+    height > 0 ? (
+      <tr key={key} aria-hidden="true">
+        <td colSpan={columns.length} style={{ height, padding: 0, border: 0 }} />
+      </tr>
+    ) : null
 
   const { pageIndex, pageSize: currentPageSize } = table.getState().pagination
   const totalRows = table.getFilteredRowModel().rows.length
@@ -300,6 +407,7 @@ export function DataTable<TData>({
           spelled out here anyway per the same defensive reasoning as
           relative above. */}
       <div
+        ref={scrollRef}
         className={cn(
           "relative h-full w-full min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto",
           scrollContainerClassName,
@@ -341,30 +449,29 @@ export function DataTable<TData>({
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
+          <TableBody ref={bodyRef}>
+            {pageRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className={cn("h-28 text-center text-muted-foreground", bodyCellClassName)}>
                   {emptyMessage ?? t("noRecordsFound")}
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.flatMap((row, index, rows) => {
+              [
+                spacer(windowStart * rowHeight, "window-top"),
+                ...pageRows.slice(windowStart, windowEnd).flatMap((row, sliceIndex) => {
+                const index = windowStart + sliceIndex
+                const rows = pageRows
                 const bodyRow = (
-                  <TableRow
+                  <DataTableBodyRow
                     key={row.id}
-                    className={cn(onRowClick && "cursor-pointer hover:bg-muted/50", getRowClassName?.(row.original))}
-                    onClick={() => onRowClick?.(row.original)}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(bodyCellClassName, cell.column.columnDef.meta?.cellClassName)}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
+                    row={row}
+                    columns={columns}
+                    clickable={!!onRowClick}
+                    onRowClick={handleRowClick}
+                    className={getRowClassName?.(row.original)}
+                    bodyCellClassName={bodyCellClassName}
+                  />
                 )
                 if (!groupBy) return [bodyRow]
                 const label = groupBy(row.original)
@@ -380,7 +487,9 @@ export function DataTable<TData>({
                   </TableRow>,
                   bodyRow,
                 ]
-              })
+              }),
+                spacer((pageRows.length - windowEnd) * rowHeight, "window-bottom"),
+              ]
             )}
           </TableBody>
         </Table>
