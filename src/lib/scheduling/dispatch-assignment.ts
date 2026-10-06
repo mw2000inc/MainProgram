@@ -9,6 +9,10 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 //
 // Technician, first match wins:
 //   1. "planned"  — the visit's own planned technician(s);
+//      "installation" — an Installation goes to the crew of INSTALL_VEHICLE
+//      (the Liteace team, Eubert + Jayson): it carries the units. Other jobs
+//      at the same place or nearby then join that crew through the rules
+//      below;
 //   2. "location" — the team already going to the same place that day: a
 //      job or visit with the same Member Account Number or the same address
 //      (five units in one dorm, a member's filter change and collection), so
@@ -35,13 +39,16 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 // changes every Saturday, so a Saturday job is always left Unassigned, with
 // no vehicle — not even the visit's planned technician — until an admin picks
 // that Saturday's technicians ("Assign Saturday Coverage").
-export type AssignmentSource = "planned" | "location" | "customer" | "nearby" | "balanced" | "none" | "saturday"
+export type AssignmentSource = "planned" | "installation" | "location" | "customer" | "nearby" | "balanced" | "none" | "saturday"
 
 export interface DispatchAssignment {
   pair: { primary: string; secondary: string }
   vehicle: string
   source: AssignmentSource
 }
+
+// The vehicle every Installation is dispatched with (with its crew).
+export const INSTALL_VEHICLE = "Liteace"
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
@@ -161,7 +168,12 @@ export function createDispatchAssigner(input: {
     let teamVehicle = ""
     let nearby: Team | undefined
     const team = keys.map((k) => teamAt.get(k)).find(Boolean)
-    if (!isAssignedTechnician(pair.primary) && team) {
+    const installCrew = visit.jobType === "installation" ? crewOfVehicle(INSTALL_VEHICLE) : undefined
+    if (!isAssignedTechnician(pair.primary) && installCrew) {
+      pair = { primary: installCrew.primary, secondary: installCrew.secondary }
+      teamVehicle = installCrew.vehicle
+      source = "installation"
+    } else if (!isAssignedTechnician(pair.primary) && team) {
       pair = team.pair
       teamVehicle = team.vehicle
       source = "location"

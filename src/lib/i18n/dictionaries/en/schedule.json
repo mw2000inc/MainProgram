@@ -225,7 +225,7 @@
   "dispatchAllHint": "Create an active job for every visit shown — with its planned technician, else the customer's technician, else the least-busy technician that day — plus a matching vehicle.",
   "dispatchAllProgress": "Dispatching {done} / {total} visits…",
   "dispatchAllDone": "Dispatched {count} visit(s) — jobs created",
-  "dispatchAllSources": "{planned} with their planned technician · {location} with the team already going to the same place · {customer} with the customer's technician · {nearby} with the team working nearby · {balanced} given to the least-busy technician · {none} unassigned · {saturday} on Saturday left for technician selection",
+  "dispatchAllSources": "{planned} with their planned technician · {installation} installation(s) with the Liteace team · {location} with the team already going to the same place · {customer} with the customer's technician · {nearby} with the team working nearby · {balanced} given to the least-busy technician · {none} unassigned · {saturday} on Saturday left for technician selection",
   "saturdayBannerTitle": "Saturday coverage is assigned by hand",
   "saturdayBannerAwaiting": "{count} Saturday job(s) are waiting for technicians — nothing is auto-assigned on Saturdays, and technicians won't see these until you assign them.",
   "saturdayBannerNone": "No Saturday jobs are waiting for technicians.",
