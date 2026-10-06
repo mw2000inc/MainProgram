@@ -181,6 +181,8 @@
   "timeframeThisWeek": "이번 주",
   "timeframeNextWeek": "다음 주",
   "timeframeThisMonth": "이번 달",
+  "timeframePickHint": "날짜를 클릭하거나, 두 날짜를 클릭해 기간을 선택하세요.",
+  "timeframePickEnd": "종료 날짜를 클릭하세요 (닫으면 하루만 선택됩니다).",
   "noJobsInTimeframe": "이 기간에 예정된 작업이 없습니다.",
   "history": "기록",
   "scheduleHistoryTitle": "일정 변경 기록",

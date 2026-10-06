@@ -181,6 +181,8 @@
   "timeframeThisWeek": "This Week",
   "timeframeNextWeek": "Next Week",
   "timeframeThisMonth": "This Month",
+  "timeframePickHint": "Click a date, or click two dates for a range.",
+  "timeframePickEnd": "Now click the end date (or close to keep one day).",
   "noJobsInTimeframe": "No jobs scheduled in this timeframe.",
   "history": "History",
   "scheduleHistoryTitle": "Schedule History",

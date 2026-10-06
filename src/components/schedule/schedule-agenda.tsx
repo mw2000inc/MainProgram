@@ -61,16 +61,14 @@ import { triggerAutomation } from "@/lib/api/automations"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { createDispatchAssigner, type AssignmentSource } from "@/lib/scheduling/dispatch-assignment"
 import {
-  SCHEDULE_TIMEFRAMES,
-  SCHEDULE_TIMEFRAME_LABEL,
   carriedFridaysInRange,
   dispatchDateFor,
   isSaturday,
   saturdaysInRange,
   isScheduleTimeframe,
   scheduleTimeframeRange,
-  type ScheduleTimeframe,
 } from "@/lib/schedule-timeframe"
+import { formatScheduleRange, ScheduleDateRangePicker, type ScheduleDateSelection } from "@/components/schedule/schedule-date-range-picker"
 import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -479,9 +477,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       // ignore — the choice just won't be remembered
     }
   }
-  // Timeframe (toolbar dropdown) — anchored on the report's date and
-  // remembered per browser like the view mode.
-  const [timeframe, setTimeframeState] = React.useState<ScheduleTimeframe>(() => {
+  // Date filter (toolbar calendar popover): a preset anchored on the
+  // report's date — remembered per browser like the view mode — or dates
+  // picked on the calendar (kept until the page is left).
+  const [selection, setSelectionState] = React.useState<ScheduleDateSelection>(() => {
     try {
       const saved = typeof window !== "undefined" ? window.localStorage.getItem(TIMEFRAME_KEY) : null
       return isScheduleTimeframe(saved) ? saved : "day"
@@ -489,20 +488,21 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       return "day"
     }
   })
-  const setTimeframe = (value: ScheduleTimeframe) => {
-    setTimeframeState(value)
+  const setSelection = (value: ScheduleDateSelection) => {
+    setSelectionState(value)
+    if (typeof value !== "string") return
     try {
       window.localStorage.setItem(TIMEFRAME_KEY, value)
     } catch {
       // ignore — the choice just won't be remembered
     }
   }
-  const range = React.useMemo(() => scheduleTimeframeRange(timeframe, date), [timeframe, date])
+  const range = React.useMemo(() => (typeof selection === "string" ? scheduleTimeframeRange(selection, date) : selection), [selection, date])
   const multiDay = range.start !== range.end
   // Friday roll-forward: Friday's still-pending jobs and unscheduled visits
   // also show on the Saturday and Monday after it, until they're done.
   const carriedFridays = React.useMemo(() => carriedFridaysInRange(range), [range])
-  const rangeLabel = multiDay ? `${formatDate(range.start)} – ${formatDate(range.end)}` : formatDate(range.start)
+  const rangeLabel = formatScheduleRange(range)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const { data: customers = [] } = useCustomers()
   const completeJobs = useCompleteScheduleJobs()
@@ -1591,35 +1591,18 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
 
   const headerActions = (
     <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap sm:flex-row sm:flex-wrap sm:items-center">
-      <Select value={timeframe} onValueChange={(v) => isScheduleTimeframe(v) && setTimeframe(v)}>
-        <SelectTrigger
-          size="sm"
-          aria-label={t("timeframe")}
-          data-testid="schedule-timeframe"
-          className="h-8 gap-1.5 text-xs @xs/card-header:flex-1 @sm/card-header:w-auto @sm/card-header:flex-none"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SCHEDULE_TIMEFRAMES.map((value) => (
-            <SelectItem key={value} value={value}>
-              {value === "day" && date !== todayIso() ? formatDate(date) : t(SCHEDULE_TIMEFRAME_LABEL[value])}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ScheduleDateRangePicker selection={selection} range={range} anchor={date} onChange={setSelection} />
       {isAdmin && (
         <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
         </Button>
       )}
-      {isAdmin && draftJobs.length > 0 && (
+      {/* Always rendered (disabled at 0) so the toolbar never shifts. */}
+      {isAdmin && (
         <Button
           size="sm"
           className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 @xs/card-header:flex-1 @sm/card-header:flex-none"
-          disabled={approvingDrafts}
+          disabled={approvingDrafts || draftJobs.length === 0}
           onClick={approveAllDrafts}
           data-testid="drafts-approve-all"
         >
