@@ -12,7 +12,9 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 //      "installation" — an Installation goes to the crew of INSTALL_VEHICLE
 //      (the Liteace team, Eubert + Jayson): it carries the units. Other jobs
 //      at the same place or nearby then join that crew through the rules
-//      below;
+//      below. Soft cap: once that crew already has INSTALL_CREW_DAILY_CAP
+//      jobs that day, further installs fall through to the rules below with
+//      the crew left out — the nearest other team, else the least busy;
 //   2. "location" — the team already going to the same place that day: a
 //      job or visit with the same Member Account Number or the same address
 //      (five units in one dorm, a member's filter change and collection), so
@@ -49,6 +51,8 @@ export interface DispatchAssignment {
 
 // The vehicle every Installation is dispatched with (with its crew).
 export const INSTALL_VEHICLE = "Liteace"
+// Jobs per day after which installs stop defaulting to that crew.
+export const INSTALL_CREW_DAILY_CAP = 10
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
@@ -138,10 +142,10 @@ export function createDispatchAssigner(input: {
   }
   // The closest same-day team within NEARBY_KM; without coordinates on
   // either side, the first one sharing a neighborhood key.
-  const nearbyTeam = (date: string, point: Point | undefined, keys: string[]) => {
+  const nearbyTeam = (date: string, point: Point | undefined, keys: string[], skip?: (team: Team) => boolean) => {
     let best: { team: Team; km: number } | undefined
     for (const stop of stops) {
-      if (stop.date !== date) continue
+      if (stop.date !== date || skip?.(stop.team)) continue
       if (point && stop.point) {
         const km = haversineKm(point, stop.point)
         if (km <= NEARBY_KM && (!best || km < best.km)) best = { team: stop.team, km }
@@ -167,9 +171,13 @@ export function createDispatchAssigner(input: {
     let source: AssignmentSource = "planned"
     let teamVehicle = ""
     let nearby: Team | undefined
-    const team = keys.map((k) => teamAt.get(k)).find(Boolean)
     const installCrew = visit.jobType === "installation" ? crewOfVehicle(INSTALL_VEHICLE) : undefined
-    if (!isAssignedTechnician(pair.primary) && installCrew) {
+    // Install crew at its cap: this install goes elsewhere, never to that crew.
+    const fullCrew = installCrew && (load.get(key(date, installCrew.primary)) ?? 0) >= INSTALL_CREW_DAILY_CAP ? installCrew : undefined
+    const isFullCrew = (p: { primary: string; secondary: string }) =>
+      !!fullCrew && [p.primary, p.secondary].some((n) => !!n && (sameName(n, fullCrew.primary) || sameName(n, fullCrew.secondary)))
+    const team = keys.map((k) => teamAt.get(k)).find((t) => t && !isFullCrew(t.pair))
+    if (!isAssignedTechnician(pair.primary) && installCrew && !fullCrew) {
       pair = { primary: installCrew.primary, secondary: installCrew.secondary }
       teamVehicle = installCrew.vehicle
       source = "installation"
@@ -179,15 +187,17 @@ export function createDispatchAssigner(input: {
       source = "location"
     } else if (!isAssignedTechnician(pair.primary)) {
       const customer = visit.customerId ? customerById.get(visit.customerId) : undefined
-      if (customer && isAssignedTechnician(customer.assignedTechnician)) {
-        pair = normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2)
+      const customerPair = customer ? normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2) : undefined
+      const candidates = fieldTechnicians.filter((name) => !isFullCrew({ primary: name, secondary: "" }))
+      if (customerPair && isAssignedTechnician(customerPair.primary) && !isFullCrew(customerPair)) {
+        pair = customerPair
         source = "customer"
-      } else if ((nearby = nearbyTeam(date, point, neighborhoodKeys(visit.address)))) {
+      } else if ((nearby = nearbyTeam(date, point, neighborhoodKeys(visit.address), (t) => isFullCrew(t.pair)))) {
         pair = nearby.pair
         teamVehicle = nearby.vehicle
         source = "nearby"
-      } else if (fieldTechnicians.length > 0) {
-        const least = fieldTechnicians.reduce((best, name) => ((load.get(key(date, name)) ?? 0) < (load.get(key(date, best)) ?? 0) ? name : best))
+      } else if (candidates.length > 0) {
+        const least = candidates.reduce((best, name) => ((load.get(key(date, name)) ?? 0) < (load.get(key(date, best)) ?? 0) ? name : best))
         pair = { primary: least, secondary: "" }
         source = "balanced"
       } else {
@@ -195,7 +205,9 @@ export function createDispatchAssigner(input: {
       }
     }
     let vehicle = teamVehicle || vehicleFor(pair)
-    const crew = crewOfTechnician(pair.primary) ?? crewOfTechnician(pair.secondary) ?? crewOfVehicle(vehicle)
+    // A fallback technician whose last vehicle was the full crew's keeps no vehicle.
+    if (fullCrew && sameName(vehicle, fullCrew.vehicle) && !isFullCrew(pair)) vehicle = ""
+    const crew =crewOfTechnician(pair.primary) ?? crewOfTechnician(pair.secondary) ?? crewOfVehicle(vehicle)
     if (crew) {
       pair = { primary: crew.primary, secondary: crew.secondary }
       vehicle = crew.vehicle
