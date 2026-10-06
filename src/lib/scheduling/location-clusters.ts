@@ -33,7 +33,9 @@ const AREAS: { area: string; zone: string; match: RegExp }[] = [
 const OTHER = { area: "Other / unknown area", zone: "Other" }
 
 export function areaOf(address: string | undefined): { area: string; zone: string; order: number } {
-  const text = (address ?? "").toLowerCase()
+  // "Metro Manila" / "NCR" name the region, not the city of Manila — blanked
+  // (same length, so match positions don't move) before looking for the city.
+  const text = (address ?? "").toLowerCase().replace(/metro\s*manila|\bncr\b/g, (m) => " ".repeat(m.length))
   // Several areas can appear (e.g. "Alabang–Zapote Rd, Las Piñas"): the one
   // mentioned LAST is usually the city.
   let best: { area: string; zone: string; order: number; at: number } | undefined
