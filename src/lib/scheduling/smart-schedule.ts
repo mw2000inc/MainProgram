@@ -3,6 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { geocodeWithFallback, type GeoPoint } from "@/lib/nominatim-server"
 import { TECHNICIANS } from "@/lib/constants"
 import { haversineKm } from "./proximity"
+import { createDispatchAssigner, type AssignmentSource } from "./dispatch-assignment"
+import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
+import type { UnscheduledVisit } from "./unscheduled-visits"
+import type { ScheduleJobType } from "@/lib/types"
 
 // Smart Automatic Scheduling System.
 //
@@ -364,16 +368,20 @@ export interface AutoAssignParams {
 }
 
 // The orchestrator called from both dispatch routes after a genuine
-// confirm/reschedule-accept. Never throws on a location/technician it can't
-// resolve -- those cases are recorded honestly (location_source =
-// 'unavailable', technician left blank, a note asking for admin review)
-// rather than blocking the confirm the customer/admin actually asked for.
+// confirm/reschedule-accept (Step 2 of the dispatch pipeline — the job it
+// staffs is a 'pending_approval' draft awaiting the admin's final approval).
+// The technician, partner and vehicle come from the same dispatch rules as
+// every other automatic assignment (createDispatchAssigner: planned
+// technician, Liteace for installs, same place, customer's technician,
+// nearby team, least-busy by errands; Saturdays stay unassigned). The job's
+// location is still resolved first so its point is cached for routing.
+// Never throws on a location it can't resolve — the job is still assigned.
 export async function autoAssignScheduleJob(admin: SupabaseClient, params: AutoAssignParams): Promise<void> {
-  const { scheduleJobId, jobType, entityType, entityId, customerId, orderNo, scheduledDate } = params
+  const { scheduleJobId, jobType, entityType, entityId, orderNo, scheduledDate } = params
 
   const { data: job } = await admin
     .from("schedule_jobs")
-    .select("technician, location_source, notes")
+    .select("technician, location_source, notes, customer_id")
     .eq("id", scheduleJobId)
     .maybeSingle()
   // Already staffed (by an admin, or a prior run of this same function) or
@@ -381,52 +389,126 @@ export async function autoAssignScheduleJob(admin: SupabaseClient, params: AutoA
   // on 'unavailable') -- leave it alone either way.
   if (!job || job.technician || job.location_source) return
 
-  const { point, source } = await resolveJobLocation(admin, jobType, entityType, entityId, customerId, orderNo)
+  const visit = await visitForEntity(admin, entityType, entityId, jobType, orderNo, params.customerId ?? job.customer_id ?? null, scheduledDate)
+  const { point, source } = await resolveJobLocation(admin, jobType, entityType, entityId, visit.customerId ?? null, orderNo)
 
-  if (!point) {
-    await admin
+  const since = new Date(Date.parse(scheduledDate) - 30 * 86_400_000).toISOString().slice(0, 10)
+  const [customersRes, accountsRes, jobsRes] = await Promise.all([
+    admin.from("customers").select("id, member_account_number, latitude, longitude, assigned_technician, assigned_technician_2"),
+    admin.from("profiles").select("id, name, role"),
+    admin
       .from("schedule_jobs")
-      .update({
-        location_source: "unavailable",
-        notes: job.notes || "Auto-schedule: location unavailable — needs admin review to assign a technician.",
-      })
-      .eq("id", scheduleJobId)
-      .eq("technician", "")
-    return
-  }
+      .select("id, customer_id, secondary_address, latitude, longitude, route_sequence, technician, technician_2, scheduled_date, status, vehicle, created_at")
+      .gte("scheduled_date", since)
+      .neq("id", scheduleJobId),
+  ])
+  const jobs = jobsRes.data ?? []
+  const accounts = assignmentAccounts((accountsRes.data ?? []).map((a) => ({ id: a.id as string, name: (a.name as string) ?? "", role: a.role as string })))
+  const assign = createDispatchAssigner({
+    jobs: jobs.map((j) => ({
+      technician: j.technician ?? "",
+      technician2: j.technician_2 ?? undefined,
+      scheduledDate: j.scheduled_date,
+      status: j.status,
+      vehicle: j.vehicle ?? "",
+      createdAt: j.created_at,
+      customerId: j.customer_id ?? undefined,
+      secondaryAddress: j.secondary_address ?? undefined,
+      latitude: j.latitude ?? undefined,
+      longitude: j.longitude ?? undefined,
+    })),
+    customers: (customersRes.data ?? []).map((c) => ({
+      id: c.id,
+      assignedTechnician: c.assigned_technician ?? "",
+      assignedTechnician2: c.assigned_technician_2 ?? undefined,
+      memberAccountNumber: c.member_account_number ?? undefined,
+      latitude: c.latitude ?? undefined,
+      longitude: c.longitude ?? undefined,
+    })),
+    accounts,
+  })
+  const assignment = assign(visit, scheduledDate)
+  const { primary, secondary } = assignment.pair
+  const ids = technicianAccountIds(primary, secondary, accounts)
 
-  const { data: sameDayJobsRaw } = await admin
-    .from("schedule_jobs")
-    .select("id, technician, technician_2, latitude, longitude, route_sequence")
-    .eq("scheduled_date", scheduledDate)
-    .neq("status", "cancelled")
-    .neq("id", scheduleJobId)
-  const sameDayJobs = (sameDayJobsRaw ?? []) as SameDayJobRow[]
-
-  const pick = pickBestTechnician(point, sameDayJobs)
-  const technicianJobsThatDay = sameDayJobs.filter(
-    (j) => j.technician === pick.technician || j.technician_2 === pick.technician
-  )
-  const routeSequence = computeRouteSequence(point, technicianJobsThatDay)
-
-  const distanceNote =
-    pick.minDistanceKm != null
-      ? `nearest existing job for ${pick.technician} that day was ${pick.minDistanceKm.toFixed(1)} km away`
-      : `${pick.technician} had no located job that day yet`
-  const explanation =
-    `Auto-scheduled: assigned to ${pick.technician} — ${distanceNote} ` +
-    `(${pick.jobCount} existing job(s) that day). Location resolved via ${source}.`
+  const sameDay = jobs.filter((j) => j.scheduled_date === scheduledDate && j.status !== "cancelled") as unknown as SameDayJobRow[]
+  const routeSequence =
+    point && primary ? computeRouteSequence(point, sameDay.filter((j) => j.technician === primary || j.technician_2 === primary)) : null
+  const team = primary ? `${primary}${secondary ? ` & ${secondary}` : ""}${assignment.vehicle ? ` (${assignment.vehicle})` : ""}` : ""
+  const explanation = primary
+    ? `Auto-assigned to ${team} — ${ASSIGNMENT_REASON[assignment.source]}. Awaiting final admin approval.`
+    : `${assignment.source === "saturday" ? "Saturday job" : "No technician available"} — left unassigned for admin review.`
 
   await admin
     .from("schedule_jobs")
     .update({
-      technician: pick.technician,
-      latitude: point.lat,
-      longitude: point.lon,
+      technician: primary,
+      technician_2: secondary || null,
+      technician_user_id: ids.technicianUserId || null,
+      technician_2_user_id: ids.technician2UserId || null,
+      vehicle: assignment.vehicle,
+      secondary_address: visit.address ?? null,
+      latitude: point?.lat ?? null,
+      longitude: point?.lon ?? null,
       location_source: source,
       route_sequence: routeSequence,
       notes: job.notes || explanation,
     })
     .eq("id", scheduleJobId)
     .eq("technician", "") // no-op if something else has assigned this job in the meantime
+}
+
+const ASSIGNMENT_REASON: Record<AssignmentSource, string> = {
+  planned: "the visit's planned technician",
+  installation: "installations go to the Liteace team",
+  location: "the team already going to the same place that day",
+  customer: "the customer's assigned technician",
+  nearby: "the team already working nearby that day",
+  balanced: "the least-busy technician that day",
+  none: "no technician available",
+  saturday: "Saturday",
+}
+
+// The visit a dispatch record stands for: its address, planned technician
+// and customer (install / repair records find theirs by order number).
+async function visitForEntity(
+  admin: SupabaseClient,
+  entityType: DispatchEntityType,
+  entityId: string,
+  jobType: ScheduleJobTypeDb,
+  orderNo: string | null,
+  customerId: string | null,
+  date: string
+): Promise<UnscheduledVisit> {
+  const { data } = await admin.from(entityType).select("*").eq("id", entityId).maybeSingle()
+  const row = (data ?? {}) as Record<string, unknown>
+  const order = (orderNo ?? String(row.order_number ?? row.order_no ?? "")).trim()
+  let customer = customerId ?? (row.customer_id as string | null) ?? null
+  if (!customer && order) {
+    const { data: entry } = await admin.from("sale_list_entries").select("customer_id").eq("order_number", order).maybeSingle()
+    customer = (entry?.customer_id as string | null) ?? null
+    if (!customer) {
+      const { data: byOrder } = await admin.from("customers").select("id").eq("order_number", order).maybeSingle()
+      customer = (byOrder?.id as string | null) ?? null
+    }
+  }
+  let address = String(row.address ?? "").trim()
+  if (!address && customer) {
+    const { data: c } = await admin.from("customers").select("address").eq("id", customer).maybeSingle()
+    address = String(c?.address ?? "").trim()
+  }
+  const repair = entityType === "repair_plans"
+  return {
+    key: `${entityType}:${entityId}`,
+    table: entityType,
+    recordId: entityId,
+    jobType: jobType as ScheduleJobType,
+    date,
+    orderNo: order,
+    customerId: customer ?? undefined,
+    name: String(row.member_account || row.name || row.account_name || order),
+    address: address || undefined,
+    technician: String((repair ? row.th : row.serviceman) ?? ""),
+    technician2: String((repair ? row.th_2 : row.serviceman_2) ?? ""),
+  }
 }

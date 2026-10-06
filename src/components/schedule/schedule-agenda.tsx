@@ -374,7 +374,10 @@ function RescheduledBadge({ date, t }: { date: string; t: (key: string, params?:
 
 // An auto-generated job still awaiting an admin's review (the draft job
 // automation and the filter-change automation create these).
-const isDraftJob = (job: Pick<ScheduleJob, "status" | "source">) => job.status === "pending_approval" && job.source === "automation"
+// Step 3 of the dispatch pipeline: a job awaiting final admin approval —
+// drafted by the automation or created by a customer's confirmation.
+const isDraftJob = (job: Pick<ScheduleJob, "status" | "source">) =>
+  job.status === "pending_approval" && (job.source === "automation" || job.source === "customer_confirmed")
 
 // "Draft · Auto-assigned (pending review)".
 function DraftBadge({ t }: { t: (key: string) => string }) {

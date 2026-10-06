@@ -16,18 +16,17 @@ import { formatDate } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
 
-// Admin Schedule Approval workflow — schedule_jobs rows an admin manually
-// created (ScheduleFormDialog) that are still status = 'pending_approval'.
+// Admin Schedule Approval workflow — schedule_jobs rows still status =
+// 'pending_approval': jobs an admin created manually (ScheduleFormDialog),
+// automation drafts, and jobs created by a customer's confirmation (Step 2
+// of the dispatch pipeline, 20261023000000_customer_confirm_creates_draft_job).
 // This is a genuinely different concept than the Schedule page's other
 // "Pending Approvals" tab (dispatch_status on filter_change_plans/
 // install_plans/collections/repair_plans — items that don't have a
 // schedule_jobs row *at all* yet): a row here already exists as a real
 // schedule_jobs record, it's just not active/technician-visible until an
 // admin approves it (see the schedule_pending_approval_status and
-// schedule_pending_approval_rls_and_dedup migrations). Smart Scheduling
-// and the dispatch-confirm flow never produce a 'pending_approval' row —
-// only this admin-manual path does — so this list is never populated by
-// anything but a human admin's own "Schedule Job" creation.
+// schedule_pending_approval_rls_and_dedup migrations).
 //
 // RLS already does the real work of keeping a technician from ever reading
 // these rows (schedule_jobs_select); this panel is reachable at all only

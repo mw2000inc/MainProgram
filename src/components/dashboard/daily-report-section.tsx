@@ -60,6 +60,7 @@ import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChange
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useApproveStockMovements, useRejectStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
@@ -636,25 +637,41 @@ export function DailyReportSection() {
   // backlog up to the selected date too, per an earlier read of AppSheet's
   // behavior; reverted since the real intent is a clean single-day list,
   // not a rolling backlog.)
+  // Step 3 of the dispatch pipeline: a still-pending record reaches these
+  // widgets only once its schedule job has the admin's final approval
+  // (status 'pending', or already 'completed'). A record without a job, or
+  // whose job is still a draft ('pending_approval'), waits in the Schedule's
+  // Unscheduled Visits / drafts. A record already done always shows.
+  // Technicians never receive draft jobs (RLS), so for them the same rule
+  // holds automatically.
+  const { data: scheduleJobs = [] } = useScheduleJobs()
+  const approvedJobIds = React.useMemo(
+    () => new Set(scheduleJobs.filter((j) => j.status === "pending" || j.status === "completed").map((j) => j.id)),
+    [scheduleJobs]
+  )
+  const isApprovedForReport = React.useCallback(
+    (r: { status: string; scheduleJobId?: string }) => r.status !== "Pending" || (!!r.scheduleJobId && approvedJobIds.has(r.scheduleJobId)),
+    [approvedJobIds]
+  )
   const dayFilterChangePlans = React.useMemo(
-    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
-    [filterChangePlans, reportDate]
+    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [filterChangePlans, reportDate, isApprovedForReport]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
   // is preInstalledDate (input date is the plan/entry date, installedDate
   // is when it actually happened — see the InstallPlan type), so that's
   // what wins over inputDate here, same COALESCE semantics as the others.
   const dayInstallPlans = React.useMemo(
-    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
-    [installPlans, reportDate]
+    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [installPlans, reportDate, isApprovedForReport]
   )
   const dayRepairPlans = React.useMemo(
-    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
-    [repairPlans, reportDate]
+    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [repairPlans, reportDate, isApprovedForReport]
   )
   const dayCollectionPlans = React.useMemo(
-    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate && isDailyReportEligible(p.dispatchStatus)),
-    [collectionPlans, reportDate]
+    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [collectionPlans, reportDate, isApprovedForReport]
   )
   // Filtered by the movement's own `date` (its as-of day — defaults to the
   // day it was recorded, and matches the completed job's scheduledDate for
