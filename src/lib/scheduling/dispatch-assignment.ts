@@ -13,8 +13,10 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 //      (the Liteace team, Eubert + Jayson): it carries the units. Other jobs
 //      at the same place or nearby then join that crew through the rules
 //      below. Soft cap: once that crew already has INSTALL_CREW_DAILY_CAP
-//      jobs that day, further installs fall through to the rules below with
-//      the crew left out — the nearest other team, else the least busy;
+//      errands that day, an install at a NEW place falls through to the rules
+//      below with the crew left out — the nearest other team, else the least
+//      busy. An install at a place the crew is already going to, or within
+//      NEARBY_KM of one, still goes to the crew past the cap;
 //   2. "location" — the team already going to the same place that day: a
 //      job or visit with the same Member Account Number or the same address
 //      (five units in one dorm, a member's filter change and collection), so
@@ -27,9 +29,13 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 //      (see proximity.ts);
 //   5. "balanced" — the field technician (a TECHNICIANS roster name that has a
 //      login account, so the job reaches their own Daily Report) with the
-//      fewest jobs that day, counting both existing jobs and the ones this
+//      fewest errands that day, counting both existing jobs and the ones this
 //      batch has already handed out, so a batch is spread evenly;
 //   6. "none"     — unassigned, only when there's no such technician at all.
+// Workload is counted in ERRANDS, not jobs: every job at one place (same
+// Member Account Number, else same address, else same customer) is one
+// errand — a member's filter change + collection, or five units in one
+// building, count once.
 // Vehicle: a fixed crew's vehicle when the pair is that crew (the Liteace for
 // Eubert + Jayson), otherwise the vehicle that technician took on their most
 // recent job, otherwise none.
@@ -51,8 +57,9 @@ export interface DispatchAssignment {
 
 // The vehicle every Installation is dispatched with (with its crew).
 export const INSTALL_VEHICLE = "Liteace"
-// Jobs per day after which installs stop defaulting to that crew.
-export const INSTALL_CREW_DAILY_CAP = 10
+// Errands (separate places) per day after which installs at a new place stop
+// defaulting to that crew.
+export const INSTALL_CREW_DAILY_CAP = 5
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
@@ -88,16 +95,16 @@ export function createDispatchAssigner(input: {
   // Field technicians eligible for balancing: accounts that are on the roster.
   const fieldTechnicians = fieldTechnicianNames(input.accounts)
 
-  const load = new Map<string, number>()
+  // Each technician's errands per day (see errandOf): distinct places.
+  const errands = new Map<string, Set<string>>()
   const key = (date: string, name: string) => `${date}|${name.trim().toLowerCase()}`
-  const addLoad = (date: string, name: string | undefined) => {
-    if (isAssignedTechnician(name)) load.set(key(date, name!), (load.get(key(date, name!)) ?? 0) + 1)
+  const addLoad = (date: string, name: string | undefined, errand: string) => {
+    if (!isAssignedTechnician(name)) return
+    const set = errands.get(key(date, name!)) ?? new Set<string>()
+    set.add(errand)
+    errands.set(key(date, name!), set)
   }
-  for (const job of input.jobs) {
-    if (job.status === "cancelled") continue
-    addLoad(job.scheduledDate, job.technician)
-    addLoad(job.scheduledDate, job.technician2)
-  }
+  const loadOf = (date: string, name: string) => errands.get(key(date, name))?.size ?? 0
 
   // Each technician's most recent vehicle.
   const lastVehicle = new Map<string, string>()
@@ -156,8 +163,17 @@ export function createDispatchAssigner(input: {
     return best?.team
   }
 
+  // One errand per place: the first place key, else the customer, else the
+  // job itself.
+  const errandOf = (date: string, customerId: string | undefined, address: string | undefined, own: string) =>
+    placeKeys(date, customerId, address)[0] ?? (customerId ? `${date}|customer:${customerId}` : own)
+
+  let jobIndex = 0
   for (const job of [...input.jobs].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     if (job.status === "cancelled") continue
+    const errand = errandOf(job.scheduledDate, job.customerId, job.secondaryAddress, `job:${jobIndex++}`)
+    addLoad(job.scheduledDate, job.technician, errand)
+    addLoad(job.scheduledDate, job.technician2, errand)
     const team = { pair: normalizeTechnicianPair(job.technician, job.technician2), vehicle: job.vehicle?.trim() ?? "" }
     rememberTeam(placeKeys(job.scheduledDate, job.customerId, job.secondaryAddress), team)
     rememberStop(job.scheduledDate, pointOf(job.customerId, job.latitude, job.longitude), job.secondaryAddress, team)
@@ -172,10 +188,18 @@ export function createDispatchAssigner(input: {
     let teamVehicle = ""
     let nearby: Team | undefined
     const installCrew = visit.jobType === "installation" ? crewOfVehicle(INSTALL_VEHICLE) : undefined
-    // Install crew at its cap: this install goes elsewhere, never to that crew.
-    const fullCrew = installCrew && (load.get(key(date, installCrew.primary)) ?? 0) >= INSTALL_CREW_DAILY_CAP ? installCrew : undefined
-    const isFullCrew = (p: { primary: string; secondary: string }) =>
-      !!fullCrew && [p.primary, p.secondary].some((n) => !!n && (sameName(n, fullCrew.primary) || sameName(n, fullCrew.secondary)))
+    const isCrew = (crew: typeof installCrew, p: { primary: string; secondary: string }) =>
+      !!crew && [p.primary, p.secondary].some((n) => !!n && (sameName(n, crew.primary) || sameName(n, crew.secondary)))
+    // Install crew at its cap AND this install is a separate place (not one
+    // the crew is already going to, nor within NEARBY_KM of one): it goes to
+    // another team, never to that crew.
+    const crewAtCap = !!installCrew && loadOf(date, installCrew.primary) >= INSTALL_CREW_DAILY_CAP
+    const crewAlreadyHere =
+      crewAtCap &&
+      (keys.some((k) => isCrew(installCrew, teamAt.get(k)?.pair ?? { primary: "", secondary: "" })) ||
+        !!nearbyTeam(date, point, neighborhoodKeys(visit.address), (t) => !isCrew(installCrew, t.pair)))
+    const fullCrew = crewAtCap && !crewAlreadyHere ? installCrew : undefined
+    const isFullCrew = (p: { primary: string; secondary: string }) => isCrew(fullCrew, p)
     const team = keys.map((k) => teamAt.get(k)).find((t) => t && !isFullCrew(t.pair))
     if (!isAssignedTechnician(pair.primary) && installCrew && !fullCrew) {
       pair = { primary: installCrew.primary, secondary: installCrew.secondary }
@@ -197,7 +221,7 @@ export function createDispatchAssigner(input: {
         teamVehicle = nearby.vehicle
         source = "nearby"
       } else if (candidates.length > 0) {
-        const least = candidates.reduce((best, name) => ((load.get(key(date, name)) ?? 0) < (load.get(key(date, best)) ?? 0) ? name : best))
+        const least = candidates.reduce((best, name) => (loadOf(date, name) < loadOf(date, best) ? name : best))
         pair = { primary: least, secondary: "" }
         source = "balanced"
       } else {
@@ -212,8 +236,9 @@ export function createDispatchAssigner(input: {
       pair = { primary: crew.primary, secondary: crew.secondary }
       vehicle = crew.vehicle
     }
-    addLoad(date, pair.primary)
-    addLoad(date, pair.secondary)
+    const errand = errandOf(date, visit.customerId, visit.address, `visit:${visit.key}`)
+    addLoad(date, pair.primary, errand)
+    addLoad(date, pair.secondary, errand)
     rememberTeam(keys, { pair, vehicle })
     rememberStop(date, point, visit.address, { pair, vehicle })
     return { pair, vehicle, source }
