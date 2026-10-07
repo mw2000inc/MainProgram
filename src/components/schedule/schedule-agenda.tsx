@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { endOfMonth, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -48,18 +49,19 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { assignmentAccounts, crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { MonthApprovalReview, type JobPatch } from "@/components/schedule/month-approval-review"
+import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
 import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-dialog"
-import { BulkCreateJobsDialog } from "@/components/schedule/bulk-create-jobs-dialog"
+import { VisitDispatchReview, type VisitDraft } from "@/components/schedule/visit-dispatch-review"
 import { SaturdayRedistributeDialog } from "@/components/schedule/saturday-redistribute-dialog"
 import { SaturdayCoverageDialog } from "@/components/schedule/saturday-coverage-dialog"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { triggerAutomation } from "@/lib/api/automations"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
-import { createDispatchAssigner, type AssignmentSource } from "@/lib/scheduling/dispatch-assignment"
+import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import {
   carriedFridaysInRange,
   dispatchDateFor,
@@ -411,6 +413,24 @@ function NeedsTechnicianBadge({ t }: { t: (key: string) => string }) {
 // Still to do: active, or a Saturday job awaiting coverage approval.
 const isOpenStatus = (status: ScheduleJobStatus) => status === "pending" || status === "pending_approval"
 
+// An errand: a non-visit task (job type "other" — stock pickup, a payment
+// collection, an audit), its description in notes.
+const isErrand = (job: Pick<ScheduleJob, "jobType">) => job.jobType === "other"
+const jobLabel = (job: Pick<ScheduleJob, "jobType" | "notes">, t: (key: string) => string) =>
+  isErrand(job) && job.notes?.trim() ? job.notes.trim() : t(job.jobType)
+
+function ErrandBadge({ t }: { t: (key: string) => string }) {
+  return (
+    <Badge
+      variant="outline"
+      data-testid="schedule-errand-badge"
+      className="h-5 border-violet-500/40 bg-violet-500/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300"
+    >
+      {t("errandBadge")}
+    </Badge>
+  )
+}
+
 function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: string) => string }) {
   if (source === "manual") return null
   const badge = SOURCE_BADGE[source]
@@ -589,25 +609,36 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   )
   // Bulk Create Jobs: which visits are ticked, and the dialog.
   const [selectedVisitKeys, setSelectedVisitKeys] = React.useState<Set<string>>(new Set())
-  const [bulkOpen, setBulkOpen] = React.useState(false)
   // Approve All & Dispatch: progress while it runs (null when idle).
   const [dispatching, setDispatching] = React.useState<{ done: number; total: number } | null>(null)
-  const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(
-    () =>
-      visitToSchedule && {
-        jobType: visitToSchedule.jobType,
-        scheduledDate: visitDispatchDate(visitToSchedule),
-        orderNo: visitToSchedule.orderNo,
-        customerId: visitToSchedule.customerId,
-        // Saturday is never pre-filled — the admin picks who's working.
-        technician: isSaturday(visitDispatchDate(visitToSchedule)) ? undefined : visitToSchedule.technician,
-        technician2: isSaturday(visitDispatchDate(visitToSchedule)) ? undefined : visitToSchedule.technician2,
-        secondaryAddress: visitToSchedule.address,
-        notes: [visitToSchedule.name, visitToSchedule.detail].filter(Boolean).join(" — "),
-        filterCodes: visitToSchedule.filterCodes,
-      },
-    [visitToSchedule, visitDispatchDate]
-  )
+  // Edits an admin makes inline on a ticked Unscheduled Visit (date,
+  // technician, vehicle, details) — held here, never saved on their own;
+  // they pre-fill "Create Job" and the Bulk Create / Approve All & Dispatch
+  // review, and are dropped once that visit's job is created.
+  const [visitEdits, setVisitEdits] = React.useState<Record<string, Partial<Pick<VisitDraft, "date" | "primary" | "secondary" | "vehicle" | "detail">>>>({})
+  const editVisit = (visit: UnscheduledVisit, patch: Partial<Pick<VisitDraft, "date" | "primary" | "secondary" | "vehicle" | "detail">>) =>
+    setVisitEdits((e) => ({ ...e, [visit.key]: { ...e[visit.key], ...patch } }))
+  const dropVisitEdits = (keys: string[]) =>
+    setVisitEdits((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !keys.includes(k))))
+  const visitPrefill = React.useMemo<ScheduleJobPrefill | undefined>(() => {
+    if (!visitToSchedule) return undefined
+    const edit = visitEdits[visitToSchedule.key] ?? {}
+    const scheduledDate = edit.date ?? visitDispatchDate(visitToSchedule)
+    return {
+      jobType: visitToSchedule.jobType,
+      scheduledDate,
+      orderNo: visitToSchedule.orderNo,
+      customerId: visitToSchedule.customerId,
+      // Saturday is never pre-filled — the admin picks who's working —
+      // unless they already picked someone inline.
+      technician: edit.primary !== undefined ? edit.primary : isSaturday(scheduledDate) ? undefined : visitToSchedule.technician,
+      technician2: edit.primary !== undefined ? edit.secondary : isSaturday(scheduledDate) ? undefined : visitToSchedule.technician2,
+      vehicle: edit.vehicle,
+      secondaryAddress: visitToSchedule.address,
+      notes: [visitToSchedule.name, edit.detail ?? visitToSchedule.detail].filter(Boolean).join(" — "),
+      filterCodes: visitToSchedule.filterCodes,
+    }
+  }, [visitToSchedule, visitDispatchDate, visitEdits])
   // The new job takes over the visit (the database's own sync would usually
   // link it too; this makes sure it's exactly this visit).
   const linkScheduledVisit = async (visit: UnscheduledVisit, job: ScheduleJob) => {
@@ -849,7 +880,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     >
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-          <span className="font-medium">{t(job.jobType)}</span>
+          {isErrand(job) && <ErrandBadge t={t} />}
+          <span className="font-medium">{jobLabel(job, t)}</span>
           <JobSourceBadge source={job.source} t={t} />
           {isDraftJob(job) && <DraftBadge t={t} />}
           {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
@@ -877,7 +909,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             {t("editFilters")}: <span className="font-medium text-foreground">{job.filterCodes}</span>
           </p>
         )}
-        {job.notes && <p className="text-xs wrap-break-word">{job.notes}</p>}
+        {/* An errand's notes are its description, already shown as its label. */}
+        {job.notes && !isErrand(job) && <p className="text-xs wrap-break-word">{job.notes}</p>}
         <p className="text-xs text-muted-foreground truncate">
           {formatTechnicians(job.technician, job.technician2, t("and"))}
           {stopNumberByJobId.has(job.id) && (
@@ -1102,7 +1135,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 className="whitespace-nowrap"
                 display={
                   <span className="inline-flex items-center gap-1.5">
-                    {t(job.jobType)}
+                    {isErrand(job) && <ErrandBadge t={t} />}
+                    {jobLabel(job, t)}
                     <JobSourceBadge source={job.source} t={t} />
                     {isDraftJob(job) && <DraftBadge t={t} />}
                     {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
@@ -1223,37 +1257,76 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       return next
     })
   const toggleAllVisits = () => setSelectedVisitKeys(allVisitsSelected ? new Set() : new Set(visibleVisits.map((v) => v.key)))
-  // One click: an active job for every visit on screen, no dialog — each on
-  // its own dispatch date (carried Friday visits on the day being viewed,
-  // Friday visits on Saturday), with its planned technician, else the
-  // customer's assigned technician, else the least-busy field technician
-  // that day, plus a matching vehicle (createDispatchAssigner). Technician
-  // logins are linked, so each job shows on that technician's own widget.
-  const approveAllAndDispatch = async () => {
-    const targets = visibleVisits
+  // Bulk Create (ticked visits) and Approve All & Dispatch (every visit on
+  // screen) both open VisitDispatchReview: each visit as the job it will
+  // become, editable, created only on confirm. The proposal is the admin's
+  // held inline edits, else — for Bulk Create — the visit's planned
+  // technician (none on a Saturday), or — for Approve All & Dispatch — the
+  // automatic assignment (createDispatchAssigner: planned → Liteace for
+  // installs → same place → customer's → nearby → least busy; Saturdays
+  // unassigned). Each job is dated its visit's dispatch date (carried Friday
+  // visits on the day being viewed, Friday visits on Saturday) unless changed.
+  const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
+  const openVisitReview = (mode: "bulk" | "dispatch", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
-    setDispatching({ done: 0, total: targets.length })
+    const assigner = mode === "dispatch" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users) }) : undefined
+    const proposals: Record<string, VisitDraft> = {}
+    for (const v of targets) {
+      const edit = visitEdits[v.key] ?? {}
+      const date = edit.date ?? visitDispatchDate(v)
+      let pair = { primary: "", secondary: "" }
+      let vehicle = ""
+      let technicianChosen = false
+      if (edit.primary !== undefined) {
+        pair = normalizeTechnicianPair(edit.primary, edit.secondary ?? "")
+        technicianChosen = isAssignedTechnician(pair.primary)
+      } else if (assigner) {
+        const a = assigner({ ...v, detail: edit.detail ?? v.detail }, date)
+        pair = a.pair
+        vehicle = a.vehicle
+      } else if (!isSaturday(date)) {
+        pair = normalizeTechnicianPair(v.technician, v.technician2)
+      }
+      const crew = crewOfTechnician(pair.primary)
+      proposals[v.key] = {
+        date,
+        primary: pair.primary,
+        secondary: pair.secondary,
+        vehicle: edit.vehicle ?? (vehicle || crew?.vehicle || ""),
+        detail: edit.detail ?? v.detail ?? "",
+        remarks: "",
+        technicianChosen,
+      }
+    }
+    setVisitReview({ mode, visits: targets, proposals })
+  }
+  const createFromReview = async (items: { visit: UnscheduledVisit; draft: VisitDraft }[]) => {
+    const byKey = new Map(items.map((i) => [i.visit.key, i]))
     const accounts = assignmentAccounts(users)
-    const assigner = createDispatchAssigner({ jobs, customers, accounts })
-    const bySource: Record<AssignmentSource, number> = { planned: 0, installation: 0, location: 0, customer: 0, nearby: 0, balanced: 0, none: 0, saturday: 0 }
-    const { created, failed, awaitingApproval } = await createJobsFromVisits(targets, {
-      dateFor: visitDispatchDate,
-      assignFor: (visit, date) => {
-        const assignment = assigner(visit, date)
-        bySource[assignment.source] += 1
-        return assignment
-      },
-      accounts,
-      onProgress: (done) => setDispatching((p) => (p ? { ...p, done } : p)),
-    })
+    setDispatching({ done: 0, total: items.length })
+    const { created, failed, awaitingApproval } = await createJobsFromVisits(
+      items.map(({ visit, draft }) => ({ ...visit, detail: draft.detail || undefined })),
+      {
+        dateFor: (v) => byKey.get(v.key)!.draft.date,
+        createDateFor: (v) => visitDispatchDate(byKey.get(v.key)!.visit),
+        assignFor: (v) => {
+          const d = byKey.get(v.key)!.draft
+          return { pair: { primary: d.primary, secondary: d.secondary }, vehicle: d.vehicle }
+        },
+        activateFor: (v) => {
+          const d = byKey.get(v.key)!.draft
+          return d.technicianChosen && isAssignedTechnician(d.primary)
+        },
+        remarksFor: (v) => byKey.get(v.key)!.draft.remarks,
+        accounts,
+        onProgress: (done) => setDispatching((p) => (p ? { ...p, done } : p)),
+      }
+    )
     for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
     setDispatching(null)
     setSelectedVisitKeys(new Set())
-    if (created) {
-      toast.success(t("dispatchAllDone", { count: created }), {
-        description: t("dispatchAllSources", { planned: bySource.planned, installation: bySource.installation, location: bySource.location, customer: bySource.customer, nearby: bySource.nearby, balanced: bySource.balanced, none: bySource.none, saturday: bySource.saturday }),
-      })
-    }
+    dropVisitEdits(items.map((i) => i.visit.key))
+    if (created) toast.success(t("dispatchAllDone", { count: created }))
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
     if (awaitingApproval) toast.warning(t("saturdayJobsAwaiting", { count: awaitingApproval }))
   }
@@ -1286,7 +1359,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             variant="outline"
             className="ml-auto h-7 gap-1.5 text-xs"
             disabled={selectedVisits.length === 0 || !!dispatching}
-            onClick={() => setBulkOpen(true)}
+            onClick={() => openVisitReview("bulk", selectedVisits)}
             data-testid="unscheduled-bulk-create"
           >
             <CheckCheck className="h-3.5 w-3.5" /> {t("bulkCreateJobs", { count: selectedVisits.length })}
@@ -1295,7 +1368,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             size="sm"
             className="h-7 gap-1.5 text-xs"
             disabled={visibleVisits.length === 0 || !!dispatching}
-            onClick={approveAllAndDispatch}
+            onClick={() => openVisitReview("dispatch", visibleVisits)}
             title={t("dispatchAllHint")}
             data-testid="unscheduled-dispatch-all"
           >
@@ -1318,7 +1391,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
               <thead>
                 <tr className="bg-muted text-left text-xs text-muted-foreground">
                   <th className="w-10 px-3 py-2" />
-                  {(["tableDate", "tableJobType", "tableCustomerOrder", "tableAddress", "tablePlannedTechnician", "tableDetails"] as const).map((key) => (
+                  {(["tableDate", "tableJobType", "tableCustomerOrder", "tableAddress", "tablePlannedTechnician", "tableVehicle", "tableDetails"] as const).map((key) => (
                     <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
                       {t(key)}
                     </th>
@@ -1327,10 +1400,33 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 </tr>
               </thead>
               <tbody>
-                {visibleVisits.map((v) => (
-                  <tr key={v.key} data-testid="unscheduled-row" className="border-t align-top">
-                    <td className="px-3 py-2">{visitCheckbox(v)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.date)}</td>
+                {visibleVisits.map((v) => {
+                  // A ticked row is edited in place; the edits are held (see
+                  // visitEdits) until a job is created from it.
+                  const editing = isAdmin && selectedVisitKeys.has(v.key)
+                  const edit = visitEdits[v.key] ?? {}
+                  const date = edit.date ?? visitDispatchDate(v)
+                  const primary = edit.primary !== undefined ? edit.primary : v.technician
+                  const secondary = edit.primary !== undefined ? (edit.secondary ?? "") : v.technician2
+                  return (
+                  <tr key={v.key} data-testid="unscheduled-row" data-editing={editing || undefined} className={cn("border-t align-top", editing && "bg-primary/5")}>
+                    <td className="px-3 py-2">
+                      {visitCheckbox(v)}
+                      {visitEdits[v.key] && <div className="mt-1 text-[10px] font-medium text-primary">{t("monthReviewEditedBadge")}</div>}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {editing ? (
+                        <InlineDateCell
+                          value={date}
+                          onCommit={(next) =>
+                            next &&
+                            editVisit(v, isSaturday(next) && !isSaturday(date) ? { date: next, primary: "", secondary: "", vehicle: "" } : { date: next })
+                          }
+                        />
+                      ) : (
+                        formatDate(edit.date ?? v.date)
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {t(v.jobType)}
                       {v.date < range.start && (
@@ -1354,11 +1450,51 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                       <div className="text-xs text-muted-foreground">{v.orderNo}</div>
                     </td>
                     <td className="max-w-[18rem] px-3 py-2 text-xs">{v.address || "—"}</td>
-                    <td className="px-3 py-2">{isAssignedTechnician(v.technician) ? formatTechnicians(v.technician, v.technician2, t("and")) : "—"}</td>
-                    <td className="max-w-[16rem] px-3 py-2 text-xs">{v.detail || "—"}</td>
+                    <td className="px-3 py-2">
+                      {editing ? (
+                        <InlineTechnicianPairCell
+                          primary={primary}
+                          secondary={secondary}
+                          onCommit={(p) => {
+                            const pair = normalizeTechnicianPair(p.primary ?? primary, p.secondary ?? secondary ?? "")
+                            editVisit(v, { primary: pair.primary, secondary: pair.secondary })
+                          }}
+                        />
+                      ) : isAssignedTechnician(primary) ? (
+                        formatTechnicians(primary, secondary || undefined, t("and"))
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {editing ? (
+                        <InlineComboboxCell
+                          value={edit.vehicle ?? ""}
+                          options={VEHICLE_OPTIONS}
+                          placeholder={t("selectVehicle")}
+                          commitOnSelect
+                          showAllOnExactMatch
+                          onCommit={(next) => {
+                            const vehicle = next.trim()
+                            const crew = crewForVehicle(vehicle)
+                            editVisit(v, { vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary } : {}) })
+                          }}
+                        />
+                      ) : (
+                        edit.vehicle || "—"
+                      )}
+                    </td>
+                    <td className="max-w-[16rem] px-3 py-2 text-xs">
+                      {editing ? (
+                        <InlineTextAreaCell value={edit.detail ?? v.detail} className="w-56" onCommit={(next) => editVisit(v, { detail: next })} />
+                      ) : (
+                        (edit.detail ?? v.detail) || "—"
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right">{createJobButton(v)}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1412,15 +1548,31 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // Drafts in view: approve them all at once, or ask the automation for more.
   // (Saturday drafts are left to "Assign Saturday Coverage".)
   const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && !isSaturday(j.scheduledDate))
+  // A whole calendar month in view (e.g. the "This Month" chip): the button
+  // becomes "Approve All for Month" and covers every draft dated in that
+  // month — Saturday ones too, even without a technician (they go live as
+  // "needs technician"). It opens MonthApprovalReview: every one of those
+  // drafts in an editable table, edits staged until "Confirm Approve All"
+  // saves them with the approval. (A job an admin created by hand that awaits
+  // approval isn't listed here at all — see todaysJobs — and keeps its own
+  // approval on the Schedule page.)
+  const isMonthRange = range.start.endsWith("-01") && range.end === format(endOfMonth(parseISO(range.start)), "yyyy-MM-dd")
+  const monthDraftJobs = isMonthRange
+    ? todaysJobs.filter((j) => j.status === "pending_approval" && j.scheduledDate >= range.start && j.scheduledDate <= range.end)
+    : []
+  const [confirmMonthOpen, setConfirmMonthOpen] = React.useState(false)
+  const approveTargets = isMonthRange ? monthDraftJobs : draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
   const [generatingDrafts, setGeneratingDrafts] = React.useState(false)
-  const approveAllDrafts = async () => {
+  // Approves the drafts in view — or, from the month review, the given jobs
+  // with the edits made there saved in the same write.
+  const approveAllDrafts = async (items: { job: ScheduleJob; patch: JobPatch }[] = approveTargets.map((job) => ({ job, patch: {} }))) => {
     setApprovingDrafts(true)
     let approved = 0
     const failed: string[] = []
-    for (const job of draftJobs) {
+    for (const { job, patch } of items) {
       try {
-        await updateScheduleJob(job.id, { status: "pending" })
+        await updateScheduleJob(job.id, { ...patch, status: "pending" })
         approved += 1
       } catch (error) {
         failed.push(`${job.orderNo ?? job.id}: ${error instanceof Error ? error.message : String(error)}`)
@@ -1459,7 +1611,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 key={saturday}
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
-                disabled={count === 0}
                 onClick={() => setCoverageSaturday(saturday)}
                 data-testid="saturday-coverage-open"
               >
@@ -1605,12 +1756,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <Button
           size="sm"
           className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 @xs/card-header:flex-1 @sm/card-header:flex-none"
-          disabled={approvingDrafts || draftJobs.length === 0}
-          onClick={approveAllDrafts}
+          disabled={approvingDrafts || approveTargets.length === 0}
+          onClick={isMonthRange ? () => setConfirmMonthOpen(true) : () => approveAllDrafts()}
           data-testid="drafts-approve-all"
         >
           {approvingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {t("draftsApproveAll", { count: draftJobs.length })}
+          {isMonthRange ? t("draftsApproveMonth", { count: monthDraftJobs.length }) : t("draftsApproveAll", { count: draftJobs.length })}
         </Button>
       )}
       {isAdmin && (
@@ -1773,6 +1924,23 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </DialogContent>
       </Dialog>
 
+      <MonthApprovalReview
+        open={confirmMonthOpen}
+        onOpenChange={setConfirmMonthOpen}
+        jobs={monthDraftJobs}
+        monthLabel={formatDate(range.start, "MMMM yyyy")}
+        customerLabel={(job) => {
+          const c = job.customerId ? customerById.get(job.customerId) : undefined
+          return (c ? c.companyName || c.fullName : "") || (job.notes ?? "").split(" — ")[0]
+        }}
+        dateChange={dateChange}
+        technicianChange={technicianChange}
+        vehiclePatch={(vehicle) => {
+          const crew = crewForVehicle(vehicle)
+          return { vehicle, ...(crew ? technicianInput(crew.primary, crew.secondary) : {}) }
+        }}
+        onConfirm={(items) => approveAllDrafts(items)}
+      />
       <ConfirmDialog
         open={confirmComplete}
         onOpenChange={setConfirmComplete}
@@ -1840,13 +2008,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         />
       )}
       {isAdmin && (
-        <BulkCreateJobsDialog
-          key={bulkOpen ? "open" : "closed"}
-          open={bulkOpen}
-          onOpenChange={setBulkOpen}
-          visits={selectedVisits}
-          ownDateFor={visitDispatchDate}
-          onDone={() => setSelectedVisitKeys(new Set())}
+        <VisitDispatchReview
+          open={!!visitReview}
+          onOpenChange={(o) => !o && setVisitReview(null)}
+          title={t(visitReview?.mode === "dispatch" ? "visitReviewTitleDispatch" : "visitReviewTitleBulk", { count: visitReview?.visits.length ?? 0 })}
+          visits={visitReview?.visits ?? []}
+          initial={(v) => visitReview!.proposals[v.key]}
+          onConfirm={createFromReview}
         />
       )}
       <ScheduleFormDialog
@@ -1854,7 +2022,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         onOpenChange={(o) => !o && setVisitToSchedule(undefined)}
         defaultDate={visitToSchedule?.date ?? date}
         prefill={visitPrefill}
-        onCreated={(job) => visitToSchedule && linkScheduledVisit(visitToSchedule, job)}
+        onCreated={(job) => {
+          if (!visitToSchedule) return
+          linkScheduledVisit(visitToSchedule, job)
+          dropVisitEdits([visitToSchedule.key])
+        }}
       />
       <MarkJobDoneDialog key={markingDone?.id ?? "none"} job={markingDone} onOpenChange={(o) => !o && setMarkingDone(undefined)} />
     </Card>

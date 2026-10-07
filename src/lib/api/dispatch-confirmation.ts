@@ -66,10 +66,22 @@ export async function listDispatchNotifications(): Promise<DispatchNotificationR
 // from Resend's own response, or 'skipped_no_provider' if RESEND_API_KEY
 // isn't configured yet. SMS was fully removed as a notification channel —
 // see dispatch-notifications-server.ts's own note.
+// The visit is closer than CONFIRMATION_LEAD_DAYS: the route wants the
+// admin's choice (move the date, or send anyway) before it sends.
+export class ShortNoticeError extends Error {
+  constructor(
+    readonly scheduledDate: string,
+    readonly earliestDate: string
+  ) {
+    super("short_notice")
+  }
+}
+
 export async function approveDispatchItem(input: {
   entityType: DispatchEntityType
   entityId: string
   notifyEmail: string
+  leadTime?: "move"
 }): Promise<{ token: string; confirmUrl: string; email?: DispatchChannelResult } | null> {
   const response = await fetch("/api/dispatch/approve", {
     method: "POST",
@@ -78,10 +90,12 @@ export async function approveDispatchItem(input: {
       entityType: input.entityType,
       entityId: input.entityId,
       notifyEmail: input.notifyEmail,
+      leadTime: input.leadTime,
     }),
   })
   if (response.status === 409) return null
   const data = await response.json()
+  if (response.status === 422 && data?.code === "short_notice") throw new ShortNoticeError(data.scheduledDate, data.earliestDate)
   if (!response.ok) throw new Error(data?.error ?? "Failed to approve this dispatch item")
   return data
 }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDateTime } from "@/lib/utils"
+import { cn, formatDate, formatDateTime } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
 // Otherwise a pure history/view — no add/delete/approve affordances anywhere
@@ -192,8 +192,12 @@ export function getInventoryListExpandedColumns({
   onReject,
   onMap,
   density = "full",
+  showDate = false,
 }: {
   density?: InventoryListDensity
+  // A leading Date column — for lists that span several days (the
+  // "Approve all dates" review of every pending item).
+  showDate?: boolean
   onEdit?: (movement: StockMovementRow) => void
   // Admin-only approval actions on pending rows (see ApprovalActionsCell);
   // omitted, there's no Approve column.
@@ -207,8 +211,12 @@ export function getInventoryListExpandedColumns({
       {onEdit && <EditButtonCell movement={movement} onEdit={onEdit} className="h-7 w-7 p-0" />}
     </div>
   )
+  const dateColumns: ColumnDef<StockMovementRow, unknown>[] = showDate
+    ? [{ accessorKey: "date", header: () => <ColumnHeader tKey="date" ns="inventory" />, cell: ({ row }) => <span className="whitespace-nowrap">{formatDate(row.original.date)}</span> }]
+    : []
   if (density === "compact") {
     return [
+      ...dateColumns,
       { accessorKey: "productName", header: () => <ColumnHeader tKey="item" ns="inventory" />, cell: ({ row }) => <CompactItemCell row={row.original} /> },
       {
         accessorKey: "relatedJobOrderNo",
@@ -224,6 +232,7 @@ export function getInventoryListExpandedColumns({
   }
 
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
+    ...dateColumns,
     {
       accessorKey: "productName",
       header: () => <ColumnHeader tKey="item" ns="inventory" />,

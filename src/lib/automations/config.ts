@@ -9,10 +9,14 @@ import type { AutomationId } from "./types"
 export const AUTOMATION_DEFAULTS: Record<AutomationId, boolean> = {
   extendCollectionSchedule: true,
   extendFilterChangeSchedule: true,
-  generateFilterChangeJobs: true,
+  // Retired from the daily cron: Filter Change jobs now come only from the
+  // CP-derived Filter Change records (generateDraftJobs). Off unless an admin
+  // switches it on in Settings > Automations to run it by hand.
+  generateFilterChangeJobs: false,
   filterChangeInventoryDeduction: true,
   sendScheduleReminders: true,
   generateDraftJobs: true,
+  redateShortNoticeDrafts: true,
 }
 
 // overrides is company_settings.automation_settings as-is (a plain jsonb

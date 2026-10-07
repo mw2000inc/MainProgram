@@ -28,6 +28,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import { SendByLine } from "@/components/dispatch/send-by-line"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
@@ -356,8 +357,9 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 
 // Additive, independent of statusFilter above — an admin can combine "only
 // items due in the next 2 days" with any status bucket (e.g. "which of the
-// upcoming ones are still unapproved"). "next2Days" is the DEFAULT (see its
-// own useState below) — a rolling window (today through today+2 inclusive,
+// upcoming ones are still unapproved"). "upcoming" (today onward) is the
+// DEFAULT, so Drafts are visible well before their confirmation email's
+// send-by date (visit − 2 days); "next2Days" is a rolling window (today through today+2 inclusive,
 // 3 calendar days) meant to keep this queue's default view scoped to the
 // near-term dispatch horizon rather than every pending item ever created,
 // including "overdue" (anything before today) as its own explicit bucket
@@ -365,12 +367,16 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 // very differently from one due tomorrow, and an admin should be able to
 // isolate exactly that backlog. "all" remains available for the full,
 // unfiltered history.
-export type DateRangeFilter = "all" | "next2Days" | "overdue"
+export type DateRangeFilter = "upcoming" | "all" | "next2Days" | "overdue"
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
   if (filter === "all") return true
   const today = todayIso()
   if (filter === "overdue") return scheduledDate < today
+  // Today onward — every Draft still ahead, so it can be approved (and its
+  // confirmation email sent) before its send-by date; the stale backlog
+  // stays under "overdue".
+  if (filter === "upcoming") return scheduledDate >= today
   return scheduledDate >= today && scheduledDate <= twoDaysFromNowIso()
 }
 
@@ -448,7 +454,7 @@ export function PendingApprovalsPanel({
   // actually due soon, not scroll past months of backlog first. Still just
   // as switchable as before (see the Select below); "all"/"overdue" are one
   // click away.
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("next2Days")
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("upcoming")
   // Per-viewer, not persisted. Bulk-approves the checked rows as-is (each
   // one's own existing customer email/fields — no shared editing step,
   // deliberately simpler than ApprovalDetailDialog's own per-row edit form,
@@ -598,7 +604,7 @@ export function PendingApprovalsPanel({
         skippedNoContact.push(row)
         continue
       }
-      const result = await approve.mutateAsync({ entityType: row.entityType, entityId: row.entityId, notifyEmail: email })
+      const result = await approve.mutateAsync({ entityType: row.entityType, entityId: row.entityId, notifyEmail: email, label: row.customerName || row.orderNumber })
       if (result) approved.push(row)
     }
     setBulkSummary({ approved, skippedNoContact, skippedAlreadySent })
@@ -633,16 +639,21 @@ export function PendingApprovalsPanel({
         // (Approve/Reject/Reschedule inside ApprovalDetailDialog are all
         // gated the same way) — a technician sees the same plain read-only
         // date the whole table showed before this column became editable.
-        cell: ({ row }) =>
-          isAdmin ? (
-            <DailyReportDateButton
-              value={row.original.scheduledDate}
-              onChange={(date) => updateScheduledDate(row.original, date)}
-              className="h-7 px-2 text-xs"
-            />
-          ) : (
-            formatDate(row.original.scheduledDate)
-          ),
+        cell: ({ row }) => (
+          <div className="space-y-0.5">
+            {isAdmin ? (
+              <DailyReportDateButton
+                value={row.original.scheduledDate}
+                onChange={(date) => updateScheduledDate(row.original, date)}
+                className="h-7 px-2 text-xs"
+              />
+            ) : (
+              formatDate(row.original.scheduledDate)
+            )}
+            {/* Only a Draft still has its confirmation email to send. */}
+            {row.original.dispatchStatus === "Draft" && <SendByLine visitDate={row.original.scheduledDate} className="whitespace-nowrap" />}
+          </div>
+        ),
       },
       { accessorKey: "moduleKey", header: t("jobTypeColumn"), cell: ({ row }) => t(row.original.moduleKey) },
       { accessorKey: "orderNumber", header: t("orderNoColumn"), cell: ({ row }) => row.original.orderNumber || "—" },
@@ -737,6 +748,7 @@ export function PendingApprovalsPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="upcoming">{t("upcomingFilter")}</SelectItem>
               <SelectItem value="next2Days">{t("next2DaysFilter")}</SelectItem>
               <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
               <SelectItem value="overdue">{t("overdueFilter")}</SelectItem>

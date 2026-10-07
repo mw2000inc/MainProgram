@@ -13,6 +13,12 @@ import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 // dispatch-confirmed, so the jobs don't wait for a second approval — except
 // a job dated a Saturday, which stays 'pending_approval' until an admin
 // confirms Saturday coverage (requiresSaturdayApproval).
+//
+// A job whose date was changed from the visit's own (createDateFor) is
+// created on the visit's own date and then moved, so the database's
+// job→record sync (sync_schedule_job_changes_to_module, on a date change)
+// re-dates the Filter Change / install / repair / collection record too —
+// the record and its job never disagree.
 export async function createJobsFromVisits(
   visits: UnscheduledVisit[],
   opts: {
@@ -28,6 +34,12 @@ export async function createJobsFromVisits(
     // Make the jobs active even on a Saturday — set when an admin has just
     // explicitly assigned that Saturday's technicians.
     activate?: boolean
+    // The same, per visit (an admin picked this visit's technician by hand).
+    activateFor?: (visit: UnscheduledVisit) => boolean
+    // The visit's own date, when dateFor may differ from it (see above).
+    createDateFor?: (visit: UnscheduledVisit) => string
+    // Remarks for the new job.
+    remarksFor?: (visit: UnscheduledVisit) => string | undefined
   }
 ): Promise<{ created: number; failed: string[]; awaitingApproval: number }> {
   let created = 0
@@ -35,13 +47,14 @@ export async function createJobsFromVisits(
   const failed: string[] = []
   for (const visit of visits) {
     const scheduledDate = opts.dateFor(visit)
+    const createDate = opts.createDateFor?.(visit) ?? scheduledDate
     const assigned = opts.assignFor?.(visit, scheduledDate)
     const pair = assigned?.pair ?? opts.pairFor?.(visit) ?? { primary: "", secondary: "" }
     try {
       const job = await createScheduleJob({
         jobType: visit.jobType,
         status: "pending_approval",
-        scheduledDate,
+        scheduledDate: createDate,
         orderNo: visit.orderNo,
         customerId: visit.customerId,
         technician: pair.primary,
@@ -50,11 +63,18 @@ export async function createJobsFromVisits(
         vehicle: assigned?.vehicle ?? opts.vehicle ?? "",
         secondaryAddress: visit.address,
         notes: [visit.name, visit.detail].filter(Boolean).join(" — "),
+        remarks: opts.remarksFor?.(visit) || undefined,
         filterCodes: visit.filterCodes,
       })
       await linkVisitToScheduleJob(visit.table, visit.recordId, job.id)
-      if (requiresSaturdayApproval(scheduledDate) && !opts.activate) awaitingApproval += 1
-      else await updateScheduleJob(job.id, { status: "pending" })
+      const active = !requiresSaturdayApproval(scheduledDate) || opts.activate || opts.activateFor?.(visit)
+      if (!active) awaitingApproval += 1
+      if (createDate !== scheduledDate || active) {
+        await updateScheduleJob(job.id, {
+          ...(createDate !== scheduledDate ? { scheduledDate } : {}),
+          ...(active ? { status: "pending" as const } : {}),
+        })
+      }
       created += 1
     } catch (error) {
       failed.push(`${visit.orderNo}: ${error instanceof Error ? error.message : String(error)}`)

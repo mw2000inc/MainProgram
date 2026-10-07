@@ -1,9 +1,11 @@
 "use client"
 
 import * as React from "react"
+import { Plus } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { SaturdayErrandDialog } from "@/components/schedule/saturday-errand-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -89,10 +91,21 @@ export function SaturdayCoverageDialog({
   const [working, setWorking] = React.useState<string[]>([])
   const [choice, setChoice] = React.useState<Record<string, string>>({})
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null)
+  // "+ Add Errand" opens the errand form for this Saturday on top of this
+  // dialog; on save it refreshes the schedule, so the errand joins the list
+  // below right away (unassigned) or lands on its technician's Saturday.
+  const [errandOpen, setErrandOpen] = React.useState(false)
 
   const rows = React.useMemo<Row[]>(
     () => [
-      ...jobs.map((job): Row => ({ key: `job:${job.id}`, kind: "job", job, label: job.orderNo || t(job.jobType), address: addressOfJob(job) })),
+      // An errand (type "other") has no order number; its description is in notes.
+      ...jobs.map((job): Row => ({
+        key: `job:${job.id}`,
+        kind: "job",
+        job,
+        label: job.orderNo || (job.jobType === "other" && job.notes?.trim() ? job.notes.trim() : t(job.jobType)),
+        address: addressOfJob(job),
+      })),
       ...visits.map((visit): Row => ({ key: `visit:${visit.key}`, kind: "visit", visit, label: visit.orderNo, address: visit.address })),
     ],
     [jobs, visits, addressOfJob, t]
@@ -163,15 +176,37 @@ export function SaturdayCoverageDialog({
     .join(" ")
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => !progress && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" data-testid="saturday-coverage">
+      <DialogContent
+        className="sm:max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        data-testid="saturday-coverage"
+        // The errand form (and its dropdowns) open on top of this dialog as
+        // React-tree siblings, so a press inside them counts as "outside"
+        // here — same guard as the expanded Daily Report panels: a press
+        // that started inside another dialog or a dropdown list never
+        // dismisses this one.
+        onPointerDownOutside={(e) => {
+          const target = e.detail.originalEvent.target
+          if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"], [role="listbox"], [data-slot="popover-content"]')) e.preventDefault()
+        }}
+        onInteractOutside={(e) => {
+          const target = e.detail.originalEvent.target
+          if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"], [role="listbox"], [data-slot="popover-content"]')) e.preventDefault()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("coverageTitle", { date: formatDate(saturday) })}</DialogTitle>
           <DialogDescription>{t("coverageDescription")}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div>
-            <p className="mb-2 text-sm font-medium">{t("coverageWhoIsWorking")}</p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{t("coverageWhoIsWorking")}</p>
+              <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={!!progress} onClick={() => setErrandOpen(true)} data-testid="coverage-add-errand">
+                <Plus className="h-3.5 w-3.5" /> {t("errandAdd")}
+              </Button>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {technicians.map((name) => (
                 <label key={name} className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
@@ -199,7 +234,7 @@ export function SaturdayCoverageDialog({
                     <tr key={row.key} className="border-t align-top" data-testid="coverage-row">
                       <td className="px-3 py-1.5">
                         <div className="font-medium">{row.label}</div>
-                        <div className="text-xs text-muted-foreground">{row.kind === "job" ? t(row.job.jobType) : t(row.visit.jobType)}</div>
+                        <div className="text-xs text-muted-foreground">{row.kind === "job" ? (row.job.jobType === "other" ? t("errandBadge") : t(row.job.jobType)) : t(row.visit.jobType)}</div>
                       </td>
                       <td className="max-w-[16rem] px-3 py-1.5 text-xs">{row.address || "—"}</td>
                       <td className="px-3 py-1.5">
@@ -241,5 +276,7 @@ export function SaturdayCoverageDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <SaturdayErrandDialog open={errandOpen} onOpenChange={setErrandOpen} defaultDate={saturday} />
+    </>
   )
 }

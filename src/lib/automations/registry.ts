@@ -7,6 +7,7 @@ import { runGenerateFilterChangeJobs } from "./jobs/generate-filter-change-jobs"
 import { runFilterChangeInventoryDeduction } from "./jobs/filter-change-inventory-deduction"
 import { runSendScheduleReminders } from "./jobs/send-schedule-reminders"
 import { runGenerateDraftJobs } from "./jobs/generate-draft-jobs"
+import { runRedateShortNoticeDrafts } from "./jobs/redate-short-notice-drafts"
 
 // One entry per automated background task in this app — the single place
 // that maps an AutomationId to what it actually does. Every existing cron
@@ -32,8 +33,8 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
   },
   generateFilterChangeJobs: {
     id: "generateFilterChangeJobs",
-    label: "Generate Due Filter Change Jobs",
-    description: "Creates a Schedule job for every customer/CP-System-linked order whose next filter change is now due.",
+    label: "Generate Due Filter Change Jobs (legacy)",
+    description: "Retired from the daily cron — Filter Change jobs now come from the CP-derived Filter Change records (Generate Draft Schedule Jobs). Computes its own due dates (flat Settings interval, or CP intervals) and can re-date a Filter Change record; kept off, for manual use only.",
     defaultEnabled: AUTOMATION_DEFAULTS.generateFilterChangeJobs,
     run: runGenerateFilterChangeJobs,
   },
@@ -57,6 +58,13 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
     description: "Pre-schedules the next week's confirmed visits as auto-assigned draft jobs (technician, vehicle, login) for an admin to review and approve.",
     defaultEnabled: AUTOMATION_DEFAULTS.generateDraftJobs,
     run: runGenerateDraftJobs,
+  },
+  redateShortNoticeDrafts: {
+    id: "redateShortNoticeDrafts",
+    label: "Keep Drafts at 2 Days' Notice",
+    description: "Daily: moves unapproved Drafts due today or tomorrow (too late for a 2-day confirmation email) to the earliest date with full notice (Sunday → Monday). Past-dated Drafts are left for review. Never approves or sends anything.",
+    defaultEnabled: AUTOMATION_DEFAULTS.redateShortNoticeDrafts,
+    run: runRedateShortNoticeDrafts,
   },
 }
 

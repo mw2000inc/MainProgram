@@ -702,16 +702,30 @@ export function DailyReportSection() {
   const viewPending = React.useMemo(() => dayStockMovements.filter((m) => m.status === "pending"), [dayStockMovements])
   const viewApprovable = React.useMemo(() => viewPending.filter((m) => !!m.productId), [viewPending])
 
-  // Approve All Pending: every pending movement across all jobs and days,
-  // not just this day's — except one still waiting to be mapped to a stock
-  // item (an install model / hand-typed part), which needs the queue.
-  const [approveAllOpen, setApproveAllOpen] = React.useState(false)
+  // Approve all dates: every pending movement across all jobs and days, not
+  // just this day's — except one still waiting to be mapped to a stock item
+  // (an install model / hand-typed part), which needs the queue. Clicking it
+  // first switches the expanded view to a review of ALL those items (one row
+  // per item per job, with its date), and only "Confirm approve all"
+  // approves them. Left when the expanded view closes or the date changes.
+  const [reviewAllPending, setReviewAllPending] = React.useState(false)
+  const [reviewDate, setReviewDate] = React.useState(reportDate)
+  if (reviewDate !== reportDate) {
+    setReviewDate(reportDate)
+    setReviewAllPending(false)
+  }
   const allPending = React.useMemo(() => stockMovements.filter((m) => m.status === "pending"), [stockMovements])
   const approvablePending = React.useMemo(() => allPending.filter((m) => !!m.productId), [allPending])
   const approvableJobCount = React.useMemo(
     () => new Set(approvablePending.map((m) => m.filterChangePlanId ?? m.installPlanId ?? m.scheduleJobId ?? m.referenceNumber)).size,
     [approvablePending]
   )
+  // The review rows: oldest date first, one row per item per job.
+  const allPendingRows = React.useMemo(
+    () => groupInventoryListRows([...allPending].sort((a, b) => a.date.localeCompare(b.date))),
+    [allPending]
+  )
+  const reviewColumns = React.useMemo(() => getInventoryListExpandedColumns({ ...inventoryColumnOptions, showDate: true }), [inventoryColumnOptions])
 
   // Raw panel content, unwrapped — always wrapped in SortablePanel +
   // ResizablePanel below (see resizable()). Titles come from the admin's
@@ -838,9 +852,41 @@ export function DailyReportSection() {
         columns={inventoryListExpandedColumns}
         columnsForWidth={inventoryColumnsForWidth}
         data={dayStockMovementRows}
-        expandedData={dayStockItemTotals}
+        expandedData={reviewAllPending ? allPendingRows : dayStockItemTotals}
+        expandedColumns={reviewAllPending ? reviewColumns : undefined}
+        onExpandedChange={(open) => !open && setReviewAllPending(false)}
         expandedToolbar={
-          // Always there for an admin, next to search; disabled (with the
+          // Reviewing every pending item (see reviewAllPending): what will be
+          // approved, then Confirm or Cancel.
+          isAdmin && reviewAllPending ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-1.5 text-sm" data-testid="inventory-review-all-banner">
+              <span>
+                {tInventory("reviewAllBanner", { count: String(allPending.length), jobs: String(approvableJobCount) })}
+                {allPending.length > approvablePending.length &&
+                  " " + tInventory("approveAllPendingSkipped", { count: String(allPending.length - approvablePending.length) })}
+              </span>
+              <Button
+                className="h-8 gap-1.5"
+                disabled={approvablePending.length === 0 || approveAll.isPending}
+                onClick={async () => {
+                  if (!user) return
+                  await approveAll.mutateAsync({ ids: approvablePending.map((m) => m.id), approvedBy: user.id }).catch(() => {})
+                  setReviewAllPending(false)
+                }}
+                data-testid="inventory-confirm-approve-all"
+              >
+                <CheckCheck className="h-4 w-4" /> {tInventory("confirmApproveAll", { count: String(approvablePending.length) })}
+              </Button>
+              <Button variant="ghost" className="h-8" onClick={() => setReviewAllPending(false)} data-testid="inventory-cancel-review-all">
+                {tCommon("cancel")}
+              </Button>
+              {approvablePending.length === 0 && (
+                <Button variant="link" className="h-8 px-1" onClick={() => setInventoryQueueOpen(true)}>
+                  {tInventory("approveAllPendingOpenQueue")}
+                </Button>
+              )}
+            </div>
+          ) : // Always there for an admin, next to search; disabled (with the
           // reason on hover) when nothing in this list can be approved. The
           // hint sits on a wrapper because a disabled button gets no pointer
           // events, so its own title would never show.
@@ -858,33 +904,49 @@ export function DailyReportSection() {
               <Button className="h-9 gap-1.5" disabled={viewApprovable.length === 0} onClick={() => setApproveViewOpen(true)}>
                 <CheckCheck className="h-4 w-4" /> {tInventory("approveAllInView", { count: String(viewApprovable.length) })}
               </Button>
+              {/* Every pending item on every date, in one go (the header's
+                  button only covers the selected date). */}
+              {allPending.length > 0 && (
+                <Button variant="outline" className="ml-2 h-9 gap-1.5" onClick={() => setReviewAllPending(true)} data-testid="inventory-approve-all-dates">
+                  <CheckCheck className="h-4 w-4" /> {tInventory("approveAllDates", { count: String(allPending.length) })}
+                </Button>
+              )}
             </span>
           ) : undefined
         }
         headerActions={
-          // Shown whenever anything is pending — even if all of it still needs
-          // mapping, so the admin is pointed to the queue rather than the
-          // button silently not being there.
+          // "Approve all (N)" matches the table: only the selected date's
+          // pending items that can be approved (mapped to a stock item), and
+          // hidden when there are none — never a count of other days' items
+          // next to "No inventory movements for this date". Review shows the
+          // pending total across all dates and stays whenever anything is
+          // pending anywhere (even if it all still needs mapping), so the
+          // backlog is never hidden; the all-dates approve is in the
+          // expanded view's toolbar.
           isAdmin && allPending.length > 0 ? (
             <>
-              {/* Full labels when the panel is wide; "Approve all (N)" and an
-                  icon-only Review when it's narrow (container queries on the
-                  card header), so the header stays on one row. */}
-              <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveAllOpen(true)}>
-                <CheckCheck className="h-3.5 w-3.5" />
-                <span className="hidden @2xl/card-header:inline">{tInventory("approveAllPending", { count: String(allPending.length) })}</span>
-                <span className="@2xl/card-header:hidden">{tInventory("approveAllShort", { count: String(allPending.length) })}</span>
-              </Button>
+              {/* Full labels when the panel is wide, short ones when it's
+                  narrow (container queries on the card header), so the
+                  header stays on one row. */}
+              {viewApprovable.length > 0 && (
+                <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={() => setApproveViewOpen(true)} data-testid="inventory-approve-all">
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  <span className="hidden @2xl/card-header:inline">{tInventory("approveAllInView", { count: String(viewApprovable.length) })}</span>
+                  <span className="@2xl/card-header:hidden">{tInventory("approveAllShort", { count: String(viewApprovable.length) })}</span>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 gap-1 px-2"
                 title={tInventory("reviewQueueHint")}
-                aria-label={tInventory("reviewQueue")}
+                aria-label={tInventory("reviewQueueCount", { count: String(allPending.length) })}
                 onClick={() => setInventoryQueueOpen(true)}
+                data-testid="inventory-review-queue"
               >
                 <PackageCheck className="h-3.5 w-3.5" />
-                <span className="hidden @2xl/card-header:inline">{tInventory("reviewQueue")}</span>
+                <span className="hidden @2xl/card-header:inline">{tInventory("reviewQueueCount", { count: String(allPending.length) })}</span>
+                <span className="@2xl/card-header:hidden">{allPending.length}</span>
               </Button>
             </>
           ) : undefined
@@ -975,32 +1037,6 @@ export function DailyReportSection() {
                 if (!user) return
                 await approveAll.mutateAsync({ ids: viewApprovable.map((m) => m.id), approvedBy: user.id }).catch(() => {})
                 setApproveViewOpen(false)
-              }}
-            />
-            <ConfirmDialog
-              open={approveAllOpen}
-              onOpenChange={setApproveAllOpen}
-              title={tInventory("approveAllPendingTitle")}
-              description={
-                approvablePending.length === 0
-                  ? tInventory("approveAllPendingNoneMapped", { count: String(allPending.length) })
-                  : tInventory("approveAllPendingDescription", { count: String(approvablePending.length), jobs: String(approvableJobCount) }) +
-                    (allPending.length > approvablePending.length
-                      ? " " + tInventory("approveAllPendingSkipped", { count: String(allPending.length - approvablePending.length) })
-                      : "")
-              }
-              confirmLabel={approvablePending.length === 0 ? tInventory("approveAllPendingOpenQueue") : tInventory("approveAllPendingConfirm")}
-              destructive={false}
-              loading={approveAll.isPending}
-              onConfirm={async () => {
-                if (approvablePending.length === 0) {
-                  setApproveAllOpen(false)
-                  setInventoryQueueOpen(true)
-                  return
-                }
-                if (!user) return
-                await approveAll.mutateAsync({ ids: approvablePending.map((m) => m.id), approvedBy: user.id }).catch(() => {})
-                setApproveAllOpen(false)
               }}
             />
             <Button

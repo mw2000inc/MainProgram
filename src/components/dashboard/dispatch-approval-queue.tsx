@@ -35,6 +35,7 @@ import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate, safeFormat, todayIso, twoDaysFromNowIso } from "@/lib/utils"
+import { SendByLine } from "@/components/dispatch/send-by-line"
 import type { DispatchEntityType, DispatchChannelResult } from "@/lib/api/dispatch-confirmation"
 import type { Customer, DispatchStatus, SaleListEntry, Locale } from "@/lib/types"
 
@@ -259,8 +260,9 @@ function isSameCustomer(a: DispatchRow, b: { customerId?: string; orderNumber?: 
 const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Confirmation", "Draft", "Reschedule Requested"]
 
 // Additive date lens on top of the Draft/Reschedule Requested status split
-// below — "next2Days" (the DEFAULT, see its own useState below) narrows
-// both lists (and, since Approve All/the full-screen view both read from
+// below — "upcoming" (today onward) is the DEFAULT, so Drafts are visible
+// well before their confirmation email's send-by date (visit − 2 days);
+// "next2Days" narrows both lists (and, since Approve All/the full-screen view both read from
 // those same filtered lists, the bulk action and full-screen mode too) to
 // a rolling window: today through today+2 inclusive (3 calendar days) —
 // keeps this queue's default view scoped to what's actually dispatchable
@@ -271,12 +273,16 @@ const CONFLICT_STATUSES: DispatchStatus[] = ["Confirmed", "Pending Customer Conf
 // "keep these two panel files independent" precedent DISPATCH_STATUS_KEYS
 // above already follows (that panel's own DateRangeFilter mirrors this
 // exact same next2Days/all/overdue shape, just as a separate copy).
-type DateRangeFilter = "all" | "next2Days" | "overdue"
+type DateRangeFilter = "upcoming" | "all" | "next2Days" | "overdue"
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
   if (filter === "all") return true
   const today = todayIso()
   if (filter === "overdue") return scheduledDate < today
+  // Today onward — every Draft still ahead, so it can be approved (and its
+  // confirmation email sent) before its send-by date; the stale backlog
+  // stays under "overdue".
+  if (filter === "upcoming") return scheduledDate >= today
   return scheduledDate >= today && scheduledDate <= twoDaysFromNowIso()
 }
 
@@ -338,7 +344,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
   // Reschedule Requested item ever created — same reasoning and default as
   // pending-approvals-panel.tsx's own DateRangeFilter. "all"/"overdue" stay
   // one click away via the Select below.
-  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("next2Days")
+  const [dateRangeFilter, setDateRangeFilter] = React.useState<DateRangeFilter>("upcoming")
   // Gates handleApproveAll behind an explicit "yes, send these" — Approve
   // All used to fire the instant it was clicked; a misclick sent real
   // emails to every Draft item currently in view with no way back. Purely
@@ -435,6 +441,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
       entityType: item.entityType,
       entityId: item.entityId,
       notifyEmail,
+      label: item.recordLabel,
     })
     if (!result) return
     setLastResult(result)
@@ -569,6 +576,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="upcoming">{t("upcomingFilter")}</SelectItem>
                     <SelectItem value="next2Days">{t("next2DaysFilter")}</SelectItem>
                     <SelectItem value="all">{t("allDatesFilter")}</SelectItem>
                     <SelectItem value="overdue">{t("overdueFilter")}</SelectItem>
@@ -668,6 +676,7 @@ export function DispatchApprovalQueue({ open, onOpenChange }: { open: boolean; o
                         <span className="font-medium truncate">{item.recordLabel}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{t("scheduled", { date: formatDate(item.scheduledDate) })}</p>
+                      <SendByLine visitDate={item.scheduledDate} />
                     </div>
                   </div>
                   <div className="flex flex-wrap items-end gap-2">

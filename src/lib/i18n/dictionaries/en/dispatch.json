@@ -111,6 +111,7 @@
   "totalPendingApprovals": "Total Pending Approvals",
   "allStatuses": "All Status",
   "allDatesFilter": "All Dates",
+  "upcomingFilter": "Upcoming",
   "next2DaysFilter": "Next 2 Days",
   "overdueFilter": "Overdue",
   "approveAndSendConfirmation": "Approve & Send Confirmation",
@@ -128,5 +129,13 @@
   "downloadExcel": "Excel (.xlsx) — summary + a sheet per section",
   "downloadCsv": "CSV — all records",
   "downloadPdf": "PDF — all records",
-  "reportDownloaded": "Daily Report downloaded ({count} record(s))"
+  "reportDownloaded": "Daily Report downloaded ({count} record(s))",
+  "shortNoticeTitle": "Less than 2 days' notice",
+  "shortNoticeBody": "{label} is scheduled for {date}. Confirmation emails go out at least {days} days before a visit, so it can only be sent by moving the visit to {earliest}, the earliest date with full notice.",
+  "shortNoticeMove": "Move to {date} & send",
+  "shortNoticeSkip": "Not now",
+  "shortNoticeApplyToRest": "Use this choice for the rest of this batch",
+  "sendBy": "Send by {date}",
+  "sendByToday": "Send today ({date})",
+  "sendByOverdue": "Send-by date passed ({date}) — less than 2 days' notice"
 }

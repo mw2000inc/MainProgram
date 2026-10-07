@@ -15,6 +15,16 @@ import {
   buildScheduleSummary,
 } from "@/lib/dispatch-notifications-server"
 import { sendPushToCustomer } from "@/lib/push-notifications-server"
+import { businessToday, earliestFullNoticeDate, isShortNotice } from "@/lib/dispatch-lead-time"
+
+// Each module's visit-date columns: the rescheduled date (wins when set) and
+// the base date.
+const VISIT_DATE_COLUMNS: Record<DispatchEntityType, { pre: string; base: string }> = {
+  filter_change_plans: { pre: "pre_d", base: "plan_date" },
+  install_plans: { pre: "pre_installed_date", base: "input_date" },
+  collections: { pre: "pre_d", base: "collection_date" },
+  repair_plans: { pre: "pre_d", base: "issued_date" },
+}
 
 export const dynamic = "force-dynamic"
 
@@ -53,12 +63,36 @@ export async function POST(request: Request) {
     entityType?: DispatchEntityType
     entityId?: string
     notifyEmail?: string
+    leadTime?: "move"
   } | null
   const entityType = body?.entityType
   const entityId = body?.entityId
   const notifyEmail = body?.notifyEmail?.trim() || undefined
   if (!entityType || !entityId || !notifyEmail) {
     return NextResponse.json({ error: "entityType, entityId, and notifyEmail are required" }, { status: 400 })
+  }
+
+  // Lead time (strict): the confirmation email must reach the customer at
+  // least CONFIRMATION_LEAD_DAYS before the visit — it is never sent later.
+  // For a closer visit the only way to send is leadTime "move": the visit
+  // (Pre D) is re-dated to the earliest date with full notice, then sent.
+  // Without it the route answers 422 short_notice. Read and
+  // re-dated under the caller's own session, so RLS and the audit trail
+  // apply exactly as for an edit in the approval dialog (a still-Draft row
+  // isn't reset by the Pre D triggers).
+  const dateCols = VISIT_DATE_COLUMNS[entityType]
+  if (!dateCols) return NextResponse.json({ error: "Unknown entity type" }, { status: 400 })
+  const { data: planRow } = await supabase.from(entityType).select(`${dateCols.pre}, ${dateCols.base}`).eq("id", entityId).maybeSingle()
+  const plan = (planRow ?? {}) as Record<string, string | null>
+  const visitDate = plan[dateCols.pre] || plan[dateCols.base]
+  const today = businessToday()
+  if (visitDate && isShortNotice(visitDate, today)) {
+    const earliestDate = earliestFullNoticeDate(today)
+    if (body?.leadTime !== "move") {
+      return NextResponse.json({ code: "short_notice", scheduledDate: visitDate, earliestDate }, { status: 422 })
+    }
+    const { error: moveError } = await supabase.from(entityType).update({ [dateCols.pre]: earliestDate }).eq("id", entityId).eq("dispatch_status", "Draft")
+    if (moveError) return NextResponse.json({ error: moveError.message }, { status: 400 })
   }
 
   // Re-validates admin-ness itself (is_admin(), under the caller's own

@@ -141,5 +141,9 @@
   "approvedByAt": "{name} 승인 · {time}",
   "rejectedByAt": "{name} 반려 · {time}",
   "awaitingApproval": "승인 대기 중",
-  "recordedWithoutApproval": "직접 기록됨 (승인 단계 없음)"
+  "recordedWithoutApproval": "직접 기록됨 (승인 단계 없음)",
+  "approveAllDates": "전체 날짜 모두 승인 ({count})",
+  "reviewQueueCount": "검토 ({count})",
+  "reviewAllBanner": "모든 날짜의 대기 항목 {count}건을 검토 중입니다 (작업 {jobs}건). 목록을 확인한 후 승인하세요.",
+  "confirmApproveAll": "모두 승인 확인 ({count})"
 }

@@ -42,6 +42,9 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   expandedData?: TData[]
   // Extra controls in the expanded dialog's table toolbar, next to search.
   expandedToolbar?: React.ReactNode
+  // Told when the expanded dialog opens or closes (e.g. to leave a review
+  // mode the toolbar started).
+  onExpandedChange?: (open: boolean) => void
   // Pick the compact table's columns from its measured width (e.g. fewer,
   // merged columns on a narrow panel) so it never needs a sideways scroll.
   // Falls back to `columns` until the width is known.
@@ -144,6 +147,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   headerActions,
   expandedData,
   expandedToolbar,
+  onExpandedChange,
   columnsForWidth,
   growToFit,
   onAdd,
@@ -169,7 +173,11 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [selectMode, setSelectMode] = React.useState(false)
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpandedState] = React.useState(false)
+  const setExpanded = (open: boolean) => {
+    setExpandedState(open)
+    onExpandedChange?.(open)
+  }
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
 

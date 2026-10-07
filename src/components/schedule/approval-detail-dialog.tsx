@@ -162,7 +162,7 @@ export function ApprovalDetailDialog({
     // once they confirm, same as DispatchApprovalQueue's own Approve.
     const email = notifyEmail.trim()
     if (!email) return
-    const result = await approve.mutateAsync({ entityType: row.entityType, entityId: row.entityId, notifyEmail: email })
+    const result = await approve.mutateAsync({ entityType: row.entityType, entityId: row.entityId, notifyEmail: email, label: row.customerName || row.orderNumber })
     if (result) onOpenChange(false)
   }
 

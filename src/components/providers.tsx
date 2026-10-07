@@ -11,6 +11,7 @@ import { I18nProvider } from "@/lib/i18n/i18n-context"
 import { SidebarCollapseProvider } from "@/lib/sidebar-collapse-context"
 import { RegisterServiceWorker } from "@/components/pwa/register-service-worker"
 import { InstallPromptProvider } from "@/components/pwa/install-prompt-context"
+import { ShortNoticePromptHost } from "@/components/dispatch/short-notice-prompt"
 
 // Navigating away (e.g. clicking a sidebar link) while a Radix Dialog/Popover is
 // still open skips its normal close cleanup, leaving `body { pointer-events: none }`
@@ -48,6 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   <RouteChangeCleanup />
                   <RegisterServiceWorker />
                   {children}
+                  <ShortNoticePromptHost />
                   <Toaster richColors position="top-right" closeButton />
                 </InstallPromptProvider>
               </SidebarCollapseProvider>

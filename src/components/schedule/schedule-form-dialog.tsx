@@ -129,6 +129,7 @@ export interface ScheduleJobPrefill {
   secondaryAddress?: string
   notes?: string
   filterCodes?: string
+  vehicle?: string
 }
 
 function defaultValues(defaultDate: string, job?: ScheduleJob, prefill?: ScheduleJobPrefill): FormValues {
@@ -136,7 +137,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob, prefill?: Schedul
     return {
       jobType: prefill.jobType,
       technician: prefill.technician ?? "",
-      vehicle: "",
+      vehicle: prefill.vehicle ?? "",
       technician2: prefill.technician2 || NONE_SENTINEL,
       orderNo: prefill.orderNo ?? "",
       scheduledDate: prefill.scheduledDate,

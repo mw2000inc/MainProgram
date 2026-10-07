@@ -18,6 +18,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // First keep every unapproved Draft at 2 days' notice (same daily cron,
+  // no extra Vercel schedule; toggleable separately in Settings).
+  const redated = await runAutomation("redateShortNoticeDrafts", { triggeredBy: "cron" })
   const result = await runAutomation("sendScheduleReminders", { triggeredBy: "cron" })
-  return NextResponse.json(result)
+  return NextResponse.json({ ...result, redated })
 }

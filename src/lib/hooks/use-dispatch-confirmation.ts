@@ -5,6 +5,7 @@ import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
 import { installPlansKey } from "@/lib/hooks/use-install-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
+import { askShortNotice } from "@/components/dispatch/short-notice-prompt"
 
 // Approving invalidates all four plan queries rather than just the one the
 // approved item belongs to — cheap (four cache keys, not four network
@@ -29,18 +30,39 @@ export function useDispatchNotifications() {
   return useQuery({ queryKey: dispatchNotificationsKey, queryFn: api.listDispatchNotifications })
 }
 
+// Approvals the admin skipped at the short-notice prompt (by entity id), so
+// their null result isn't reported as "no longer awaiting approval".
+const skippedShortNotice = new Set<string>()
+
 export function useApproveDispatchItem() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: api.approveDispatchItem,
-    onSuccess: (result) => {
+    // A visit closer than the confirmation lead time asks the admin first
+    // (move the date to the earliest with full notice, send anyway, or skip)
+    // and retries with that choice; skipping resolves to null like any other
+    // "not approved" outcome, so every caller handles it unchanged.
+    mutationFn: async (input: Parameters<typeof api.approveDispatchItem>[0] & { label?: string }) => {
+      try {
+        return await api.approveDispatchItem(input)
+      } catch (error) {
+        if (!(error instanceof api.ShortNoticeError)) throw error
+        const choice = await askShortNotice({ label: input.label, scheduledDate: error.scheduledDate, earliestDate: error.earliestDate })
+        if (choice === "skip") {
+          skippedShortNotice.add(input.entityId)
+          return null
+        }
+        return api.approveDispatchItem({ ...input, leadTime: choice })
+      }
+    },
+    onSuccess: (result, input) => {
       qc.invalidateQueries({ queryKey: filterChangePlansKey })
       qc.invalidateQueries({ queryKey: installPlansKey })
       qc.invalidateQueries({ queryKey: collectionsKey })
       qc.invalidateQueries({ queryKey: repairPlansKey })
       qc.invalidateQueries({ queryKey: dispatchNotificationsKey })
       if (!result) {
-        toast.error("That item is no longer awaiting approval.")
+        if (skippedShortNotice.delete(input.entityId)) toast.info("Not sent — the visit date was left unchanged.")
+        else toast.error("That item is no longer awaiting approval.")
         return
       }
       const summaries = [summarizeChannel("Email", result.email)].filter(Boolean)

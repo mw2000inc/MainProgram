@@ -141,5 +141,9 @@
   "approvedByAt": "Approved by {name} · {time}",
   "rejectedByAt": "Rejected by {name} · {time}",
   "awaitingApproval": "Awaiting approval",
-  "recordedWithoutApproval": "Recorded directly (no approval step)"
+  "recordedWithoutApproval": "Recorded directly (no approval step)",
+  "approveAllDates": "Approve all dates ({count})",
+  "reviewQueueCount": "Review ({count})",
+  "reviewAllBanner": "Reviewing all {count} pending item(s) across every date ({jobs} job(s)). Check the list, then confirm.",
+  "confirmApproveAll": "Confirm approve all ({count})"
 }
