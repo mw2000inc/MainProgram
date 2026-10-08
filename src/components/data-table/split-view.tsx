@@ -208,6 +208,11 @@ export function DetailPanel({
   // One-off header button rendered before Edit (e.g. Member's "QR Code")
   // for pages that need an action beyond the generic Edit/Delete pair.
   headerActions,
+  // Optional block pinned to the header's top-right corner, beside the title
+  // and the buttons (e.g. an order's QR code). When the panel is too narrow
+  // for it to sit beside them, it drops below the buttons, still
+  // right-aligned, so it never overlaps the title or the buttons.
+  headerAside,
   // Opt-in, off by default. When true, this panel bounds itself to
   // whatever real height its own ancestor chain gives it (h-full — Card's
   // own base classes already include flex flex-col overflow-hidden, see
@@ -237,20 +242,30 @@ export function DetailPanel({
   children: React.ReactNode
   extra?: React.ReactNode
   headerActions?: React.ReactNode
+  headerAside?: React.ReactNode
   fillHeight?: boolean
 }) {
   const { t } = useTranslation("common")
   return (
     <Card className={cn(expanded && "min-h-[70vh]", fillHeight && "h-full")}>
-      <CardHeader className={cn("flex-row items-center justify-between gap-2 border-b", fillHeight && "shrink-0")}>
-        <div className="min-w-0">
+      <CardHeader
+        className={cn(
+          "flex-row items-center justify-between gap-2 border-b",
+          // Title (row 1) and buttons (row 2) on the left, the aside spanning
+          // both rows on the right — once the header is wide enough
+          // (container query); narrower, the aside stacks below.
+          headerAside && "grid-cols-1 @sm/card-header:grid-cols-[minmax(0,1fr)_auto] @sm/card-header:gap-x-4",
+          fillHeight && "shrink-0"
+        )}
+      >
+        <div className={cn("min-w-0", headerAside && "@sm/card-header:col-start-1 @sm/card-header:row-start-1")}>
           <div className="flex min-w-0 items-center gap-2">
             {Icon && <Icon className="h-4 w-4 shrink-0 text-primary" />}
             <h2 className="truncate font-semibold">{title}</h2>
           </div>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className={cn("flex shrink-0 items-center gap-1.5", headerAside && "@sm/card-header:col-start-1 @sm/card-header:row-start-2")}>
           {headerActions}
           {onEdit && (
             <Button className="gap-1.5 rounded-full px-3.5" title={t("edit")} onClick={onEdit}>
@@ -290,6 +305,11 @@ export function DetailPanel({
             </Button>
           </div>
         </div>
+        {headerAside && (
+          <div className="justify-self-end @sm/card-header:col-start-2 @sm/card-header:row-span-2 @sm/card-header:row-start-1" data-testid="detail-header-aside">
+            {headerAside}
+          </div>
+        )}
       </CardHeader>
       <CardContent className={cn("space-y-8 pt-6", fillHeight && "flex-1 min-h-0 overflow-y-auto pr-2")}>
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">{children}</div>

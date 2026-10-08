@@ -20,6 +20,7 @@ import {
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
 import { OrderRelatedSection } from "@/components/sale-list/order-related-section"
 import { SaleListFormDialog } from "@/components/sale-list/sale-list-form-dialog"
+import { OrderQrCode, orderScanCustomerId } from "@/components/customers/customer-qr-code"
 import {
   getSaleListColumns,
   getSaleListOrderNumberColumn,
@@ -240,6 +241,7 @@ export default function SaleListPage() {
               // Changes/Collections/Repairs) instead of a generic fullscreen
               // field dump, since that richer page already exists.
               onToggleExpand={() => router.push(`/sale-list/${selected.id}`)}
+              headerAside={<OrderQrCode customerId={orderScanCustomerId(selected, customers)} orderNumber={selected.orderNumber} />}
               onClose={selection.close}
               extra={
                 <>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/data-table/data-table"
 import { DetailField, DetailPanel, SplitViewLayout } from "@/components/data-table/split-view"
+import { OrderQrCode, orderScanCustomerId } from "@/components/customers/customer-qr-code"
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
 import { OrderRelatedSection } from "@/components/sale-list/order-related-section"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
@@ -286,6 +287,7 @@ export function MemberOrderDetail({
             // Opens the standalone order page (its own URL, for linking/printing)
             // without losing this in-place view.
             onToggleExpand={() => router.push(`/sale-list/${entry.id}`)}
+            headerAside={<OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} />}
             onClose={onClose}
             extra={
               <>

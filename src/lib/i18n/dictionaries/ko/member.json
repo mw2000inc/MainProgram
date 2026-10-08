@@ -111,5 +111,7 @@
   "serviceNote": "메모",
   "serviceOpenRecord": "기록 열기",
   "toneNotActive": "비활성",
-  "toneRentOnly": "렌탈만"
+  "toneRentOnly": "렌탈만",
+  "orderQrDownload": "다운로드",
+  "orderQrUnavailable": "이 주문에 연결된 회원이 없어 QR 코드가 없습니다."
 }

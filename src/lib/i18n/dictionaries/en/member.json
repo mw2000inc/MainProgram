@@ -111,5 +111,7 @@
   "serviceNote": "Note",
   "serviceOpenRecord": "Open record",
   "toneNotActive": "Not active",
-  "toneRentOnly": "Rent only"
+  "toneRentOnly": "Rent only",
+  "orderQrDownload": "Download",
+  "orderQrUnavailable": "No member linked to this order, so there's no QR code yet."
 }

@@ -34,6 +34,7 @@ import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
+import { OrderQrCode, orderScanCustomerId } from "@/components/customers/customer-qr-code"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDate, initials, todayIso as today } from "@/lib/utils"
 
@@ -132,6 +133,9 @@ export default function SaleListOrderDetailPage() {
             <p className="text-sm text-muted-foreground">
               {customer?.companyName || customer?.fullName || t("noMemberLinked")}
             </p>
+          </div>
+          <div className="self-end sm:self-center" data-testid="order-page-qr">
+            <OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} />
           </div>
         </CardContent>
       </Card>
