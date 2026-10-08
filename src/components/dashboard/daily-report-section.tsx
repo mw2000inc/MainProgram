@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, ListChecks, CheckCheck } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -46,7 +46,6 @@ import { DispatchApprovalQueue, useDispatchApprovalCount } from "@/components/da
 import { AllCollectionDialog } from "@/components/dashboard/all-collection-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { PendingApprovalsDialog, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import {
   getInventoryListExpandedColumns,
   inventoryListDensityForWidth,
@@ -439,15 +438,6 @@ export function DailyReportSection() {
   // where pending inventory items are approved now; there's no separate
   // header button for it.
   const [inventoryQueueOpen, setInventoryQueueOpen] = React.useState(false)
-
-  // Same idea, for the unified Collection/Repair/Installation/Filter Change
-  // Admin Approval queue (see pending-approvals-panel.tsx) — this hook reads
-  // the exact same react-query cache PendingApprovalsDialog's own panel
-  // does, so the count here updates live the moment an approve/reject/
-  // reschedule inside that dialog settles, with no explicit refetch needed
-  // on close.
-  const [pendingApprovalsQueueOpen, setPendingApprovalsQueueOpen] = React.useState(false)
-  const pendingApprovalsCount = usePendingApprovalsCount()
 
   // All Collection — the cross-module payments view (see
   // all-collection-dialog.tsx). No count badge: unlike the three queues
@@ -1038,21 +1028,6 @@ export function DailyReportSection() {
                 await approveAll.mutateAsync({ ids: viewApprovable.map((m) => m.id), approvedBy: user.id }).catch(() => {})
                 setApproveViewOpen(false)
               }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant={pendingApprovalsCount > 0 ? "default" : "outline"}
-              className="gap-1.5"
-              onClick={() => setPendingApprovalsQueueOpen(true)}
-            >
-              <ListChecks className="h-3.5 w-3.5" />
-              {tDispatch("pendingApprovalsButton")}{pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
-            </Button>
-            <PendingApprovalsDialog
-              open={pendingApprovalsQueueOpen}
-              onOpenChange={setPendingApprovalsQueueOpen}
-              historyDefaultDate={reportDate}
             />
             <Button
               type="button"

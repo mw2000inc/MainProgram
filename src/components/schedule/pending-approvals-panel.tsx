@@ -2,11 +2,10 @@
 
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { History } from "lucide-react"
+import { BellOff, History } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,11 +26,11 @@ import { PendingApprovalsHistoryDialog } from "@/components/schedule/pending-app
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
 import { useFullScreenToggle } from "@/lib/hooks/use-fullscreen-toggle"
-import { useApproveDispatchItem, useAcceptRequestedReschedule } from "@/lib/hooks/use-dispatch-confirmation"
+import { useApproveDispatchItem, useAcceptRequestedReschedule, useConfirmDispatchItemsWithoutNotifying } from "@/lib/hooks/use-dispatch-confirmation"
 import { SendByLine } from "@/components/dispatch/send-by-line"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
+import { formatDate, todayIso, twoDaysFromNowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Customer, SaleListEntry, ScheduleJob, DispatchStatus } from "@/lib/types"
 import type { DispatchEntityType } from "@/lib/api/dispatch-confirmation"
@@ -463,6 +462,8 @@ export function PendingApprovalsPanel({
   // assignment — see batchMismatch below for what blocks it otherwise.
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
+  const confirmWithoutNotify = useConfirmDispatchItemsWithoutNotifying()
+  const [confirmWithoutNotifyOpen, setConfirmWithoutNotifyOpen] = React.useState(false)
   const [bulkApproving, setBulkApproving] = React.useState(false)
   const [bulkSummary, setBulkSummary] = React.useState<{
     approved: PendingApprovalRow[]
@@ -500,6 +501,26 @@ export function PendingApprovalsPanel({
       ),
     [dateFilteredRows, activeTab, statusFilter]
   )
+
+  // "Confirm Without Notifying" (moved here from the Daily Report's former
+  // Pending Dispatch Approval queue): every Draft row in the current view
+  // (tab, status and date filters) becomes Confirmed with no email, push or
+  // confirmation link. Pending Customer Confirmation / Reschedule Requested
+  // rows are never touched (the update itself is guarded to Draft too).
+  const draftRowsInView = React.useMemo(() => visibleRows.filter((r) => r.dispatchStatus === "Draft"), [visibleRows])
+  // Breakdown by type, plus a warning when any row is dated today or later:
+  // only those can still get the automatic 2-day reminder afterward.
+  const confirmWithoutNotifyDescription = React.useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of draftRowsInView) counts.set(r.moduleKey, (counts.get(r.moduleKey) ?? 0) + 1)
+    const breakdown = Array.from(counts, ([key, n]) => `${t(key)} ${n}`).join(" · ")
+    const today = todayIso()
+    const upcoming = draftRowsInView.filter((r) => r.scheduledDate >= today).length
+    return (
+      t("confirmWithoutNotifyDescription", { count: draftRowsInView.length, breakdown }) +
+      (upcoming > 0 ? t("confirmWithoutNotifyUpcomingWarning", { count: upcoming }) : "")
+    )
+  }, [draftRowsInView, t])
 
   const stopNumberByJobId = React.useMemo(
     () => computeStopNumbers(rows.filter((r) => r.routeSequence != null).map((r) => ({ id: r.entityId, technician: r.technician ?? "", scheduledDate: r.scheduledDate, routeSequence: r.routeSequence }))),
@@ -772,6 +793,19 @@ export function PendingApprovalsPanel({
               <History className="h-3.5 w-3.5" /> {t("historyButton")}
             </Button>
           )}
+          {isAdmin && draftRowsInView.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 shrink-0"
+              disabled={bulkApproving || confirmWithoutNotify.isPending}
+              onClick={() => setConfirmWithoutNotifyOpen(true)}
+              data-testid="confirm-without-notify"
+            >
+              <BellOff className="h-3.5 w-3.5" /> {t("confirmWithoutNotifyCount", { count: draftRowsInView.length })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -866,6 +900,25 @@ export function PendingApprovalsPanel({
           }}
         />
       )}
+      {isAdmin && (
+        <ConfirmDialog
+          open={confirmWithoutNotifyOpen}
+          onOpenChange={setConfirmWithoutNotifyOpen}
+          title={t("confirmWithoutNotifyTitle")}
+          description={confirmWithoutNotifyDescription}
+          confirmLabel={t("confirmWithoutNotifyLabel")}
+          destructive={false}
+          loading={confirmWithoutNotify.isPending}
+          onConfirm={async () => {
+            try {
+              await confirmWithoutNotify.mutateAsync(draftRowsInView.map((r) => ({ entityType: r.entityType, entityId: r.entityId })))
+              setConfirmWithoutNotifyOpen(false)
+            } catch {
+              // The hook's own onError already toasted; keep the dialog open to retry.
+            }
+          }}
+        />
+      )}
     </>
   )
 
@@ -953,90 +1006,6 @@ export function PendingApprovalsPanel({
       <CardContent className="pt-6 space-y-4">{toolbarAndTable}</CardContent>
       {dialogs}
     </Card>
-  )
-}
-
-// The same PendingApprovalsPanel, popped into a Dialog — for a call site
-// that isn't already a Schedule-page tab (the Daily Report header's own
-// "Pending Approvals" button, matching how DispatchApprovalQueue/
-// StockMovementApprovalQueue are triggered from that same header). No
-// separate data path: the panel's own hooks (usePendingApprovalRows,
-// via the 4 plan queries) are the same react-query cache either call site
-// reads, so approving/rejecting/rescheduling in here updates the header's
-// own badge count live, the moment the mutation settles — closing the
-// dialog needs no explicit refetch of its own.
-export function PendingApprovalsDialog({
-  open,
-  onOpenChange,
-  historyDefaultDate,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  // Forwarded straight to PendingApprovalsPanel — see its own comment.
-  historyDefaultDate?: string
-}) {
-  const { t } = useTranslation("dispatch")
-  // Owned here, not by the panel, so full-screen grows this dialog in
-  // place — see PendingApprovalsPanel's `fullScreen` prop. Reset on close
-  // since this component stays mounted while closed.
-  const { isFullScreen, exit: exitFullScreen, toggle: toggleFullScreen } = useFullScreenToggle()
-  React.useEffect(() => {
-    if (!open) exitFullScreen()
-  }, [open, exitFullScreen])
-  const fullScreen = React.useMemo(() => ({ isFullScreen, toggle: toggleFullScreen }), [isFullScreen, toggleFullScreen])
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        // DialogBody below is the ONE vertical scroll boundary for this
-        // whole dialog — PendingApprovalsPanel's own table is told not to
-        // bound/scroll itself too (renderedInDialog), so the two never nest
-        // into a second scrollbar. DialogContent itself no longer scrolls,
-        // so the header and X button stay pinned above the rows.
-        // Widened from sm:max-w-4xl — this table has 9 columns (several
-        // inherently wide: a date picker, technician names, a route stop
-        // label), so the old width pushed Status/Review off past a lot of
-        // horizontal scroll on an ordinary laptop viewport. Doesn't
-        // eliminate horizontal scroll outright (a real <table> auto-sizes
-        // to its widest content, not proportionally to the viewport — see
-        // the actions column's own sticky-right fix below for the part of
-        // this that still needs it regardless of width), just needs it less often.
-        className={cn(
-          isFullScreen
-            ? "inset-0 top-0 left-0 h-screen max-h-screen w-screen max-w-none sm:max-w-none translate-x-0 translate-y-0 rounded-none p-6"
-            : "sm:max-w-7xl max-h-[80vh]",
-          "flex flex-col overflow-hidden"
-        )}
-        // Escape exits full-screen first rather than closing the dialog,
-        // same as every other full-screen-capable dialog here.
-        onEscapeKeyDown={(e) => {
-          if (isFullScreen) {
-            e.preventDefault()
-            exitFullScreen()
-          }
-        }}
-        // A misclick on the backdrop (or, via Radix's own "interact
-        // outside" detection, opening the Status/Date Range Selects below
-        // — their dropdowns portal outside this DialogContent's own DOM
-        // subtree, and the panel's own full-screen mode portals straight
-        // to document.body for the same reason its own comment gives —
-        // Radix otherwise treats either as an outside interaction) used to
-        // silently close this whole dialog. Same guard approval-detail-
-        // dialog.tsx and DispatchApprovalQueue's own main dialog already
-        // use — only an explicit Close (X) or Escape may dismiss this.
-        onInteractOutside={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
-            <span>{t("pendingApprovalsDialogTitle")}</span>
-            <FullScreenToggleButton isFullScreen={isFullScreen} onToggle={toggleFullScreen} />
-          </DialogTitle>
-          <DialogDescription>{t("pendingApprovalsDialogDescription")}</DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <PendingApprovalsPanel historyDefaultDate={historyDefaultDate} renderedInDialog fullScreen={fullScreen} />
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
   )
 }
 
