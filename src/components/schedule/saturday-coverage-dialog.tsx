@@ -8,7 +8,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { SaturdayErrandDialog } from "@/components/schedule/saturday-errand-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -25,8 +25,6 @@ import { formatDate } from "@/lib/utils"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import type { ScheduleJob } from "@/lib/types"
 
-const UNASSIGNED = "__unassigned"
-
 // Who goes out together that Saturday: each ticked technician on their own,
 // except a fixed crew whose members are BOTH ticked (Eubert + Jayson → one
 // team with the Liteace). A crew member ticked alone goes alone, no vehicle.
@@ -39,6 +37,20 @@ interface Team {
 }
 
 type Row = { key: string; kind: "job"; job: ScheduleJob; label: string; address?: string } | { key: string; kind: "visit"; visit: UnscheduledVisit; label: string; address?: string }
+
+// What a row's technician box resolves to: a ticked team when the text names
+// one (its label, or a solo technician's name — any case), else a typed name
+// on its own, no vehicle (free typing, as on every other technician field).
+// Blank, "N/A" or "Unassigned" is no assignment — the row is left alone.
+function resolveTeam(text: string, teams: Team[], unassignedLabel: string): Team | null {
+  const q = text.trim()
+  if (!isAssignedTechnician(q) || q.toLowerCase() === unassignedLabel.toLowerCase()) return null
+  const lower = q.toLowerCase()
+  return (
+    teams.find((tm) => tm.label.toLowerCase() === lower) ??
+    teams.find((tm) => !tm.secondary && tm.primary.toLowerCase() === lower) ?? { key: `typed:${q}`, label: q, primary: q, secondary: "", vehicle: "" }
+  )
+}
 
 function teamsFor(working: string[]): Team[] {
   const teams: Team[] = []
@@ -66,7 +78,8 @@ function teamsFor(working: string[]): Team[] {
 // the teams (neighbouring areas stay together), changeable per row. Confirming
 // sets each assigned job's technicians, logins and vehicle and makes it
 // active; a visit without a job gets one, active. Rows left Unassigned are
-// untouched.
+// untouched. Each row's technician is a typable box: the suggestions are the
+// ticked teams, but any name can be typed, and clearing it unassigns the row.
 export function SaturdayCoverageDialog({
   open,
   onOpenChange,
@@ -89,6 +102,7 @@ export function SaturdayCoverageDialog({
   const qc = useQueryClient()
   const technicians = React.useMemo(() => fieldTechnicianNames(accounts), [accounts])
   const [working, setWorking] = React.useState<string[]>([])
+  // Per row: the technician box's text (a team label, a typed name, or blank).
   const [choice, setChoice] = React.useState<Record<string, string>>({})
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null)
   // "+ Add Errand" opens the errand form for this Saturday on top of this
@@ -111,7 +125,10 @@ export function SaturdayCoverageDialog({
     [jobs, visits, addressOfJob, t]
   )
   const teams = React.useMemo(() => teamsFor(working), [working])
-  const teamByKey = React.useMemo(() => new Map(teams.map((tm) => [tm.key, tm])), [teams])
+  const unassignedLabel = t("unassigned")
+  // "Unassigned" first, like the dropdown this replaced — picking it clears the row.
+  const suggestions = React.useMemo(() => [unassignedLabel, ...teams.map((tm) => tm.label)], [teams, unassignedLabel])
+  const teamOf = (row: Row) => resolveTeam(choice[row.key] ?? "", teams, unassignedLabel)
 
   // Ticking technicians re-splits the queue across the teams by area.
   const toggle = (name: string) => {
@@ -123,19 +140,22 @@ export function SaturdayCoverageDialog({
       return
     }
     const plan = distributeByArea(rows, (r) => r.address, nextTeams.map((tm) => tm.key))
+    const labelOf = new Map(nextTeams.map((tm) => [tm.key, tm.label]))
     const auto: Record<string, string> = {}
-    for (const { day: teamKey, clusters } of plan) for (const r of clusters.flatMap((c) => c.items)) auto[r.key] = teamKey
+    for (const { day: teamKey, clusters } of plan) for (const r of clusters.flatMap((c) => c.items)) auto[r.key] = labelOf.get(teamKey) ?? ""
     setChoice(auto)
   }
 
-  const assigned = rows.filter((r) => choice[r.key] && choice[r.key] !== UNASSIGNED && teamByKey.has(choice[r.key]))
+  const assigned = rows.flatMap((row) => {
+    const team = teamOf(row)
+    return team ? [{ row, team }] : []
+  })
 
   async function confirm() {
     setProgress({ done: 0, total: assigned.length })
     let done = 0
     const failed: string[] = []
-    for (const row of assigned) {
-      const team = teamByKey.get(choice[row.key])!
+    for (const { row, team } of assigned) {
       const ids = technicianAccountIds(team.primary, team.secondary, accounts)
       try {
         if (row.kind === "job") {
@@ -226,7 +246,7 @@ export function SaturdayCoverageDialog({
                   <tr>
                     <th className="px-3 py-2 font-medium">{t("tableCustomerOrder")}</th>
                     <th className="px-3 py-2 font-medium">{t("tableAddress")}</th>
-                    <th className="w-60 px-3 py-2 font-medium">{t("tableTechnician")}</th>
+                    <th className="w-44 px-3 py-2 font-medium sm:w-60">{t("tableTechnician")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,23 +258,16 @@ export function SaturdayCoverageDialog({
                       </td>
                       <td className="max-w-[16rem] px-3 py-1.5 text-xs">{row.address || "—"}</td>
                       <td className="px-3 py-1.5">
-                        <Select
-                          value={choice[row.key] && teamByKey.has(choice[row.key]) ? choice[row.key] : UNASSIGNED}
-                          onValueChange={(v) => setChoice((c) => ({ ...c, [row.key]: v }))}
+                        <TechnicianCombobox
+                          value={choice[row.key] ?? ""}
+                          onChange={(v) => setChoice((c) => ({ ...c, [row.key]: v === unassignedLabel ? "" : v }))}
+                          suggestions={suggestions}
+                          placeholder={unassignedLabel}
                           disabled={teams.length === 0}
-                        >
-                          <SelectTrigger size="sm" className="h-8 w-full text-xs" data-testid="coverage-row-select">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={UNASSIGNED}>{t("unassigned")}</SelectItem>
-                            {teams.map((tm) => (
-                              <SelectItem key={tm.key} value={tm.key}>
-                                {tm.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          className="h-8 w-full text-xs md:text-xs"
+                          aria-label={t("tableTechnician")}
+                          data-testid="coverage-row-select"
+                        />
                         {row.kind === "job" && isAssignedTechnician(row.job.technician) && (
                           <p className="mt-0.5 text-[11px] text-muted-foreground">{t("coverageCurrently", { name: row.job.technician })}</p>
                         )}

@@ -45,15 +45,22 @@ export function TechnicianCombobox({
   includeNotApplicable = true,
   exclude,
   placeholder,
+  suggestions,
   ...props
 }: Omit<React.ComponentProps<typeof Combobox>, "options" | "showAllOnExactMatch" | "onOptionSelect"> & {
   // false drops "N/A" from the suggestions (blank already means "not assigned").
   includeNotApplicable?: boolean
   // A name to leave out of the suggestions (the other technician of a pair).
   exclude?: string
+  // Replaces the roster suggestions with a caller's own short list (Saturday
+  // Coverage offers only who's working that day). Still free-typing.
+  suggestions?: string[]
 }) {
   const { t } = useTranslation("common")
-  const options = React.useMemo(() => technicianOptions(includeNotApplicable, exclude), [includeNotApplicable, exclude])
+  const options = React.useMemo(
+    () => (suggestions ? suggestions.map((value) => ({ value })) : technicianOptions(includeNotApplicable, exclude)),
+    [suggestions, includeNotApplicable, exclude]
+  )
   return (
     <Combobox
       {...props}

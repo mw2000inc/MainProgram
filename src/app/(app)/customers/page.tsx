@@ -37,6 +37,17 @@ import { formatDate, getContractStatus } from "@/lib/utils"
 import type { ContractStatus, Customer } from "@/lib/types"
 import { parseISO } from "date-fns"
 
+// Member row colors (see memberToneById). The text color is set on every
+// cell and everything inside it, so placeholders ("—") and the monospace
+// Member Account# take it too; the 600 shades read well on the light theme
+// and the 400 shades on the dark one. Hover/selection backgrounds are
+// untouched.
+type MemberTone = "notActive" | "rentOnly"
+const MEMBER_TONE_CLASS: Record<MemberTone, string> = {
+  notActive: "[&_td]:text-red-600 [&_td_*]:text-red-600 dark:[&_td]:text-red-400 dark:[&_td_*]:text-red-400",
+  rentOnly: "[&_td]:text-pink-600 [&_td_*]:text-pink-600 dark:[&_td]:text-pink-400 dark:[&_td_*]:text-pink-400",
+}
+
 export default function CustomersPage() {
   const router = useRouter()
   const { can } = useAuth()
@@ -50,7 +61,7 @@ export default function CustomersPage() {
   const { data: settings } = useSettings()
   const deleteCustomer = useDeleteCustomer()
 
-  const [statusFilter, setStatusFilter] = React.useState<"all" | ContractStatus>("all")
+  const [statusFilter, setStatusFilter] = React.useState<"all" | ContractStatus | MemberTone>("all")
   const [monthYear, setMonthYear] = React.useState<MonthYearValue>({ month: "all", year: "all" })
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Customer | undefined>(undefined)
@@ -72,6 +83,26 @@ export default function CustomersPage() {
     [realCustomers, saleListEntries]
   )
 
+  // Row color by the member's orders (display only — kept out of the row data,
+  // so search and export are unaffected): "notActive" when none of their
+  // orders is ACTIVE or RENT, "rentOnly" when they have RENT orders and no
+  // ACTIVE one (an old INACTIVE order alongside doesn't change that); not
+  // active wins. A member with no orders keeps the normal look. Orders are matched
+  // the same way as relatedOrderNumbers (the entry's customer link, else its
+  // order number).
+  const memberToneById = React.useMemo(() => {
+    const map = new Map<string, MemberTone>()
+    for (const c of realCustomers) {
+      const statuses = saleListEntries
+        .filter((e) => (e.customerId ? e.customerId === c.id : e.orderNumber === c.orderNumber))
+        .map((e) => e.status)
+      if (statuses.length === 0) continue
+      if (!statuses.some((st) => st === "ACTIVE" || st === "RENT")) map.set(c.id, "notActive")
+      else if (!statuses.includes("ACTIVE")) map.set(c.id, "rentOnly")
+    }
+    return map
+  }, [realCustomers, saleListEntries])
+
   const rows: CustomerRow[] = React.useMemo(
     () =>
       realCustomers.map((c) => ({
@@ -89,13 +120,15 @@ export default function CustomersPage() {
 
   const scopedRows = React.useMemo(() => {
     return rows.filter((c) => {
-      if (statusFilter !== "all" && c.contractStatus !== statusFilter) return false
+      if (statusFilter === "notActive" || statusFilter === "rentOnly") {
+        if (memberToneById.get(c.id) !== statusFilter) return false
+      } else if (statusFilter !== "all" && c.contractStatus !== statusFilter) return false
       const created = parseISO(c.createdAt)
       if (monthYear.month !== "all" && created.getMonth() !== Number(monthYear.month)) return false
       if (monthYear.year !== "all" && created.getFullYear() !== Number(monthYear.year)) return false
       return true
     })
-  }, [rows, statusFilter, monthYear])
+  }, [rows, statusFilter, monthYear, memberToneById])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
   // Current copy of the selected member, not the one filteredRows may still
@@ -309,6 +342,10 @@ export default function CustomersPage() {
                     onSearchChange={setSearchQuery}
                     emptyMessage={t("noMembersFound")}
                     onRowClick={(row) => selection.open(row)}
+                    getRowClassName={(row) => {
+                      const tone = memberToneById.get(row.id)
+                      return tone ? MEMBER_TONE_CLASS[tone] : undefined
+                    }}
                     virtualize
                     tableClassName="table-fixed min-w-[1360px] w-full"
                     tableContainerClassName="overflow-x-auto"
@@ -326,8 +363,19 @@ export default function CustomersPage() {
                             <SelectItem value="active">{tStatus("active")}</SelectItem>
                             <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
                             <SelectItem value="expired">{tStatus("expired")}</SelectItem>
+                            <SelectItem value="notActive">{t("toneNotActive")}</SelectItem>
+                            <SelectItem value="rentOnly">{t("toneRentOnly")}</SelectItem>
                           </SelectContent>
                         </Select>
+                        {/* What the row colors mean. */}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground" data-testid="member-tone-legend">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full bg-red-600 dark:bg-red-400" /> {t("toneNotActive")}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full bg-pink-600 dark:bg-pink-400" /> {t("toneRentOnly")}
+                          </span>
+                        </div>
                         <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
                         <ExportButtons
                           title="Member List"

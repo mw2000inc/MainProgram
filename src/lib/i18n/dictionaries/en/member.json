@@ -109,5 +109,7 @@
   "serviceTerm": "C/T",
   "serviceAmount": "Amount",
   "serviceNote": "Note",
-  "serviceOpenRecord": "Open record"
+  "serviceOpenRecord": "Open record",
+  "toneNotActive": "Not active",
+  "toneRentOnly": "Rent only"
 }

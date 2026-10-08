@@ -109,5 +109,7 @@
   "serviceTerm": "C/T",
   "serviceAmount": "금액",
   "serviceNote": "메모",
-  "serviceOpenRecord": "기록 열기"
+  "serviceOpenRecord": "기록 열기",
+  "toneNotActive": "비활성",
+  "toneRentOnly": "렌탈만"
 }
