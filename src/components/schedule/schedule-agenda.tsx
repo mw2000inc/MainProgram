@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { endOfMonth, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -49,7 +48,6 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
 import { cn, formatDate, todayIso } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { MonthApprovalReview, type JobPatch } from "@/components/schedule/month-approval-review"
 import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
@@ -67,10 +65,8 @@ import {
   dispatchDateFor,
   isSaturday,
   saturdaysInRange,
-  isScheduleTimeframe,
-  scheduleTimeframeRange,
 } from "@/lib/schedule-timeframe"
-import { formatScheduleRange, ScheduleDateRangePicker, type ScheduleDateSelection } from "@/components/schedule/schedule-date-range-picker"
+import { formatScheduleRange } from "@/components/schedule/schedule-date-range-picker"
 import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -224,7 +220,6 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
 type StatusFilter = "all" | "pending" | "completed"
 type ViewMode = "grid" | "table"
 const VIEW_MODE_KEY = "schedule-fullscreen-view"
-const TIMEFRAME_KEY = "schedule-timeframe"
 const CARD_STATUS_KEY = "schedule-card-status"
 const TABLE_COLUMN_LABEL = {
   date: "tableDate",
@@ -378,6 +373,9 @@ function RescheduledBadge({ date, t }: { date: string; t: (key: string, params?:
 // automation and the filter-change automation create these).
 // Step 3 of the dispatch pipeline: a job awaiting final admin approval —
 // drafted by the automation or created by a customer's confirmation.
+// The fields an approval may save along with it.
+type JobPatch = Partial<Omit<ScheduleJob, "id" | "createdAt">>
+
 const isDraftJob = (job: Pick<ScheduleJob, "status" | "source">) =>
   job.status === "pending_approval" && (job.source === "automation" || job.source === "customer_confirmed")
 
@@ -500,27 +498,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       // ignore — the choice just won't be remembered
     }
   }
-  // Date filter (toolbar calendar popover): a preset anchored on the
-  // report's date — remembered per browser like the view mode — or dates
-  // picked on the calendar (kept until the page is left).
-  const [selection, setSelectionState] = React.useState<ScheduleDateSelection>(() => {
-    try {
-      const saved = typeof window !== "undefined" ? window.localStorage.getItem(TIMEFRAME_KEY) : null
-      return isScheduleTimeframe(saved) ? saved : "day"
-    } catch {
-      return "day"
-    }
-  })
-  const setSelection = (value: ScheduleDateSelection) => {
-    setSelectionState(value)
-    if (typeof value !== "string") return
-    try {
-      window.localStorage.setItem(TIMEFRAME_KEY, value)
-    } catch {
-      // ignore — the choice just won't be remembered
-    }
-  }
-  const range = React.useMemo(() => (typeof selection === "string" ? scheduleTimeframeRange(selection, date) : selection), [selection, date])
+  // The Daily Report's own date — this panel shows that one day only, like
+  // every other panel on the report (no separate range of its own; the
+  // Full Schedule page keeps ranges). Changing the report date changes it.
+  const range = React.useMemo(() => ({ start: date, end: date }), [date])
   const multiDay = range.start !== range.end
   // Friday roll-forward: Friday's still-pending jobs and unscheduled visits
   // also show on the Saturday and Monday after it, until they're done.
@@ -1545,23 +1526,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const awaitingSaturday = todaysJobs.filter((j) => isSaturday(j.scheduledDate) && (j.status === "pending_approval" || needsTechnician(j)))
   const saturdayQueueJobs = todaysJobs.filter((j) => isOpenStatus(j.status))
 
-  // Drafts in view: approve them all at once, or ask the automation for more.
-  // (Saturday drafts are left to "Assign Saturday Coverage".)
-  const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && !isSaturday(j.scheduledDate))
-  // A whole calendar month in view (e.g. the "This Month" chip): the button
-  // becomes "Approve All for Month" and covers every draft dated in that
-  // month — Saturday ones too, even without a technician (they go live as
-  // "needs technician"). It opens MonthApprovalReview: every one of those
-  // drafts in an editable table, edits staged until "Confirm Approve All"
-  // saves them with the approval. (A job an admin created by hand that awaits
-  // approval isn't listed here at all — see todaysJobs — and keeps its own
-  // approval on the Schedule page.)
-  const isMonthRange = range.start.endsWith("-01") && range.end === format(endOfMonth(parseISO(range.start)), "yyyy-MM-dd")
-  const monthDraftJobs = isMonthRange
-    ? todaysJobs.filter((j) => j.status === "pending_approval" && j.scheduledDate >= range.start && j.scheduledDate <= range.end)
-    : []
-  const [confirmMonthOpen, setConfirmMonthOpen] = React.useState(false)
-  const approveTargets = isMonthRange ? monthDraftJobs : draftJobs
+  // The report day's drafts: "Approve All for <date>" approves exactly these,
+  // or ask the automation for more. (Saturday drafts are left to "Assign
+  // Saturday Coverage".)
+  const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && j.scheduledDate === date && !isSaturday(j.scheduledDate))
+  const approveTargets = draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
   const [generatingDrafts, setGeneratingDrafts] = React.useState(false)
   // Approves the drafts in view — or, from the month review, the given jobs
@@ -1586,7 +1555,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const generateDrafts = async () => {
     setGeneratingDrafts(true)
     try {
-      const result = await triggerAutomation("generateDraftJobs")
+      // Only the report day's visits: drafts whose job lands on this date.
+      const result = await triggerAutomation("generateDraftJobs", { date })
       const drafted = Number((result.detail as { drafted?: number } | undefined)?.drafted ?? 0)
       if (result.ok) toast.success(t("draftsGenerated", { count: drafted }))
       else toast.error(result.message)
@@ -1745,7 +1715,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
 
   const headerActions = (
     <div className="flex min-w-0 flex-col gap-2 @xs/card-header:flex-row @xs/card-header:flex-wrap sm:flex-row sm:flex-wrap sm:items-center">
-      <ScheduleDateRangePicker selection={selection} range={range} anchor={date} onChange={setSelection} />
       {isAdmin && (
         <Button size="sm" className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
@@ -1757,11 +1726,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           size="sm"
           className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 @xs/card-header:flex-1 @sm/card-header:flex-none"
           disabled={approvingDrafts || approveTargets.length === 0}
-          onClick={isMonthRange ? () => setConfirmMonthOpen(true) : () => approveAllDrafts()}
+          onClick={() => approveAllDrafts()}
           data-testid="drafts-approve-all"
         >
           {approvingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {isMonthRange ? t("draftsApproveMonth", { count: monthDraftJobs.length }) : t("draftsApproveAll", { count: draftJobs.length })}
+          {t("draftsApproveDay", { date: formatDate(date, "MMM d"), count: draftJobs.length })}
         </Button>
       )}
       {isAdmin && (
@@ -1924,23 +1893,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </DialogContent>
       </Dialog>
 
-      <MonthApprovalReview
-        open={confirmMonthOpen}
-        onOpenChange={setConfirmMonthOpen}
-        jobs={monthDraftJobs}
-        monthLabel={formatDate(range.start, "MMMM yyyy")}
-        customerLabel={(job) => {
-          const c = job.customerId ? customerById.get(job.customerId) : undefined
-          return (c ? c.companyName || c.fullName : "") || (job.notes ?? "").split(" — ")[0]
-        }}
-        dateChange={dateChange}
-        technicianChange={technicianChange}
-        vehiclePatch={(vehicle) => {
-          const crew = crewForVehicle(vehicle)
-          return { vehicle, ...(crew ? technicianInput(crew.primary, crew.secondary) : {}) }
-        }}
-        onConfirm={(items) => approveAllDrafts(items)}
-      />
       <ConfirmDialog
         open={confirmComplete}
         onOpenChange={setConfirmComplete}

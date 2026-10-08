@@ -30,11 +30,13 @@ export async function listAutomations(): Promise<AutomationListItem[]> {
   return body.automations as AutomationListItem[]
 }
 
-export async function triggerAutomation(automationId: string): Promise<AutomationRunResult> {
+// `params.date` (yyyy-MM-dd) narrows an automation that supports it to one
+// day — the Daily Report's "Generate Drafts" passes its report date.
+export async function triggerAutomation(automationId: string, params?: { date?: string }): Promise<AutomationRunResult> {
   const res = await fetch("/api/automations/trigger", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ automationId }),
+    body: JSON.stringify({ automationId, ...(params?.date ? { date: params.date } : {}) }),
   })
   const body = await res.json()
   if (!res.ok) throw new Error(body?.error ?? "Failed to run automation")

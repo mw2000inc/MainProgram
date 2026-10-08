@@ -23,6 +23,10 @@ export interface AutomationContext {
   // Settings page (see /api/automations/trigger) — never a claim about who
   // triggered a cron run, which has no human behind it at all.
   triggeredByUserId?: string
+  // A manual run narrowed to one day (yyyy-MM-dd) — only automations that
+  // read it use it (generateDraftJobs, from the Daily Report). Cron runs
+  // never set it.
+  date?: string
 }
 
 // Every automation's run() resolves to this instead of throwing — the

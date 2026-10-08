@@ -6,7 +6,7 @@ import { dispatchDateFor } from "@/lib/schedule-timeframe"
 import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
 import type { UnscheduledVisit, VisitTable } from "@/lib/scheduling/unscheduled-visits"
 import type { ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
-import type { AutomationResult } from "../types"
+import type { AutomationContext, AutomationResult } from "../types"
 
 // Draft window: visits from a few days back (Friday's still-open visits on a
 // Monday) through a week ahead.
@@ -28,11 +28,20 @@ const LOOKAHEAD_DAYS = 7
 //   - the visit is linked to it straight away, so it leaves Unscheduled
 //     Visits and is never drafted twice.
 // A visit whose order already has an open job of the same type is skipped.
-export async function runGenerateDraftJobs(): Promise<AutomationResult> {
+//
+// With ctx.date (the Daily Report's "Generate Drafts" on a chosen day), only
+// drafts whose job lands on that date are made: visits dated that day, a
+// Friday visit for a Saturday, and — when that day is today — the open
+// visits of the last few days that roll onto today. The scheduled run keeps
+// the full window above.
+export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<AutomationResult> {
   const admin = createAdminClient()
   const today = new Date().toISOString().slice(0, 10)
-  const start = format(addDays(parseISO(today), -LOOKBACK_DAYS), "yyyy-MM-dd")
-  const end = format(addDays(parseISO(today), LOOKAHEAD_DAYS), "yyyy-MM-dd")
+  const onlyDate = ctx?.date
+  const start = onlyDate
+    ? format(addDays(parseISO(onlyDate), onlyDate === today ? -LOOKBACK_DAYS : -1), "yyyy-MM-dd")
+    : format(addDays(parseISO(today), -LOOKBACK_DAYS), "yyyy-MM-dd")
+  const end = onlyDate ?? format(addDays(parseISO(today), LOOKAHEAD_DAYS), "yyyy-MM-dd")
 
   const [customersRes, accountsRes, jobsRes] = await Promise.all([
     admin.from("customers").select("id, order_number, address, full_name, company_name, member_account_number, latitude, longitude, assigned_technician, assigned_technician_2"),
@@ -138,6 +147,8 @@ export async function runGenerateDraftJobs(): Promise<AutomationResult> {
     }
     const own = dispatchDateFor(visit.date)
     const date = own < today ? today : own
+    // A one-day run makes only that day's drafts.
+    if (onlyDate && date !== onlyDate) continue
     const assignment = assigner(visit, date)
     bySource[assignment.source] = (bySource[assignment.source] ?? 0) + 1
     const ids = technicianAccountIds(assignment.pair.primary, assignment.pair.secondary, accounts)

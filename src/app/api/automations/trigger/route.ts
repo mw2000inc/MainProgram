@@ -65,6 +65,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "automationId is required" }, { status: 400 })
   }
 
-  const result = await runAutomation(automationId, { triggeredBy: "manual", triggeredByUserId: auth.callerId })
+  // Optional single day (yyyy-MM-dd) for an automation that supports it.
+  const date = typeof body?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? (body.date as string) : undefined
+  const result = await runAutomation(automationId, { triggeredBy: "manual", triggeredByUserId: auth.callerId, ...(date ? { date } : {}) })
   return NextResponse.json(result)
 }
