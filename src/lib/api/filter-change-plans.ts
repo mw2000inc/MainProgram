@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client"
-import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import { fetchAllRowsConcurrent } from "@/lib/supabase/fetch-all"
 import type { FilterChangePlan } from "@/lib/types"
 
 type Row = {
@@ -100,8 +100,10 @@ function toRow(input: Partial<Omit<FilterChangePlan, "id" | "createdAt">>) {
 }
 
 export async function listFilterChangePlans(): Promise<FilterChangePlan[]> {
-  const data = await fetchAllRows<Row>((from, to) =>
-    supabase.from("filter_change_plans").select("*").order("plan_date", { ascending: true }).range(from, to)
+  // Concurrent pages (the largest table in the app); "id" breaks plan_date
+  // ties so independently fetched pages never overlap or skip a row.
+  const data = await fetchAllRowsConcurrent<Row>((from, to) =>
+    supabase.from("filter_change_plans").select("*").order("plan_date", { ascending: true }).order("id", { ascending: true }).range(from, to)
   )
   return data.map(fromRow)
 }
