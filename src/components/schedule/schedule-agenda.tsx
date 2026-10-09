@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -1493,6 +1495,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // The report day's drafts: "Approve All for <date>" approves exactly these,
   // or ask the automation for more. (Saturday drafts are left to "Assign
   // Saturday Coverage".)
+  // Unfinished jobs from earlier days (admins, when the report date is today
+  // or later): only a count with a link to the Full Schedule's Overdue
+  // filter — never mixed into this single-date list.
+  const overdueCount = React.useMemo(() => {
+    const today = businessToday()
+    if (!isAdmin || date < today) return 0
+    return jobs.filter((j) => isOverdueJob(j, today)).length
+  }, [isAdmin, date, jobs])
   const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && j.scheduledDate === date && !isSaturday(j.scheduledDate))
   const approveTargets = draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
@@ -1625,6 +1635,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </p>
       )}
       {!isPending && !expanded && saturdayBanner()}
+      {!isPending && overdueCount > 0 && !expanded && (
+        <Link
+          href={OVERDUE_SCHEDULE_HREF}
+          data-testid="schedule-overdue-link"
+          className="mb-3 flex w-full items-center justify-between rounded-md border border-dashed border-danger/40 bg-danger/5 px-3 py-2 text-left text-xs font-medium text-danger hover:bg-danger/10"
+        >
+          {t("overdueLink", { count: String(overdueCount) })}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
       {!isPending && unscheduledVisits.length > 0 && !expanded && (
         <button
           type="button"

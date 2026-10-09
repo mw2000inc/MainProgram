@@ -294,5 +294,7 @@
   "errandAdded": "{technician}님의 일정에 업무가 추가되었습니다",
   "errandAddedUnassigned": "업무가 추가되었습니다 — 토요일 배정 목록에서 대기 중",
   "errandOrderNote": "주문 {order}",
-  "errandCustomerFilled": "주문을 찾았습니다 — {name}의 정보로 빈 항목을 채웠습니다."
+  "errandCustomerFilled": "주문을 찾았습니다 — {name}의 정보로 빈 항목을 채웠습니다.",
+  "overdueFilter": "기한 초과 ({count})",
+  "overdueLink": "이전 날짜의 미완료 작업 {count}건"
 }

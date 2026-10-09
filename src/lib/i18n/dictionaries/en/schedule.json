@@ -294,5 +294,7 @@
   "errandAdded": "Errand added to {technician}'s schedule",
   "errandAddedUnassigned": "Errand added — waiting in the Saturday coverage list",
   "errandOrderNote": "Order {order}",
-  "errandCustomerFilled": "Order found — filled in the blank fields from {name}."
+  "errandCustomerFilled": "Order found — filled in the blank fields from {name}.",
+  "overdueFilter": "Overdue ({count})",
+  "overdueLink": "{count} unfinished from earlier days"
 }

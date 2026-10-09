@@ -42,6 +42,8 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { formatDate, todayIso } from "@/lib/utils"
 import { technicianFilterOptions, isAssignedTechnician } from "@/lib/technicians"
+import { isOverdueJob } from "@/lib/scheduling/overdue"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
 
@@ -100,6 +102,20 @@ function ScheduleContent() {
   // OR technician_2 (names can be typed in now) — see technicianFilterOptions.
   const technicianOptions = React.useMemo(() => technicianFilterOptions(jobs), [jobs])
   const [jobTypeFilter, setJobTypeFilter] = React.useState<string>("all")
+  // "Overdue": jobs dated before today (Manila) that aren't completed or
+  // cancelled, drafts included. Opened from the Daily Report's "unfinished
+  // from earlier days" link (?filter=overdue); toggling keeps the address in
+  // step so a refresh keeps it.
+  const [overdueOnly, setOverdueOnly] = React.useState(() => searchParams.get("filter") === "overdue")
+  const toggleOverdue = () => {
+    const next = !overdueOnly
+    setOverdueOnly(next)
+    const params = new URLSearchParams(window.location.search)
+    if (next) params.set("filter", "overdue")
+    else params.delete("filter")
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
+  }
 
   // Folds in the linked customer's own "SK001-####" order_number (see
   // customer-lookup.ts's resolveCustomerForPlan) — this job's own orderNo
@@ -128,9 +144,14 @@ function ScheduleContent() {
   // toolbar's own technicianFilter narrowing it first — see that constant's
   // own comment for why.
   const activeJobs = React.useMemo(() => jobsWithOrder.filter((j) => j.status !== "pending_approval"), [jobsWithOrder])
+  const overdueJobs = React.useMemo(() => {
+    const today = businessToday()
+    return jobsWithOrder.filter((j) => isOverdueJob(j, today))
+  }, [jobsWithOrder])
 
   const scopedJobs = React.useMemo(() => {
-    const byTechnician = technicianFilter === "all" ? activeJobs : activeJobs.filter((j) => matchesTechnician(j, technicianFilter))
+    const source = overdueOnly ? overdueJobs : activeJobs
+    const byTechnician = technicianFilter === "all" ? source : source.filter((j) => matchesTechnician(j, technicianFilter))
     const base = jobTypeFilter === "all" ? byTechnician : byTechnician.filter((j) => j.jobType === jobTypeFilter)
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
@@ -149,7 +170,7 @@ function ScheduleContent() {
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [activeJobs, technicianFilter, jobTypeFilter])
+  }, [activeJobs, overdueJobs, overdueOnly, technicianFilter, jobTypeFilter])
 
   // Deliberately from activeJobs, NOT scopedJobs — "Auto-suggest
   // technicians" (the button below) has to see every genuinely unassigned
@@ -390,6 +411,17 @@ function ScheduleContent() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={overdueOnly ? "default" : "outline"}
+                        className="h-9"
+                        aria-pressed={overdueOnly}
+                        onClick={toggleOverdue}
+                        data-testid="schedule-overdue-filter"
+                      >
+                        {t("overdueFilter", { count: String(overdueJobs.length) })}
+                      </Button>
                       <TechnicianWorkloadStats technician={technicianFilter} />
                     </>
                   }
