@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { ClipboardList } from "lucide-react"
 import { DailyReportSection } from "@/components/dashboard/daily-report-section"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -15,7 +16,11 @@ export default function DailyReportPage() {
         <p className="text-sm text-muted-foreground">{tNav("dailyReportDescription")}</p>
       </div>
 
-      <DailyReportSection />
+      {/* DailyReportSection reads its date from the address (useSearchParams),
+          which needs a Suspense boundary on this prerendered page. */}
+      <Suspense fallback={null}>
+        <DailyReportSection />
+      </Suspense>
     </div>
   )
 }

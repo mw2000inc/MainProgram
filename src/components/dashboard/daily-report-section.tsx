@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import {
   DndContext,
   KeyboardSensor,
@@ -66,7 +67,6 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { todayIso } from "@/lib/utils"
 import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
 import { completionDateFor } from "@/lib/completion-date"
 
@@ -258,6 +258,15 @@ function filterColumnsByVisibility<T>(columns: ColumnDef<T, unknown>[], visibleF
 // regardless of mode or saved layout — see isPanelEnabled. Rendered on both
 // the Dashboard and the standalone Daily Report page so they stay in sync
 // rather than drifting as two separate copies.
+// A ?date= value the Daily Report accepts: YYYY-MM-DD and a real calendar
+// date (2026-02-30 is not). Anything else falls back to today.
+function validReportDate(value: string | null): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const [y, m, d] = value.split("-").map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? value : undefined
+}
+
 export function DailyReportSection() {
   const router = useRouter()
   const { user, can } = useAuth()
@@ -407,7 +416,17 @@ export function DailyReportSection() {
     saveLayout.mutate({ panelSizes: { ...sizes, [panelId]: size }, ...firstSaveMode })
   }
 
-  const [reportDate, setReportDate] = React.useState(todayIso)
+  // The report date lives in the address (?date=YYYY-MM-DD) so a refresh or a
+  // shared link keeps it. No (or an invalid) date means today in Manila — so
+  // opening the Daily Report from the menu (plain "/") starts at today. A new
+  // date replaces the address instead of adding a history entry per date.
+  const searchParams = useSearchParams()
+  const reportDate = validReportDate(searchParams.get("date")) ?? businessToday()
+  const setReportDate = React.useCallback((next: string) => {
+    const params = new URLSearchParams(window.location.search)
+    params.set("date", next)
+    window.history.replaceState(null, "", `?${params.toString()}`)
+  }, [])
 
   const { data: filterChangePlans = [], isPending: pFilter } = useFilterChangePlans()
   const { data: installPlans = [], isPending: pInstall } = useInstallPlans()
