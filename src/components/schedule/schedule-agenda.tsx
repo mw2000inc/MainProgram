@@ -681,7 +681,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // already in rather than being treated as "first"). Purely a display
   // order; the ScheduleFormDialog admins already use to reassign anything
   // is completely unaffected.
-  const todaysJobs = React.useMemo(() => {
+  const allDayJobs = React.useMemo(() => {
     // Exactly the jobs dated the report date, in every status (draft,
     // awaiting approval, pending, completed, cancelled) — nothing carried in
     // from another day. Unfinished work from earlier days stays on the Full
@@ -717,6 +717,38 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       return a.routeSequence - b.routeSequence
     })
   }, [jobs, range, isAdmin, user?.id])
+
+  // Generated (or customer-confirmed) drafts the admin hasn't decided on yet:
+  // the job's own-type record has a Pre D (Pre-Installed Date for installs)
+  // that isn't the job's date — usually blank, since approving writes it
+  // (20261028). They stay off this panel — list, counts, export, stop numbers
+  // and Approve All — and wait in the Full Schedule's Pending Schedule
+  // Approval tab; setting the record's Pre D to the job's date brings one back.
+  // Hand-made drafts and drafts with no linked record always show. The
+  // Saturday banner, Assign Saturday Coverage and redistribute still read
+  // allDayJobs, so Saturday drafts keep reaching them.
+  const undecidedDraftIds = React.useMemo(() => {
+    const preDsByJob = new Map<string, (string | undefined)[]>()
+    const add = (jobType: string, jobId: string | undefined, preD: string | undefined) => {
+      if (!jobId) return
+      const key = `${jobType}|${jobId}`
+      preDsByJob.set(key, [...(preDsByJob.get(key) ?? []), preD])
+    }
+    filterChangePlans.forEach((p) => add("filter_change", p.scheduleJobId, p.preD))
+    installPlans.forEach((p) => add("installation", p.scheduleJobId, p.preInstalledDate))
+    repairPlans.forEach((p) => add("repair", p.scheduleJobId, p.preD))
+    collectionRecords.forEach((c) => add("collection", c.scheduleJobId, c.preD))
+    return new Set(
+      allDayJobs
+        .filter((j) => {
+          if (!isDraftJob(j)) return false
+          const preDs = preDsByJob.get(`${j.jobType}|${j.id}`)
+          return !!preDs && preDs.every((preD) => preD !== j.scheduledDate)
+        })
+        .map((j) => j.id)
+    )
+  }, [allDayJobs, filterChangePlans, installPlans, repairPlans, collectionRecords])
+  const todaysJobs = React.useMemo(() => allDayJobs.filter((j) => !undecidedDraftIds.has(j.id)), [allDayJobs, undecidedDraftIds])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
@@ -804,7 +836,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // selects it for the batch Mark as Completed instead of opening the
   // single-job Mark done dialog; a completed job's box just shows it's done.
   const renderJob = (job: (typeof todaysJobs)[number], first: boolean, selectMode = false) => (
-    <div className={cn("flex items-start gap-3 py-2.5", !first && "border-t")}>
+    <div className={cn("flex items-start gap-3 py-2.5", !first && "border-t")} data-testid="schedule-job" data-order={job.orderNo ?? ""}>
     {selectMode ? (
       <Checkbox
         checked={job.status === "completed" || selected.has(job.id)}
@@ -1486,11 +1518,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const [redistributeOpen, setRedistributeOpen] = React.useState(false)
   const [coverageSaturday, setCoverageSaturday] = React.useState<string | undefined>(undefined)
   // A Saturday's open jobs and the unscheduled visits that would go on it.
-  const saturdayJobsOn = (saturday: string) => todaysJobs.filter((j) => isOpenStatus(j.status) && j.scheduledDate === saturday)
+  const saturdayJobsOn = (saturday: string) => allDayJobs.filter((j) => isOpenStatus(j.status) && j.scheduledDate === saturday)
   const saturdayVisitsOn = (saturday: string) => unscheduledVisits.filter((v) => visitDispatchDate(v) === saturday)
   const needsTechnician = (job: ScheduleJob) => isSaturday(job.scheduledDate) && isOpenStatus(job.status) && !isAssignedTechnician(job.technician)
-  const awaitingSaturday = todaysJobs.filter((j) => isSaturday(j.scheduledDate) && (j.status === "pending_approval" || needsTechnician(j)))
-  const saturdayQueueJobs = todaysJobs.filter((j) => isOpenStatus(j.status))
+  const awaitingSaturday = allDayJobs.filter((j) => isSaturday(j.scheduledDate) && (j.status === "pending_approval" || needsTechnician(j)))
+  const saturdayQueueJobs = allDayJobs.filter((j) => isOpenStatus(j.status))
 
   // The report day's drafts: "Approve All for <date>" approves exactly these,
   // or ask the automation for more. (Saturday drafts are left to "Assign
@@ -1642,6 +1674,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           className="mb-3 flex w-full items-center justify-between rounded-md border border-dashed border-danger/40 bg-danger/5 px-3 py-2 text-left text-xs font-medium text-danger hover:bg-danger/10"
         >
           {t("overdueLink", { count: String(overdueCount) })}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
+      {!isPending && isAdmin && undecidedDraftIds.size > 0 && !expanded && (
+        <Link
+          href="/schedule?tab=pendingSchedule"
+          data-testid="schedule-undecided-drafts-link"
+          className="mb-3 flex w-full items-center justify-between rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-left text-xs font-medium hover:bg-primary/10"
+        >
+          {t("undecidedDraftsLink", { count: String(undecidedDraftIds.size) })}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}

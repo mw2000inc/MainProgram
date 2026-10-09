@@ -262,7 +262,7 @@
   "draftsApproved": "초안 작업 {count}건을 승인했습니다 — 이제 담당 기술자에게 보입니다",
   "draftsGenerate": "초안 생성",
   "draftsGenerateHint": "이 날의 확정된 방문을 자동 배정된 초안 작업으로 미리 생성하여 검토합니다.",
-  "draftsGenerated": "검토할 초안 작업 {count}건을 생성했습니다",
+  "draftsGenerated": "초안 작업 {count}건을 생성했습니다 — 전체 일정 › 일정 승인 대기 탭에서 검토하세요",
   "needsTechnician": "기술자 선택 필요",
   "needsTechnicianHint": "토요일은 자동 배정되지 않습니다 — 토요일 근무 배정에서 근무자를 선택하세요.",
   "coverageOpen": "토요일 근무 배정 ({count})",
@@ -323,5 +323,6 @@
   "releaseSlipManualPart": "부품",
   "releaseSlipManualErrand": "심부름",
   "releaseSlipManualRemove": "삭제",
-  "releaseSlipAddSuggestions": "오늘 일정:"
+  "releaseSlipAddSuggestions": "오늘 일정:",
+  "undecidedDraftsLink": "일정 승인 대기 중인 자동 생성 초안 {count}건"
 }

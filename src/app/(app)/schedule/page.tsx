@@ -54,6 +54,9 @@ import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
 // disappearing from the dropdown.
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
 
+const SCHEDULE_TABS = ["schedule", "pending", "pendingSchedule", "draftAssignments"] as const
+type ScheduleTab = (typeof SCHEDULE_TABS)[number]
+
 // The linked customer's own "SK001-####" order_number, never rendered as a
 // column — exists purely so DataTable's generic search on the Schedule
 // List view can find a job by that number too, not just its own
@@ -91,7 +94,21 @@ function ScheduleContent() {
   const [filteredRows, setFilteredRows] = React.useState<ScheduleRow[]>([])
   const [view, setView] = React.useState<"list" | "table">("list")
   const [tableDate, setTableDate] = React.useState(todayIso)
-  const [tab, setTab] = React.useState<"schedule" | "pending" | "pendingSchedule" | "draftAssignments">("schedule")
+  // The tab follows the address (?tab=pendingSchedule etc.), so a link — e.g.
+  // the Daily Report's "generated drafts are waiting" note — opens it and a
+  // refresh keeps it.
+  const [tab, setTabState] = React.useState<ScheduleTab>(() => {
+    const value = searchParams.get("tab")
+    return SCHEDULE_TABS.includes(value as ScheduleTab) ? (value as ScheduleTab) : "schedule"
+  })
+  const setTab = (next: ScheduleTab) => {
+    setTabState(next)
+    const params = new URLSearchParams(window.location.search)
+    if (next === "schedule") params.delete("tab")
+    else params.set("tab", next)
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
+  }
   const pendingApprovalsCount = usePendingApprovalsCount()
   const pendingScheduleApprovalCount = usePendingScheduleApprovalCount()
   // "All Technicians" by default. A shared job (technician + technician2) shows
@@ -290,7 +307,7 @@ function ScheduleContent() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "schedule" | "pending" | "pendingSchedule" | "draftAssignments")}>
+      <Tabs value={tab === "draftAssignments" && !isAdmin ? "schedule" : tab} onValueChange={(v) => setTab(v as ScheduleTab)}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <TabsList>
             <TabsTrigger value="schedule">{t("scheduleTabLabel")}</TabsTrigger>
