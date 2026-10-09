@@ -61,7 +61,6 @@ import { triggerAutomation } from "@/lib/api/automations"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import {
-  carriedFridaysInRange,
   dispatchDateFor,
   isSaturday,
   saturdaysInRange,
@@ -340,21 +339,6 @@ const SOURCE_BADGE: Record<Exclude<ScheduleJobSource, "manual">, { label: string
 
 // "Auto" / "Auto-suggest" / "Customer confirmed" next to a job's type; nothing
 // for a job an admin added by hand.
-// "Carried from Fri, Oct 2" — Friday work still pending, shown on the
-// Saturday / Monday after it (carriedFridaysInRange).
-function CarriedBadge({ date, t }: { date: string; t: (key: string, params?: Record<string, string>) => string }) {
-  return (
-    <Badge
-      variant="outline"
-      data-testid="schedule-carried-badge"
-      title={t("carriedFromFridayHint")}
-      className="h-5 border-warning/40 bg-warning/10 px-1.5 text-[10px] font-semibold text-warning"
-    >
-      {t("carriedFromFriday", { date: formatDate(date) })}
-    </Badge>
-  )
-}
-
 // "Rescheduled from Sat, Oct 10" — moved off a cancelled Saturday by
 // "Cancel & Auto-Distribute Saturday Queue".
 function RescheduledBadge({ date, t }: { date: string; t: (key: string, params?: Record<string, string>) => string }) {
@@ -503,9 +487,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // Full Schedule page keeps ranges). Changing the report date changes it.
   const range = React.useMemo(() => ({ start: date, end: date }), [date])
   const multiDay = range.start !== range.end
-  // Friday roll-forward: Friday's still-pending jobs and unscheduled visits
-  // also show on the Saturday and Monday after it, until they're done.
-  const carriedFridays = React.useMemo(() => carriedFridaysInRange(range), [range])
   const rangeLabel = formatScheduleRange(range)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const { data: customers = [] } = useCustomers()
@@ -575,19 +556,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const unscheduledVisits = React.useMemo(
     () =>
       isAdmin
-        ? [range, ...carriedFridays.map((friday) => ({ start: friday, end: friday }))]
-            .flatMap((r) => buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, r))
-            .sort((a, b) => a.date.localeCompare(b.date) || a.jobType.localeCompare(b.jobType) || a.name.localeCompare(b.name))
+        ? buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, range).sort(
+            (a, b) => a.date.localeCompare(b.date) || a.jobType.localeCompare(b.jobType) || a.name.localeCompare(b.name)
+          )
         : [],
-    [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range, carriedFridays]
+    [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range]
   )
   const [visitToSchedule, setVisitToSchedule] = React.useState<UnscheduledVisit | undefined>(undefined)
-  // The date a visit's job goes on by default: a carried Friday visit on the
-  // day being viewed, one due on a Friday on Saturday, otherwise its own date.
-  const visitDispatchDate = React.useCallback(
-    (v: UnscheduledVisit) => (v.date < range.start ? range.start : dispatchDateFor(v.date)),
-    [range.start]
-  )
+  // The date a visit's job goes on by default: one due on a Friday on
+  // Saturday, otherwise its own date.
+  const visitDispatchDate = React.useCallback((v: UnscheduledVisit) => dispatchDateFor(v.date), [])
   // Bulk Create Jobs: which visits are ticked, and the dialog.
   const [selectedVisitKeys, setSelectedVisitKeys] = React.useState<Set<string>>(new Set())
   // Approve All & Dispatch: progress while it runs (null when idle).
@@ -702,13 +680,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // order; the ScheduleFormDialog admins already use to reassign anything
   // is completely unaffected.
   const todaysJobs = React.useMemo(() => {
-    // Excludes a manually-created job still awaiting admin approval
-    // ('pending_approval', see the Admin Schedule Approval workflow) — this
-    // agenda represents the active technician schedule, and RLS already
-    // keeps a technician from ever fetching such a row at all; an admin's
-    // own session can read it (is_admin() bypasses that), so it still needs
-    // filtering out here or it would show up mixed into "today's schedule"
-    // for the admin viewing their own Daily Report.
+    // Exactly the jobs dated the report date, in every status (draft,
+    // awaiting approval, pending, completed, cancelled) — nothing carried in
+    // from another day. Unfinished work from earlier days stays on the Full
+    // Schedule. A technician never receives a job awaiting approval (RLS
+    // hides 'pending_approval'), so for them it's their own jobs that day.
     //
     // technicianUserId/technician2UserId — belt-and-suspenders, not the
     // real enforcement: schedule_jobs_select RLS (see the technician_role
@@ -725,12 +701,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     // technician's jobs, same as before.
     const filtered = jobs.filter(
       (j) =>
-        ((j.scheduledDate >= range.start && j.scheduledDate <= range.end) ||
-          (j.status === "pending" && carriedFridays.includes(j.scheduledDate))) &&
-        // Jobs awaiting approval stay hidden — except, for admins, auto-
-        // assigned drafts and Saturday jobs, which are there to be reviewed.
-        // (Technicians never receive these: RLS hides pending_approval.)
-        (j.status !== "pending_approval" || (isAdmin && (isDraftJob(j) || isSaturday(j.scheduledDate)))) &&
+        j.scheduledDate >= range.start &&
+        j.scheduledDate <= range.end &&
         (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
     )
     // Day first (a multi-day timeframe), then technician and route order.
@@ -742,7 +714,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [jobs, range, carriedFridays, isAdmin, user?.id])
+  }, [jobs, range, isAdmin, user?.id])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
@@ -867,7 +839,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           {isDraftJob(job) && <DraftBadge t={t} />}
           {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
           {paymentLine(job)}
-          {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
           {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
           {job.orderNo && <span className="text-muted-foreground">· {job.orderNo}</span>}
         </div>
@@ -1122,7 +1093,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     {isDraftJob(job) && <DraftBadge t={t} />}
                     {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
                     {paymentLine(job)}
-                    {job.scheduledDate < range.start && <CarriedBadge date={job.scheduledDate} t={t} />}
                     {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
                   </span>
                 }
@@ -1245,8 +1215,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // technician (none on a Saturday), or — for Approve All & Dispatch — the
   // automatic assignment (createDispatchAssigner: planned → Liteace for
   // installs → same place → customer's → nearby → least busy; Saturdays
-  // unassigned). Each job is dated its visit's dispatch date (carried Friday
-  // visits on the day being viewed, Friday visits on Saturday) unless changed.
+  // unassigned). Each job is dated its visit's dispatch date (Friday visits on
+  // Saturday) unless changed.
   const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
   const openVisitReview = (mode: "bulk" | "dispatch", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
@@ -1410,11 +1380,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {t(v.jobType)}
-                      {v.date < range.start && (
-                        <div className="mt-1">
-                          <CarriedBadge date={v.date} t={t} />
-                        </div>
-                      )}
                       {v.rescheduledFrom && (
                         <div className="mt-1">
                           <RescheduledBadge date={v.rescheduledFrom} t={t} />
@@ -1491,7 +1456,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {formatDate(v.date)}
-                      {v.date < range.start && <CarriedBadge date={v.date} t={t} />}
                       {v.rescheduledFrom && <RescheduledBadge date={v.rescheduledFrom} t={t} />}
                       {isSaturday(visitDispatchDate(v)) && <NeedsTechnicianBadge t={t} />}
                     </div>
