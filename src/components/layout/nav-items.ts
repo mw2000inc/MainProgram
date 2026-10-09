@@ -13,6 +13,7 @@ import {
   Layers,
   History,
   Hammer,
+  ReceiptText,
   type LucideIcon,
 } from "lucide-react"
 import type { Permission } from "@/lib/auth/auth-context"
@@ -51,6 +52,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Daily Report", key: "dailyReport", icon: ClipboardList, group: 1, technicianVisible: true },
+  { href: "/release-slip", label: "Release Slip", key: "releaseSlip", icon: ReceiptText, group: 1, technicianVisible: true },
   { href: "/schedule", label: "Schedule", key: "schedule", icon: CalendarClock, group: 1 },
   { href: "/install", label: "Install", key: "install", icon: HardHat, group: 1 },
   { href: "/filter-change", label: "Filter Change", key: "filterChange", icon: Droplets, group: 1 },

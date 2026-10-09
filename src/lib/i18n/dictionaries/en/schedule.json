@@ -296,5 +296,11 @@
   "errandOrderNote": "Order {order}",
   "errandCustomerFilled": "Order found — filled in the blank fields from {name}.",
   "overdueFilter": "Overdue ({count})",
-  "overdueLink": "{count} unfinished from earlier days"
+  "overdueLink": "{count} unfinished from earlier days",
+  "releaseSlipDescription": "A printable slip of the items taken out and returned for the day's jobs.",
+  "releaseSlipPickTechnician": "Choose a technician",
+  "releaseSlipPickTechnicianHint": "Choose a technician to see their release slip.",
+  "releaseSlipIncludePending": "Include pending jobs",
+  "releaseSlipError": "The release slip couldn't be loaded. Please try again.",
+  "releaseSlipCount": "{count} job(s) on this slip"
 }
