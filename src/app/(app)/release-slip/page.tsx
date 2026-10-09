@@ -4,14 +4,18 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { Printer, ReceiptText } from "lucide-react"
+import { Plus, Printer, ReceiptText, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
 import { ReleaseSlipSheets, RELEASE_SLIP_CSS, type SlipSignatures } from "@/components/release-slip/release-slip-sheets"
+import { AddSlipItemDialog } from "@/components/release-slip/add-slip-item-dialog"
 import { fetchReleaseSlip } from "@/lib/api/release-slip"
+import { listProducts } from "@/lib/api/inventory"
+import { productsKey } from "@/lib/hooks/use-inventory"
+import { loadManualItems, manualSlipJob, saveManualItems, type ManualSlipItem } from "@/lib/release-slip-manual"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -71,13 +75,61 @@ function ReleaseSlipContent() {
     () => (data?.jobs ?? []).map((j) => (j.status === "completed" ? j : { ...j, movements: [] })),
     [data]
   )
-  const technicianName = data?.technicianName || (isAdmin ? technicians.find((p) => p.id === pickedTechnician)?.name ?? "" : user?.name ?? "")
-
+  // Extra parts / errand notes added on this page, kept in this browser per
+  // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
+  const manualKey = technicianId ? `${date}:${technicianId}` : null
+  const [manual, setManual] = React.useState<{ key: string | null; items: ManualSlipItem[] }>({ key: null, items: [] })
+  if (mounted && manual.key !== manualKey) setManual({ key: manualKey, items: technicianId ? loadManualItems(date, technicianId) : [] })
+  const setManualItems = (items: ManualSlipItem[]) => {
+    if (!technicianId) return
+    saveManualItems(date, technicianId, items)
+    setManual({ key: manualKey, items })
+  }
+  const [addOpen, setAddOpen] = React.useState(false)
+  // Technicians can't read the product list; they type the item instead.
+  const { data: products = [] } = useQuery({ queryKey: productsKey, queryFn: listProducts, enabled: isAdmin })
+  const productOptions = React.useMemo(
+    () => [...new Set(products.map((p) => (p.sku || p.name).trim()).filter(Boolean))].sort().map((value) => ({ value })),
+    [products]
+  )
+  // For pre-filling a manual row's note: the technician's whole day (pending
+  // jobs too — same query as "Include pending jobs"), so a SKU on one of their
+  // jobs suggests that job's order and account; otherwise the product itself.
+  const { data: wholeDay } = useQuery({
+    queryKey: ["releaseSlip", date, technicianId ?? null, true],
+    queryFn: () => fetchReleaseSlip(date, technicianId, true),
+    enabled: !!user && (!isAdmin || !!pickedTechnician),
+  })
+  const noteSuggestions = React.useCallback(
+    (item: string) => {
+      const key = item.trim().toLowerCase()
+      if (!key) return []
+      const accounts = (wholeDay?.jobs ?? [])
+        .filter((j) => j.movements.some((m) => (m.sku || m.label).trim().toLowerCase() === key))
+        .map((j) => [j.orderNo, j.accountName].filter(Boolean).join(" — "))
+      if (accounts.length) return [...new Set(accounts)]
+      const product = products.find((p) => (p.sku || p.name).trim().toLowerCase() === key)
+      if (!product) return []
+      const sku = (product.sku || "").trim()
+      // The name reads "012 / MW) Pre-Carbon": the part after the SKU. (Descriptions
+      // carry extra lines like "Location: …", so only their first line is a fallback.)
+      const name = product.name.trim()
+      const text = (sku && name.startsWith(sku) ? name.slice(sku.length).replace(/^\s*[/-]\s*/, "") : name).trim() || (product.description ?? "").split("\n")[0].trim()
+      return [sku && text ? `${sku} - ${text}` : sku || text]
+    },
+    [wholeDay, products]
+  )
+  const slipJobs = React.useMemo(() => {
+    const extra = manualSlipJob(manual.items)
+    return extra ? [...jobs, extra] : jobs
+  }, [jobs, manual.items])
+
+  const technicianName = data?.technicianName || (isAdmin ? technicians.find((p) => p.id === pickedTechnician)?.name ?? "" : user?.name ?? "")
 
   const ready = !!data && !isPending
   return (
@@ -110,6 +162,9 @@ function ReleaseSlipContent() {
             <Checkbox checked={includePending} onCheckedChange={(v) => setIncludePending(v === true)} data-testid="slip-include-pending" />
             {t("releaseSlipIncludePending")}
           </label>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAddOpen(true)} disabled={!technicianId} data-testid="slip-add">
+            <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAdd")}
+          </Button>
           <Button size="sm" className="gap-1.5" onClick={() => window.print()} disabled={!ready} data-testid="slip-print">
             <Printer className="h-3.5 w-3.5" /> {t("print")}
           </Button>
@@ -129,21 +184,50 @@ function ReleaseSlipContent() {
           <p className="text-xs text-muted-foreground" data-testid="slip-count">
             {t("releaseSlipCount", { count: String(jobs.length) })}
           </p>
+          {manual.items.length > 0 && (
+            <div className="space-y-1.5 rounded-md border p-3" data-testid="slip-manual-list">
+              <p className="text-sm font-medium">{t("releaseSlipManualTitle", { count: String(manual.items.length) })}</p>
+              <ul className="space-y-1 text-sm">
+                {manual.items.map((i) => (
+                  <li key={i.id} className="flex items-center gap-2" data-testid="slip-manual-item">
+                    <span className="w-16 shrink-0 text-xs text-muted-foreground">{i.category === "errand" ? t("releaseSlipManualErrand") : t("releaseSlipManualPart")}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {i.item ? `${i.item} · ${i.direction === "out" ? "OUT" : "IN"} ${i.qty}` : ""}
+                      {i.item && i.note ? " — " : ""}
+                      {i.note}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => setManualItems(manual.items.filter((x) => x.id !== i.id))}
+                      aria-label={t("releaseSlipManualRemove")}
+                      data-testid="slip-manual-remove"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {/* On-screen preview: scrolls sideways on a narrow screen. */}
           <div className="overflow-x-auto rounded-md border bg-muted/40 p-3">
             <div className="flex w-max flex-col gap-4">
-              <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={jobs} signatures={signatures} onSignaturesChange={setSignatures} />
+              <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={slipJobs} signatures={signatures} onSignaturesChange={setSignatures} />
             </div>
           </div>
           {mounted &&
             createPortal(
               <div className="release-slip-print">
-                <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={jobs} signatures={signatures} />
+                <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={slipJobs} signatures={signatures} />
               </div>,
               document.body
             )}
         </>
       )}
+      <AddSlipItemDialog open={addOpen} onOpenChange={setAddOpen} productOptions={productOptions} noteSuggestions={noteSuggestions} onAdd={(item) => setManualItems([...manual.items, item])} />
     </div>
   )
 }

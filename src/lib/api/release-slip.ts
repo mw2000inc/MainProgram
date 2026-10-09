@@ -8,6 +8,11 @@ export interface ReleaseSlipMovement {
   qtyIn: number
   // 'pending' = awaiting inventory approval (printed with an asterisk).
   status: string
+  // Manual rows added on the slip page (not from the database): printed in
+  // the Notes column. An errand row is a task note — its item is printed but
+  // left out of the Summary totals.
+  note?: string
+  errand?: boolean
 }
 
 export interface ReleaseSlipJob {

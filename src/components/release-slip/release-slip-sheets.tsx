@@ -25,7 +25,11 @@ const MIN_SUMMARY_ROWS = 10
 type Block = { job: ReleaseSlipJob; movements: ReleaseSlipMovement[]; lines: number; continued: boolean }
 type Page = { blocks: Block[]; summary: boolean }
 
-export function typeBox(jobType: string): "F" | "R" | "S" | "O" {
+// The block of rows added by hand on the slip page (no type box ticked).
+export const MANUAL_JOB_TYPE = "manual"
+
+export function typeBox(jobType: string): "F" | "R" | "S" | "O" | null {
+  if (jobType === MANUAL_JOB_TYPE) return null
   if (jobType === "filter_change") return "F"
   if (jobType === "repair") return "R"
   if (jobType === "installation") return "S"
@@ -39,6 +43,7 @@ export function buildSummary(jobs: ReleaseSlipJob[]) {
   const map = new Map<string, { sku: string; out: number; in: number; pending: boolean }>()
   for (const j of jobs)
     for (const m of j.movements) {
+      if (m.errand || !(m.qtyOut || m.qtyIn)) continue
       const key = itemName(m)
       const row = map.get(key) ?? { sku: key, out: 0, in: 0, pending: false }
       row.out += m.qtyOut
@@ -53,7 +58,7 @@ export function paginate(jobs: ReleaseSlipJob[], summaryRows: number): Page[] {
   // Split a job longer than a whole page into page-sized chunks.
   const blocks: Block[] = []
   for (const job of jobs) {
-    const items = job.movements.filter((m) => m.qtyOut || m.qtyIn)
+    const items = job.movements.filter((m) => m.qtyOut || m.qtyIn || m.note)
     if (items.length <= LINES_PER_PAGE) {
       blocks.push({ job, movements: items, lines: Math.max(LINES_PER_JOB, items.length), continued: false })
     } else {
@@ -206,7 +211,9 @@ export function ReleaseSlipSheets({
                           <td className="slip-num">{m && m.qtyOut ? `${qty(m.qtyOut)}${m.status === "pending" ? "*" : ""}` : ""}</td>
                           <td>{m && m.qtyIn ? itemName(m) : ""}</td>
                           <td className="slip-num">{m && m.qtyIn ? `${qty(m.qtyIn)}${m.status === "pending" ? "*" : ""}` : ""}</td>
-                          <td />
+                          <td className="slip-note" title={m?.note}>
+                            {m?.note ?? ""}
+                          </td>
                         </tr>
                       )
                     })}
@@ -271,6 +278,7 @@ export const RELEASE_SLIP_CSS = `
 .slip-cont { font-weight: 400; font-size: 7.5pt; }
 .slip-box { text-align: center; font-weight: 700; }
 .slip-num { text-align: right; }
+.slip-table td.slip-note { font-size: 7pt; }
 .slip-foot { font-size: 7.5pt; text-align: right; }
 .slip-bottom { display: flex; gap: 6mm; align-items: flex-start; margin-top: 2mm; }
 .slip-summary { flex: 0 0 92mm; }
