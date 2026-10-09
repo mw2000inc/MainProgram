@@ -47,7 +47,17 @@ export function SidebarNav({
           const link = (
             <Link
               href={item.href}
-              onClick={onNavigate}
+              onClick={(e) => {
+                // Already on the Daily Report: drop ?date= so it returns to
+                // today. Done by hand (not a router navigation to the same
+                // page), which could restore the date the page was first
+                // opened with.
+                if (item.href === "/" && pathname === "/") {
+                  e.preventDefault()
+                  if (window.location.search) window.history.replaceState(null, "", "/")
+                }
+                onNavigate?.()
+              }}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-2",
