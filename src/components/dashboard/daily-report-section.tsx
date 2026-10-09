@@ -661,25 +661,37 @@ export function DailyReportSection() {
     (r: { status: string; scheduleJobId?: string }) => r.status !== "Pending" || (!!r.scheduleJobId && approvedJobIds.has(r.scheduleJobId)),
     [approvedJobIds]
   )
+  // Which day a record belongs on. A still-Pending record shows only on its
+  // Pre D (Pre-Installed Date for installs) — the admin sets it, and
+  // approving its job sets it to the job's date (20261028); a blank Pre D
+  // keeps it off every day. Completed / Collected / Cancelled records keep
+  // Pre D, else the base date, so past reports don't lose rows. (Unscheduled
+  // Visits, the draft generator and reminders still use Pre D, else the base
+  // date — that's how a record without a Pre D gets scheduled.)
+  const isOnReportDay = React.useCallback(
+    (status: string, preD: string | undefined, baseDate: string | undefined) =>
+      status === "Pending" ? preD === reportDate : (preD || baseDate) === reportDate,
+    [reportDate]
+  )
   const dayFilterChangePlans = React.useMemo(
-    () => filterChangePlans.filter((p) => (p.preD || p.planDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [filterChangePlans, reportDate, isApprovedForReport]
+    () => filterChangePlans.filter((p) => isOnReportDay(p.status, p.preD, p.planDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [filterChangePlans, isOnReportDay, isApprovedForReport]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
   // is preInstalledDate (input date is the plan/entry date, installedDate
   // is when it actually happened — see the InstallPlan type), so that's
   // what wins over inputDate here, same COALESCE semantics as the others.
   const dayInstallPlans = React.useMemo(
-    () => installPlans.filter((p) => (p.preInstalledDate || p.inputDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [installPlans, reportDate, isApprovedForReport]
+    () => installPlans.filter((p) => isOnReportDay(p.status, p.preInstalledDate, p.inputDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [installPlans, isOnReportDay, isApprovedForReport]
   )
   const dayRepairPlans = React.useMemo(
-    () => repairPlans.filter((p) => (p.preD || p.issuedDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [repairPlans, reportDate, isApprovedForReport]
+    () => repairPlans.filter((p) => isOnReportDay(p.status, p.preD, p.issuedDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [repairPlans, isOnReportDay, isApprovedForReport]
   )
   const dayCollectionPlans = React.useMemo(
-    () => collectionPlans.filter((p) => (p.preD || p.collectionDate) === reportDate && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [collectionPlans, reportDate, isApprovedForReport]
+    () => collectionPlans.filter((p) => isOnReportDay(p.status, p.preD, p.collectionDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
+    [collectionPlans, isOnReportDay, isApprovedForReport]
   )
   // Filtered by the movement's own `date` (its as-of day — defaults to the
   // day it was recorded, and matches the completed job's scheduledDate for
