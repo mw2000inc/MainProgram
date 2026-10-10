@@ -12,7 +12,7 @@ import {
 import { StockStatusBadge, StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDateTime, getStockStatus } from "@/lib/utils"
+import { formatDate, getStockStatus } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 
 export type { StockMovementRow }
@@ -124,10 +124,10 @@ export function getStockMovementsColumns({
   const columns: ColumnDef<StockMovementRow, unknown>[] = [
     {
       accessorKey: "createdAt",
-      header: () => <ColumnHeader tKey="dateTime" ns="inventory" />,
-      // The exact timestamp (not just the day) an entry was recorded — lets the admin
-      // tell which movement happened first when several land on the same day.
-      cell: ({ row }) => formatDateTime(row.original.createdAt),
+      header: () => <ColumnHeader tKey="date" ns="inventory" />,
+      // The day the entry was recorded. Sorting still uses the full timestamp,
+      // so same-day movements keep their order.
+      cell: ({ row }) => formatDate(row.original.createdAt),
     },
     {
       accessorKey: "sku",

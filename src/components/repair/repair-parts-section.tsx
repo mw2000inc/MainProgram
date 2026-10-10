@@ -255,7 +255,6 @@ export function PartFormDialog({
     formatPart,
   ])
   const partNoOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: p.sku })), [products])
-  const inOutOptions: ComboboxOption[] = React.useMemo(() => [{ value: "IN" }, { value: "OUT" }], [])
 
   // Part and Part No are two independent, clickable entry points into the
   // SAME product catalog — picking a real catalog suggestion in either one
@@ -328,7 +327,9 @@ export function PartFormDialog({
                 part can be found by typing its code, not just its (often
                 long) description — matches the table's own Part No/Part
                 split below. */}
-            <Combobox value={partText} onChange={handlePartChange} options={partOptions} placeholder={t("selectProduct")} />
+            {/* The dialog focuses this field on open; openOnFocus={false} keeps its
+                list closed until a click or typing, so it doesn't cover the fields below. */}
+            <Combobox value={partText} onChange={handlePartChange} options={partOptions} placeholder={t("selectProduct")} openOnFocus={false} />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{tFields("partNo")}</label>
@@ -346,7 +347,16 @@ export function PartFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">{t("inOut")}</label>
-              <Combobox value={inOutText} onChange={setInOutText} options={inOutOptions} placeholder="IN / OUT" />
+              {/* Two fixed choices, so a dropdown instead of a typable field. */}
+              <Select value={inOutText.trim().toUpperCase() === "OUT" ? "OUT" : "IN"} onValueChange={setInOutText}>
+                <SelectTrigger className="w-full" data-testid="part-in-out">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="IN">IN</SelectItem>
+                  <SelectItem value="OUT">OUT</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">{tFields("quantity")}</label>
