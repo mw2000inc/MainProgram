@@ -65,7 +65,12 @@ interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[]
   data: TData[]
   searchPlaceholder?: string
+  // Opt-in. Decides whether a row matches the search text (passed as typed).
+  // Without it, a row matches when any of its own values contains the text.
+  searchFn?: (row: TData, query: string) => boolean
   toolbar?: React.ReactNode
+  // Every row that passes the search, across all pages, in the list's
+  // current sort order (so Prev/Next and exports follow what's shown).
   onFilteredRowsChange?: (rows: TData[]) => void
   // Raw text currently typed into the search box — separate from
   // onFilteredRowsChange because an empty query and a query that happens to
@@ -181,6 +186,7 @@ export function DataTable<TData>({
   columns,
   data,
   searchPlaceholder,
+  searchFn,
   toolbar,
   onFilteredRowsChange,
   onSearchChange,
@@ -252,6 +258,7 @@ export function DataTable<TData>({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn: (row, _columnId, filterValue) => {
+      if (searchFn) return searchFn(row.original, String(filterValue))
       const search = String(filterValue).toLowerCase()
       return Object.values(row.original as Record<string, unknown>).some((value) =>
         String(value ?? "").toLowerCase().includes(search)
@@ -270,8 +277,8 @@ export function DataTable<TData>({
     setPagination((p) => (p.pageIndex > lastPageIndex ? { ...p, pageIndex: lastPageIndex } : p))
   }
 
-  const filteredRows = table.getFilteredRowModel().rows.map((r) => r.original)
-  const filteredRowsKey = filteredRows.length + ":" + globalFilter
+  const filteredRows = table.getPrePaginationRowModel().rows.map((r) => r.original)
+  const filteredRowsKey = filteredRows.length + ":" + globalFilter + ":" + JSON.stringify(sorting)
 
   React.useEffect(() => {
     onFilteredRowsChange?.(filteredRows)

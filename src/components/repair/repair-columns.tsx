@@ -228,6 +228,23 @@ export function getRepairListColumns(partsByRepairId: Map<string, string>): Colu
 }
 
 
+// The Repair Plan search. Text that looks like an order number (digits, with
+// or without dashes) matches the repair's Order No only: a complete number
+// such as "001-0404" must match exactly (so it never finds 001-0405, nor
+// 001-01036 when "001-0103" is typed); a partial one such as "0404" or
+// "001-04" matches any Order No containing it. Any other text matches the
+// account name or the problem. Case is ignored.
+const FULL_ORDER_NO = /^\d{3}-\d{4,}$/
+export function matchesRepairSearch(plan: RepairPlan, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (/^[\d-]+$/.test(q) && /\d/.test(q)) {
+    const orderNo = plan.orderNo.trim().toLowerCase()
+    return FULL_ORDER_NO.test(q) ? orderNo === q : orderNo.includes(q)
+  }
+  return plan.accountName.toLowerCase().includes(q) || (plan.problem ?? "").toLowerCase().includes(q)
+}
+
 export const REPAIR_EXPORT_COLUMNS = [
   { header: "Issued Date", key: "issuedDate" },
   { header: "Account Name", key: "accountName" },

@@ -12,7 +12,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { DetailField, DetailPanel, SplitViewLayout, useSplitViewSelection } from "@/components/data-table/split-view"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
 import { RepairPartsSection } from "@/components/repair/repair-parts-section"
-import { getRepairListColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
+import { getRepairListColumns, matchesRepairSearch, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { useDeleteRepairPlans, useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useAllRepairPlanParts } from "@/lib/hooks/use-repair-plan-parts"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -153,6 +153,7 @@ function RepairPlanPageContent() {
                   data={sortedPlans}
                   pageSize={REPAIR_PAGE_SIZE}
                   searchPlaceholder={t("searchPlaceholder")}
+                  searchFn={matchesRepairSearch}
                   emptyMessage={t("noPlansFound")}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
