@@ -113,5 +113,8 @@
   "toneNotActive": "비활성",
   "toneRentOnly": "렌탈만",
   "orderQrDownload": "다운로드",
-  "orderQrUnavailable": "이 주문에 연결된 회원이 없어 QR 코드가 없습니다."
+  "orderQrUnavailable": "이 주문에 연결된 회원이 없어 QR 코드가 없습니다.",
+  "toneNew": "신규",
+  "markSeen": "확인 완료",
+  "markAllSeen": "모두 확인 완료 ({count})"
 }

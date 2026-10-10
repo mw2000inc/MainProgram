@@ -113,5 +113,8 @@
   "toneNotActive": "Not active",
   "toneRentOnly": "Rent only",
   "orderQrDownload": "Download",
-  "orderQrUnavailable": "No member linked to this order, so there's no QR code yet."
+  "orderQrUnavailable": "No member linked to this order, so there's no QR code yet.",
+  "toneNew": "New",
+  "markSeen": "Mark as seen",
+  "markAllSeen": "Mark all as seen ({count})"
 }

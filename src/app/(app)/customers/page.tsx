@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Plus, Printer, Users } from "lucide-react"
+import { Check, CheckCheck, MapPin, Maximize2, Plus, Printer, Users } from "lucide-react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "@/components/data-table/data-table"
 import { MonthYearFilter, type MonthYearValue } from "@/components/data-table/month-year-filter"
@@ -26,7 +28,7 @@ import { MemberOrderDetail } from "@/components/customers/member-order-detail"
 import { BreadcrumbTrail } from "@/components/shared/breadcrumb-trail"
 import { getCustomerColumns, type CustomerRow } from "@/components/customers/customers-columns"
 import type { SaleListRow } from "@/components/sale-list/sale-list-columns"
-import { useCustomers, useDeleteCustomer } from "@/lib/hooks/use-customers"
+import { useCustomers, useDeleteCustomer, useMarkCustomersSeen } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { buildRelatedOrderNumbersByCustomerId } from "@/lib/customer-lookup"
 import { useSettings } from "@/lib/hooks/use-misc"
@@ -40,13 +42,15 @@ import { parseISO } from "date-fns"
 // Member row colors (see memberToneById). The text color is set on every
 // cell and everything inside it, so placeholders ("—") and the monospace
 // Member Account# take it too; the 600 shades read well on the light theme
-// and the 400 shades on the dark one. Hover/selection backgrounds are
-// untouched.
-type MemberTone = "notActive" | "rentOnly"
+// and the 400 shades on the dark one (green uses emerald-700 on light, since
+// 600 is too faint on white). Hover/selection backgrounds are untouched.
+type MemberTone = "notActive" | "rentOnly" | "new"
 const MEMBER_TONE_CLASS: Record<MemberTone, string> = {
   notActive: "[&_td]:text-red-600 [&_td_*]:text-red-600 dark:[&_td]:text-red-400 dark:[&_td_*]:text-red-400",
   rentOnly: "[&_td]:text-pink-600 [&_td_*]:text-pink-600 dark:[&_td]:text-pink-400 dark:[&_td_*]:text-pink-400",
+  new: "[&_td]:text-emerald-700 [&_td_*]:text-emerald-700 dark:[&_td]:text-emerald-400 dark:[&_td_*]:text-emerald-400",
 }
+const isMemberTone = (v: string): v is MemberTone => v === "notActive" || v === "rentOnly" || v === "new"
 
 export default function CustomersPage() {
   const router = useRouter()
@@ -71,6 +75,11 @@ export default function CustomersPage() {
   // that was never drilled into via the split-view panel.
   const [directionsTarget, setDirectionsTarget] = React.useState<Customer | undefined>(undefined)
   const [filteredRows, setFilteredRows] = React.useState<CustomerRow[]>([])
+  // Full screen: the same list in a dialog across the whole screen. It shares
+  // the status and month/year filters; its search is its own, and Export there
+  // exports what it shows.
+  const [fullScreen, setFullScreen] = React.useState(false)
+  const [fullScreenRows, setFullScreenRows] = React.useState<CustomerRow[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
@@ -87,26 +96,37 @@ export default function CustomersPage() {
   // so search and export are unaffected): "notActive" when none of their
   // orders is ACTIVE or RENT, "rentOnly" when they have RENT orders and no
   // ACTIVE one (an old INACTIVE order alongside doesn't change that); not
-  // active wins. A member with no orders keeps the normal look. Orders are matched
-  // the same way as relatedOrderNumbers (the entry's customer link, else its
-  // order number).
+  // active wins. Otherwise "new" (green) while the member's "new" flag is on —
+  // set when a member is created in the app, cleared by an admin's "Mark as
+  // seen" (20261031000000_member_new_flag). A member with no orders gets no
+  // red/pink. Orders are matched the same way as relatedOrderNumbers (the
+  // entry's customer link, else its order number).
   const memberToneById = React.useMemo(() => {
     const map = new Map<string, MemberTone>()
     for (const c of realCustomers) {
       const statuses = saleListEntries
         .filter((e) => (e.customerId ? e.customerId === c.id : e.orderNumber === c.orderNumber))
         .map((e) => e.status)
-      if (statuses.length === 0) continue
-      if (!statuses.some((st) => st === "ACTIVE" || st === "RENT")) map.set(c.id, "notActive")
-      else if (!statuses.includes("ACTIVE")) map.set(c.id, "rentOnly")
+      if (statuses.length > 0 && !statuses.some((st) => st === "ACTIVE" || st === "RENT")) map.set(c.id, "notActive")
+      else if (statuses.length > 0 && !statuses.includes("ACTIVE")) map.set(c.id, "rentOnly")
+      else if (c.isNew) map.set(c.id, "new")
     }
     return map
   }, [realCustomers, saleListEntries])
+
+  // Members whose "new" flag is on — the "New" filter, the "Mark as seen"
+  // buttons and "Mark all as seen" all go by the flag (a flagged member that
+  // is red or pink keeps that color but still has the button).
+  const flaggedIds = React.useMemo(() => new Set(realCustomers.filter((c) => c.isNew).map((c) => c.id)), [realCustomers])
+  const markSeen = useMarkCustomersSeen()
+  const canMarkSeen = can("customers:edit")
 
   const rows: CustomerRow[] = React.useMemo(
     () =>
       realCustomers.map((c) => ({
         ...c,
+        // Kept out of the row data, so search and export never see it.
+        isNew: undefined,
         contractStatus: getContractStatus(c.contractEnd),
         relatedOrderNumbers: (relatedOrderNumbersByCustomerId.get(c.id) ?? []).join(" "),
       })),
@@ -120,7 +140,9 @@ export default function CustomersPage() {
 
   const scopedRows = React.useMemo(() => {
     return rows.filter((c) => {
-      if (statusFilter === "notActive" || statusFilter === "rentOnly") {
+      if (statusFilter === "new") {
+        if (!flaggedIds.has(c.id)) return false
+      } else if (isMemberTone(statusFilter)) {
         if (memberToneById.get(c.id) !== statusFilter) return false
       } else if (statusFilter !== "all" && c.contractStatus !== statusFilter) return false
       const created = parseISO(c.createdAt)
@@ -128,7 +150,7 @@ export default function CustomersPage() {
       if (monthYear.year !== "all" && created.getFullYear() !== Number(monthYear.year)) return false
       return true
     })
-  }, [rows, statusFilter, monthYear, memberToneById])
+  }, [rows, statusFilter, monthYear, memberToneById, flaggedIds])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
   // Current copy of the selected member, not the one filteredRows may still
@@ -159,16 +181,42 @@ export default function CustomersPage() {
   const orderSelection = useSplitViewSelection(relatedSaleRows)
 
   const columns = React.useMemo(
-    () =>
-      getCustomerColumns({
+    () => {
+      const base = getCustomerColumns({
         canDelete: can("customers:delete"),
         onEdit: (c) => {
           setEditing(c)
           setFormOpen(true)
         },
         onDelete: (c) => setDeleting(c),
-      }),
-    [can]
+      })
+      if (!canMarkSeen) return base
+      // "Mark as seen" on a flagged row, just before the row's … menu.
+      const markSeenColumn: ColumnDef<CustomerRow, unknown> = {
+        id: "markSeen",
+        header: "",
+        meta: { headerClassName: "w-[130px] max-w-[130px]", cellClassName: "w-[130px] max-w-[130px]" },
+        cell: ({ row }) =>
+          flaggedIds.has(row.original.id) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs"
+              disabled={markSeen.isPending}
+              onClick={(e) => {
+                e.stopPropagation()
+                markSeen.mutate([row.original.id])
+              }}
+              data-testid="member-mark-seen"
+            >
+              <Check className="h-3.5 w-3.5" /> {t("markSeen")}
+            </Button>
+          ) : null,
+      }
+      return [...base.slice(0, -1), markSeenColumn, ...base.slice(-1)]
+    },
+    [can, canMarkSeen, flaggedIds, markSeen, t]
   )
 
   const exportColumns = [
@@ -235,6 +283,96 @@ export default function CustomersPage() {
   // one level deeper (list -> member -> order) instead of showing the list
   // and detail side by side. The level you came from minimizes into a
   // breadcrumb crumb rather than staying visible.
+  // The Member list table — on the page, and again in the full-screen dialog.
+  const memberTable = (inFullScreen: boolean) => (
+        <DataTable
+          columns={columns}
+          data={scopedRows}
+          searchPlaceholder={t("searchPlaceholder")}
+          onFilteredRowsChange={inFullScreen ? setFullScreenRows : setFilteredRows}
+          onSearchChange={inFullScreen ? undefined : setSearchQuery}
+          emptyMessage={t("noMembersFound")}
+          onRowClick={(row) => {
+            setFullScreen(false)
+            selection.open(row)
+          }}
+          getRowClassName={(row) => {
+            const tone = memberToneById.get(row.id)
+            return tone ? MEMBER_TONE_CLASS[tone] : undefined
+          }}
+          virtualize
+          tableClassName={canMarkSeen ? "table-fixed min-w-[1490px] w-full" : "table-fixed min-w-[1360px] w-full"}
+          tableContainerClassName="overflow-x-auto"
+          scrollContainerClassName="overflow-x-auto"
+          headerCellClassName="px-2 py-1.5"
+          bodyCellClassName="px-2 py-1.5"
+          toolbar={
+            <>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                <SelectTrigger className="h-9 w-[150px]">
+                  <SelectValue placeholder={t("contractStatus")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
+                  <SelectItem value="active">{tStatus("active")}</SelectItem>
+                  <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
+                  <SelectItem value="expired">{tStatus("expired")}</SelectItem>
+                  <SelectItem value="notActive">{t("toneNotActive")}</SelectItem>
+                  <SelectItem value="rentOnly">{t("toneRentOnly")}</SelectItem>
+                  <SelectItem value="new">{t("toneNew")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* What the row colors mean. */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground" data-testid="member-tone-legend">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-600 dark:bg-red-400" /> {t("toneNotActive")}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-pink-600 dark:bg-pink-400" /> {t("toneRentOnly")}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-700 dark:bg-emerald-400" /> {t("toneNew")}
+                </span>
+              </div>
+              {canMarkSeen && flaggedIds.size > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5"
+                  disabled={markSeen.isPending}
+                  onClick={() => markSeen.mutate(undefined)}
+                  data-testid="member-mark-all-seen"
+                >
+                  <CheckCheck className="h-4 w-4" /> {t("markAllSeen", { count: String(flaggedIds.size) })}
+                </Button>
+              )}
+              <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+              <ExportButtons
+                title="Member List"
+                subtitle={`Generated ${formatDate(new Date().toISOString())}`}
+                fileName="members"
+                columns={exportColumns}
+                rows={inFullScreen ? fullScreenRows : filteredRows}
+              />
+              {!inFullScreen && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  title={tCommon("expand")}
+                  aria-label={tCommon("expand")}
+                  onClick={() => setFullScreen(true)}
+                  data-testid="member-list-expand"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              )}
+            </>
+          }
+        />
+  )
+
   return (
     // h-full (not overflow-hidden) here — the Order-detail branch below
     // (MemberOrderDetail) can still carry natural, potentially-tall content
@@ -334,62 +472,29 @@ export default function CustomersPage() {
                   h-full scroll box its exact bounded height instead of
                   letting it grow to content. */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                  <DataTable
-                    columns={columns}
-                    data={scopedRows}
-                    searchPlaceholder={t("searchPlaceholder")}
-                    onFilteredRowsChange={setFilteredRows}
-                    onSearchChange={setSearchQuery}
-                    emptyMessage={t("noMembersFound")}
-                    onRowClick={(row) => selection.open(row)}
-                    getRowClassName={(row) => {
-                      const tone = memberToneById.get(row.id)
-                      return tone ? MEMBER_TONE_CLASS[tone] : undefined
-                    }}
-                    virtualize
-                    tableClassName="table-fixed min-w-[1360px] w-full"
-                    tableContainerClassName="overflow-x-auto"
-                    scrollContainerClassName="overflow-x-auto"
-                    headerCellClassName="px-2 py-1.5"
-                    bodyCellClassName="px-2 py-1.5"
-                    toolbar={
-                      <>
-                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                          <SelectTrigger className="h-9 w-[150px]">
-                            <SelectValue placeholder={t("contractStatus")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">{tCommon("allStatuses")}</SelectItem>
-                            <SelectItem value="active">{tStatus("active")}</SelectItem>
-                            <SelectItem value="expiring">{tStatus("expiringSoon")}</SelectItem>
-                            <SelectItem value="expired">{tStatus("expired")}</SelectItem>
-                            <SelectItem value="notActive">{t("toneNotActive")}</SelectItem>
-                            <SelectItem value="rentOnly">{t("toneRentOnly")}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {/* What the row colors mean. */}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground" data-testid="member-tone-legend">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full bg-red-600 dark:bg-red-400" /> {t("toneNotActive")}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full bg-pink-600 dark:bg-pink-400" /> {t("toneRentOnly")}
-                          </span>
-                        </div>
-                        <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
-                        <ExportButtons
-                          title="Member List"
-                          subtitle={`Generated ${formatDate(new Date().toISOString())}`}
-                          fileName="members"
-                          columns={exportColumns}
-                          rows={filteredRows}
-                        />
-                      </>
-                    }
-                  />
+                  {memberTable(false)}
               </div>
             </CardContent>
           </Card>
+          <Dialog open={fullScreen} onOpenChange={setFullScreen}>
+            <DialogContent
+              className="w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col gap-0 p-0"
+              data-testid="member-list-fullscreen"
+              // A press inside another dialog (a filter dropdown, Export) is
+              // never a dismissal of this one — same as the panels' expand view.
+              onPointerDownOutside={(e) => {
+                const target = e.detail.originalEvent.target
+                if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) e.preventDefault()
+              }}
+            >
+              <DialogHeader className="border-b p-4 pb-3">
+                <DialogTitle className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" /> {tNav("member")}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 overflow-hidden p-4">{memberTable(true)}</div>
+            </DialogContent>
+          </Dialog>
         </div>
       ) : orderSelection.selected ? (
         <MemberOrderDetail

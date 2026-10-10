@@ -52,6 +52,15 @@ export function useUpdateCustomer() {
   })
 }
 
+export function useMarkCustomersSeen() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids?: string[]) => api.markCustomersSeen(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: customersKey }),
+    onError: () => toast.error("Couldn't mark as seen. Please try again."),
+  })
+}
+
 export function useDeleteCustomer() {
   const qc = useQueryClient()
   return useMutation({

@@ -28,6 +28,8 @@ type CustomerRow = {
   assigned_technician_2?: string
   notes: string | null
   created_at: string
+  // Absent until the 20261031000000_member_new_flag migration is applied.
+  is_new?: boolean
 }
 
 function fromRow(row: CustomerRow): Customer {
@@ -57,6 +59,7 @@ function fromRow(row: CustomerRow): Customer {
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
     isSystem: false,
+    isNew: row.is_new === true,
   }
 }
 
@@ -158,6 +161,15 @@ export async function updateCustomer(
 // bookkeeping so the Member List map doesn't re-geocode this address next time.
 export async function updateCustomerCoordinates(id: string, latitude: number, longitude: number): Promise<void> {
   const { error } = await supabase.from("customers").update({ latitude, longitude }).eq("id", id)
+  if (error) throw error
+}
+
+// Clears the "new" flag ("Mark as seen"): the given members, or with no ids
+// every member still flagged ("Mark all as seen"). A new member gets the flag
+// from the column's default, so creating one never sends it.
+export async function markCustomersSeen(ids?: string[]): Promise<void> {
+  const query = supabase.from("customers").update({ is_new: false })
+  const { error } = ids ? await query.in("id", ids) : await query.eq("is_new", true)
   if (error) throw error
 }
 

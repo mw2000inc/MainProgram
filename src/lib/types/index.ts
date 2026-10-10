@@ -50,6 +50,10 @@ export interface Customer {
   notes?: string
   createdAt: string
   isSystem?: boolean
+  // "New" flag (20261031000000_member_new_flag): on for a member created in
+  // the app until an admin marks it as seen; shows the row green on the
+  // Member list. Undefined/false before that migration is applied.
+  isNew?: boolean
 }
 
 export type MonitoringStatus = "active" | "for-replacement"

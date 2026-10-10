@@ -9,6 +9,7 @@ import { installPlansKey } from "@/lib/hooks/use-install-plans"
 import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { productsKey, stockMovementsKey } from "@/lib/hooks/use-inventory"
+import { customersKey } from "@/lib/hooks/use-customers"
 
 // The queries each table's rows feed. A schedule job change can also create,
 // link or re-date a module record (the schedule_job_module_sync migration),
@@ -20,6 +21,8 @@ const KEYS_BY_TABLE: Record<string, QueryKey[]> = {
   repair_plans: [repairPlansKey],
   collections: [collectionsKey],
   stock_movements: [stockMovementsKey, productsKey],
+  // The Member list's "new" (green) flag, cleared by any admin (20261031000000).
+  customers: [customersKey],
 }
 
 // A batch (Complete All, an automation run) sends one event per row, so
