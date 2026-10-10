@@ -145,5 +145,7 @@
   "approveAllDates": "Approve all dates ({count})",
   "reviewQueueCount": "Review ({count})",
   "reviewAllBanner": "Reviewing all {count} pending item(s) across every date ({jobs} job(s)). Check the list, then confirm.",
-  "confirmApproveAll": "Confirm approve all ({count})"
+  "confirmApproveAll": "Confirm approve all ({count})",
+  "productTypeToSearch": "Type a code or name",
+  "noMatchingProduct": "No matching product"
 }

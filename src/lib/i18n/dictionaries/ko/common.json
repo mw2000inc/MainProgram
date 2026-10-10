@@ -83,5 +83,6 @@
   "technicianAlreadyAssigned": "이미 첫 번째 기술자로 지정된 분입니다.",
   "refreshData": "데이터 새로고침",
   "refreshDone": "페이지가 업데이트되었습니다",
-  "refreshFailed": "새로고침하지 못했습니다 — 연결을 확인하고 다시 시도하세요."
+  "refreshFailed": "새로고침하지 못했습니다 — 연결을 확인하고 다시 시도하세요.",
+  "comboboxMoreMatches": "{count}개 더 있음 — 계속 입력하여 좁히세요"
 }

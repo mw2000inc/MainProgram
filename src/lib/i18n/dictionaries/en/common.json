@@ -83,5 +83,6 @@
   "technicianAlreadyAssigned": "That person is already the first technician.",
   "refreshData": "Refresh data",
   "refreshDone": "Page updated",
-  "refreshFailed": "Couldn't refresh — check your connection and try again."
+  "refreshFailed": "Couldn't refresh — check your connection and try again.",
+  "comboboxMoreMatches": "{count} more — keep typing to narrow the list"
 }

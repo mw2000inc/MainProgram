@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Combobox } from "@/components/ui/combobox"
 import {
   Form,
   FormControl,
@@ -194,8 +195,21 @@ function AddMovementForm({
     defaultValues: defaultsFor(defaultDirection),
   })
 
+  // The Product field is typable: the text typed or picked, and the product
+  // it names exactly (any letter case) — only that sets productId.
+  const [productText, setProductText] = React.useState("")
+  const productOptions = React.useMemo(() => products.map((p) => ({ value: p.name })), [products])
+  const changeProductText = (text: string) => {
+    setProductText(text)
+    const match = products.find((p) => p.name.trim().toLowerCase() === text.trim().toLowerCase())
+    form.setValue("productId", match?.id ?? "", { shouldValidate: form.formState.isSubmitted })
+  }
+
   React.useEffect(() => {
-    if (open) form.reset(defaultsFor(defaultDirection))
+    if (open) {
+      form.reset(defaultsFor(defaultDirection))
+      setProductText("")
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDirection, defaultDate])
 
@@ -230,23 +244,21 @@ function AddMovementForm({
         <FormField
           control={form.control}
           name="productId"
-          render={({ field }) => (
+          render={() => (
             <FormItem>
               <FormLabel>{t("product")}</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={tCommon("selectField", { field: t("product") })} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.stockQuantity} in stock)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <Combobox
+                  value={productText}
+                  onChange={changeProductText}
+                  options={productOptions}
+                  placeholder={t("productTypeToSearch")}
+                  maxResults={20}
+                  emptyMessage={t("noMatchingProduct")}
+                  openOnFocus={false}
+                  data-testid="movement-product"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

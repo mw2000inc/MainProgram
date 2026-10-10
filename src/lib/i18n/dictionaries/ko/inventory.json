@@ -145,5 +145,7 @@
   "approveAllDates": "전체 날짜 모두 승인 ({count})",
   "reviewQueueCount": "검토 ({count})",
   "reviewAllBanner": "모든 날짜의 대기 항목 {count}건을 검토 중입니다 (작업 {jobs}건). 목록을 확인한 후 승인하세요.",
-  "confirmApproveAll": "모두 승인 확인 ({count})"
+  "confirmApproveAll": "모두 승인 확인 ({count})",
+  "productTypeToSearch": "코드 또는 이름 입력",
+  "noMatchingProduct": "일치하는 제품이 없습니다"
 }
