@@ -100,8 +100,6 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     deliveryInstallationFee: moneySchema(t),
     paymentMode: z.string().optional(),
     receiptNo: z.string().optional(),
-    preInstalledDate: dateFieldSchema(t),
-    installedDate: dateFieldSchema(t),
     salesPerson: z.string().optional(),
     via: z.string().optional(),
     note: z.string().optional(),
@@ -137,8 +135,6 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
       deliveryInstallationFee: String(plan.deliveryInstallationFee ?? 0),
       paymentMode: plan.paymentMode ?? "",
       receiptNo: plan.receiptNo ?? "",
-      preInstalledDate: plan.preInstalledDate ?? "",
-      installedDate: plan.installedDate ?? "",
       salesPerson: plan.salesPerson ?? "",
       via: plan.via ?? "",
       note: plan.note ?? "",
@@ -168,8 +164,6 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     deliveryInstallationFee: "0",
     paymentMode: "",
     receiptNo: "",
-    preInstalledDate: "",
-    installedDate: "",
     salesPerson: "",
     via: "",
     note: "",
@@ -896,32 +890,6 @@ export function RepairFormDialog({
                   <FormLabel>{tFields("receiptNo")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="preInstalledDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tFields("preInstalledDate")}</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="installedDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tFields("installedDate")}</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

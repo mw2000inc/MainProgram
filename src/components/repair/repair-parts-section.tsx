@@ -238,76 +238,43 @@ export function PartFormDialog({
   const [partText, setPartText] = React.useState(() =>
     prefill ? (prefill.productId ? `${prefill.productSku} — ${prefill.productName}` : prefill.productName) : ""
   )
-  const [partNoText, setPartNoText] = React.useState(() => prefill?.productSku ?? "")
   const [inOutText, setInOutText] = React.useState<string>(prefill?.inOut ?? "IN")
   const [quantity, setQuantity] = React.useState(prefill ? String(prefill.quantity) : "1")
   const [date, setDate] = React.useState(prefill?.partDate ?? defaultDate)
 
-  // Every field below is a typable Combobox (free text + filtered
-  // suggestions), not a click-only native Select. in_out is still a real,
-  // constrained value underneath (a DB check(in_out in ('IN','OUT'))), so
-  // canSubmit only allows an exact "IN"/"OUT" match there — but Part/Part No
-  // are deliberately NOT required to resolve to a real catalog product: a
-  // part that isn't in the catalog yet can still be logged as a one-off
-  // custom entry (see the repair_plan_parts_custom_entries migration).
+  // Part is a typable Combobox (free text + catalog suggestions, each shown
+  // with its code so a part can be found by typing it). It is NOT required to
+  // be a catalog product: a part that isn't in the catalog yet can still be
+  // logged as a one-off custom entry (repair_plan_parts_custom_entries).
+  // in_out is a real, constrained value underneath (check in ('IN','OUT')).
   const partOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: formatPart(p) })), [
     products,
     formatPart,
   ])
-  const partNoOptions: ComboboxOption[] = React.useMemo(() => products.map((p) => ({ value: p.sku })), [products])
+  const [initialPartText] = React.useState(partText)
 
-  // Part and Part No are two independent, clickable entry points into the
-  // SAME product catalog — picking a real catalog suggestion in either one
-  // auto-fills the other so they can never drift out of sync while they
-  // describe an actual product. Typing something that doesn't match any
-  // catalog entry just leaves them as independent free text instead (a
-  // custom, not-yet-cataloged part) — see canSubmit/the submit handler
-  // below for how that's still addable.
-  //
-  // A custom Part is usually AppSheet's combined "[code] / [description]"
-  // string (e.g. "1080 / T1 Old) Tank Cover Assy"), so Part No is derived
-  // from that leading numeric code via the same parseItemString the Product
-  // form uses for Item -> SKU. Only numeric codes are taken: a free-typed
-  // name like "Hot / Cold Tap" shouldn't yield a Part No of "Hot".
-  function derivedPartNo(text: string): string | null {
-    const catalogMatch = products.find((p) => formatPart(p) === text)
-    if (catalogMatch) return catalogMatch.sku
+  // There's no separate Part No field: a custom part's number comes from the
+  // Part text's leading numeric code (AppSheet's "[code] / [description]",
+  // e.g. "1080 / T1 Old) Tank Cover Assy" -> 1080), via the same
+  // parseItemString the Product form uses for Item -> SKU. Only numeric codes
+  // count, so "Hot / Cold Tap" gives none. Editing a custom part without
+  // changing its Part text keeps the number it was saved with.
+  function customPartNo(text: string): string | undefined {
     const parsed = parseItemString(text)
-    return parsed && /^\d+$/.test(parsed.sku) ? parsed.sku : null
+    if (parsed && /^\d+$/.test(parsed.sku)) return parsed.sku
+    if (prefill && !prefill.productId && text === initialPartText.trim()) return prefill.productSku || undefined
+    return undefined
   }
 
-  function handlePartChange(value: string) {
-    const previous = derivedPartNo(partText)
-    const next = derivedPartNo(value)
-    setPartText(value)
-    if (products.some((p) => formatPart(p) === value)) {
-      setPartNoText(next ?? "")
-      return
-    }
-    // Part No follows Part only while it's blank or still holds what Part
-    // last derived, so a Part No the admin typed themselves is never
-    // overwritten (same "never clobbers" rule as the Product form's SKU).
-    const current = partNoText.trim()
-    if ((next !== null || previous !== null) && (current === "" || current === previous)) {
-      setPartNoText(next ?? "")
-    }
-  }
-
-  function handlePartNoChange(value: string) {
-    setPartNoText(value)
-    const match = products.find((p) => p.sku === value)
-    if (match) setPartText(formatPart(match))
-  }
-
-  const selectedProduct = products.find((p) => formatPart(p) === partText && p.sku === partNoText)
+  const selectedProduct = products.find((p) => formatPart(p) === partText)
   const trimmedPart = partText.trim()
-  const trimmedPartNo = partNoText.trim()
+  const trimmedPartNo = selectedProduct ? selectedProduct.sku : (customPartNo(trimmedPart) ?? "")
   const resolvedInOut = inOutText.trim().toUpperCase()
   // Not gated on selectedProduct — a part that isn't in the catalog yet is
   // still addable, as a one-off custom entry, as long as it's actually
-  // named by something (Part or Part No, not necessarily both).
+  // named by its Part.
   const canSubmit =
-    (!!selectedProduct || !!trimmedPart || !!trimmedPartNo) &&
+    (!!selectedProduct || !!trimmedPart) &&
     (resolvedInOut === "IN" || resolvedInOut === "OUT") &&
     Number(quantity) > 0 &&
     !!date
@@ -329,20 +296,7 @@ export function PartFormDialog({
                 split below. */}
             {/* The dialog focuses this field on open; openOnFocus={false} keeps its
                 list closed until a click or typing, so it doesn't cover the fields below. */}
-            <Combobox value={partText} onChange={handlePartChange} options={partOptions} placeholder={t("selectProduct")} openOnFocus={false} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">{tFields("partNo")}</label>
-            {/* Independently typable/clickable, same as Part above — picking
-                a suggestion here (or in Part) auto-fills the other field via
-                handlePartNoChange/handlePartChange, so they always describe
-                the same product. */}
-            <Combobox
-              value={partNoText}
-              onChange={handlePartNoChange}
-              options={partNoOptions}
-              placeholder={t("selectProduct")}
-            />
+            <Combobox value={partText} onChange={setPartText} options={partOptions} placeholder={t("selectProduct")} openOnFocus={false} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
