@@ -74,5 +74,6 @@
   "via": "경로",
   "parts": "부품",
   "dAndI": "배송·설치비",
-  "preDate": "예정일"
+  "preDate": "예정일",
+  "product": "제품"
 }

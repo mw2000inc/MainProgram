@@ -28,7 +28,18 @@ import type { CollectionPlan } from "@/lib/types"
 // own rows memo. Used to make the Member Account cell clickable on the
 // standalone list page; undefined means no customer could be resolved for
 // this entry, and the cell just stays plain text.
-export type CollectionRow = CollectionPlan & { customerOrderNumber: string; resolvedCustomerId?: string }
+// sc / product: the S/C and Product of the collection's order (its Sale List
+// entry), filled by the Collection Plan page for its own columns.
+export type CollectionRow = CollectionPlan & { customerOrderNumber: string; resolvedCustomerId?: string; sc?: string; product?: string }
+
+// C/T as a short code in table rows ("Yearly" -> "Y", "Quarterly" -> "Q",
+// "Monthly" -> "M"); anything else (already short, blank) as stored. Forms
+// and detail views keep the stored value.
+export function ctShort(ct: string | undefined): string {
+  const v = (ct ?? "").trim()
+  const short: Record<string, string> = { yearly: "Y", quarterly: "Q", monthly: "M" }
+  return short[v.toLowerCase()] ?? v
+}
 
 // Kept as "Collected" rather than the other three modules' "Completed" —
 // this is a payment record, and "Collected" is what the rest of this app
@@ -81,17 +92,6 @@ function NoteCell({
       onCommit={(next) => onFieldChange(entry, { note: next })}
     />
   )
-}
-
-// 'recurring_schedule' rows are auto-generated from a sale list entry's C/T
-// + CP Start/End (see the collection_recurring_schedule migration);
-// 'ct_completion' ones from a completed job's filter items; 'manual' (the
-// default) is anything typed in directly on this page.
-function SourceCell({ source }: { source: CollectionPlan["source"] }) {
-  const { t } = useTranslation("fields")
-  if (source === "recurring_schedule") return <StatusBadge tone="secondary" label={t("recurring")} />
-  if (source === "ct_completion") return <StatusBadge tone="secondary" label={t("autoCT")} />
-  return <span className="text-muted-foreground">{t("manual")}</span>
 }
 
 // A single interactive Status column when onStatusChange is provided
@@ -332,11 +332,28 @@ export function getCollectionsFullColumns({
       cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.resolvedCustomerId} />,
     },
     {
+      id: "sc",
+      accessorFn: (entry) => entry.sc ?? "",
+      header: () => <ColumnHeader tKey="sc" ns="fields" />,
+      cell: ({ row }) => row.original.sc || "—",
+    },
+    {
+      id: "product",
+      accessorFn: (entry) => entry.product ?? "",
+      header: () => <ColumnHeader tKey="product" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.product || "—"} />,
+    },
+    {
       accessorKey: "amount",
       header: () => <ColumnHeader tKey="amount" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.amount),
     },
-    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
+    {
+      id: "ct",
+      accessorFn: (entry) => ctShort(entry.ct),
+      header: () => <ColumnHeader tKey="ct" ns="fields" />,
+      cell: ({ row }) => ctShort(row.original.ct) || "—",
+    },
     {
       accessorKey: "collectionDate",
       header: () => <ColumnHeader tKey="planD" ns="fields" />,
@@ -375,16 +392,6 @@ export function getCollectionsFullColumns({
       accessorKey: "paymentType",
       header: () => <ColumnHeader tKey="paymentType" ns="fields" />,
       cell: ({ row }) => row.original.paymentType || "—",
-    },
-    {
-      accessorKey: "filterChangeRequired",
-      header: () => <ColumnHeader tKey="filterChange" ns="fields" />,
-      cell: ({ row }) => <FilterChangeRequiredCell required={row.original.filterChangeRequired} />,
-    },
-    {
-      accessorKey: "source",
-      header: () => <ColumnHeader tKey="source" ns="fields" />,
-      cell: ({ row }) => <SourceCell source={row.original.source} />,
     },
     {
       accessorKey: "serviceman",

@@ -57,13 +57,31 @@ function CollectionPlanPageContent() {
   // customer-lookup.ts's resolveCustomerForPlan) — this entry's own orderNo
   // ("001-####") is already searchable directly, this was the missing
   // direction, same gap the Sep 11 Member List fix closed there.
+  // S/C and Product come from the collection's order: its linked Sale List
+  // entry, else the first entry with the same order number.
+  const saleEntryLookup = React.useMemo(() => {
+    const byId = new Map(saleListEntries.map((s) => [s.id, s]))
+    const byOrder = new Map<string, (typeof saleListEntries)[number]>()
+    for (const s of saleListEntries) {
+      const key = s.orderNumber.trim()
+      if (key && !byOrder.has(key)) byOrder.set(key, s)
+    }
+    return { byId, byOrder }
+  }, [saleListEntries])
   const rows: CollectionRow[] = React.useMemo(
     () =>
       entries.map((e) => {
         const customer = resolveCustomerForPlan(customers, saleListEntries, e.customerId, e.orderNo)
-        return { ...e, customerOrderNumber: customer?.orderNumber ?? "", resolvedCustomerId: customer?.id }
+        const order = (e.saleListEntryId ? saleEntryLookup.byId.get(e.saleListEntryId) : undefined) ?? saleEntryLookup.byOrder.get(e.orderNo.trim())
+        return {
+          ...e,
+          customerOrderNumber: customer?.orderNumber ?? "",
+          resolvedCustomerId: customer?.id,
+          sc: order?.sc?.trim() || undefined,
+          product: order?.productNo?.trim() || undefined,
+        }
       }),
-    [entries, customers, saleListEntries]
+    [entries, customers, saleListEntries, saleEntryLookup]
   )
 
   const selection = useSplitViewSelection(filteredRows, initialId)
