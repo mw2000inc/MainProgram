@@ -1,14 +1,11 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table"
-import { Badge } from "@/components/ui/badge"
+import type { ColumnDef, SortingFn } from "@tanstack/react-table"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
-import { CustomerNameCell } from "@/components/shared/customer-name-cell"
-import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { RepairPlan } from "@/lib/types"
@@ -135,82 +132,101 @@ export function getRepairColumns({
 // real "order"/"member repair summary" table to query) — always derived
 // fresh from whatever repair_plans/sale_list_entries/customers rows
 // currently exist, never a stored value that could drift out of date.
-export interface RepairOrderGroup {
-  id: string
-  memberAccountNumber?: string
-  // The linked customer's own id, when toGroup() in repair-plan/page.tsx
-  // resolved one (repair_plans has no customer_id column of its own — see
-  // that file's own comment) — makes the Account Name cell clickable on the
-  // standalone list page. Undefined means no customer could be resolved for
-  // this group, and the cell just stays plain text.
-  customerId?: string
-  accountName: string
-  latestDate: string
-  records: RepairPlan[]
-  // Every order number that should find this group by search — each
-  // record's own orderNo plus the linked customer's own order_number when
-  // resolved, space-joined. Never rendered as a column: `records` is an
-  // array of objects, which DataTable's generic Object.values() search
-  // can't see into at all, so without this field order-number search on
-  // this list was completely blind to every repair record.
-  orderNumbers: string
-}
-
-function MemberAccountCell({ group }: { group: RepairOrderGroup }) {
-  const { t } = useTranslation("repair")
-  if (group.memberAccountNumber) {
-    return <span className="font-mono text-sm">{group.memberAccountNumber}</span>
+// The Repair Plan page's list: one row per repair (AppSheet's Repair list).
+// S/C, Unit IN/OUT, Amount and Solution/Status are left to the repair's
+// detail view. `partsByRepairId` is each repair's parts summary text
+// ("013 ×1, 012 ×2 IN") — built once on the page, so these columns stay
+// stable between renders.
+export function getRepairListColumns(partsByRepairId: Map<string, string>): ColumnDef<RepairPlan, unknown>[] {
+  // Sorting reads trimmed, case-insensitive text (a few account names start
+  // with a space); a blank sorts after every value, so the first click
+  // (ascending) leaves blanks at the bottom. (The table's own sortUndefined
+  // "last" is inconsistent when both values are blank — on a mostly-blank
+  // column like Parts it scrambles the order — so it isn't used.)
+  const sortable = (value: string | undefined) => value?.trim() ?? ""
+  const blanksAfter: SortingFn<RepairPlan> = (a, b, id) => {
+    const x = String(a.getValue(id) ?? "").toLowerCase()
+    const y = String(b.getValue(id) ?? "").toLowerCase()
+    if (x === y) return 0
+    if (!x) return 1
+    if (!y) return -1
+    return x < y ? -1 : 1
   }
-  return (
-    <Badge variant="outline" className="font-normal text-muted-foreground">
-      {t("noMemberAccount")}
-    </Badge>
-  )
-}
-
-// The standalone /repair-plan list page's own columns — deliberately just
-// these three (Account Name, Member Account#, Latest Repair Date), one row
-// per distinct member rather than one per order or per repair visit.
-// Clicking a row (via DataTable's own onRowClick, same as every other list
-// page here — no per-cell handler needed since every column should behave
-// the same way) drills into that member's own list of repair dates across
-// every order instead of opening a single record's detail panel directly;
-// see repair-plan/page.tsx's own onRowClick={orderSelection.open}.
-export function getRepairOrderGroupColumns(): ColumnDef<RepairOrderGroup, unknown>[] {
-  return [
-    {
-      accessorKey: "accountName",
-      header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.customerId} />,
-    },
-    {
-      accessorKey: "memberAccountNumber",
-      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <MemberAccountCell group={row.original} />,
-    },
-    {
-      accessorKey: "latestDate",
-      header: () => <ColumnHeader tKey="latestRepairDate" ns="fields" />,
-      cell: ({ row }) => formatDate(row.original.latestDate),
-    },
-  ]
-}
-
-// The narrow date-picker list shown once an order is drilled into (see
-// RepairOrderGroup above) — same "single identifying column, row click
-// selects it" shape as getSaleListOrderNumberColumn's own narrow list for
-// MemberOrderDetail. Selecting a date shows that one repair visit's full
-// detail panel (every field) alongside it, unchanged from before this
-// drill-down existed.
-export function getRepairDateColumns(): ColumnDef<RepairPlan, unknown>[] {
+  const sorting = { sortingFn: blanksAfter, sortDescFirst: false }
   return [
     {
       accessorKey: "issuedDate",
       header: () => <ColumnHeader tKey="issuedDate" ns="fields" />,
-      cell: ({ row }) => <span className="font-medium">{formatDate(row.original.issuedDate)}</span>,
+      meta: { headerClassName: "w-[110px]", cellClassName: "w-[110px] whitespace-nowrap" },
+      cell: ({ row }) => (row.original.issuedDate ? formatDate(row.original.issuedDate) : "—"),
+    },
+    {
+      id: "accountName",
+      accessorFn: (plan) => sortable(plan.accountName),
+      ...sorting,
+      header: () => <ColumnHeader tKey="accountName" ns="fields" />,
+      meta: { headerClassName: "w-[200px]", cellClassName: "w-[200px] max-w-[200px]" },
+      cell: ({ row }) => <TruncatedCell value={row.original.accountName} className="font-medium" />,
+    },
+    {
+      id: "orderNo",
+      accessorFn: (plan) => sortable(plan.orderNo),
+      ...sorting,
+      header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
+      meta: { headerClassName: "w-[100px]", cellClassName: "w-[100px] whitespace-nowrap" },
+      cell: ({ row }) => row.original.orderNo || "—",
+    },
+    {
+      id: "model",
+      accessorFn: (plan) => sortable(plan.model),
+      ...sorting,
+      header: () => <ColumnHeader tKey="model" ns="fields" />,
+      meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] max-w-[120px]" },
+      cell: ({ row }) => <TruncatedCell value={row.original.model || "—"} />,
+    },
+    {
+      id: "problem",
+      accessorFn: (plan) => sortable(plan.problem),
+      ...sorting,
+      header: () => <ColumnHeader tKey="problem" ns="fields" />,
+      meta: { headerClassName: "w-[260px]", cellClassName: "w-[260px] max-w-[260px]" },
+      cell: ({ row }) => <ProblemCell plan={row.original} />,
+    },
+    {
+      id: "preD",
+      accessorFn: (plan) => plan.preD ?? "",
+      ...sorting,
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
+      meta: { headerClassName: "w-[110px]", cellClassName: "w-[110px] whitespace-nowrap" },
+      cell: ({ row }) => (row.original.preD ? formatDate(row.original.preD) : "—"),
+    },
+    {
+      id: "accD",
+      accessorFn: (plan) => plan.accD ?? "",
+      ...sorting,
+      header: () => <ColumnHeader tKey="accD" ns="fields" />,
+      meta: { headerClassName: "w-[110px]", cellClassName: "w-[110px] whitespace-nowrap" },
+      cell: ({ row }) => (row.original.accD ? formatDate(row.original.accD) : "—"),
+    },
+    {
+      id: "th",
+      accessorFn: (plan) => sortable(plan.th ? formatTechnicians(plan.th, plan.th2, "&") : ""),
+      ...sorting,
+      header: () => <ColumnHeader tKey="th" ns="fields" />,
+      meta: { headerClassName: "w-[160px]", cellClassName: "w-[160px] max-w-[160px]" },
+      cell: ({ getValue }) => <TruncatedCell value={(getValue() as string) || "—"} />,
+    },
+    {
+      id: "parts",
+      accessorFn: (plan) => sortable(partsByRepairId.get(plan.id)),
+      ...sorting,
+      header: () => <ColumnHeader tKey="parts" ns="fields" />,
+      meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] max-w-[180px]" },
+      cell: ({ getValue }) => <TruncatedCell value={(getValue() as string) || "—"} />,
     },
   ]
 }
+
 
 export const REPAIR_EXPORT_COLUMNS = [
   { header: "Issued Date", key: "issuedDate" },

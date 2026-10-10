@@ -9,7 +9,7 @@
   "optional": "선택 사항",
   "selectTechnician": "기술자 선택",
   "pageDescription": "수리 요청 및 상태의 전체 목록입니다.",
-  "searchPlaceholder": "계정 이름 또는 주문 번호로 검색...",
+  "searchPlaceholder": "계정명, 주문번호 또는 문제로 검색...",
   "searchPlaceholderDates": "날짜 검색...",
   "noMemberAccount": "회원 계정 번호 없음",
   "noPlansFound": "수리 계획을 찾을 수 없습니다.",

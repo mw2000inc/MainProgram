@@ -9,7 +9,7 @@
   "optional": "Optional",
   "selectTechnician": "Select technician",
   "pageDescription": "Full list of repair requests and their status.",
-  "searchPlaceholder": "Search by account name or order no...",
+  "searchPlaceholder": "Search by account name, order no. or problem...",
   "searchPlaceholderDates": "Search dates...",
   "noMemberAccount": "No Member Account#",
   "noPlansFound": "No repair plans found.",

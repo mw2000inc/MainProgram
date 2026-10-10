@@ -71,5 +71,6 @@
   "paymentType": "Payment Type",
   "receiptNo": "Receipt #",
   "salesPerson": "Sales Person",
-  "via": "Via"
+  "via": "Via",
+  "parts": "Parts"
 }

@@ -3,6 +3,14 @@ import * as api from "@/lib/api/repair-plan-parts"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 
+// Every repair's parts (the Repair Plan list's Parts column); refreshed by
+// the same part mutations as the per-repair list.
+export const allRepairPlanPartsKey = ["repairPlanParts", "all"] as const
+
+export function useAllRepairPlanParts() {
+  return useQuery({ queryKey: allRepairPlanPartsKey, queryFn: api.listAllRepairPlanParts })
+}
+
 export function repairPlanPartsKey(repairPlanId: string) {
   return ["repairPlanParts", repairPlanId] as const
 }
@@ -31,6 +39,7 @@ export function useCreateRepairPlanPart() {
       api.createRepairPlanPart(repairPlanId, input),
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
+      qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
       toast.success("Part added")
     },
     onError: () => toast.error("Failed to add part"),
@@ -44,6 +53,7 @@ export function useUpdateRepairPlanPart() {
       api.updateRepairPlanPart(id, input),
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
+      qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
       toast.success("Part updated")
     },
     onError: () => toast.error("Failed to update part"),
@@ -57,6 +67,7 @@ export function useDeleteRepairPlanPart() {
     mutationFn: ({ id }: { id: string; repairPlanId: string }) => api.deleteRepairPlanPart(id),
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
+      qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
       toast.success(t("removed"))
     },
     onError: () => toast.error(t("failedToRemove")),

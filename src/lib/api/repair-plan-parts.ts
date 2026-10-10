@@ -50,6 +50,24 @@ export async function listRepairPlanIdsForParts(partIds: string[]): Promise<Reco
   return Object.fromEntries((data as { id: string; repair_plan_id: string }[]).map((r) => [r.id, r.repair_plan_id]))
 }
 
+// Every repair's parts, for the Repair Plan list's Parts column (500 rows on
+// Oct 10, 2026 — read in pages of 1,000 like the other full-table reads).
+export async function listAllRepairPlanParts(): Promise<RepairPlanPart[]> {
+  const out: RepairPlanPart[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("repair_plan_parts")
+      .select("*, products(sku, name)")
+      .order("part_date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + 999)
+    if (error) throw error
+    out.push(...(data as Row[]).map(fromRow))
+    if ((data ?? []).length < 1000) break
+  }
+  return out
+}
+
 export async function listRepairPlanParts(repairPlanId: string): Promise<RepairPlanPart[]> {
   const { data, error } = await supabase
     .from("repair_plan_parts")
