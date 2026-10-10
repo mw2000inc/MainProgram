@@ -324,5 +324,10 @@
   "releaseSlipManualErrand": "심부름",
   "releaseSlipManualRemove": "삭제",
   "releaseSlipAddSuggestions": "오늘 일정:",
-  "undecidedDraftsLink": "일정 승인 대기 중인 자동 생성 초안 {count}건"
+  "undecidedDraftsLink": "일정 승인 대기 중인 자동 생성 초안 {count}건",
+  "allMonths": "전체 월",
+  "monthPrevious": "이전 달",
+  "monthNext": "다음 달",
+  "yearPrevious": "이전 연도",
+  "yearNext": "다음 연도"
 }

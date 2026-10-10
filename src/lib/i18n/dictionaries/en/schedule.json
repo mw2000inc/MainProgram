@@ -324,5 +324,10 @@
   "releaseSlipManualErrand": "Errand",
   "releaseSlipManualRemove": "Remove",
   "releaseSlipAddSuggestions": "On the schedule:",
-  "undecidedDraftsLink": "{count} generated draft(s) waiting in Pending Schedule Approval"
+  "undecidedDraftsLink": "{count} generated draft(s) waiting in Pending Schedule Approval",
+  "allMonths": "All months",
+  "monthPrevious": "Previous month",
+  "monthNext": "Next month",
+  "yearPrevious": "Previous year",
+  "yearNext": "Next year"
 }

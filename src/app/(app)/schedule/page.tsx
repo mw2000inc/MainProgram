@@ -26,6 +26,7 @@ import { ScheduleTableView } from "@/components/schedule/schedule-table-view"
 import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNumbers, JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS } from "@/components/schedule/schedule-columns"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
+import { ScheduleMonthPicker } from "@/components/schedule/schedule-month-picker"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
 import { DraftAssignmentsPanel } from "@/components/schedule/draft-assignments-panel"
 import {
@@ -124,6 +125,20 @@ function ScheduleContent() {
   // from earlier days" link (?filter=overdue); toggling keeps the address in
   // step so a refresh keeps it.
   const [overdueOnly, setOverdueOnly] = React.useState(() => searchParams.get("filter") === "overdue")
+  // One month of jobs ("YYYY-MM") or every month; kept in the address
+  // (?month=2026-10) so a refresh or a shared link keeps it.
+  const [monthFilter, setMonthFilterState] = React.useState(() => {
+    const value = searchParams.get("month")
+    return value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? value : "all"
+  })
+  const setMonthFilter = (next: string) => {
+    setMonthFilterState(next)
+    const params = new URLSearchParams(window.location.search)
+    if (next === "all") params.delete("month")
+    else params.set("month", next)
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
+  }
   const toggleOverdue = () => {
     const next = !overdueOnly
     setOverdueOnly(next)
@@ -169,7 +184,8 @@ function ScheduleContent() {
   const scopedJobs = React.useMemo(() => {
     const source = overdueOnly ? overdueJobs : activeJobs
     const byTechnician = technicianFilter === "all" ? source : source.filter((j) => matchesTechnician(j, technicianFilter))
-    const base = jobTypeFilter === "all" ? byTechnician : byTechnician.filter((j) => j.jobType === jobTypeFilter)
+    const byType = jobTypeFilter === "all" ? byTechnician : byTechnician.filter((j) => j.jobType === jobTypeFilter)
+    const base = monthFilter === "all" ? byType : byType.filter((j) => j.scheduledDate.startsWith(monthFilter))
     // Default display order only — column-header sorting (DataTable's own
     // sorting state) still takes over the instant an admin clicks a column,
     // exactly as before. Grouped by technician, then date, then
@@ -187,7 +203,8 @@ function ScheduleContent() {
       if (b.routeSequence == null) return -1
       return a.routeSequence - b.routeSequence
     })
-  }, [activeJobs, overdueJobs, overdueOnly, technicianFilter, jobTypeFilter])
+  }, [activeJobs, overdueJobs, overdueOnly, technicianFilter, jobTypeFilter, monthFilter])
+  const monthsWithJobs = React.useMemo(() => new Set(activeJobs.map((j) => j.scheduledDate.slice(0, 7))), [activeJobs])
 
   // Deliberately from activeJobs, NOT scopedJobs — "Auto-suggest
   // technicians" (the button below) has to see every genuinely unassigned
@@ -400,8 +417,10 @@ function ScheduleContent() {
                   emptyMessage={t("noScheduledJobsFound")}
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
+                  pageResetKey={monthFilter}
                   toolbar={
                     <>
+                      <ScheduleMonthPicker value={monthFilter} onChange={setMonthFilter} monthsWithJobs={monthsWithJobs} />
                       <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
                         <SelectTrigger className="h-9 w-45">
                           <SelectValue placeholder={t("allJobTypes")} />
