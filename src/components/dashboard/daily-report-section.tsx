@@ -681,9 +681,20 @@ export function DailyReportSection() {
   // is preInstalledDate (input date is the plan/entry date, installedDate
   // is when it actually happened — see the InstallPlan type), so that's
   // what wins over inputDate here, same COALESCE semantics as the others.
+  // A completed install shows on its Installed Date — the date its
+  // Installation job is on (20261101000000) — else its Pre-Installed /
+  // Input Date; a pending one follows the Pre D rule above.
   const dayInstallPlans = React.useMemo(
-    () => installPlans.filter((p) => isOnReportDay(p.status, p.preInstalledDate, p.inputDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [installPlans, isOnReportDay, isApprovedForReport]
+    () =>
+      installPlans.filter(
+        (p) =>
+          (p.status === "Completed"
+            ? (p.installedDate || p.preInstalledDate || p.inputDate) === reportDate
+            : isOnReportDay(p.status, p.preInstalledDate, p.inputDate)) &&
+          isDailyReportEligible(p.dispatchStatus) &&
+          isApprovedForReport(p)
+      ),
+    [installPlans, isOnReportDay, isApprovedForReport, reportDate]
   )
   const dayRepairPlans = React.useMemo(
     () => repairPlans.filter((p) => isOnReportDay(p.status, p.preD, p.issuedDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
