@@ -72,5 +72,7 @@
   "receiptNo": "영수증 번호",
   "salesPerson": "영업 담당자",
   "via": "경로",
-  "parts": "부품"
+  "parts": "부품",
+  "dAndI": "배송·설치비",
+  "preDate": "예정일"
 }

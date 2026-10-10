@@ -72,5 +72,7 @@
   "receiptNo": "Receipt #",
   "salesPerson": "Sales Person",
   "via": "Via",
-  "parts": "Parts"
+  "parts": "Parts",
+  "dAndI": "D&I",
+  "preDate": "Pre Date"
 }

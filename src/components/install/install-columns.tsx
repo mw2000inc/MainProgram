@@ -176,6 +176,9 @@ export interface InstallOrderGroup {
   // clicking the row still drills into every one of this member's records
   // via `records`, not just this latest one.
   latest: InstallPlan
+  // The linked member's Email (customers.email), when the group resolved to
+  // a member; shown in the list's Email column.
+  email?: string
 }
 
 function MemberAccountCell({ group }: { group: InstallOrderGroup }) {
@@ -191,8 +194,8 @@ function MemberAccountCell({ group }: { group: InstallOrderGroup }) {
 }
 
 // The standalone /install list page's own columns — one row per distinct
-// member rather than one per order or per install record. Beyond the two
-// group-level columns (Member Account#, Latest Install Date), every other
+// member rather than one per order or per install record. Input Date comes
+// first; Email is the linked member's. Beyond Member Account#, every other
 // column is AppSheet-parity display only: sourced from `latest` (that
 // member's most recent install record — the exact same record latestDate
 // itself came from), never from `records` as a whole. Clicking a row (via
@@ -203,6 +206,12 @@ function MemberAccountCell({ group }: { group: InstallOrderGroup }) {
 export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unknown>[] {
   return [
     {
+      id: "latestInputDate",
+      accessorFn: (group) => group.latest.inputDate,
+      header: () => <ColumnHeader tKey="inputDate" ns="fields" />,
+      cell: ({ row }) => formatDate(row.original.latest.inputDate),
+    },
+    {
       accessorKey: "name",
       header: () => <ColumnHeader tKey="name" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.name} />,
@@ -211,16 +220,6 @@ export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unkn
       accessorKey: "memberAccountNumber",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <MemberAccountCell group={row.original} />,
-    },
-    {
-      accessorKey: "latestDate",
-      header: () => <ColumnHeader tKey="latestInstallDate" ns="fields" />,
-      cell: ({ row }) => formatDate(row.original.latestDate),
-    },
-    {
-      id: "latestInputDate",
-      header: () => <ColumnHeader tKey="inputDate" ns="fields" />,
-      cell: ({ row }) => formatDate(row.original.latest.inputDate),
     },
     {
       id: "latestOrderNo",
@@ -238,14 +237,10 @@ export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unkn
       cell: ({ row }) => row.original.latest.contactNumber || "—",
     },
     {
-      id: "latestInOut",
-      header: () => <ColumnHeader tKey="inOrOut" ns="fields" />,
-      cell: ({ row }) => row.original.latest.inOut || "—",
-    },
-    {
-      id: "latestModelDp",
-      header: () => <ColumnHeader tKey="modelDp" ns="fields" />,
-      cell: ({ row }) => row.original.latest.modelDp || "—",
+      id: "email",
+      accessorFn: (group) => group.email ?? "",
+      header: () => <ColumnHeader tKey="email" ns="fields" />,
+      cell: ({ row }) => <TruncatedCell value={row.original.email || "—"} />,
     },
     {
       id: "latestModel",
@@ -264,7 +259,7 @@ export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unkn
     },
     {
       id: "latestDeliveryInstallationFee",
-      header: () => <ColumnHeader tKey="deliveryInstallationFee" ns="fields" />,
+      header: () => <ColumnHeader tKey="dAndI" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.latest.deliveryInstallationFee),
     },
     {
@@ -274,7 +269,7 @@ export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unkn
     },
     {
       id: "latestPreInstalledDate",
-      header: () => <ColumnHeader tKey="preInstalledDate" ns="fields" />,
+      header: () => <ColumnHeader tKey="preDate" ns="fields" />,
       cell: ({ row }) => (row.original.latest.preInstalledDate ? formatDate(row.original.latest.preInstalledDate) : "—"),
     },
     {

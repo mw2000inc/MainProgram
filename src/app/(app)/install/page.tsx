@@ -142,6 +142,7 @@ function InstallPageContent() {
         records: sorted,
         orderNumbers,
         latest: sorted[0],
+        email: linkedCustomer?.email?.trim() || undefined,
       }
     }
 
