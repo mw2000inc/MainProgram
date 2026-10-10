@@ -158,7 +158,10 @@ function RepairPlanPageContent() {
                   onFilteredRowsChange={setFilteredRows}
                   onRowClick={(row) => selection.open(row)}
                   tableClassName="table-fixed min-w-[1360px] w-full"
-                  tableContainerClassName="overflow-x-auto"
+                  // The table (1360px) is wider than most screens: keep its
+                  // horizontal scrollbar drawn instead of an overlay one that
+                  // only shows while scrolling (see globals.css).
+                  tableContainerClassName="overflow-x-auto scrollbar-always-visible"
                   scrollContainerClassName="overflow-x-auto"
                 />
               </div>

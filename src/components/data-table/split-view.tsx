@@ -171,7 +171,13 @@ export function SplitViewLayout({
         // real heights down to (see data-table.tsx's own h-full comment) —
         // without this, DataTable's h-full silently resolves to nothing no
         // matter how many ancestors above this grid are correctly bounded.
-        fillHeight && "grid-rows-[minmax(0,1fr)]",
+        fillHeight && !isOpen && "grid-rows-[minmax(0,1fr)]",
+        // Open, below the side-by-side breakpoint, list and detail stack: with
+        // only one 1fr row the detail took an extra content-sized row and the
+        // list's row shrank to nothing (the list and its scrollbars vanished).
+        // Two equal rows there; one row again once they sit side by side.
+        fillHeight && isOpen && breakpoint === "lg" && "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]",
+        fillHeight && isOpen && breakpoint === "xl" && "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]",
         // Both arbitrary-value classes are written out in full (not built via
         // string interpolation) so Tailwind's static scanner picks them up.
         isOpen && breakpoint === "lg" && !narrow && "lg:grid-cols-[minmax(0,1fr)_400px]",
