@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { Droplets, Plus, Sparkles } from "lucide-react"
+import { ChevronDown, ChevronRight, Droplets, Plus, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -185,14 +185,47 @@ function FilterChangePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestSelected?.id, isAdmin])
 
-  const monthGroups = React.useMemo(() => {
-    const counts = new Map<string, number>()
+  // Sidebar: years, each expanding to its months. Each badge reads
+  // "pending/total": visits still Pending (Completed and Cancelled ones
+  // aren't) out of all visits in that period, so a month whose visits are
+  // all done shows 0/N. The table still lists every visit of the selected
+  // month, done or not.
+  const yearGroups = React.useMemo(() => {
+    const byMonth = new Map<string, { pending: number; total: number }>()
     for (const p of rows) {
       const ym = yearMonth(p.planDate)
-      counts.set(ym, (counts.get(ym) ?? 0) + 1)
+      const c = byMonth.get(ym) ?? { pending: 0, total: 0 }
+      c.total += 1
+      if (p.status === "Pending") c.pending += 1
+      byMonth.set(ym, c)
     }
-    return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month))
+    const byYear = new Map<string, { month: string; pending: number; total: number }[]>()
+    for (const [month, c] of Array.from(byMonth).sort((a, b) => a[0].localeCompare(b[0]))) {
+      const year = month.slice(0, 4)
+      const list = byYear.get(year)
+      if (list) list.push({ month, ...c })
+      else byYear.set(year, [{ month, ...c }])
+    }
+    return Array.from(byYear, ([year, months]) => ({
+      year,
+      months,
+      pending: months.reduce((sum, m) => sum + m.pending, 0),
+      total: months.reduce((sum, m) => sum + m.total, 0),
+    }))
   }, [rows])
+  const [expandedYears, setExpandedYears] = React.useState<Set<string>>(() => new Set([todayIso().slice(0, 4)]))
+  const toggleYear = (year: string) =>
+    setExpandedYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) next.delete(year)
+      else next.add(year)
+      return next
+    })
+  // Selecting a month (or a save that jumps to one) keeps its year open.
+  const selectMonth = (month: string) => {
+    setSelectedMonth(month)
+    if (month !== "all") setExpandedYears((prev) => (prev.has(month.slice(0, 4)) ? prev : new Set(prev).add(month.slice(0, 4))))
+  }
 
   const scopedPlans = React.useMemo(() => {
     if (selectedMonth === "all") return rows
@@ -293,21 +326,45 @@ function FilterChangePageContent() {
                   >
                     {tCommon("all")}
                   </button>
-                  {monthGroups.map((g) => (
-                    <button
-                      key={g.month}
-                      onClick={() => setSelectedMonth(g.month)}
-                      className={cn(
-                        "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 transition-colors",
-                        selectedMonth === g.month && "bg-accent font-medium"
-                      )}
-                    >
-                      <span>{g.month}</span>
-                      <Badge variant="secondary" className="ml-2">
-                        {g.count}
-                      </Badge>
-                    </button>
-                  ))}
+                  {yearGroups.map((y) => {
+                    const open = expandedYears.has(y.year)
+                    return (
+                      <div key={y.year} data-testid="fc-year">
+                        <button
+                          onClick={() => toggleYear(y.year)}
+                          aria-expanded={open}
+                          className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold hover:bg-muted/50 transition-colors"
+                          data-testid="fc-year-toggle"
+                        >
+                          <span className="flex items-center gap-1">
+                            {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {y.year}
+                          </span>
+                          <Badge variant={y.pending ? "secondary" : "outline"} className="ml-2 tabular-nums" data-testid="fc-year-count">
+                            {y.pending}/{y.total}
+                          </Badge>
+                        </button>
+                        {open &&
+                          y.months.map((g) => (
+                            <button
+                              key={g.month}
+                              onClick={() => selectMonth(g.month)}
+                              className={cn(
+                                "flex w-full items-center justify-between py-2 pl-7 pr-3 text-sm hover:bg-muted/50 transition-colors",
+                                selectedMonth === g.month && "bg-accent font-medium"
+                              )}
+                              data-testid="fc-month"
+                              data-month={g.month}
+                            >
+                              <span>{g.month}</span>
+                              <Badge variant={g.pending ? "secondary" : "outline"} className="ml-2 tabular-nums" data-testid="fc-month-count">
+                                {g.pending}/{g.total}
+                              </Badge>
+                            </button>
+                          ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -435,7 +492,7 @@ function FilterChangePageContent() {
         // visible (or the admin is on "All") leaves the tab untouched.
         onSaved={(saved) => {
           const savedMonth = yearMonth(saved.planDate)
-          if (selectedMonth !== "all" && selectedMonth !== savedMonth) setSelectedMonth(savedMonth)
+          if (selectedMonth !== "all" && selectedMonth !== savedMonth) selectMonth(savedMonth)
         }}
       />
 
