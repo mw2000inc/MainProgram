@@ -1,6 +1,6 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table"
+import type { ColumnDef, SortingFn } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
@@ -204,92 +204,139 @@ function MemberAccountCell({ group }: { group: InstallOrderGroup }) {
 // still drills into that member's own list of every install date, not just
 // the one shown here; see install/page.tsx's own onRowClick={orderSelection.open}.
 export function getInstallOrderGroupColumns(): ColumnDef<InstallOrderGroup, unknown>[] {
+  // Every column sorts: the first click is ascending, the second descending,
+  // the third returns to the list's own order. Text sorts trimmed and
+  // case-insensitive, dates by date (ISO strings), both with blanks after
+  // every value (so ascending leaves them at the bottom); prices by number.
+  const text = (value: string | undefined) => (value ?? "").trim()
+  const blanksAfter: SortingFn<InstallOrderGroup> = (a, b, id) => {
+    const x = String(a.getValue(id) ?? "").toLowerCase()
+    const y = String(b.getValue(id) ?? "").toLowerCase()
+    if (x === y) return 0
+    if (!x) return 1
+    if (!y) return -1
+    return x < y ? -1 : 1
+  }
+  const byText = { sortingFn: blanksAfter, sortDescFirst: false }
+  const byNumber = { sortingFn: "basic" as const, sortDescFirst: false }
   return [
     {
       id: "latestInputDate",
-      accessorFn: (group) => group.latest.inputDate,
+      accessorFn: (group) => text(group.latest.inputDate),
+      ...byText,
       header: () => <ColumnHeader tKey="inputDate" ns="fields" />,
       cell: ({ row }) => formatDate(row.original.latest.inputDate),
     },
     {
-      accessorKey: "name",
+      id: "name",
+      accessorFn: (group) => text(group.name),
+      ...byText,
       header: () => <ColumnHeader tKey="name" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.name} />,
     },
     {
-      accessorKey: "memberAccountNumber",
+      id: "memberAccountNumber",
+      accessorFn: (group) => text(group.memberAccountNumber),
+      ...byText,
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <MemberAccountCell group={row.original} />,
     },
     {
       id: "latestOrderNo",
+      accessorFn: (group) => text(group.latest.orderNo),
+      ...byText,
       header: () => <ColumnHeader tKey="orderNo" ns="fields" />,
       cell: ({ row }) => row.original.latest.orderNo || "—",
     },
     {
       id: "latestAddress",
+      accessorFn: (group) => text(group.latest.address),
+      ...byText,
       header: () => <ColumnHeader tKey="address" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.latest.address} />,
     },
     {
       id: "latestContactNumber",
+      accessorFn: (group) => text(group.latest.contactNumber),
+      ...byText,
       header: () => <ColumnHeader tKey="contactNumber" ns="fields" />,
       cell: ({ row }) => row.original.latest.contactNumber || "—",
     },
     {
       id: "email",
-      accessorFn: (group) => group.email ?? "",
+      accessorFn: (group) => text(group.email),
+      ...byText,
       header: () => <ColumnHeader tKey="email" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.email || "—"} />,
     },
     {
       id: "latestModel",
+      accessorFn: (group) => text(group.latest.model),
+      ...byText,
       header: () => <ColumnHeader tKey="model" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.latest.model} />,
     },
     {
       id: "latestUnitPrice",
+      accessorFn: (group) => Number(group.latest.unitPrice) || 0,
+      ...byNumber,
       header: () => <ColumnHeader tKey="unitPrice" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.latest.unitPrice),
     },
     {
       id: "latestCpPrice",
+      accessorFn: (group) => Number(group.latest.cpPrice) || 0,
+      ...byNumber,
       header: () => <ColumnHeader tKey="cpPrice" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.latest.cpPrice),
     },
     {
       id: "latestDeliveryInstallationFee",
+      accessorFn: (group) => Number(group.latest.deliveryInstallationFee) || 0,
+      ...byNumber,
       header: () => <ColumnHeader tKey="dAndI" ns="fields" />,
       cell: ({ row }) => formatCurrency(row.original.latest.deliveryInstallationFee),
     },
     {
       id: "latestPaymentMode",
+      accessorFn: (group) => text(group.latest.paymentMode),
+      ...byText,
       header: () => <ColumnHeader tKey="paymentMode" ns="fields" />,
       cell: ({ row }) => row.original.latest.paymentMode || "—",
     },
     {
       id: "latestPreInstalledDate",
+      accessorFn: (group) => text(group.latest.preInstalledDate),
+      ...byText,
       header: () => <ColumnHeader tKey="preDate" ns="fields" />,
       cell: ({ row }) => (row.original.latest.preInstalledDate ? formatDate(row.original.latest.preInstalledDate) : "—"),
     },
     {
       id: "latestInstalledDate",
+      accessorFn: (group) => text(group.latest.installedDate),
+      ...byText,
       header: () => <ColumnHeader tKey="installedDate" ns="fields" />,
       cell: ({ row }) => (row.original.latest.installedDate ? formatDate(row.original.latest.installedDate) : "—"),
     },
     {
       id: "latestNote",
+      accessorFn: (group) => text(group.latest.note),
+      ...byText,
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell plan={row.original.latest} />,
     },
     {
       id: "latestServiceman",
+      accessorFn: (group) => (group.latest.serviceman ? formatTechnicians(group.latest.serviceman, group.latest.serviceman2, "&") : ""),
+      ...byText,
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
       cell: ({ row }) =>
         row.original.latest.serviceman ? formatTechnicians(row.original.latest.serviceman, row.original.latest.serviceman2, "&") : "—",
     },
     {
       id: "latestStatus",
+      accessorFn: (group) => text(group.latest.status),
+      ...byText,
       header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <PlanStatusBadge status={row.original.latest.status} />,
     },
