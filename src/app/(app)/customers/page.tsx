@@ -15,6 +15,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import { DataTable } from "@/components/data-table/data-table"
 import { MonthYearFilter, type MonthYearValue } from "@/components/data-table/month-year-filter"
 import { ExportButtons } from "@/components/shared/export-buttons"
@@ -52,6 +53,9 @@ const MEMBER_TONE_CLASS: Record<MemberTone, string> = {
 }
 const isMemberTone = (v: string): v is MemberTone => v === "notActive" || v === "rentOnly" || v === "new"
 
+// "Include inactive" is remembered per browser (a viewing preference, not data).
+const INCLUDE_INACTIVE_KEY = "members.includeInactive"
+
 export default function CustomersPage() {
   const router = useRouter()
   const { can } = useAuth()
@@ -81,6 +85,27 @@ export default function CustomersPage() {
   const [fullScreen, setFullScreen] = React.useState(false)
   const [fullScreenRows, setFullScreenRows] = React.useState<CustomerRow[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
+  // Not active members (see memberToneById) are left out of the list, map,
+  // search and export unless this is on — nothing is moved or changed, so a
+  // member shows again by itself the moment one of their orders is ACTIVE or
+  // RENT again. Choosing "Not active" in the status filter shows them anyway.
+  const [includeInactive, setIncludeInactive] = React.useState(false)
+  React.useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem(INCLUDE_INACTIVE_KEY) === "1") setIncludeInactive(true)
+    } catch {}
+  }, [])
+  const changeIncludeInactive = (on: boolean) => {
+    setIncludeInactive(on)
+    try {
+      localStorage.setItem(INCLUDE_INACTIVE_KEY, on ? "1" : "0")
+    } catch {}
+  }
+  // The member last opened from the list stays listed even if it turns Not
+  // active while open (e.g. its last ACTIVE order is set INACTIVE), so the
+  // detail view doesn't close underneath the admin.
+  const [openedMemberId, setOpenedMemberId] = React.useState<string | null>(null)
 
   const realCustomers = React.useMemo(() => customers.filter((c) => !c.isSystem), [customers])
 
@@ -138,8 +163,20 @@ export default function CustomersPage() {
     [realCustomers]
   )
 
+  const inactiveCount = React.useMemo(
+    () => [...memberToneById.values()].filter((tone) => tone === "notActive").length,
+    [memberToneById]
+  )
+
   const scopedRows = React.useMemo(() => {
     return rows.filter((c) => {
+      if (
+        !includeInactive &&
+        statusFilter !== "notActive" &&
+        c.id !== openedMemberId &&
+        memberToneById.get(c.id) === "notActive"
+      )
+        return false
       if (statusFilter === "new") {
         if (!flaggedIds.has(c.id)) return false
       } else if (isMemberTone(statusFilter)) {
@@ -150,7 +187,7 @@ export default function CustomersPage() {
       if (monthYear.year !== "all" && created.getFullYear() !== Number(monthYear.year)) return false
       return true
     })
-  }, [rows, statusFilter, monthYear, memberToneById, flaggedIds])
+  }, [rows, statusFilter, monthYear, memberToneById, flaggedIds, includeInactive, openedMemberId])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
   // Current copy of the selected member, not the one filteredRows may still
@@ -294,6 +331,7 @@ export default function CustomersPage() {
           emptyMessage={t("noMembersFound")}
           onRowClick={(row) => {
             setFullScreen(false)
+            setOpenedMemberId(row.id)
             selection.open(row)
           }}
           getRowClassName={(row) => {
@@ -347,6 +385,14 @@ export default function CustomersPage() {
                   <CheckCheck className="h-4 w-4" /> {t("markAllSeen", { count: String(flaggedIds.size) })}
                 </Button>
               )}
+              <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm whitespace-nowrap">
+                <Switch
+                  checked={includeInactive}
+                  onCheckedChange={changeIncludeInactive}
+                  data-testid="member-include-inactive"
+                />
+                {t("includeInactive", { count: String(inactiveCount) })}
+              </label>
               <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
               <ExportButtons
                 title="Member List"
