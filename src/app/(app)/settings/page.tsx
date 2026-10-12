@@ -14,7 +14,9 @@ import { DailyReportSectionsPanel } from "@/components/settings/daily-report-sec
 import { AutomationsPanel } from "@/components/settings/automations-panel"
 import { ProductCatalogPanel } from "@/components/settings/product-catalog-panel"
 import { LanguagePanel } from "@/components/settings/language-panel"
+import { toast } from "sonner"
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-misc"
+import { COMPANY_LOGO_MAX_BYTES, removeCompanyAssetByUrl, uploadCompanyLogo } from "@/lib/api/misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import type { ContactEntry } from "@/lib/types"
@@ -94,6 +96,15 @@ export default function SettingsPage() {
   const [contactNumbers, setContactNumbers] = React.useState<ContactEntry[]>([])
   const [contactEmails, setContactEmails] = React.useState<ContactEntry[]>([])
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  // A newly picked logo, held until Save (uploaded to Storage then, so a
+  // picked-then-abandoned file never lands there), and its local preview.
+  const [pendingLogo, setPendingLogo] = React.useState<File | null>(null)
+  const [pendingLogoPreview, setPendingLogoPreview] = React.useState<string | undefined>(undefined)
+  const [uploadingLogo, setUploadingLogo] = React.useState(false)
+  React.useEffect(() => {
+    if (!pendingLogoPreview) return
+    return () => URL.revokeObjectURL(pendingLogoPreview)
+  }, [pendingLogoPreview])
 
   React.useEffect(() => {
     // One-time sync from the fetched settings record into editable local form state.
@@ -113,16 +124,38 @@ export default function SettingsPage() {
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ""
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setLogoUrl(reader.result as string)
-    reader.readAsDataURL(file)
+    if (!file.type.startsWith("image/")) {
+      toast.error(t("logoNotImage"))
+      return
+    }
+    if (file.size > COMPANY_LOGO_MAX_BYTES) {
+      toast.error(t("logoTooLarge"))
+      return
+    }
+    setPendingLogo(file)
+    setPendingLogoPreview(URL.createObjectURL(file))
   }
 
-  function handleSave() {
+  async function handleSave() {
+    // A new logo goes to Storage first; only its URL is saved below.
+    let companyLogoUrl = logoUrl
+    if (pendingLogo) {
+      setUploadingLogo(true)
+      try {
+        companyLogoUrl = await uploadCompanyLogo(pendingLogo)
+      } catch {
+        toast.error(t("logoUploadFailed"))
+        return
+      } finally {
+        setUploadingLogo(false)
+      }
+    }
+    const previousLogoUrl = logoUrl
     updateSettings.mutate({
       companyName,
-      companyLogoUrl: logoUrl,
+      companyLogoUrl,
       supportEmail,
       emailNotificationsEnabled: emailNotifications,
       currency,
@@ -130,6 +163,14 @@ export default function SettingsPage() {
       address,
       contactNumbers,
       contactEmails,
+    }, {
+      onSuccess: () => {
+        if (!pendingLogo) return
+        setPendingLogo(null)
+        setPendingLogoPreview(undefined)
+        // The replaced logo, if it was a Storage file, is no longer used.
+        if (previousLogoUrl !== companyLogoUrl) removeCompanyAssetByUrl(previousLogoUrl).catch(() => {})
+      },
     })
   }
 
@@ -169,7 +210,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={logoUrl} alt="Company logo" />
+                <AvatarImage src={pendingLogoPreview ?? logoUrl} alt="Company logo" />
                 <AvatarFallback className="bg-primary text-primary-foreground text-lg">
                   {companyName.slice(0, 2).toUpperCase() || "AT"}
                 </AvatarFallback>
@@ -264,8 +305,8 @@ export default function SettingsPage() {
         <ProductCatalogPanel />
 
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={updateSettings.isPending}>
-            {updateSettings.isPending ? tCommon("saving") : t("saveSettings")}
+          <Button onClick={handleSave} disabled={updateSettings.isPending || uploadingLogo}>
+            {updateSettings.isPending || uploadingLogo ? tCommon("saving") : t("saveSettings")}
           </Button>
         </div>
         </>

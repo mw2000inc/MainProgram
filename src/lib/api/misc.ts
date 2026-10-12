@@ -220,6 +220,38 @@ export async function updateSettings(input: Partial<CompanySettings>): Promise<C
   return settingsFromRow(data as SettingsRow)
 }
 
+// Company files live in Supabase Storage (bucket created by the
+// company_assets_bucket migration: public read, admin-only writes, images up
+// to 2 MB) — company_settings keeps only the file's public URL, not the image
+// itself as base64 text, which made every settings read ~800 KB.
+const COMPANY_ASSETS_BUCKET = "company-assets"
+export const COMPANY_LOGO_MAX_BYTES = 2 * 1024 * 1024
+
+// Uploads under a new, timestamped name (never overwriting), so a cached copy
+// of the old logo can't linger under the same URL; returns the public URL to
+// save as companyLogoUrl.
+export async function uploadCompanyLogo(file: File): Promise<string> {
+  const ext = (file.name.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") || "png"
+  const path = `logo/${Date.now()}.${ext}`
+  const bucket = supabase.storage.from(COMPANY_ASSETS_BUCKET)
+  const { error } = await bucket.upload(path, file, { contentType: file.type, cacheControl: "31536000", upsert: false })
+  if (error) throw error
+  return bucket.getPublicUrl(path).data.publicUrl
+}
+
+// Removes a logo this bucket holds, given its public URL — used after a new
+// logo is saved. Anything else (an old base64 logo, an outside URL) is left
+// alone. Best-effort: a leftover file costs only storage, so callers needn't
+// handle a failure.
+export async function removeCompanyAssetByUrl(url: string | undefined): Promise<void> {
+  const marker = `/storage/v1/object/public/${COMPANY_ASSETS_BUCKET}/`
+  const at = url?.indexOf(marker) ?? -1
+  if (!url || at < 0) return
+  const path = decodeURIComponent(url.slice(at + marker.length).split("?")[0])
+  const { error } = await supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([path])
+  if (error) throw error
+}
+
 // Mirrors updateCustomerCoordinates (see lib/api/customers.ts) — caches a
 // successful geocode of the office address so it never needs to be
 // re-resolved on every single "Directions" lookup. Called fire-and-forget
