@@ -104,8 +104,14 @@ export function MemberMapPanel({
       mapRef.current = map
       setReady(true)
     })
+    // Leaflet sizes its tiles once; when the box changes size (window resize,
+    // the side menu collapsing, the page's own layout) tell it to re-measure,
+    // so no grey, untiled strips are left behind.
+    const observer = new ResizeObserver(() => mapRef.current?.invalidateSize())
+    if (mapDivRef.current) observer.observe(mapDivRef.current)
     return () => {
       cancelled = true
+      observer.disconnect()
       mapRef.current?.remove()
       mapRef.current = null
     }
@@ -214,9 +220,9 @@ export function MemberMapPanel({
   }
 
   return (
-    // h-full, not a fixed height of its own — the page decides how tall
-    // this panel is (see customers/page.tsx's own h-95 wrapper) so the two
-    // can never disagree about the actual height being rendered.
+    // h-full/w-full, not a size of its own — the page decides how big this
+    // panel is (see customers/page.tsx's own wrapper around it) so the two
+    // can never disagree about the size actually rendered.
     <Card className="flex h-full w-full flex-col">
       <CardHeader className="gap-2 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">

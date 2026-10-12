@@ -73,6 +73,9 @@ function createAddSchema(
 
 type AddFormValues = z.infer<ReturnType<typeof createAddSchema>>
 
+const defaultReasonFor = (direction: "in" | "out"): AddFormValues["reason"] =>
+  direction === "in" ? "Restock" : "Adjustment"
+
 // Edit mode exposes Qty Added / Qty Removed / condition buckets directly (rather
 // than the Add flow's single Quantity + Direction) so a wrong entry — e.g. an
 // accidental Qty Removed — can just be corrected or cleared to 0 in place.
@@ -176,14 +179,13 @@ function AddMovementForm({
   const addMovement = useAddStockMovement()
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
-  const { t: tFields } = useTranslation("fields")
   const addSchema = React.useMemo(() => createAddSchema(tCommon, t), [tCommon, t])
 
   const defaultsFor = (direction: "in" | "out"): AddFormValues => ({
     productId: "",
     date: defaultDate || todayIso(),
     direction,
-    reason: direction === "in" ? "Restock" : "Adjustment",
+    reason: defaultReasonFor(direction),
     quantity: 1,
     secondHandReadyQuantity: 0,
     secondHandRepairQuantity: 0,
@@ -241,49 +243,18 @@ function AddMovementForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="productId"
-          render={() => (
-            <FormItem>
-              <FormLabel>{t("product")}</FormLabel>
-              <FormControl>
-                <Combobox
-                  value={productText}
-                  onChange={changeProductText}
-                  options={productOptions}
-                  placeholder={t("productTypeToSearch")}
-                  maxResults={20}
-                  emptyMessage={t("noMatchingProduct")}
-                  openOnFocus={false}
-                  data-testid="movement-product"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {selectedProduct && (
-          <p className="text-sm text-muted-foreground">{t("currentStockUnits", { stock: String(selectedProduct.stockQuantity) })}</p>
-        )}
+        {/* Date first: it's usually set once for a batch of entries, before
+            picking each product. */}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="direction"
+            name="date"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("direction")}</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="in">{t("stockIn")}</SelectItem>
-                    <SelectItem value="out">{t("stockOut")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormLabel>{t("date")}</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -313,13 +284,38 @@ function AddMovementForm({
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name="productId"
+          render={() => (
+            <FormItem>
+              <FormLabel>{t("product")}</FormLabel>
+              <FormControl>
+                <Combobox
+                  value={productText}
+                  onChange={changeProductText}
+                  options={productOptions}
+                  placeholder={t("productTypeToSearch")}
+                  maxResults={20}
+                  emptyMessage={t("noMatchingProduct")}
+                  openOnFocus={false}
+                  data-testid="movement-product"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {selectedProduct && (
+          <p className="text-sm text-muted-foreground">{t("currentStockUnits", { stock: String(selectedProduct.stockQuantity) })}</p>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="quantity"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{tFields("quantity")}</FormLabel>
+                <FormLabel>{t("brandNew")}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -327,6 +323,7 @@ function AddMovementForm({
                     value={field.value}
                     onFocus={(e) => e.target.select()}
                     onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                    data-testid="movement-brand-new"
                   />
                 </FormControl>
                 <FormMessage />
@@ -335,13 +332,28 @@ function AddMovementForm({
           />
           <FormField
             control={form.control}
-            name="date"
+            name="direction"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("date")}</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
+                <FormLabel>{t("direction")}</FormLabel>
+                {/* Fixed by the button that opened the form (defaultDirection):
+                    "+ Add In/Out" and the In Stock panel only add stock, the
+                    Out Stock panel only takes it out — so only that one option
+                    is offered, and the field is locked to it. */}
+                <Select value={field.value} onValueChange={field.onChange} disabled>
+                  <FormControl>
+                    <SelectTrigger className="w-full" data-testid="movement-direction">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {field.value === "in" ? (
+                      <SelectItem value="in">{t("stockIn")}</SelectItem>
+                    ) : (
+                      <SelectItem value="out">{t("stockOut")}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
@@ -373,7 +385,7 @@ function AddMovementForm({
                         const value = e.target.valueAsNumber || 0
                         field.onChange(value)
                         // A movement is either regular stock or one of the condition
-                        // buckets, not both — entering a bucket quantity clears Quantity.
+                        // buckets, not both — entering a bucket quantity clears Brand New.
                         if (value > 0) form.setValue("quantity", 0)
                       }}
                     />

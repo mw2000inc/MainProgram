@@ -427,55 +427,60 @@ export default function CustomersPage() {
             )}
           </div>
 
-          {/* Full-width banner above the table, rather than the old
-              side-by-side split — a fixed height (see member-map-panel.tsx,
-              now h-full so this wrapper is the one true source of its
-              height) keeps it a clean map overview instead of dominating
-              the page the way a 600px-tall map matched to the table's own
-              height used to. */}
-          <div className="h-95 w-full shrink-0">
-            <MemberMapPanel
-              customers={scopedRows}
-              focusCustomer={topSearchMatch}
-              onOpenDirections={setDirectionsTarget}
-            />
-          </div>
+          {/* Map and member table side by side on a wide screen (xl, 1280px+):
+              the table on the left, filling the width and the page's remaining
+              height, and the compact 400×400 map on the right, so both are in
+              view at once. Narrower screens stack them with the map first, as
+              before (the map's order-first; the table comes first in the
+              markup so the desktop reading/Tab order matches the screen). */}
+          <div className="grid flex-1 min-h-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px] xl:grid-rows-[minmax(0,1fr)] xl:items-start">
+            {/* min-h-120 (480px) instead of a plain min-h-0 floor —
+                guarantees the table area never gets squeezed below roughly
+                10 visible rows (~480px covers DataTable's own search bar +
+                header + row chrome, see data-table.tsx's TABLE_ROW_HEIGHT)
+                no matter how tall the map grows or how short the
+                viewport is. Still flex-1 above that floor, so on any screen
+                with room to spare the table keeps claiming "whatever's left"
+                exactly as before — this only ever changes behavior in the
+                genuine squeeze case, where the wrapper above deliberately has
+                no overflow-hidden to clip it, so the excess is left for
+                <main> to scroll instead of silently hiding rows with no way
+                to reach them. */}
+            <Card className="flex-1 min-h-120 xl:h-full xl:self-stretch" data-testid="member-table-card">
+              <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
+                {/* table-fixed + each column's own fixed width (see
+                    customers-columns.tsx's meta) means the table's total
+                    width is always the sum of its columns' assigned widths —
+                    1360px, now wider than most viewports since these were
+                    deliberately expanded for readability (Account Name,
+                    Address, etc.) at TIN #'s expense. min-w-[1360px] on the
+                    table itself (not just w-full) is what makes table-fixed
+                    actually honor each column's real pixel width instead of
+                    compressing them all to fit 100% of the container — and
+                    overflow-x-auto below is what turns that overflow into an
+                    inner scrollbar on this card instead of pushing the whole
+                    page wider (matches member-order-detail.tsx's own
+                    min-w-[1000px] w-full + overflow-x-auto pattern). flex-1
+                    min-h-0 overflow-hidden is what hands DataTable's own
+                    h-full scroll box its exact bounded height instead of
+                    letting it grow to content. */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                    {memberTable(false)}
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* min-h-120 (480px) instead of a plain min-h-0 floor —
-              guarantees the table area never gets squeezed below roughly
-              10 visible rows (~480px covers DataTable's own search bar +
-              header + row chrome, see data-table.tsx's TABLE_ROW_HEIGHT)
-              no matter how tall the map above grows or how short the
-              viewport is. Still flex-1 above that floor, so on any screen
-              with room to spare the table keeps claiming "whatever's left"
-              exactly as before — this only ever changes behavior in the
-              genuine squeeze case, where the wrapper above deliberately has
-              no overflow-hidden to clip it, so the excess is left for
-              <main> to scroll instead of silently hiding rows with no way
-              to reach them. */}
-          <Card className="flex-1 min-h-120">
-            <CardContent className="flex flex-1 min-h-0 flex-col pt-6">
-              {/* table-fixed + each column's own fixed width (see
-                  customers-columns.tsx's meta) means the table's total
-                  width is always the sum of its columns' assigned widths —
-                  1360px, now wider than most viewports since these were
-                  deliberately expanded for readability (Account Name,
-                  Address, etc.) at TIN #'s expense. min-w-[1360px] on the
-                  table itself (not just w-full) is what makes table-fixed
-                  actually honor each column's real pixel width instead of
-                  compressing them all to fit 100% of the container — and
-                  overflow-x-auto below is what turns that overflow into an
-                  inner scrollbar on this card instead of pushing the whole
-                  page wider (matches member-order-detail.tsx's own
-                  min-w-[1000px] w-full + overflow-x-auto pattern). flex-1
-                  min-h-0 overflow-hidden is what hands DataTable's own
-                  h-full scroll box its exact bounded height instead of
-                  letting it grow to content. */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                  {memberTable(false)}
-              </div>
-            </CardContent>
-          </Card>
+            {/* A compact, square map: 400px tall and at most 400px wide (full
+                width on a phone). member-map-panel.tsx is h-full/w-full, so this
+                wrapper is the one source of its size. */}
+            <div className="order-first h-100 w-full shrink-0 sm:w-100 xl:order-0" data-testid="member-map-wrapper">
+              <MemberMapPanel
+                customers={scopedRows}
+                focusCustomer={topSearchMatch}
+                onOpenDirections={setDirectionsTarget}
+              />
+            </div>
+          </div>
           <Dialog open={fullScreen} onOpenChange={setFullScreen}>
             <DialogContent
               className="w-[96vw] sm:max-w-[96vw] h-[92vh] max-h-[92vh] flex flex-col gap-0 p-0"

@@ -365,7 +365,12 @@ function InventoryContent() {
             : undefined
         })()}
       />
-      <StockMovementFormDialog open={movementFormOpen} onOpenChange={setMovementFormOpen} defaultDate={selectedDate} />
+      <StockMovementFormDialog
+        open={movementFormOpen}
+        onOpenChange={setMovementFormOpen}
+        defaultDirection="in"
+        defaultDate={selectedDate}
+      />
 
       <ConfirmDialog
         open={!!deleting}

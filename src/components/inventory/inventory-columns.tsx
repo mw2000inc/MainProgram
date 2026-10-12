@@ -60,10 +60,8 @@ export function getInventoryColumns({
       cell: ({ row }) => <span className="font-medium">{row.original.balance}</span>,
     },
     { accessorKey: "brandNewQuantity", header: () => <ColumnHeader tKey="brandNew" ns="inventory" /> },
-    // The sum of the two 2nd Hand columns to its right (Ready + Need Repair),
-    // both of which come from the approved movement ledger — so this moves
-    // whenever either of them does. Balance above is Brand New + this + Demo.
-    { accessorKey: "secondHandQuantity", header: () => <ColumnHeader tKey="secondHand" ns="inventory" /> },
+    // No combined "2nd Hand" column — the Ready + Need Repair split below says
+    // the same thing. Balance above is still Brand New + both of these + Demo.
     { accessorKey: "secondHandReadyQuantity", header: () => <ColumnHeader tKey="secondHandReadyShort" ns="inventory" /> },
     { accessorKey: "secondHandRepairQuantity", header: () => <ColumnHeader tKey="secondHandRepairShort" ns="inventory" /> },
     { accessorKey: "demoQuantity", header: () => <ColumnHeader tKey="demo" ns="inventory" /> },
