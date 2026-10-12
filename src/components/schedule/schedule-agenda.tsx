@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { addDays, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
@@ -59,7 +60,6 @@ import { VisitDispatchReview, type VisitDraft } from "@/components/schedule/visi
 import { SaturdayRedistributeDialog } from "@/components/schedule/saturday-redistribute-dialog"
 import { SaturdayCoverageDialog } from "@/components/schedule/saturday-coverage-dialog"
 import { updateScheduleJob } from "@/lib/api/schedule"
-import { triggerAutomation } from "@/lib/api/automations"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import {
@@ -1251,10 +1251,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // installs → same place → customer's → nearby → least busy; Saturdays
   // unassigned). Each job is dated its visit's dispatch date (Friday visits on
   // Saturday) unless changed.
-  const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
-  const openVisitReview = (mode: "bulk" | "dispatch", targets: UnscheduledVisit[]) => {
+  // "generate" (Generate Drafts) proposes like "dispatch" and adds "Save Drafts".
+  const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch" | "generate"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
+  const openVisitReview = (mode: "bulk" | "dispatch" | "generate", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
-    const assigner = mode === "dispatch" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users) }) : undefined
+    const assigner = mode !== "bulk" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users) }) : undefined
     const proposals: Record<string, VisitDraft> = {}
     for (const v of targets) {
       const edit = visitEdits[v.key] ?? {}
@@ -1285,7 +1286,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     }
     setVisitReview({ mode, visits: targets, proposals })
   }
-  const createFromReview = async (items: { visit: UnscheduledVisit; draft: VisitDraft }[]) => {
+  const createFromReview = async (items: { visit: UnscheduledVisit; draft: VisitDraft }[], keepDraft = false) => {
     const byKey = new Map(items.map((i) => [i.visit.key, i]))
     const accounts = assignmentAccounts(users)
     setDispatching({ done: 0, total: items.length })
@@ -1303,6 +1304,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           return d.technicianChosen && isAssignedTechnician(d.primary)
         },
         remarksFor: (v) => byKey.get(v.key)!.draft.remarks,
+        keepDraft,
         accounts,
         onProgress: (done) => setDispatching((p) => (p ? { ...p, done } : p)),
       }
@@ -1311,9 +1313,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     setDispatching(null)
     setSelectedVisitKeys(new Set())
     dropVisitEdits(items.map((i) => i.visit.key))
-    if (created) toast.success(t("dispatchAllDone", { count: created }))
+    if (keepDraft) {
+      if (created) toast.success(t("draftsSaved", { count: created }))
+    } else {
+      if (created) toast.success(t("dispatchAllDone", { count: created }))
+      if (awaitingApproval) toast.warning(t("saturdayJobsAwaiting", { count: awaitingApproval }))
+    }
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
-    if (awaitingApproval) toast.warning(t("saturdayJobsAwaiting", { count: awaitingApproval }))
   }
 
   const visitCheckbox = (v: UnscheduledVisit) => (
@@ -1538,7 +1544,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && j.scheduledDate === date && !isSaturday(j.scheduledDate))
   const approveTargets = draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
-  const [generatingDrafts, setGeneratingDrafts] = React.useState(false)
   // Approves the drafts in view — or, from the month review, the given jobs
   // with the edits made there saved in the same write.
   const approveAllDrafts = async (items: { job: ScheduleJob; patch: JobPatch }[] = approveTargets.map((job) => ({ job, patch: {} }))) => {
@@ -1558,19 +1563,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (approved) toast.success(t("draftsApproved", { count: approved }))
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
   }
-  const generateDrafts = async () => {
-    setGeneratingDrafts(true)
-    try {
-      // Only the report day's visits: drafts whose job lands on this date.
-      const result = await triggerAutomation("generateDraftJobs", { date })
-      const drafted = Number((result.detail as { drafted?: number } | undefined)?.drafted ?? 0)
-      if (result.ok) toast.success(t("draftsGenerated", { count: drafted }))
-      else toast.error(result.message)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    }
-    for (const queryKey of [scheduleJobsKey, filterChangePlansKey, installPlansKey, repairPlansKey, collectionsKey]) qc.invalidateQueries({ queryKey })
-    setGeneratingDrafts(false)
+  // Generate Drafts: the visits the generator would draft for this day —
+  // dated this day, a Friday's visits for a Saturday, and (on today) the open
+  // visits of the last 3 days — shown in the review with the automatic
+  // assignment, nothing saved until Approve or Save Drafts; or, with none,
+  // "There are no schedules on this day" and a way to add one.
+  const [noSchedulesOpen, setNoSchedulesOpen] = React.useState(false)
+  const openGenerateReview = () => {
+    const today = businessToday()
+    const start = format(addDays(parseISO(date), date === today ? -3 : -1), "yyyy-MM-dd")
+    const pool = buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, { start, end: date })
+    const targets = pool.filter((v) => visitDispatchDate(v) === date || (date === today && v.date < today))
+    if (targets.length === 0) setNoSchedulesOpen(true)
+    else openVisitReview("generate", targets)
   }
   const saturdayBanner = () =>
     !isAdmin || saturdays.length === 0 ? null : (
@@ -1764,12 +1769,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           size="sm"
           variant="outline"
           className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none"
-          disabled={generatingDrafts}
-          onClick={generateDrafts}
+          disabled={!!dispatching}
+          onClick={openGenerateReview}
           title={t("draftsGenerateHint")}
           data-testid="drafts-generate"
         >
-          {generatingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
+          <CalendarClock className="h-3.5 w-3.5" />
           {t("draftsGenerate")}
         </Button>
       )}
@@ -1953,6 +1958,31 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       />
       {isAdmin && <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />}
 
+      {isAdmin && (
+        <Dialog open={noSchedulesOpen} onOpenChange={setNoSchedulesOpen}>
+          <DialogContent className="sm:max-w-sm" data-testid="no-schedules-dialog">
+            <DialogHeader>
+              <DialogTitle>{t("noSchedulesTitle")}</DialogTitle>
+              <DialogDescription>{t("noSchedulesHint", { date: formatDate(date) })}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNoSchedulesOpen(false)}>
+                {tCommon("close")}
+              </Button>
+              <Button
+                className="gap-1.5"
+                onClick={() => {
+                  setNoSchedulesOpen(false)
+                  openCreate()
+                }}
+                data-testid="no-schedules-add"
+              >
+                <Plus className="h-3.5 w-3.5" /> {t("scheduleJob")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <ScheduleFormDialog
         open={formOpen}
         onOpenChange={(o) => {
@@ -1989,10 +2019,15 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <VisitDispatchReview
           open={!!visitReview}
           onOpenChange={(o) => !o && setVisitReview(null)}
-          title={t(visitReview?.mode === "dispatch" ? "visitReviewTitleDispatch" : "visitReviewTitleBulk", { count: visitReview?.visits.length ?? 0 })}
+          title={t(
+            visitReview?.mode === "generate" ? "visitReviewTitleGenerate" : visitReview?.mode === "dispatch" ? "visitReviewTitleDispatch" : "visitReviewTitleBulk",
+            { count: visitReview?.visits.length ?? 0, date: formatDate(date) }
+          )}
           visits={visitReview?.visits ?? []}
           initial={(v) => visitReview!.proposals[v.key]}
-          onConfirm={createFromReview}
+          onConfirm={(items) => createFromReview(items)}
+          onSaveDrafts={visitReview?.mode === "generate" ? (items) => createFromReview(items, true) : undefined}
+          confirmLabel={visitReview?.mode === "generate" ? t("visitReviewApprove", { count: visitReview.visits.length }) : undefined}
         />
       )}
       <ScheduleFormDialog

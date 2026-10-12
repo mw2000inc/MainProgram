@@ -261,7 +261,7 @@
   "monthReviewEditedBadge": "Edited",
   "draftsApproved": "Approved {count} draft job(s) — now visible to their technicians",
   "draftsGenerate": "Generate Drafts",
-  "draftsGenerateHint": "Pre-schedule this day's confirmed visits as auto-assigned draft jobs for review.",
+  "draftsGenerateHint": "Review the day’s visits as jobs (technicians proposed), then Approve or Save Drafts — nothing is saved before that.",
   "draftsGenerated": "Generated {count} draft job(s) — they're waiting in Full Schedule › Pending Schedule Approval",
   "needsTechnician": "Requires Technician Selection",
   "needsTechnicianHint": "Saturdays are never auto-assigned — pick who's working with Assign Saturday Coverage.",
@@ -334,5 +334,11 @@
   "releaseSlipCountAll": "{count} job(s) on {slips} technician slip(s)",
   "releaseSlipUnassigned": "Unassigned",
   "releaseSlipNoJobsDay": "No jobs on this day.",
-  "releaseSlipAddPickTechnician": "Choose a technician to add items to their slip"
+  "releaseSlipAddPickTechnician": "Choose a technician to add items to their slip",
+  "visitReviewTitleGenerate": "Generate drafts for {date} — {count} visit(s)",
+  "visitReviewApprove": "Approve ({count})",
+  "visitReviewSaveDrafts": "Save Drafts ({count})",
+  "draftsSaved": "Saved {count} draft job(s) — they wait in Full Schedule › Pending Schedule Approval",
+  "noSchedulesTitle": "There are no schedules on this day",
+  "noSchedulesHint": "No visits are waiting to be scheduled for {date}. You can add a schedule directly."
 }

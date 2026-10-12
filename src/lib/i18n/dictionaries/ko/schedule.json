@@ -261,7 +261,7 @@
   "monthReviewEditedBadge": "수정됨",
   "draftsApproved": "초안 작업 {count}건을 승인했습니다 — 이제 담당 기술자에게 보입니다",
   "draftsGenerate": "초안 생성",
-  "draftsGenerateHint": "이 날의 확정된 방문을 자동 배정된 초안 작업으로 미리 생성하여 검토합니다.",
+  "draftsGenerateHint": "그날의 방문을 작업으로 검토(기술자 제안)한 뒤 승인 또는 초안 저장 — 그 전에는 저장되지 않습니다.",
   "draftsGenerated": "초안 작업 {count}건을 생성했습니다 — 전체 일정 › 일정 승인 대기 탭에서 검토하세요",
   "needsTechnician": "기술자 선택 필요",
   "needsTechnicianHint": "토요일은 자동 배정되지 않습니다 — 토요일 근무 배정에서 근무자를 선택하세요.",
@@ -334,5 +334,11 @@
   "releaseSlipCountAll": "기술자 출고증 {slips}장에 작업 {count}건",
   "releaseSlipUnassigned": "미배정",
   "releaseSlipNoJobsDay": "이 날에는 작업이 없습니다.",
-  "releaseSlipAddPickTechnician": "항목을 추가하려면 기술자를 선택하세요"
+  "releaseSlipAddPickTechnician": "항목을 추가하려면 기술자를 선택하세요",
+  "visitReviewTitleGenerate": "{date} 초안 생성 — 방문 {count}건",
+  "visitReviewApprove": "승인 ({count})",
+  "visitReviewSaveDrafts": "초안 저장 ({count})",
+  "draftsSaved": "초안 작업 {count}건 저장 — 전체 일정 › 일정 승인 대기에서 대기합니다",
+  "noSchedulesTitle": "이 날에는 일정이 없습니다",
+  "noSchedulesHint": "{date}에 일정을 잡을 방문이 없습니다. 바로 일정을 추가할 수 있습니다."
 }

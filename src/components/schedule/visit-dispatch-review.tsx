@@ -42,6 +42,8 @@ export function VisitDispatchReview({
   visits,
   initial,
   onConfirm,
+  onSaveDrafts,
+  confirmLabel,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -51,6 +53,10 @@ export function VisitDispatchReview({
   // the automatic assignment).
   initial: (visit: UnscheduledVisit) => VisitDraft
   onConfirm: (items: { visit: UnscheduledVisit; draft: VisitDraft }[]) => Promise<void>
+  // Optional second action (Generate Drafts): save the jobs as drafts awaiting
+  // approval instead — no technician needed yet.
+  onSaveDrafts?: (items: { visit: UnscheduledVisit; draft: VisitDraft }[]) => Promise<void>
+  confirmLabel?: string
 }) {
   const { t } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
@@ -87,15 +93,16 @@ export function VisitDispatchReview({
   const weekdayMissing = rows.filter((r) => needsTechnician(r.draft) && !isSaturday(r.draft.date)).length
   const saturdayMissing = rows.filter((r) => needsTechnician(r.draft) && isSaturday(r.draft.date)).length
 
-  const confirm = async () => {
+  const run = async (action: (items: typeof rows) => Promise<void>) => {
     setSaving(true)
     try {
-      await onConfirm(rows)
+      await action(rows)
       onOpenChange(false)
     } finally {
       setSaving(false)
     }
   }
+  const confirm = () => run(onConfirm)
 
   return (
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
@@ -122,9 +129,14 @@ export function VisitDispatchReview({
             <Button variant="ghost" size="sm" disabled={saving} onClick={() => onOpenChange(false)} data-testid="visit-review-cancel">
               {tCommon("cancel")}
             </Button>
+            {onSaveDrafts && (
+              <Button variant="outline" size="sm" disabled={saving || rows.length === 0} onClick={() => run(onSaveDrafts)} data-testid="visit-review-save-drafts">
+                {t("visitReviewSaveDrafts", { count: rows.length })}
+              </Button>
+            )}
             <Button size="sm" className="gap-1.5" disabled={saving || rows.length === 0 || weekdayMissing > 0} onClick={confirm} data-testid="visit-review-confirm">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
-              {t("visitReviewConfirm", { count: rows.length })}
+              {confirmLabel ?? t("visitReviewConfirm", { count: rows.length })}
             </Button>
           </div>
         </div>

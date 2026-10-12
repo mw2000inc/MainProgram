@@ -40,6 +40,9 @@ export async function createJobsFromVisits(
     createDateFor?: (visit: UnscheduledVisit) => string
     // Remarks for the new job.
     remarksFor?: (visit: UnscheduledVisit) => string | undefined
+    // Leave every job a draft ('pending_approval', counted in
+    // awaitingApproval) — "Save Drafts" in Generate Drafts' review.
+    keepDraft?: boolean
   }
 ): Promise<{ created: number; failed: string[]; awaitingApproval: number }> {
   let created = 0
@@ -67,7 +70,7 @@ export async function createJobsFromVisits(
         filterCodes: visit.filterCodes,
       })
       await linkVisitToScheduleJob(visit.table, visit.recordId, job.id)
-      const active = !requiresSaturdayApproval(scheduledDate) || opts.activate || opts.activateFor?.(visit)
+      const active = !opts.keepDraft && (!requiresSaturdayApproval(scheduledDate) || opts.activate || opts.activateFor?.(visit))
       if (!active) awaitingApproval += 1
       if (createDate !== scheduledDate || active) {
         await updateScheduleJob(job.id, {
