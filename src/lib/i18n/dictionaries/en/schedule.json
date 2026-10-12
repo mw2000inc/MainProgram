@@ -329,5 +329,10 @@
   "monthPrevious": "Previous month",
   "monthNext": "Next month",
   "yearPrevious": "Previous year",
-  "yearNext": "Next year"
+  "yearNext": "Next year",
+  "releaseSlipAllTechnicians": "All technicians",
+  "releaseSlipCountAll": "{count} job(s) on {slips} technician slip(s)",
+  "releaseSlipUnassigned": "Unassigned",
+  "releaseSlipNoJobsDay": "No jobs on this day.",
+  "releaseSlipAddPickTechnician": "Choose a technician to add items to their slip"
 }

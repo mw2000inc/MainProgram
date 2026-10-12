@@ -329,5 +329,10 @@
   "monthPrevious": "이전 달",
   "monthNext": "다음 달",
   "yearPrevious": "이전 연도",
-  "yearNext": "다음 연도"
+  "yearNext": "다음 연도",
+  "releaseSlipAllTechnicians": "전체 기술자",
+  "releaseSlipCountAll": "기술자 출고증 {slips}장에 작업 {count}건",
+  "releaseSlipUnassigned": "미배정",
+  "releaseSlipNoJobsDay": "이 날에는 작업이 없습니다.",
+  "releaseSlipAddPickTechnician": "항목을 추가하려면 기술자를 선택하세요"
 }

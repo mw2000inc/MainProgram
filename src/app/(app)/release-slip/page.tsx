@@ -20,7 +20,11 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { assignmentAccounts } from "@/lib/technicians"
+import { assignmentAccounts, isAssignedTechnician } from "@/lib/technicians"
+import type { ReleaseSlipJob } from "@/lib/api/release-slip"
+
+// The admin's technician picker value for every technician's slip at once.
+const ALL_TECHNICIANS = "all"
 
 // A ?date= value: YYYY-MM-DD and a real calendar date, else today (Manila).
 function validDate(value: string | null): string | undefined {
@@ -60,15 +64,18 @@ function ReleaseSlipContent() {
   const { data: users = [] } = useUsers()
   const technicians = React.useMemo(() => assignmentAccounts(users).sort((a, b) => a.name.localeCompare(b.name)), [users])
   // A technician always gets their own slip (the database decides); an admin
-  // picks whose slip to print.
-  const [pickedTechnician, setPickedTechnician] = React.useState<string | undefined>(undefined)
-  const technicianId = isAdmin ? pickedTechnician : user?.id
+  // picks whose slip to print, or every technician's ("All technicians", the
+  // default) — then the day's jobs come in one call and are split per
+  // technician below.
+  const [pickedTechnician, setPickedTechnician] = React.useState<string>(ALL_TECHNICIANS)
+  const allMode = isAdmin && pickedTechnician === ALL_TECHNICIANS
+  const technicianId = isAdmin ? (allMode ? undefined : pickedTechnician) : user?.id
   const [signatures, setSignatures] = React.useState<SlipSignatures>({ checkedBy: "Jerson", notedBy: "Jan", approvedBy: "Malou" })
 
   const { data, isPending, error } = useQuery({
     queryKey: ["releaseSlip", date, technicianId ?? null, includePending],
     queryFn: () => fetchReleaseSlip(date, technicianId, includePending),
-    enabled: !!user && (!isAdmin || !!pickedTechnician),
+    enabled: !!user,
   })
   // Pending jobs print with blank OUT lines.
   const jobs = React.useMemo(
@@ -103,7 +110,7 @@ function ReleaseSlipContent() {
   const { data: wholeDay } = useQuery({
     queryKey: ["releaseSlip", date, technicianId ?? null, true],
     queryFn: () => fetchReleaseSlip(date, technicianId, true),
-    enabled: !!user && (!isAdmin || !!pickedTechnician),
+    enabled: !!user && !allMode,
   })
   const noteSuggestions = React.useCallback(
     (item: string) => {
@@ -131,6 +138,29 @@ function ReleaseSlipContent() {
 
   const technicianName = data?.technicianName || (isAdmin ? technicians.find((p) => p.id === pickedTechnician)?.name ?? "" : user?.name ?? "")
 
+  // The slips to show and print: one, or (All technicians) one per technician
+  // with jobs that day, by name — a job shared by two technicians is on both
+  // slips, as in the single view; jobs with no technician get an "Unassigned"
+  // slip. Each technician's slip also carries the items added by hand on
+  // their own slip (read here; added/removed in their single view).
+  const slips = ((): { key: string; name: string; jobs: ReleaseSlipJob[] }[] => {
+    if (!allMode) return [{ key: technicianId ?? "self", name: technicianName, jobs: slipJobs }]
+    const byName = new Map<string, ReleaseSlipJob[]>()
+    const unassigned: ReleaseSlipJob[] = []
+    for (const job of jobs) {
+      const names = [job.technician, job.technician2].map((n) => (n ?? "").trim()).filter((n) => isAssignedTechnician(n))
+      if (names.length === 0) unassigned.push(job)
+      for (const name of new Set(names)) byName.set(name, [...(byName.get(name) ?? []), job])
+    }
+    const list = Array.from(byName, ([name, list]) => {
+      const account = technicians.find((p) => p.name.trim().toLowerCase() === name.toLowerCase())
+      const extra = mounted && account ? manualSlipJob(loadManualItems(date, account.id)) : null
+      return { key: account?.id ?? name, name, jobs: extra ? [...list, extra] : list }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+    if (unassigned.length) list.push({ key: "unassigned", name: t("releaseSlipUnassigned"), jobs: unassigned })
+    return list
+  })()
+
   const ready = !!data && !isPending
   return (
     <div className="space-y-4">
@@ -145,11 +175,12 @@ function ReleaseSlipContent() {
         <div className="flex flex-wrap items-center gap-2">
           <DailyReportDateButton value={date} onChange={setDate} />
           {isAdmin && (
-            <Select value={pickedTechnician ?? ""} onValueChange={setPickedTechnician}>
+            <Select value={pickedTechnician} onValueChange={setPickedTechnician}>
               <SelectTrigger className="h-8 w-52" data-testid="slip-technician">
                 <SelectValue placeholder={t("releaseSlipPickTechnician")} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={ALL_TECHNICIANS}>{t("releaseSlipAllTechnicians")}</SelectItem>
                 {technicians.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
@@ -162,7 +193,15 @@ function ReleaseSlipContent() {
             <Checkbox checked={includePending} onCheckedChange={(v) => setIncludePending(v === true)} data-testid="slip-include-pending" />
             {t("releaseSlipIncludePending")}
           </label>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAddOpen(true)} disabled={!technicianId} data-testid="slip-add">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => setAddOpen(true)}
+            disabled={!technicianId}
+            title={allMode ? t("releaseSlipAddPickTechnician") : undefined}
+            data-testid="slip-add"
+          >
             <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAdd")}
           </Button>
           <Button size="sm" className="gap-1.5" onClick={() => window.print()} disabled={!ready} data-testid="slip-print">
@@ -171,9 +210,7 @@ function ReleaseSlipContent() {
         </div>
       </div>
 
-      {isAdmin && !pickedTechnician ? (
-        <p className="text-sm text-muted-foreground">{t("releaseSlipPickTechnicianHint")}</p>
-      ) : error ? (
+      {error ? (
         <p className="text-sm text-danger" data-testid="slip-error">
           {t("releaseSlipError")}
         </p>
@@ -182,9 +219,12 @@ function ReleaseSlipContent() {
       ) : (
         <>
           <p className="text-xs text-muted-foreground" data-testid="slip-count">
-            {t("releaseSlipCount", { count: String(jobs.length) })}
+            {allMode
+              ? t("releaseSlipCountAll", { count: String(jobs.length), slips: String(slips.length) })
+              : t("releaseSlipCount", { count: String(jobs.length) })}
           </p>
-          {manual.items.length > 0 && (
+          {allMode && slips.length === 0 && <p className="text-sm text-muted-foreground">{t("releaseSlipNoJobsDay")}</p>}
+          {!allMode && manual.items.length > 0 && (
             <div className="space-y-1.5 rounded-md border p-3" data-testid="slip-manual-list">
               <p className="text-sm font-medium">{t("releaseSlipManualTitle", { count: String(manual.items.length) })}</p>
               <ul className="space-y-1 text-sm">
@@ -213,15 +253,30 @@ function ReleaseSlipContent() {
             </div>
           )}
           {/* On-screen preview: scrolls sideways on a narrow screen. */}
-          <div className="overflow-x-auto rounded-md border bg-muted/40 p-3">
-            <div className="flex w-max flex-col gap-4">
-              <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={slipJobs} signatures={signatures} onSignaturesChange={setSignatures} />
+          {slips.length > 0 && (
+            <div className="overflow-x-auto rounded-md border bg-muted/40 p-3">
+              <div className="flex w-max flex-col gap-4">
+                {slips.map((slip) => (
+                  <div key={slip.key} className="flex flex-col gap-2" data-testid="slip-technician-block">
+                    {allMode && (
+                      <p className="text-sm font-semibold" data-testid="slip-technician-name">
+                        {slip.name} · {t("releaseSlipCount", { count: String(slip.jobs.filter((j) => j.jobId !== "manual").length) })}
+                      </p>
+                    )}
+                    <ReleaseSlipSheets date={date} technicianName={slip.name} jobs={slip.jobs} signatures={signatures} onSignaturesChange={setSignatures} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {/* Printed: every slip's pages in order; each technician starts on a new page. */}
           {mounted &&
+            slips.length > 0 &&
             createPortal(
               <div className="release-slip-print">
-                <ReleaseSlipSheets date={date} technicianName={technicianName} jobs={slipJobs} signatures={signatures} />
+                {slips.map((slip) => (
+                  <ReleaseSlipSheets key={slip.key} date={date} technicianName={slip.name} jobs={slip.jobs} signatures={signatures} />
+                ))}
               </div>,
               document.body
             )}
