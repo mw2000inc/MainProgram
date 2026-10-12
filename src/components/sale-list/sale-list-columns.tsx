@@ -1,8 +1,9 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Pencil, QrCode, Trash2 } from "lucide-react"
+import { Pencil, QrCode, StickyNote, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
@@ -113,6 +114,39 @@ function ActionsCell({
         </Button>
       )}
     </div>
+  )
+}
+
+// The Related Sales_Lists Note column's icon, shown when the unit (Sale List
+// order) has a note: opens the full note — wrapped, line breaks kept,
+// scrolling when long. Clicks stay inside (never open the order's row).
+function NoteButton({ note }: { note: string }) {
+  const { t } = useTranslation("fields")
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={t("note")}
+          aria-label={t("note")}
+          onClick={(e) => e.stopPropagation()}
+          data-testid="sale-note-button"
+        >
+          <StickyNote className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-80 max-w-[calc(100vw-2rem)] p-3"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="sale-note-popover"
+      >
+        <p className="mb-1.5 text-xs font-medium text-muted-foreground">{t("note")}</p>
+        <div className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words text-sm">{note}</div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -303,6 +337,15 @@ export function getSaleListSummaryColumns({
   ]
 
   if (onEditClick || onQrClick || onDeleteClick) {
+    // Note right after S/C, in its own column clear of the action icons — only
+    // for the admin-facing callers (the ones passing actions), never the
+    // public scan page, since notes are internal.
+    columns.push({
+      accessorKey: "note",
+      header: () => <ColumnHeader tKey="note" ns="fields" />,
+      enableSorting: false,
+      cell: ({ row }) => (row.original.note?.trim() ? <NoteButton note={row.original.note} /> : null),
+    })
     columns.push({
       id: "actions",
       header: "",
