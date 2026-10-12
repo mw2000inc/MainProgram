@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Check, CheckCheck, MapPin, Maximize2, Plus, Printer, Users } from "lucide-react"
+import { Check, CheckCheck, MapPin, Maximize2, Minimize2, Plus, Printer, Users } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import {
@@ -326,6 +326,9 @@ export default function CustomersPage() {
           columns={columns}
           data={scopedRows}
           searchPlaceholder={t("searchPlaceholder")}
+          // Search, filters, Export and Expand/Collapse in one wrapping row,
+          // in the same order on the page card and in full screen.
+          inlineToolbar
           onFilteredRowsChange={inFullScreen ? setFullScreenRows : setFilteredRows}
           onSearchChange={inFullScreen ? undefined : setSearchQuery}
           emptyMessage={t("noMembersFound")}
@@ -401,19 +404,19 @@ export default function CustomersPage() {
                 columns={exportColumns}
                 rows={inFullScreen ? fullScreenRows : filteredRows}
               />
-              {!inFullScreen && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
-                  title={tCommon("expand")}
-                  aria-label={tCommon("expand")}
-                  onClick={() => setFullScreen(true)}
-                  data-testid="member-list-expand"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </Button>
-              )}
+              {/* Same spot in both toolbars: Expand on the page, Collapse (back
+                  to the page) in the full-screen view. */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                title={inFullScreen ? tCommon("collapse") : tCommon("expand")}
+                aria-label={inFullScreen ? tCommon("collapse") : tCommon("expand")}
+                onClick={() => setFullScreen(!inFullScreen)}
+                data-testid={inFullScreen ? "member-list-collapse" : "member-list-expand"}
+              >
+                {inFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
             </>
           }
         />

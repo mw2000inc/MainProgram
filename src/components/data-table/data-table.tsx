@@ -69,6 +69,11 @@ interface DataTableProps<TData> {
   // Without it, a row matches when any of its own values contains the text.
   searchFn?: (row: TData, query: string) => boolean
   toolbar?: React.ReactNode
+  // Opt-in. The search box and every toolbar control share one wrapping row
+  // (flex-wrap, gap-2) instead of the toolbar wrapping as its own block beside
+  // the search — so a narrow list flows onto a second line in the same order
+  // a wide one shows in one.
+  inlineToolbar?: boolean
   // Every row that passes the search, across all pages, in the list's
   // current sort order (so Prev/Next and exports follow what's shown).
   onFilteredRowsChange?: (rows: TData[]) => void
@@ -188,6 +193,7 @@ export function DataTable<TData>({
   searchPlaceholder,
   searchFn,
   toolbar,
+  inlineToolbar = false,
   onFilteredRowsChange,
   onSearchChange,
   emptyMessage,
@@ -352,8 +358,14 @@ export function DataTable<TData>({
     // flex-1/min-h-0 on the table wrapper below: it only stretches/scrolls
     // when there's actual extra height to fill.
     <div className="h-full min-h-0 flex flex-1 flex-col space-y-3">
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="relative w-full sm:max-w-xs">
+      <div
+        className={
+          inlineToolbar
+            ? "shrink-0 flex flex-wrap items-center gap-2"
+            : "shrink-0 flex flex-col sm:flex-row sm:items-center gap-2"
+        }
+      >
+        <div className={inlineToolbar ? "relative w-full sm:w-72" : "relative w-full sm:max-w-xs"}>
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={globalFilter}
@@ -366,7 +378,7 @@ export function DataTable<TData>({
             className="pl-8"
           />
         </div>
-        {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
+        {toolbar && (inlineToolbar ? toolbar : <div className="flex flex-wrap items-center gap-2">{toolbar}</div>)}
       </div>
 
       {/* This is the ONE real scroll container for the whole table — both
