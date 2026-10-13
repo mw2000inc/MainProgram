@@ -41,6 +41,8 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { getCpSystemFilterSkus } from "@/lib/filter-parts"
+import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
+import { toast } from "sonner"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -235,6 +237,7 @@ export function ScheduleFormDialog({
   const { data: saleListEntries = [] } = useSaleListEntries()
   const { data: filterChangePlans = [] } = useFilterChangePlans()
   const { data: cpSystems = [] } = useCpSystems()
+  const duplicateWarning = useDuplicateJobGuard()
   // Technician logins, plus the fixed crews' members whatever their role (see assignmentAccounts).
   const technicianAccounts = React.useMemo(() => assignmentAccounts(users), [users])
   const { t } = useTranslation("schedule")
@@ -306,7 +309,22 @@ export function ScheduleFormDialog({
     return normalizeTechnicianPair(values.technician, values.technician2 === NONE_SENTINEL ? "" : values.technician2)
   }
 
+  // One open job per Order No. and job type (findOpenJobForOrder): a new job,
+  // or an edit that changes its type or Order No., is refused when the order
+  // already has an approved or draft job of that type — shown on the Order
+  // No. field and as a toast. True when it's fine to save.
+  async function passesDuplicateCheck(values: FormValues): Promise<boolean> {
+    const changed = !isEdit || values.jobType !== job.jobType || (values.orderNo ?? "").trim() !== (job.orderNo ?? "").trim()
+    if (!changed) return true
+    const duplicate = await duplicateWarning(values.jobType, values.orderNo, job?.id)
+    if (!duplicate) return true
+    form.setError("orderNo", { type: "duplicate", message: duplicate })
+    toast.warning(duplicate)
+    return false
+  }
+
   async function onSubmit(values: FormValues) {
+    if (!(await passesDuplicateCheck(values))) return
     const input = {
       ...values,
       // Same "" (not undefined) reasoning as technicianUserId below — the
@@ -394,6 +412,7 @@ export function ScheduleFormDialog({
   // client-side check.
   async function onApprove(values: FormValues) {
     if (!isEdit) return
+    if (!(await passesDuplicateCheck(values))) return
     const input = {
       ...values,
       // Same "" (not undefined) reasoning as technicianUserId below — the

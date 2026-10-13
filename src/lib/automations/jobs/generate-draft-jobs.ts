@@ -1,7 +1,7 @@
 import "server-only"
 import { addDays, format, parseISO } from "date-fns"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
+import { createDispatchAssigner, previousTechniciansByOrder } from "@/lib/scheduling/dispatch-assignment"
 import { autoJobDate } from "@/lib/schedule-timeframe"
 import { businessToday } from "@/lib/dispatch-lead-time"
 import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
@@ -24,8 +24,11 @@ const LOOKAHEAD_DAYS = 30
 //     badge and approve it ("Approve & Dispatch All Drafts"); technicians
 //     can't see it until then (schedule_jobs RLS hides pending_approval);
 //   - technician, vehicle and the technicians' logins come from
-//     createDispatchAssigner (planned technician → customer's technician →
-//     least-busy field technician that day);
+//     createDispatchAssigner (planned technician → same place that day →
+//     customer's technician → whoever last serviced the order → nearby →
+//     least-busy field technician that day; a crew member always brings the
+//     whole crew). The record gets the same Serviceman the moment it's linked
+//     (20261104000000);
 //   - it's dated Monday to Friday only (autoJobDate): the visit's own date,
 //     or today for one already past — a Saturday or Sunday becomes the
 //     following Monday (Manila calendar). Saturday work is assigned by hand;
@@ -56,6 +59,24 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
       .gte("scheduled_date", format(addDays(parseISO(start), -30), "yyyy-MM-dd")),
   ])
   for (const r of [customersRes, accountsRes, jobsRes]) if (r.error) return { ok: false, message: r.error.message }
+
+  // Who last serviced each order: completed jobs, and done records (their
+  // Serviceman / TH) — the latest 1,000 of each is plenty.
+  const history = await Promise.all([
+    admin.from("schedule_jobs").select("order_no, technician, technician_2, scheduled_date").eq("status", "completed").order("scheduled_date", { ascending: false }).limit(1000),
+    admin.from("filter_change_plans").select("order_number, serviceman, serviceman_2, acc_d").not("acc_d", "is", null).order("acc_d", { ascending: false }).limit(1000),
+    admin.from("collections").select("order_no, serviceman, serviceman_2, acc_d").not("acc_d", "is", null).order("acc_d", { ascending: false }).limit(1000),
+    admin.from("install_plans").select("order_no, serviceman, serviceman_2, installed_date").not("installed_date", "is", null).order("installed_date", { ascending: false }).limit(1000),
+    admin.from("repair_plans").select("order_no, th, th_2, acc_d").not("acc_d", "is", null).order("acc_d", { ascending: false }).limit(1000),
+  ])
+  const [doneJobs, doneFc, doneCol, doneInst, doneRep] = history.map((r) => (r.data ?? []) as Record<string, string | null>[])
+  const previous = previousTechniciansByOrder([
+    ...doneJobs.map((r) => ({ orderNo: r.order_no, technician: r.technician, technician2: r.technician_2, date: r.scheduled_date })),
+    ...doneFc.map((r) => ({ orderNo: r.order_number, technician: r.serviceman, technician2: r.serviceman_2, date: r.acc_d })),
+    ...doneCol.map((r) => ({ orderNo: r.order_no, technician: r.serviceman, technician2: r.serviceman_2, date: r.acc_d })),
+    ...doneInst.map((r) => ({ orderNo: r.order_no, technician: r.serviceman, technician2: r.serviceman_2, date: r.installed_date })),
+    ...doneRep.map((r) => ({ orderNo: r.order_no, technician: r.th, technician2: r.th_2, date: r.acc_d })),
+  ])
   const customers = customersRes.data ?? []
   const accounts = assignmentAccounts((accountsRes.data ?? []).map((a) => ({ id: a.id as string, name: (a.name as string) ?? "", role: a.role as string })))
   const jobs = jobsRes.data ?? []
@@ -139,6 +160,7 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
       longitude: c.longitude ?? undefined,
     })),
     accounts,
+    previous,
   })
 
   let drafted = 0

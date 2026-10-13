@@ -1,4 +1,4 @@
-import { createScheduleJob, linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
+import { createScheduleJob, findOpenJobForOrder, linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
 import { technicianAccountIds, type TechnicianAccount } from "@/lib/technicians"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
@@ -54,6 +54,14 @@ export async function createJobsFromVisits(
     const assigned = opts.assignFor?.(visit, scheduledDate)
     const pair = assigned?.pair ?? opts.pairFor?.(visit) ?? { primary: "", secondary: "" }
     try {
+      // One open job per order and type — a visit whose order already has
+      // one is left unscheduled and reported, never given a second job.
+      const existing = await findOpenJobForOrder(visit.jobType, visit.orderNo)
+      if (existing) {
+        failed.push(`${visit.orderNo}: already has an open ${visit.jobType.replace("_", " ")} ${existing.status === "pending_approval" ? "draft" : "job"} on ${existing.scheduledDate}`)
+        opts.onProgress?.(created + failed.length)
+        continue
+      }
       const job = await createScheduleJob({
         jobType: visit.jobType,
         status: "pending_approval",

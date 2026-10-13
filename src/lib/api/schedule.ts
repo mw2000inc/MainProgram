@@ -116,6 +116,36 @@ export async function updateScheduleJob(id: string, input: Partial<Omit<Schedule
 // Links a Filter Change / install / repair / collection record to the job
 // just created for it from the Schedule's Unscheduled Visits — only while
 // it's still unlinked, so it never steals a record another job already has.
+// One open job per Order No. and job type: the order's approved ('pending')
+// or draft ('pending_approval') job of this type, if it already has one —
+// read fresh from the database, not the cached list, so two admins (or two
+// quick saves) can't both add one. Every hand-made job checks this first
+// (Schedule Job, the Add forms' drafts, Unscheduled Visits, auto-suggest's
+// new jobs); the automatic drafts already skip such orders. Different types
+// for the same order (a Filter Change and a Collection) are fine, and so are
+// errands ('other') and jobs without an Order No.
+export async function findOpenJobForOrder(
+  jobType: ScheduleJobType,
+  orderNo: string | undefined,
+  excludeJobId?: string
+): Promise<Pick<ScheduleJob, "id" | "status" | "scheduledDate"> | undefined> {
+  const order = orderNo?.trim()
+  if (!order || jobType === "other") return undefined
+  let query = supabase
+    .from("schedule_jobs")
+    .select("id, status, scheduled_date")
+    .eq("job_type", jobType)
+    .eq("order_no", order)
+    .in("status", ["pending", "pending_approval"])
+    .order("scheduled_date")
+    .limit(1)
+  if (excludeJobId) query = query.neq("id", excludeJobId)
+  const { data, error } = await query
+  if (error) throw error
+  const row = data?.[0]
+  return row ? { id: row.id, status: row.status as ScheduleJobStatus, scheduledDate: row.scheduled_date } : undefined
+}
+
 export async function linkVisitToScheduleJob(
   table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections",
   recordId: string,

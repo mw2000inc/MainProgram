@@ -34,6 +34,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
+import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { useQueryClient } from "@tanstack/react-query"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -592,6 +593,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { data: installPlans = [] } = useInstallPlans()
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: collectionRecords = [] } = useCollections()
+  const previousTechnicians = usePreviousTechnicians()
   // A Collection job's payment details, read live from its linked collection.
   const collectionByJobId = React.useMemo(
     () => new Map(collectionRecords.filter((c) => c.scheduleJobId).map((c) => [c.scheduleJobId as string, c])),
@@ -1306,14 +1308,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // held inline edits, else — for Bulk Create — the visit's planned
   // technician (none on a Saturday), or — for Approve All & Dispatch — the
   // automatic assignment (createDispatchAssigner: planned → Liteace for
-  // installs → same place → customer's → nearby → least busy; Saturdays
+  // installs → same place → customer's → last serviced it → nearby → least busy; Saturdays
   // unassigned). Each job is dated its visit's own date unless changed.
   // "generate" (Generate Drafts) proposes like "dispatch", dates each job the
   // automatic way (Monday to Friday — autoJobDate), and adds "Save Drafts".
   const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch" | "generate"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
   const openVisitReview = (mode: "bulk" | "dispatch" | "generate", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
-    const assigner = mode !== "bulk" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users) }) : undefined
+    const assigner = mode !== "bulk" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users), previous: previousTechnicians }) : undefined
     const proposals: Record<string, VisitDraft> = {}
     for (const v of targets) {
       const edit = visitEdits[v.key] ?? {}

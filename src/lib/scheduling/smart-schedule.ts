@@ -463,6 +463,7 @@ const ASSIGNMENT_REASON: Record<AssignmentSource, string> = {
   installation: "installations go to the Liteace team",
   location: "the team already going to the same place that day",
   customer: "the customer's assigned technician",
+  previous: "the technician who last serviced this order",
   nearby: "the team already working nearby that day",
   balanced: "the least-busy technician that day",
   none: "no technician available",

@@ -9,9 +9,12 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { installPlansKey } from "@/lib/hooks/use-install-plans"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
-import { scheduleJobsKey, useCreateScheduleJob } from "@/lib/hooks/use-schedule"
+import { scheduleJobsKey, useCreateScheduleJob, useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
+import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
 import { assignmentAccounts, crewOfTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { formatDate } from "@/lib/utils"
 
@@ -55,15 +58,43 @@ export function useVisitDraftJob() {
   const { data: saleListEntries = [] } = useSaleListEntries()
   const qc = useQueryClient()
   const { t } = useTranslation("schedule")
+  const duplicateWarning = useDuplicateJobGuard()
+  const { data: jobs = [] } = useScheduleJobs()
+  const previous = usePreviousTechnicians()
 
   return async function ensureVisitDraftJob(o: DraftOptions) {
     if (!o.date || o.existingJobId) return
-    const picked = normalizeTechnicianPair(o.technician ?? "", o.technician2 ?? "")
-    const crew = crewOfTechnician(picked.primary) ?? crewOfTechnician(picked.secondary)
-    const pair = crew ? { primary: crew.primary, secondary: crew.secondary } : picked
-    const ids = technicianAccountIds(pair.primary, pair.secondary, assignmentAccounts(users))
     const orderNo = (o.orderNo ?? "").trim()
     const customer = orderNo ? findCustomerByOrderNumber(customers, saleListEntries, orderNo) : undefined
+    const accounts = assignmentAccounts(users)
+    // The record's own technician(s); none picked → the same automatic
+    // assignment as the nightly drafts (createDispatchAssigner: same place
+    // that day → the member's technician → whoever last serviced the order →
+    // nearby → least busy; never on a Saturday). A crew member brings the
+    // whole crew and its vehicle either way.
+    const picked = normalizeTechnicianPair(o.technician ?? "", o.technician2 ?? "")
+    const assigned = picked.primary
+      ? undefined
+      : createDispatchAssigner({ jobs, customers, accounts, previous })(
+          {
+            key: `${o.table}:${o.recordId}`,
+            table: o.table,
+            recordId: o.recordId,
+            jobType: o.jobType,
+            date: o.date,
+            orderNo,
+            customerId: customer?.id,
+            name: o.accountName ?? orderNo,
+            address: o.address?.trim() || customer?.address?.trim(),
+            technician: "",
+            technician2: "",
+          },
+          o.date
+        )
+    const base = assigned?.pair ?? picked
+    const crew = crewOfTechnician(base.primary) ?? crewOfTechnician(base.secondary)
+    const pair = crew ? { primary: crew.primary, secondary: crew.secondary } : base
+    const ids = technicianAccountIds(pair.primary, pair.secondary, accounts)
     const product = orderNo ? saleListEntries.find((e) => e.orderNumber.trim() === orderNo)?.productNo?.trim() : undefined
     const notes =
       o.notes !== null
@@ -71,6 +102,13 @@ export function useVisitDraftJob() {
         : [o.accountName?.trim(), product, o.amount ? `₱${o.amount.toLocaleString()}` : ""].filter(Boolean).join(" — ")
     const address = o.address?.trim() || customer?.address?.trim()
     try {
+      // One open job per order and type: the record is saved, but no second
+      // draft is made — the warning says where the existing one is.
+      const duplicate = await duplicateWarning(o.jobType, orderNo)
+      if (duplicate) {
+        toast.warning(duplicate)
+        return
+      }
       const job = await createJob.mutateAsync({
         jobType: o.jobType,
         status: "pending_approval",
@@ -81,7 +119,7 @@ export function useVisitDraftJob() {
         technician2: pair.secondary,
         technicianUserId: ids.technicianUserId || "",
         technician2UserId: ids.technician2UserId || "",
-        vehicle: crew?.vehicle ?? "",
+        vehicle: crew?.vehicle ?? assigned?.vehicle ?? "",
         secondaryAddress: address || undefined,
         notes: notes || undefined,
       })

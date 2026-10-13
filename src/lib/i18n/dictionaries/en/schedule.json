@@ -1,4 +1,7 @@
 {
+  "duplicateOpenJob": "A {type} {state} already exists for Order No. {orderNo} on {date} — no second one was added.",
+  "duplicateStateDraft": "draft",
+  "duplicateStateJob": "job",
   "visitDraftCreated": "Draft {type} job created for {date} — it's waiting in Schedule › Pending Schedule Approval.",
   "visitDraftFailed": "Saved, but its draft schedule job couldn't be created: {message}",
   "installation": "Installation",

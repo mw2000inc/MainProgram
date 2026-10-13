@@ -1,6 +1,7 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { haversineKm, resolveViaCustomer, autoSuggestTechnicianRoster } from "./smart-schedule"
+import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
 
 // Extends the same nearest-technician heuristic smart-schedule.ts already
 // uses for the customer-dispatch-confirm path (installs/repairs/
@@ -206,8 +207,16 @@ export async function applyTechnicianAssignments(
   let applied = 0
   for (const { planId, technician } of assignments) {
     if (!technician.trim()) continue
-    const { error } = await admin.from("filter_change_plans").update({ serviceman: technician }).eq("id", planId)
-    if (!error) applied += 1
+    const { data: plan, error } = await admin
+      .from("filter_change_plans")
+      .update({ serviceman: technician })
+      .eq("id", planId)
+      .select("schedule_job_id, serviceman, serviceman_2")
+      .maybeSingle()
+    if (error) continue
+    applied += 1
+    // Its open schedule job gets the same technician (crew rule, logins).
+    await syncRecordTechniciansToJob(admin, plan?.schedule_job_id, plan?.serviceman, plan?.serviceman_2).catch(() => undefined)
   }
   return { applied }
 }

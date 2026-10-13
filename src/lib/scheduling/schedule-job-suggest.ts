@@ -443,6 +443,21 @@ export async function applyTechnicianAssignmentsToJobs(
     const { primary, secondary } = normalizeTechnicianPair(errand.technician, errand.technician2 ?? "")
     if (!isAssignedTechnician(primary) || !ISO_DATE.test(errand.scheduledDate)) continue
     if (jobType === "other" && !errand.notes.trim()) continue
+    // One open job per order and type (findOpenJobForOrder) — never a second.
+    const orderNo = errand.orderNo?.trim()
+    if (orderNo && jobType !== "other") {
+      const { data: open } = await admin
+        .from("schedule_jobs")
+        .select("scheduled_date, status")
+        .eq("job_type", jobType)
+        .eq("order_no", orderNo)
+        .in("status", ["pending", "pending_approval"])
+        .limit(1)
+      if (open?.length) {
+        failed.push(`new ${jobType} job for ${orderNo}: the order already has an open ${jobType.replace("_", " ")} ${open[0].status === "pending_approval" ? "draft" : "job"} on ${open[0].scheduled_date}`)
+        continue
+      }
+    }
     const account = matchTechnicianAccount(primary, accounts)
     const account2 = secondary ? matchTechnicianAccount(secondary, accounts) : undefined
     const { error } = await admin.from("schedule_jobs").insert({

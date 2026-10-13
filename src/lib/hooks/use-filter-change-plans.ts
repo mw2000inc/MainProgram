@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { supabase } from "@/lib/supabase/client"
+import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
+import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
 import * as api from "@/lib/api/filter-change-plans"
 import type { FilterChangePlan } from "@/lib/types"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -27,8 +30,22 @@ const DATE_FIELDS = new Set(["preD", "accD", "planDate"])
 export function useUpdateFilterChangePlan() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: Partial<Omit<FilterChangePlan, "id" | "createdAt">> }) =>
-      api.updateFilterChangePlan(id, input),
+    // A changed Serviceman goes to the record's open schedule job too (with the
+    // crew rule and logins — syncRecordTechniciansToJob); the database then
+    // writes the job's pair back to the record.
+    mutationFn: async ({ id, input }: { id: string; input: Partial<Omit<FilterChangePlan, "id" | "createdAt">> }) => {
+      const saved = await api.updateFilterChangePlan(id, input)
+      if ("serviceman" in input || "serviceman2" in input) {
+        try {
+          if (await syncRecordTechniciansToJob(supabase, saved.scheduleJobId, saved.serviceman, saved.serviceman2)) {
+            qc.invalidateQueries({ queryKey: scheduleJobsKey })
+          }
+        } catch {
+          toast.error("Saved, but its schedule job's technician couldn't be updated")
+        }
+      }
+      return saved
+    },
     // Shown straight away (e.g. setting Acc D flips the Status badge to
     // Completed in the same click) and rolled back if the save fails; the
     // refetch below then confirms what the database actually holds.

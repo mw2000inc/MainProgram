@@ -21,7 +21,9 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 //      job or visit with the same Member Account Number or the same address
 //      (five units in one dorm, a member's filter change and collection), so
 //      one team and vehicle covers the whole stop;
-//   3. "customer" — the customer's assigned technician(s);
+//   3. "customer" — the customer's assigned technician(s) (Member List);
+//   3b. "previous" — whoever last serviced that order: the technician(s) of
+//      its most recent completed job or record (previousTechniciansByOrder);
 //   4. "nearby"   — the team already working in the same neighborhood that
 //      day: the closest stop within NEARBY_KM (1 km) on the map when both
 //      places have coordinates, otherwise one sharing a barangay, a named
@@ -47,7 +49,7 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 // changes every Saturday, so a Saturday job is always left Unassigned, with
 // no vehicle — not even the visit's planned technician — until an admin picks
 // that Saturday's technicians ("Assign Saturday Coverage").
-export type AssignmentSource = "planned" | "installation" | "location" | "customer" | "nearby" | "balanced" | "none" | "saturday"
+export type AssignmentSource = "planned" | "installation" | "location" | "customer" | "previous" | "nearby" | "balanced" | "none" | "saturday"
 
 export interface DispatchAssignment {
   pair: { primary: string; secondary: string }
@@ -66,6 +68,24 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 const crewOfVehicle = (vehicle: string) => {
   const crew = vehicle ? VEHICLE_CREWS[vehicle] : undefined
   return crew ? { vehicle, primary: crew[0], secondary: crew[1] } : undefined
+}
+
+// Who last serviced each order: the technician pair of its most recent
+// completed visit — a completed schedule job, or a done Filter Change /
+// Collection / Installation / Repair record (its Serviceman / TH) — keyed by
+// the trimmed Order No. Visits without an assigned technician are skipped.
+export function previousTechniciansByOrder(
+  visits: { orderNo?: string | null; technician?: string | null; technician2?: string | null; date?: string | null }[]
+): Map<string, { primary: string; secondary: string }> {
+  const latest = new Map<string, { date: string; pair: { primary: string; secondary: string } }>()
+  for (const v of visits) {
+    const order = (v.orderNo ?? "").trim()
+    if (!order || !isAssignedTechnician(v.technician ?? "")) continue
+    const date = v.date ?? ""
+    const seen = latest.get(order)
+    if (!seen || date > seen.date) latest.set(order, { date, pair: normalizeTechnicianPair(v.technician ?? "", v.technician2 ?? "") })
+  }
+  return new Map([...latest].map(([order, { pair }]) => [order, pair]))
 }
 
 // The field technicians automatic assignment (and Saturday coverage) can use:
@@ -91,6 +111,8 @@ export function createDispatchAssigner(input: {
   customers: (Pick<Customer, "id" | "assignedTechnician" | "assignedTechnician2"> &
     Partial<Pick<Customer, "memberAccountNumber" | "latitude" | "longitude">>)[]
   accounts: TechnicianAccount[]
+  // Who last serviced each order (previousTechniciansByOrder) — rule 3b.
+  previous?: Map<string, { primary: string; secondary: string }>
 }): (visit: UnscheduledVisit, date: string) => DispatchAssignment {
   // Field technicians eligible for balancing: accounts that are on the roster.
   const fieldTechnicians = fieldTechnicianNames(input.accounts)
@@ -213,9 +235,13 @@ export function createDispatchAssigner(input: {
       const customer = visit.customerId ? customerById.get(visit.customerId) : undefined
       const customerPair = customer ? normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2) : undefined
       const candidates = fieldTechnicians.filter((name) => !isFullCrew({ primary: name, secondary: "" }))
+      const previousPair = input.previous?.get((visit.orderNo ?? "").trim())
       if (customerPair && isAssignedTechnician(customerPair.primary) && !isFullCrew(customerPair)) {
         pair = customerPair
         source = "customer"
+      } else if (previousPair && isAssignedTechnician(previousPair.primary) && !isFullCrew(previousPair)) {
+        pair = previousPair
+        source = "previous"
       } else if ((nearby = nearbyTeam(date, point, neighborhoodKeys(visit.address), (t) => isFullCrew(t.pair)))) {
         pair = nearby.pair
         teamVehicle = nearby.vehicle
