@@ -16,7 +16,7 @@ const LOOKBACK_DAYS = 3
 const LOOKAHEAD_DAYS = 30
 
 // Pre-schedules the Daily Report's upcoming visits as DRAFT jobs for an admin
-// to review. For every dispatch-confirmed, still-pending Filter Change or
+// to review. For every still-pending (confirmed or not yet confirmed) Filter Change or
 // Collection visit in the window that no job covers (Installations and
 // Repairs are scheduled by hand — Schedule Job — as requests come in):
 //   - a job is created as 'pending_approval' with source 'automation' — a
@@ -83,7 +83,11 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
       .eq("status", "Pending")
       .is("schedule_job_id", null)
       .is(src.done, null)
-      .or("dispatch_status.is.null,dispatch_status.eq.Confirmed")
+      // Approval first: confirmed AND not-yet-confirmed ("Draft") records are
+      // drafted — the admin's approval is the gate (and confirms the record,
+      // 20261026). Records already with the customer (Pending Customer
+      // Confirmation), with a reschedule request, or rejected are left out.
+      .or("dispatch_status.is.null,dispatch_status.in.(Confirmed,Draft)")
       .or(inWindow(src.pre, src.base))
     if (error) return { ok: false, message: `${src.table}: ${error.message}` }
     for (const r of (data ?? []) as Record<string, unknown>[]) {

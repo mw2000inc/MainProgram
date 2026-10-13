@@ -397,6 +397,9 @@ function NeedsTechnicianBadge({ t }: { t: (key: string) => string }) {
   )
 }
 
+// The full-screen Job Type filter's choices.
+const JOB_TYPE_FILTERS = ["filter_change", "collection", "installation", "repair"] as const
+
 // Still to do: active, or a Saturday job awaiting coverage approval.
 const isOpenStatus = (status: ScheduleJobStatus) => status === "pending" || status === "pending_approval"
 
@@ -452,6 +455,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const [confirmComplete, setConfirmComplete] = React.useState(false)
   // Full-screen search (cleared when the view closes).
   const [search, setSearch] = React.useState("")
+  // Full-screen Job Type filter beside the search — narrows the jobs and the
+  // Unscheduled Visits together with the search text (reset on close).
+  const [jobTypeFilter, setJobTypeFilter] = React.useState<"all" | (typeof JOB_TYPE_FILTERS)[number]>("all")
   // Full-screen status filter — Pending by default, so the grid shows the
   // jobs still to do (reset to it whenever the view closes).
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("pending")
@@ -739,37 +745,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     })
   }, [jobs, range, isAdmin, user?.id])
 
-  // Generated (or customer-confirmed) drafts the admin hasn't decided on yet:
-  // the job's own-type record has a Pre D (Pre-Installed Date for installs)
-  // that isn't the job's date — usually blank, since approving writes it
-  // (20261028). They stay off this panel — list, counts, export, stop numbers
-  // and Approve All — and wait in the Full Schedule's Pending Schedule
-  // Approval tab; setting the record's Pre D to the job's date brings one back.
-  // Hand-made drafts and drafts with no linked record always show. The
+  // Approval first: the panel — list, counts, export, stop numbers — shows
+  // only approved jobs (plus completed / cancelled ones). Every draft
+  // ('pending_approval': generated, customer-confirmed or hand-made) waits in
+  // the Full Schedule's Pending Schedule Approval tab until an admin approves
+  // it; the notice below links there, and "Approve All for <date>" covers the
+  // day's drafts. Technicians never see drafts at all (schedule_jobs RLS). The
   // Saturday banner, Assign Saturday Coverage and redistribute still read
   // allDayJobs, so Saturday drafts keep reaching them.
-  const undecidedDraftIds = React.useMemo(() => {
-    const preDsByJob = new Map<string, (string | undefined)[]>()
-    const add = (jobType: string, jobId: string | undefined, preD: string | undefined) => {
-      if (!jobId) return
-      const key = `${jobType}|${jobId}`
-      preDsByJob.set(key, [...(preDsByJob.get(key) ?? []), preD])
-    }
-    filterChangePlans.forEach((p) => add("filter_change", p.scheduleJobId, p.preD))
-    installPlans.forEach((p) => add("installation", p.scheduleJobId, p.preInstalledDate))
-    repairPlans.forEach((p) => add("repair", p.scheduleJobId, p.preD))
-    collectionRecords.forEach((c) => add("collection", c.scheduleJobId, c.preD))
-    return new Set(
-      allDayJobs
-        .filter((j) => {
-          if (!isDraftJob(j)) return false
-          const preDs = preDsByJob.get(`${j.jobType}|${j.id}`)
-          return !!preDs && preDs.every((preD) => preD !== j.scheduledDate)
-        })
-        .map((j) => j.id)
-    )
-  }, [allDayJobs, filterChangePlans, installPlans, repairPlans, collectionRecords])
-  const todaysJobs = React.useMemo(() => allDayJobs.filter((j) => !undecidedDraftIds.has(j.id)), [allDayJobs, undecidedDraftIds])
+  const todaysJobs = React.useMemo(() => allDayJobs.filter((j) => j.status !== "pending_approval"), [allDayJobs])
+  const waitingDrafts = React.useMemo(() => allDayJobs.filter((j) => j.status === "pending_approval"), [allDayJobs])
 
   // Display-only "Stop 1, Stop 2, ..." per technician for this one day —
   // same computation the Schedule page's List view uses (see
@@ -952,9 +937,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // covers jobs that are visible.
   const customerById = React.useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers])
   const searchedJobs = React.useMemo(() => {
+    const ofType = jobTypeFilter === "all" ? todaysJobs : todaysJobs.filter((j) => j.jobType === jobTypeFilter)
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (terms.length === 0) return todaysJobs
-    return todaysJobs.filter((job) => {
+    if (terms.length === 0) return ofType
+    return ofType.filter((job) => {
       const customer = job.customerId ? customerById.get(job.customerId) : undefined
       const haystack = [
         customer?.companyName,
@@ -981,7 +967,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         .toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [search, todaysJobs, customerById, t])
+  }, [search, jobTypeFilter, todaysJobs, customerById, t])
   // Per-tab counts follow the search; "All" also covers cancelled jobs.
   const statusCounts = React.useMemo(
     () => ({
@@ -1249,13 +1235,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // tab hides them.
   const visibleVisits = React.useMemo(() => {
     if (statusFilter === "completed") return []
+    const ofType = jobTypeFilter === "all" ? unscheduledVisits : unscheduledVisits.filter((v) => v.jobType === jobTypeFilter)
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (terms.length === 0) return unscheduledVisits
-    return unscheduledVisits.filter((v) => {
+    if (terms.length === 0) return ofType
+    return ofType.filter((v) => {
       const haystack = [v.name, v.orderNo, v.address, v.detail, v.technician, v.technician2, t(v.jobType)].filter(Boolean).join(" ").toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [unscheduledVisits, statusFilter, search, t])
+  }, [unscheduledVisits, statusFilter, search, jobTypeFilter, t])
 
   // Only visits still on screen count as selected (search / timeframe can
   // hide ticked ones).
@@ -1568,7 +1555,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (!isAdmin || date < today) return 0
     return jobs.filter((j) => isOverdueJob(j, today)).length
   }, [isAdmin, date, jobs])
-  const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && j.scheduledDate === date && !isSaturday(j.scheduledDate))
+  const draftJobs = waitingDrafts.filter((j) => j.scheduledDate === date && !isSaturday(j.scheduledDate))
   const approveTargets = draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
   // "Approve All for <date>" opens the review first (JobApprovalReview);
@@ -1727,13 +1714,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}
-      {!isPending && isAdmin && undecidedDraftIds.size > 0 && !expanded && (
+      {!isPending && isAdmin && waitingDrafts.length > 0 && !expanded && (
         <Link
           href="/schedule?tab=pendingSchedule"
           data-testid="schedule-undecided-drafts-link"
           className="mb-3 flex w-full items-center justify-between rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-left text-xs font-medium hover:bg-primary/10"
         >
-          {t("undecidedDraftsLink", { count: String(undecidedDraftIds.size) })}
+          {t("undecidedDraftsLink", { count: String(waitingDrafts.length) })}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}
@@ -1888,6 +1875,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             setFullRange(null)
             setSelected(new Set())
             setSearch("")
+            setJobTypeFilter("all")
             setStatusFilter("pending")
           }
         }}
@@ -1998,6 +1986,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   </button>
                 )}
               </div>
+              <Select value={jobTypeFilter} onValueChange={(v) => setJobTypeFilter(v as typeof jobTypeFilter)}>
+                <SelectTrigger className="h-8 w-44 text-sm" aria-label={t("allJobTypes")} data-testid="schedule-job-type-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("allJobTypes")}</SelectItem>
+                  {JOB_TYPE_FILTERS.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {t(type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {selectMode && pendingInView.length > 0 && (
                 <>
                   <label className="flex items-center gap-2 text-sm">

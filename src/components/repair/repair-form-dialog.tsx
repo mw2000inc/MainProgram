@@ -43,6 +43,7 @@ import {
 import { PAYMENT_METHODS, PRODUCT_CATALOG, formatProductOption } from "@/lib/constants"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
+import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 import { useCreateRepairPlan, useUpdateRepairPlan, useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useCreateRepairPlanPart } from "@/lib/hooks/use-repair-plan-parts"
 import { PartFormDialog, type PartFormInput, type StagedRepairPlanPart } from "@/components/repair/repair-parts-section"
@@ -383,6 +384,23 @@ export function RepairFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNo, plan])
 
+  // Approval first: a repair with a date gets its draft schedule job (see
+  // useVisitDraftJob) — on its Pre D, else its Issued Date.
+  const ensureVisitDraftJob = useVisitDraftJob()
+  const ensureDraftJob = (recordId: string, existingJobId: string | undefined, values: FormValues) =>
+    ensureVisitDraftJob({
+      table: "repair_plans",
+      jobType: "repair",
+      recordId,
+      existingJobId,
+      date: values.preD || values.issuedDate,
+      orderNo: values.orderNo,
+      address: values.address,
+      technician: values.th,
+      technician2: values.th2,
+      notes: [values.accountName, values.problem].filter(Boolean).join(" — "),
+    })
+
   async function onSubmit(values: FormValues) {
     // Belt-and-suspenders alongside the submit button's own disabled state
     // below — that's the primary guard, this just makes sure nothing (a
@@ -405,10 +423,13 @@ export function RepairFormDialog({
     }
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
+      // A repair without a job that has a date gets its draft too.
+      await ensureDraftJob(plan.id, plan.scheduleJobId, values)
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration.
       const created = await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+      await ensureDraftJob(created.id, undefined, values)
       // Two-step, not a single combined insert: this repair had no real id
       // until the create above resolved, so any parts staged while it
       // didn't exist yet can only be created now, against that real id.

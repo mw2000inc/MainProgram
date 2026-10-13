@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import { TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
@@ -261,6 +260,36 @@ export function ScheduleFormDialog({
   const technicianValue = form.watch("technician")
   const hasSecondTechnician = !!technician2Value && technician2Value !== NONE_SENTINEL
 
+  // The account shown in a technician dropdown: the linked login, else the
+  // account whose name matches the job's technician name (older jobs and
+  // visit suggestions carry only the name).
+  const accountByName = (name: string) => technicianAccounts.find((a) => a.name.trim().toLowerCase() === name.trim().toLowerCase())
+  const accountValue = (id: string | undefined, name: string | undefined): string | undefined =>
+    id && id !== NONE_SENTINEL ? id : name && name !== NONE_SENTINEL ? accountByName(name)?.id : undefined
+  const unlinkedName = (id: string | undefined, name: string | undefined) =>
+    !!name && name !== NONE_SENTINEL && !(id && id !== NONE_SENTINEL) && !accountByName(name)
+  // Picking an account sets the technician's name and login link together.
+  function pickAccount(slot: "primary" | "secondary", id: string) {
+    const account = technicianAccounts.find((a) => a.id === id)
+    if (slot === "primary") {
+      form.setValue("technician", account?.name ?? "", { shouldDirty: true, shouldValidate: true })
+      form.setValue("technicianUserId", account?.id ?? NONE_SENTINEL, { shouldDirty: true })
+    } else {
+      form.setValue("technician2", account?.name ?? NONE_SENTINEL, { shouldDirty: true })
+      form.setValue("technician2UserId", account?.id ?? NONE_SENTINEL, { shouldDirty: true })
+    }
+  }
+  // The login links saved with the job: the picked accounts, else matched by name.
+  function linkedIds(values: FormValues) {
+    const pair = technicianPairOf(values)
+    const byName = technicianAccountIds(pair.primary, pair.secondary, technicianAccounts)
+    const pick = (v: string | undefined) => (v && v !== NONE_SENTINEL ? v : "")
+    return {
+      technicianUserId: pick(values.technicianUserId) || byName.technicianUserId || "",
+      technician2UserId: pair.secondary ? pick(values.technician2UserId) || byName.technician2UserId || "" : "",
+    }
+  }
+
   // The job's technician pair after the shared rules (see lib/technicians.ts);
   // this form stores "no second technician" as NONE_SENTINEL.
   function technicianPairOf(values: FormValues) {
@@ -287,9 +316,7 @@ export function ScheduleFormDialog({
       // actually clears technician_user_id in the DB when an edit sets this
       // back to "None" — undefined here would make toRow skip the field
       // entirely, silently leaving a stale link in place.
-      technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
-      technician2UserId:
-        values.technician2UserId && values.technician2UserId !== NONE_SENTINEL ? values.technician2UserId : "",
+      ...linkedIds(values),
       // Deduction fields only mean anything for filter-change jobs — don't
       // carry a stale product/quantity along if the type gets switched away.
       productId: isFilterChange ? values.productId || undefined : undefined,
@@ -347,9 +374,7 @@ export function ScheduleFormDialog({
       // below is "" rather than undefined).
       technician: technicianPairOf(values).primary,
       technician2: technicianPairOf(values).secondary,
-      technicianUserId: values.technicianUserId && values.technicianUserId !== NONE_SENTINEL ? values.technicianUserId : "",
-      technician2UserId:
-        values.technician2UserId && values.technician2UserId !== NONE_SENTINEL ? values.technician2UserId : "",
+      ...linkedIds(values),
       productId: isFilterChange ? values.productId || undefined : undefined,
       quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
       status: "pending" as ScheduleJobStatus,
@@ -408,13 +433,68 @@ export function ScheduleFormDialog({
             />
             <FormField
               control={form.control}
-              name="technician"
+              name="technicianUserId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("technician")}</FormLabel>
-                  <FormControl>
-                    <TechnicianCombobox value={field.value ?? ""} onChange={field.onChange} />
-                  </FormControl>
+                  {/* One field: picking a technician's account sets both the
+                      name shown/printed on the job and the login link that puts
+                      the job on their own Daily Report and Schedule. */}
+                  <Select value={accountValue(field.value, technicianValue)} onValueChange={(id) => pickAccount("primary", id)}>
+                    <FormControl>
+                      <SelectTrigger className="w-full" data-testid="schedule-form-technician">
+                        <SelectValue placeholder={t("selectTechnician")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {technicianAccounts.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* A job saved earlier under a name with no login (or typed
+                      by hand) keeps that name until someone picks an account. */}
+                  {unlinkedName(field.value, technicianValue) && (
+                    <p className="text-xs text-muted-foreground">{t("technicianNoAccount", { name: technicianValue })}</p>
+                  )}
+                  {form.formState.errors.technician && (
+                    <p className="text-destructive text-sm">{form.formState.errors.technician.message}</p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="technician2UserId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("secondTechnicianOptional")}</FormLabel>
+                  <Select
+                    value={hasSecondTechnician ? accountValue(field.value, technician2Value) : NONE_SENTINEL}
+                    onValueChange={(id) => pickAccount("secondary", id)}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full" data-testid="schedule-form-technician2">
+                        <SelectValue placeholder={t("addSecondTechnicianPlaceholder")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
+                      {technicianAccounts.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {hasSecondTechnician && unlinkedName(field.value, technician2Value) && (
+                    <p className="text-xs text-muted-foreground">{t("technicianNoAccount", { name: technician2Value })}</p>
+                  )}
+                  {/* One shared job: both technicians are on the same date. */}
+                  {hasSecondTechnician && <p className="text-xs text-muted-foreground">{t("sharesSameDateNote")}</p>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -469,93 +549,6 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="technician2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("secondTechnicianOptional")}</FormLabel>
-                  {/* Blank text is "no second technician". The form's own
-                      NONE_SENTINEL (which the rest of this dialog — the shared-
-                      date note, submit — already keys off) stays the stored
-                      value for "none"; this control just maps it to/from an
-                      empty box. A whitespace-only entry counts as none too. */}
-                  <FormControl>
-                    <TechnicianCombobox
-                      value={field.value === NONE_SENTINEL ? "" : (field.value ?? "")}
-                      onChange={(next) => field.onChange(next.trim() ? next : NONE_SENTINEL)}
-                      placeholder={t("addSecondTechnicianPlaceholder")}
-                    />
-                  </FormControl>
-                  {/* There's deliberately no separate date field for the second
-                      technician — the Date field below applies to this one
-                      shared job, so both technicians are always on it together. */}
-                  {field.value && field.value !== NONE_SENTINEL && (
-                    <p className="text-xs text-muted-foreground">{t("sharesSameDateNote")}</p>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="technicianUserId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("technicianAccountOptional")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("linkToTechnicianLogin")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
-                      {technicianAccounts.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Separate from the Technician name field above — that one
-                      is what shows/prints/exports; this is only so the
-                      linked account's own Schedule view can find this job.
-                      Leave unset if this technician doesn't have a login
-                      yet. */}
-                  <p className="text-xs text-muted-foreground">{t("linksTechnicianScheduleNote")}</p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {hasSecondTechnician && (
-              <FormField
-                control={form.control}
-                name="technician2UserId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("technician2AccountOptional")}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t("linkToSecondTechnicianLogin")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NONE_SENTINEL}>{tCommon("none")}</SelectItem>
-                        {technicianAccounts.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">{t("linksSecondTechnicianScheduleNote")}</p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
             <FormField
               control={form.control}
               name="orderNo"

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { CheckCheck } from "lucide-react"
+import { CheckCheck, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,14 +18,26 @@ import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
-import { assignmentAccounts, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
-import { formatTechnicians, JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
+import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { VEHICLE_TYPES } from "@/lib/constants"
+import { InlineComboboxCell } from "@/components/shared/inline-edit-cell"
+import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
+import { TruncatedCell } from "@/components/shared/truncated-cell"
+import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { JobApprovalReview, type JobApprovalEdit } from "@/components/schedule/job-approval-review"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate } from "@/lib/utils"
+import { formatDate, tomorrowIso } from "@/lib/utils"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
+
+const VEHICLE_OPTIONS = VEHICLE_TYPES.map((v) => ({ value: v }))
+// The action column stays pinned to the table's right edge (visible however
+// far the row scrolls sideways). Its background is solid (so nothing scrolls
+// through it) but the same colour as the row: the card colour, and on hover
+// the row's own hover tint (bg-muted/50 over the card) mixed to a solid.
+const STICKY_ACTIONS =
+  "sticky right-0 z-10 bg-card [tr:hover>&]:bg-[color-mix(in_srgb,var(--muted)_50%,var(--card))]"
 
 // Admin Schedule Approval workflow — schedule_jobs rows still status =
 // 'pending_approval': jobs an admin created manually (ScheduleFormDialog),
@@ -111,6 +123,22 @@ export function PendingScheduleApprovalPanel() {
     await updateJob.mutateAsync({ id: job.id, input: { status: "pending" } })
   }
 
+  // Inline assignment, straight from the row: each pick saves at once (the
+  // job stays a draft until approved), so "Approve Schedule" / "Approve all"
+  // then approve it with that technician and vehicle. Technicians also link
+  // their logins (so the job reaches their own Daily Report); a vehicle with
+  // a fixed crew (the Liteace) brings its two technicians, as everywhere else.
+  const technicianFields = (primary: string, secondary: string) => {
+    const pair = normalizeTechnicianPair(primary, secondary)
+    return { technician: pair.primary, technician2: pair.secondary, ...technicianAccountIds(pair.primary, pair.secondary, assignmentAccounts(users)) }
+  }
+  const saveTechnicians = (job: ScheduleJob, p: { primary?: string; secondary?: string }) =>
+    updateJob.mutate({ id: job.id, input: technicianFields(p.primary ?? job.technician ?? "", p.secondary ?? job.technician2 ?? "") })
+  const saveVehicle = (job: ScheduleJob, vehicle: string) => {
+    const crew = crewForVehicle(vehicle)
+    updateJob.mutate({ id: job.id, input: { vehicle, ...(crew ? technicianFields(crew.primary, crew.secondary) : {}) } })
+  }
+
   // Oldest date first; within a date, by technician then order number.
   const sorted = React.useMemo(
     () =>
@@ -163,22 +191,50 @@ export function PendingScheduleApprovalPanel() {
 
   const columns: ColumnDef<ScheduleJob, unknown>[] = React.useMemo(
     () => [
-      { accessorKey: "scheduledDate", header: tDispatch("dateColumn"), cell: ({ row }) => formatDate(row.original.scheduledDate) },
+      // No Date column: each date group's header row already shows the date.
       { accessorKey: "jobType", header: tDispatch("jobTypeColumn"), cell: ({ row }) => JOB_TYPE_LABELS[row.original.jobType] },
       { accessorKey: "orderNo", header: tDispatch("orderNoColumn"), cell: ({ row }) => row.original.orderNo || "—" },
-      { id: "customer", header: tDispatch("customerColumn"), cell: ({ row }) => customerNameFor(row.original) },
-      { id: "location", header: t("locationColumn"), cell: ({ row }) => locationFor(row.original) },
+      // Long names / addresses end in "…" (full text on hover) instead of
+      // stretching the table and pushing the action buttons off-screen.
+      { id: "customer", header: tDispatch("customerColumn"), cell: ({ row }) => <TruncatedCell value={customerNameFor(row.original)} className="max-w-32" /> },
+      { id: "location", header: t("locationColumn"), cell: ({ row }) => <TruncatedCell value={locationFor(row.original)} className="max-w-40" /> },
       {
         accessorKey: "technician",
         header: tDispatch("technicianColumn"),
-        cell: ({ row }) => (row.original.technician ? formatTechnicians(row.original.technician, row.original.technician2) : tDispatch("notAssigned")),
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()} data-testid="pending-technician-cell">
+            <InlineTechnicianPairCell primary={row.original.technician} secondary={row.original.technician2} onCommit={(p) => saveTechnicians(row.original, p)} />
+          </div>
+        ),
       },
-      { accessorKey: "vehicle", header: t("tableVehicle"), cell: ({ row }) => row.original.vehicle || "—" },
+      {
+        accessorKey: "vehicle",
+        header: t("tableVehicle"),
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()} data-testid="pending-vehicle-cell">
+            <InlineComboboxCell
+              className="w-[100px]"
+              value={row.original.vehicle ?? ""}
+              options={VEHICLE_OPTIONS}
+              placeholder={t("selectVehicle")}
+              commitOnSelect
+              showAllOnExactMatch
+              onCommit={(next) => {
+                if (next.trim() !== (row.original.vehicle ?? "")) saveVehicle(row.original, next.trim())
+              }}
+            />
+          </div>
+        ),
+      },
       {
         id: "actions",
         header: "",
+        meta: { headerClassName: STICKY_ACTIONS, cellClassName: STICKY_ACTIONS },
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
+          // justify-end: the buttons sit at the column's right edge, so they line
+          // up with each date header's "Approve All for <date>" button however
+          // wide the table is.
+          <div className="flex items-center justify-end gap-2 whitespace-nowrap" data-testid="pending-row-actions">
             <Button
               size="sm"
               variant="outline"
@@ -197,7 +253,7 @@ export function PendingScheduleApprovalPanel() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, tDispatch, customers, saleListEntries, updateJob.isPending]
+    [t, tDispatch, customers, saleListEntries, users, updateJob.isPending]
   )
 
   if (isPending) {
@@ -236,11 +292,27 @@ export function PendingScheduleApprovalPanel() {
             )
           }}
           toolbar={
-            sorted.length > 0 ? (
-              <Button size="sm" className="h-9 gap-1.5" onClick={() => setBatch(sorted)} data-testid="pending-approve-all">
-                <CheckCheck className="h-4 w-4" /> {t("approveAllPending", { count: sorted.length })}
+            <>
+              {sorted.length > 0 && (
+                <Button size="sm" className="h-9 gap-1.5" onClick={() => setBatch(sorted)} data-testid="pending-approve-all">
+                  <CheckCheck className="h-4 w-4" /> {t("approveAllPending", { count: sorted.length })}
+                </Button>
+              )}
+              {/* Same as the Schedule tab's "+ Schedule Job": opens the job form
+                  empty; a job made here starts as a draft, so it shows up in this
+                  list as soon as it's saved (the job list refreshes on save). */}
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => {
+                  setReviewing(undefined)
+                  setFormOpen(true)
+                }}
+                data-testid="pending-schedule-job"
+              >
+                <Plus className="h-4 w-4" /> {t("scheduleJob")}
               </Button>
-            ) : undefined
+            </>
           }
         />
       </CardContent>
@@ -250,7 +322,7 @@ export function PendingScheduleApprovalPanel() {
           setFormOpen(o)
           if (!o) setReviewing(undefined)
         }}
-        defaultDate={reviewing?.scheduledDate ?? ""}
+        defaultDate={reviewing?.scheduledDate ?? tomorrowIso()}
         job={reviewing}
       />
       <JobApprovalReview

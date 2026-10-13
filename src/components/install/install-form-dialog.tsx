@@ -42,7 +42,8 @@ import {
 import { PRODUCT_CATALOG, PAYMENT_METHODS, formatProductOption } from "@/lib/constants"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
 import { normalizeTechnicianPair } from "@/lib/technicians"
-import { useCreateInstallPlan, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
+import { useCreateInstallPlan, useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
 import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber, findExistingMemberMatch, type MemberMatchField } from "@/lib/customer-lookup"
@@ -73,6 +74,9 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     name: z.string().min(1, t("requiredField", { field: tf("name") })),
     address: z.string().optional(),
     contactNumber: z.string().optional(),
+    // The member's email — filled from the order; saved as this install's
+    // confirmation email (notify_email) and used for a new member's record.
+    email: z.string().trim().optional(),
     model: z.string().min(1, t("selectField", { field: tf("model") })),
     unitPrice: money,
     cpPrice: money,
@@ -124,6 +128,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
       name: plan.name,
       address: plan.address,
       contactNumber: plan.contactNumber,
+      email: plan.notifyEmail ?? "",
       model: plan.model,
       unitPrice: String(plan.unitPrice),
       cpPrice: String(plan.cpPrice),
@@ -149,6 +154,7 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
     name: "",
     address: "",
     contactNumber: "",
+    email: "",
     model: "",
     unitPrice: "0",
     cpPrice: "0",
@@ -192,8 +198,10 @@ export function InstallFormDialog({
   const updatePlan = useUpdateInstallPlan()
   const createCustomer = useCreateCustomer()
   const createSaleListEntry = useCreateSaleListEntry()
+  const ensureVisitDraftJob = useVisitDraftJob()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  const { data: installPlans = [] } = useInstallPlans()
   const { t } = useTranslation("install")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -225,27 +233,53 @@ export function InstallFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNo, plan])
 
-  // See filter-change-form-dialog.tsx's own comment on this same pattern —
-  // fills only currently-empty fields, add-only, never overwrites anything
-  // already typed.
+  // Entering an Order No. fills in what the database already knows about
+  // that order — add-only, and only into fields still empty (a price of 0
+  // counts as empty), so nothing already typed is overwritten:
+  //   - Name, Member Account#, Address, Contact #, Email: the order's member;
+  //   - Model: the order's Sale List Product #, else the most recent earlier
+  //     install of this order, else the member's unit;
+  //   - Unit Price, C/P Price, D&I, Payment Mode: the most recent earlier
+  //     install of this order (Sale List has no prices; an order installed
+  //     for the first time has none to copy, so those stay to be typed).
+  // Without a member, the earlier install's name / address / contact are used.
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
-    if (!customer) return
+    const order = orderNo.trim()
+    if (!order) return
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, order)
+    const entry = saleListEntries.find((e) => e.orderNumber.trim() === order)
+    const previous = installPlans
+      .filter((p) => p.orderNo.trim() === order)
+      .sort((a, b) => (b.inputDate ?? "").localeCompare(a.inputDate ?? "") || (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))[0]
+    if (!customer && !entry && !previous) {
+      toast.info(t("orderNotFound"))
+      return
+    }
     let filled = false
-    const name = customer.companyName || customer.fullName
-    if (name && !form.getValues("name").trim()) {
-      form.setValue("name", name)
-      filled = true
+    const fillText = (field: "name" | "address" | "contactNumber" | "email" | "memberAccountNumber" | "model" | "paymentMode", value: string | undefined) => {
+      if (value?.trim() && !(form.getValues(field) ?? "").trim()) {
+        form.setValue(field, value.trim(), { shouldValidate: form.formState.isSubmitted })
+        filled = true
+      }
     }
-    if (customer.contactNumber && !(form.getValues("contactNumber") ?? "").trim()) {
-      form.setValue("contactNumber", customer.contactNumber)
-      filled = true
+    const fillMoney = (field: "unitPrice" | "cpPrice" | "deliveryInstallationFee", value: number | undefined) => {
+      const current = Number(form.getValues(field) || 0)
+      if (value && !current) {
+        form.setValue(field, String(value), { shouldValidate: form.formState.isSubmitted })
+        filled = true
+      }
     }
-    if (customer.address && !(form.getValues("address") ?? "").trim()) {
-      form.setValue("address", customer.address)
-      filled = true
-    }
+    fillText("name", customer ? customer.companyName || customer.fullName : previous?.name)
+    fillText("memberAccountNumber", customer?.memberAccountNumber || previous?.memberAccountNumber)
+    fillText("address", customer?.address || previous?.address)
+    fillText("contactNumber", customer?.contactNumber || previous?.contactNumber)
+    fillText("email", customer?.email || previous?.notifyEmail)
+    fillText("model", entry?.productNo || previous?.model || customer?.dispenserType)
+    fillMoney("unitPrice", previous?.unitPrice)
+    fillMoney("cpPrice", previous?.cpPrice)
+    fillMoney("deliveryInstallationFee", previous?.deliveryInstallationFee)
+    fillText("paymentMode", previous?.paymentMode)
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
@@ -295,6 +329,22 @@ export function InstallFormDialog({
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
+  // Approval first: an installation with a date gets its draft schedule job
+  // (see useVisitDraftJob) — on the Pre Installed Date, else the Installed Date.
+  const ensureDraftJob = (planId: string, existingJobId: string | undefined, values: FormValues) =>
+    ensureVisitDraftJob({
+      table: "install_plans",
+      jobType: "installation",
+      recordId: planId,
+      existingJobId,
+      date: values.preInstalledDate || values.installedDate,
+      orderNo: values.orderNo,
+      address: values.address,
+      technician: values.serviceman,
+      technician2: values.serviceman2,
+      notes: [values.name, values.model].filter(Boolean).join(" — "),
+    })
+
   async function onSubmit(values: FormValues) {
     // No longer required (see the schema's own comment) but install_plans.
     // order_no is still NOT NULL at the database level — "" satisfies that
@@ -303,12 +353,14 @@ export function InstallFormDialog({
     // a required orderNo (the mutation input, findCustomerByOrderNumber,
     // the new Sale List entry created below).
     const orderNo = values.orderNo ?? ""
-    const { collectedBy, collectedAt, ...rest } = values
+    const { collectedBy, collectedAt, email: _email, ...rest } = values
+    void _email
     const input = {
       ...rest,
       orderNo,
       address: values.address ?? "",
       contactNumber: values.contactNumber ?? "",
+      notifyEmail: values.email ?? "",
       memberAccountNumber: (values.memberAccountNumber ?? "").trim(),
       // No second technician without a real first, and never the same person twice.
       serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
@@ -319,6 +371,8 @@ export function InstallFormDialog({
     }
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
+      // A plan without a job that now has a date gets its draft too.
+      await ensureDraftJob(plan.id, plan.scheduleJobId, values)
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration. serviceman (from
@@ -326,7 +380,8 @@ export function InstallFormDialog({
       // unassigned here — the admin can still pick one later from the
       // Pending Approvals dialog's own Technician dropdown, same as every
       // other module, this just no longer forces that field blank.
-      await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+      const created = await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
+      await ensureDraftJob(created.id, undefined, values)
 
       // This order has no existing customer/sale-list-entry match — one
       // form, three records: also create the Member and Sale List entry,
@@ -371,7 +426,7 @@ export function InstallFormDialog({
                 dispenserType: values.model,
                 installedDate: values.installedDate || undefined,
                 memberAccountNumber: values.memberAccountNumber || "",
-                email: "",
+                email: values.email ?? "",
               })
             ).id
         await createSaleListEntry.mutateAsync({
@@ -444,6 +499,13 @@ export function InstallFormDialog({
                           field.onBlur()
                           handleOrderNoBlur(e.target.value)
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleOrderNoBlur(e.currentTarget.value)
+                          }
+                        }}
+                        data-testid="install-order-no"
                       />
                     </FormControl>
                     <FormMessage />
@@ -498,6 +560,19 @@ export function InstallFormDialog({
                           handleCustomerLookupBlur("contactNumber", e.target.value)
                         }}
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("email")}</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="name@example.com" {...field} data-testid="install-email" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -652,7 +727,20 @@ export function InstallFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("installedDate")}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      {/* Entering (or changing) an Installed Date means the unit
+                          went out, so In or Out switches to OUT — only when the
+                          date is changed here, never on opening a saved plan;
+                          IN can still be picked again by hand afterwards. */}
+                      <Input
+                        type="date"
+                        {...field}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          field.onChange(e)
+                          if (next && next !== field.value) form.setValue("inOut", "OUT", { shouldDirty: true })
+                        }}
+                        data-testid="install-installed-date"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

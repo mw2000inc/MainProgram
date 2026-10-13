@@ -1,17 +1,24 @@
 "use client"
 
 import * as React from "react"
+import { addMonths, format, parseISO } from "date-fns"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import type { ExportColumn } from "@/components/shared/export-buttons"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import { cn } from "@/lib/utils"
 
 function yearMonth(value: string) {
   return value.slice(0, 7)
 }
+
+// Month pills go up to this many months past the current one. Records dated
+// later (e.g. Filter Change cycles projected into 2028) get no pill of their
+// own — they're shown under All.
+const MONTHS_AHEAD_SHOWN = 2
 
 // One order's related records (Filter Changes / Collections / Repairs) on the
 // Sale List order-detail page — grouped by year-month with counts, matching
@@ -55,6 +62,9 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
   const { t } = useTranslation("common")
   const [selectedMonth, setSelectedMonth] = React.useState<string>("all")
 
+  // The last month that gets its own pill (Manila calendar).
+  const lastShownMonth = format(addMonths(parseISO(businessToday()), MONTHS_AHEAD_SHOWN), "yyyy-MM")
+
   const monthGroups = React.useMemo(() => {
     if (!dateKey) return []
     const counts = new Map<string, number>()
@@ -62,10 +72,10 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
       const raw = row[dateKey]
       if (typeof raw !== "string" || !raw) continue
       const ym = yearMonth(raw)
-      counts.set(ym, (counts.get(ym) ?? 0) + 1)
+      if (ym <= lastShownMonth) counts.set(ym, (counts.get(ym) ?? 0) + 1)
     }
     return Array.from(counts, ([month, count]) => ({ month, count })).sort((a, b) => b.month.localeCompare(a.month))
-  }, [data, dateKey])
+  }, [data, dateKey, lastShownMonth])
 
   const scopedData = React.useMemo(() => {
     if (!dateKey || selectedMonth === "all") return data

@@ -1,4 +1,6 @@
 {
+  "visitDraftCreated": "{date} {type} 작업 초안이 생성되었습니다 — 일정 › 일정 승인 대기에서 확인하세요.",
+  "visitDraftFailed": "저장되었지만 작업 초안을 만들지 못했습니다: {message}",
   "installation": "설치",
   "filter_change": "필터 교체",
   "repair": "수리",
@@ -37,6 +39,7 @@
   "selectJobType": "작업 유형 선택",
   "selectTechnician": "기술자 선택",
   "secondTechnicianOptional": "두 번째 기술자 (선택 사항)",
+  "technicianNoAccount": "\"{name}\"(으)로 저장되어 있으며 기술자 로그인이 없습니다 — 계정을 선택하면 일일 보고서에 표시됩니다.",
   "addSecondTechnicianPlaceholder": "이 작업에 두 명이 필요한 경우 두 번째 기술자를 추가하세요",
   "sharesSameDateNote": "아래 주 기술자와 동일한 날짜, 주문, 상태를 공유합니다 — 이는 두 개가 아닌 하나의 작업입니다.",
   "technicianAccountOptional": "기술자 계정 (선택 사항)",
@@ -324,7 +327,7 @@
   "releaseSlipManualErrand": "심부름",
   "releaseSlipManualRemove": "삭제",
   "releaseSlipAddSuggestions": "오늘 일정:",
-  "undecidedDraftsLink": "일정 승인 대기 중인 자동 생성 초안 {count}건",
+  "undecidedDraftsLink": "이 날의 초안 {count}건이 일정 승인 대기에서 승인을 기다리고 있습니다",
   "allMonths": "전체 월",
   "monthPrevious": "이전 달",
   "monthNext": "다음 달",

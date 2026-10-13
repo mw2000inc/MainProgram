@@ -120,6 +120,7 @@ function toRow(input: Partial<Omit<InstallPlan, "id" | "createdAt">>) {
   if (input.serviceman !== undefined) row.serviceman = input.serviceman
   if (input.serviceman2 !== undefined) row.serviceman_2 = input.serviceman2
   if (input.memberAccountNumber !== undefined) row.member_account_number = input.memberAccountNumber.trim()
+  if (input.notifyEmail !== undefined) row.notify_email = input.notifyEmail.trim() || null
   if (input.dispatchStatus !== undefined) row.dispatch_status = input.dispatchStatus
   if (input.collected !== undefined) row.collected = input.collected
   if (input.collectedBy !== undefined) row.collected_by = input.collectedBy || null

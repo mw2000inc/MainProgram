@@ -1,4 +1,6 @@
 {
+  "visitDraftCreated": "Draft {type} job created for {date} — it's waiting in Schedule › Pending Schedule Approval.",
+  "visitDraftFailed": "Saved, but its draft schedule job couldn't be created: {message}",
   "installation": "Installation",
   "filter_change": "Filter Change",
   "repair": "Repair",
@@ -37,6 +39,7 @@
   "selectJobType": "Select job type",
   "selectTechnician": "Select technician",
   "secondTechnicianOptional": "Second Technician (Optional)",
+  "technicianNoAccount": "Saved as \"{name}\", which has no technician login — pick an account to put the job on their Daily Report.",
   "addSecondTechnicianPlaceholder": "Add a second technician if this job needs two",
   "sharesSameDateNote": "Shares the same date, order, and status as the primary technician below — this is one job, not two.",
   "technicianAccountOptional": "Technician Account (Optional)",
@@ -324,7 +327,7 @@
   "releaseSlipManualErrand": "Errand",
   "releaseSlipManualRemove": "Remove",
   "releaseSlipAddSuggestions": "On the schedule:",
-  "undecidedDraftsLink": "{count} generated draft(s) waiting in Pending Schedule Approval",
+  "undecidedDraftsLink": "{count} draft(s) for this day waiting for approval in Pending Schedule Approval",
   "allMonths": "All months",
   "monthPrevious": "Previous month",
   "monthNext": "Next month",

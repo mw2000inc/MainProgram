@@ -512,8 +512,8 @@ export function DataTable<TData>({
                     >
                       {groupHeaderAction ? (
                         <div className="flex items-center justify-between gap-2">
-                          <span>{label}</span>
-                          {groupHeaderAction(label)}
+                          <span className="sticky left-2">{label}</span>
+                          <div className="sticky right-2">{groupHeaderAction(label)}</div>
                         </div>
                       ) : (
                         label

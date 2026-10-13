@@ -26,11 +26,11 @@ export interface UnscheduledVisit {
   rescheduledFrom?: string
 }
 
-// Only what the Daily Report itself would show for the day: still Pending,
-// dispatch-confirmed (or from before dispatch statuses existed), and not
-// linked to a job.
+// Visits still to schedule: Pending, confirmed or not yet confirmed ("Draft" —
+// approval first: the admin's approval of the job is the gate), or from before
+// dispatch statuses existed, and not linked to a job.
 const isOpen = (r: { status: string; dispatchStatus?: string; scheduleJobId?: string }) =>
-  r.status === "Pending" && (r.dispatchStatus === undefined || r.dispatchStatus === "Confirmed") && !r.scheduleJobId
+  r.status === "Pending" && (r.dispatchStatus === undefined || r.dispatchStatus === "Confirmed" || r.dispatchStatus === "Draft") && !r.scheduleJobId
 
 export function buildUnscheduledVisits(
   data: {

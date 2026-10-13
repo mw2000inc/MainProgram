@@ -1,4 +1,5 @@
 {
+  "orderNotFound": "이 주문 번호의 주문, 회원 또는 이전 설치 기록이 없습니다 — 내용을 직접 입력하세요.",
   "editTitle": "설치 계획 수정",
   "addTitle": "설치 계획 추가",
   "editDescription": "이 설치 내용을 업데이트합니다.",
