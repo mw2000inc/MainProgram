@@ -5,7 +5,7 @@ import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, MapPin, Pencil, Phone, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -33,6 +33,7 @@ import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
+import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { useQueryClient } from "@tanstack/react-query"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -231,6 +232,7 @@ const TABLE_COLUMN_LABEL = {
   technician: "tableTechnician",
   vehicle: "tableVehicle",
   orderNo: "tableOrderNo",
+  customer: "tableCustomer",
   status: "tableStatus",
   inventory: "tableInventory",
   notes: "tableNotes",
@@ -439,6 +441,42 @@ function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: str
 // How far ahead the full-screen view looks by default.
 const FULL_SCREEN_DAYS_AHEAD = 30
 
+// Who and where: the job's Account Name, Address (with a Maps link) and
+// Contact Number (tap to call). Lines without a value are left out.
+function JobDetailLines({ details }: { details: JobDetails }) {
+  const { accountName, address, contactNumber } = details
+  if (!accountName && !address && !contactNumber) return null
+  return (
+    <div className="space-y-0.5 text-xs" data-testid="schedule-job-details">
+      {accountName && <p className="font-medium text-foreground wrap-break-word" data-testid="schedule-job-account">{accountName}</p>}
+      {address && (
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-start gap-1 text-muted-foreground wrap-break-word hover:text-foreground hover:underline"
+          data-testid="schedule-job-address"
+        >
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>{address}</span>
+        </a>
+      )}
+      {contactNumber && (
+        <a
+          href={`tel:${contactNumber.replace(/[^\d+]/g, "")}`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
+          data-testid="schedule-job-contact"
+        >
+          <Phone className="h-3 w-3 shrink-0" />
+          <span>{contactNumber}</span>
+        </a>
+      )}
+    </div>
+  )
+}
+
 export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -446,6 +484,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { t } = useTranslation("schedule")
   const { data: jobs = [], isPending } = useScheduleJobs()
   const updateJob = useUpdateScheduleJob()
+  // Each job's Account Name, Address and Contact Number — shown on every row
+  // so the technician knows exactly who and where (see useJobDetails).
+  const jobDetails = useJobDetails()
+  const jobAccountName = React.useCallback((job: ScheduleJob) => jobDetails(job).accountName, [jobDetails])
   const [formOpen, setFormOpen] = React.useState(false)
   // Full-screen view of this day's schedule (the header's expand toggle).
   const [expanded, setExpanded] = React.useState(false)
@@ -893,9 +935,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             Auto-suggest modal (or the job form): where to go,
             which filters to bring, and the task itself (a custom
             errand's description lives in notes). */}
-        {job.secondaryAddress && (
-          <p className="text-xs text-muted-foreground wrap-break-word">{job.secondaryAddress}</p>
-        )}
+        <JobDetailLines details={jobDetails(job)} />
         {job.filterCodes && (
           <p className="text-xs text-muted-foreground">
             {t("editFilters")}: <span className="font-medium text-foreground">{job.filterCodes}</span>
@@ -943,6 +983,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     return ofType.filter((job) => {
       const customer = job.customerId ? customerById.get(job.customerId) : undefined
       const haystack = [
+        jobAccountName(job),
         customer?.companyName,
         customer?.fullName,
         customer?.memberAccountNumber,
@@ -967,7 +1008,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         .toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [search, jobTypeFilter, todaysJobs, customerById, t])
+  }, [search, jobTypeFilter, todaysJobs, customerById, jobAccountName, t])
   // Per-tab counts follow the search; "All" also covers cancelled jobs.
   const statusCounts = React.useMemo(
     () => ({
@@ -1083,7 +1124,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 )}
               </th>
             )}
-            {(["date", "jobType", "technician", "vehicle", "orderNo", "status", "inventory", "notes", "remarks"] as const).map((key) => (
+            {(["date", "jobType", "technician", "vehicle", "orderNo", "customer", "status", "inventory", "notes", "remarks"] as const).map((key) => (
               <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
                 {t(TABLE_COLUMN_LABEL[key])}
               </th>
@@ -1179,6 +1220,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
               <EditableCell {...cellProps(job, "orderNo")} className="whitespace-nowrap" display={job.orderNo || "—"}>
                 <InlineTextCell value={job.orderNo} className="w-32" onCommit={(next) => saveJob(job, { orderNo: next.trim() })} />
               </EditableCell>
+              <td className="min-w-48 max-w-72 px-3 py-2" data-testid="schedule-customer-cell">
+                <JobDetailLines details={jobDetails(job)} />
+              </td>
               <EditableCell {...cellProps(job, "status")} display={<PlanStatusBadge status={job.status} />}>
                 <CellSelect
                   value={job.status}
@@ -2118,10 +2162,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           open={jobReviewOpen}
           onOpenChange={setJobReviewOpen}
           jobs={approveTargets}
-          customerName={(job) => {
-            const customer = job.customerId ? customerById.get(job.customerId) : undefined
-            return customer ? customer.companyName || customer.fullName : undefined
-          }}
+          customerName={jobAccountName}
           jobTypeLabel={(job) => jobLabel(job, t)}
           onConfirm={(items) => approveAllDrafts(items.map(({ job, edit, changed }) => ({ job, patch: changed ? patchFromReview(job, edit) : {} })))}
         />

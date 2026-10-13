@@ -18,6 +18,7 @@ import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { useJobAccountName } from "@/lib/scheduling/job-account-name"
 import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { InlineComboboxCell } from "@/components/shared/inline-edit-cell"
@@ -77,6 +78,7 @@ export function usePendingScheduleApprovalCount(): number {
 export function PendingScheduleApprovalPanel() {
   const { t } = useTranslation("schedule")
   const { t: tDispatch } = useTranslation("dispatch")
+  const { t: tFields } = useTranslation("fields")
   const { jobs, isPending } = usePendingScheduleApprovalJobs()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
@@ -88,23 +90,11 @@ export function PendingScheduleApprovalPanel() {
   // The batch open in the Review & Edit dialog (one date's drafts, or all).
   const [batch, setBatch] = React.useState<ScheduleJob[] | null>(null)
 
-  // Manually-created jobs have no dedicated "customer" field on this form
-  // (schedule_jobs.customer_id is only ever populated by the dispatch-
-  // confirm flow) — best-effort resolve one via the same order-number
-  // lookup the dispatch Pending Approvals panel already uses, purely for
-  // display here. Falls back to "—" when there's no order number, or none
-  // matches, rather than guessing.
-  function customerNameFor(job: ScheduleJob): string {
-    if (job.customerId) {
-      const byId = customers.find((c) => c.id === job.customerId)
-      if (byId) return byId.fullName
-    }
-    if (job.orderNo) {
-      const customer = findCustomerByOrderNumber(customers, saleListEntries, job.orderNo)
-      if (customer) return customer.fullName
-    }
-    return "—"
-  }
+  // The job's Account Name — its linked record's, else the member's, else
+  // another record with its Order No. (useJobAccountName, shared by every
+  // Schedule view). "—" only when none of them has one.
+  const jobAccountName = useJobAccountName()
+  const customerNameFor = (job: ScheduleJob): string => jobAccountName(job) ?? "—"
 
   function locationFor(job: ScheduleJob): string {
     if (job.secondaryAddress) return job.secondaryAddress
@@ -196,7 +186,7 @@ export function PendingScheduleApprovalPanel() {
       { accessorKey: "orderNo", header: tDispatch("orderNoColumn"), cell: ({ row }) => row.original.orderNo || "—" },
       // Long names / addresses end in "…" (full text on hover) instead of
       // stretching the table and pushing the action buttons off-screen.
-      { id: "customer", header: tDispatch("customerColumn"), cell: ({ row }) => <TruncatedCell value={customerNameFor(row.original)} className="max-w-32" /> },
+      { id: "customer", header: tFields("accountName"), cell: ({ row }) => <TruncatedCell value={customerNameFor(row.original)} className="max-w-32" /> },
       { id: "location", header: t("locationColumn"), cell: ({ row }) => <TruncatedCell value={locationFor(row.original)} className="max-w-40" /> },
       {
         accessorKey: "technician",
@@ -253,7 +243,7 @@ export function PendingScheduleApprovalPanel() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, tDispatch, customers, saleListEntries, users, updateJob.isPending]
+    [t, tDispatch, tFields, jobAccountName, customers, saleListEntries, users, updateJob.isPending]
   )
 
   if (isPending) {

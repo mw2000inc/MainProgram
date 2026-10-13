@@ -153,6 +153,7 @@
   "tableTechnician": "Technician",
   "tableVehicle": "Vehicle",
   "tableOrderNo": "Order No",
+  "tableCustomer": "Customer",
   "tableStatus": "Status",
   "tableNotes": "Notes",
   "tableRemarks": "Remarks",

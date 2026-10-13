@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { collectionsKey } from "@/lib/hooks/use-collections"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { installPlansKey } from "@/lib/hooks/use-install-plans"
 import { useUsers } from "@/lib/hooks/use-misc"
@@ -15,8 +16,8 @@ import { assignmentAccounts, crewOfTechnician, normalizeTechnicianPair, technici
 import { formatDate } from "@/lib/utils"
 
 type DraftOptions = {
-  table: "install_plans" | "repair_plans"
-  jobType: "installation" | "repair"
+  table: "install_plans" | "repair_plans" | "collections"
+  jobType: "installation" | "repair" | "collection"
   recordId: string
   // The record's job, if it already has one — then nothing is created.
   existingJobId?: string
@@ -26,12 +27,18 @@ type DraftOptions = {
   address?: string
   technician?: string
   technician2?: string
-  notes?: string
+  // Job notes; null → built from accountName, the order's Product (Sale
+  // List) and amount: "Account — Product — ₱1,500".
+  notes?: string | null
+  accountName?: string
+  amount?: number
 }
 
-// Approval first: an Installation or Repair saved with a date gets its draft
+const VISIT_KEYS = { install_plans: installPlansKey, repair_plans: repairPlansKey, collections: collectionsKey } as const
+
+// Approval first: an Installation, Repair or Collection saved with a date gets its draft
 // schedule job straight away ('pending_approval', on that date), with the
-// order, member, address, technicians (and their logins, so it reaches their
+// order, member, address (the record's, else the member's), technicians (and their logins, so it reaches their
 // own Daily Report once approved — technicians never see drafts) and the
 // crew's vehicle when the technicians are a fixed crew (either member brings
 // the whole crew, dispatch-assignment.ts). The draft is linked to its record
@@ -57,6 +64,12 @@ export function useVisitDraftJob() {
     const ids = technicianAccountIds(pair.primary, pair.secondary, assignmentAccounts(users))
     const orderNo = (o.orderNo ?? "").trim()
     const customer = orderNo ? findCustomerByOrderNumber(customers, saleListEntries, orderNo) : undefined
+    const product = orderNo ? saleListEntries.find((e) => e.orderNumber.trim() === orderNo)?.productNo?.trim() : undefined
+    const notes =
+      o.notes !== null
+        ? o.notes
+        : [o.accountName?.trim(), product, o.amount ? `₱${o.amount.toLocaleString()}` : ""].filter(Boolean).join(" — ")
+    const address = o.address?.trim() || customer?.address?.trim()
     try {
       const job = await createJob.mutateAsync({
         jobType: o.jobType,
@@ -69,11 +82,12 @@ export function useVisitDraftJob() {
         technicianUserId: ids.technicianUserId || "",
         technician2UserId: ids.technician2UserId || "",
         vehicle: crew?.vehicle ?? "",
-        secondaryAddress: o.address || undefined,
-        notes: o.notes || undefined,
+        secondaryAddress: address || undefined,
+        notes: notes || undefined,
       })
       await linkVisitToScheduleJob(o.table, o.recordId, job.id)
-      qc.invalidateQueries({ queryKey: o.table === "install_plans" ? installPlansKey : repairPlansKey })
+      // At once in Pending Schedule Approval and the record's own table.
+      qc.invalidateQueries({ queryKey: VISIT_KEYS[o.table] })
       qc.invalidateQueries({ queryKey: scheduleJobsKey })
       toast.success(t("visitDraftCreated", { type: t(o.jobType), date: formatDate(o.date) }))
     } catch (error) {

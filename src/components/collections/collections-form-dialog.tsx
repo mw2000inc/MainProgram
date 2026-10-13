@@ -42,6 +42,7 @@ import { useCreateCollection, useUpdateCollection } from "@/lib/hooks/use-collec
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 import { COLLECTION_PAYMENT_TYPES } from "@/lib/constants"
 import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -140,6 +141,7 @@ export function CollectionsFormDialog({
   const updateCollection = useUpdateCollection()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  const ensureVisitDraftJob = useVisitDraftJob()
   const { t } = useTranslation("collection")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -185,6 +187,25 @@ export function CollectionsFormDialog({
         // unassigned — the admin picks one from the Pending Approvals dialog's
         // own Technician dropdown before approving, same as every other module.
         await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft", serviceman: "" })
+    // Approval first: a new, still-pending collection gets its draft job on
+    // its Pre D, else its Plan D — with the order, account, the member's
+    // address, the order's product and the amount — and waits in Schedule ›
+    // Pending Schedule Approval under that date. The admin picks the
+    // technician there; approving puts it on that day's Collection Plan and
+    // the technician's agenda (useVisitDraftJob).
+    if (!isEdit && saved.status === "Pending" && !saved.collected) {
+      await ensureVisitDraftJob({
+        table: "collections",
+        jobType: "collection",
+        recordId: saved.id,
+        existingJobId: saved.scheduleJobId,
+        date: values.preD || values.collectionDate,
+        orderNo: values.orderNo,
+        accountName: values.accountName,
+        amount: Number(values.amount) || undefined,
+        notes: null,
+      })
+    }
     onSaved?.(saved)
     onOpenChange(false)
   }

@@ -35,6 +35,12 @@ import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technician
 import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
+import { useCustomers } from "@/lib/hooks/use-customers"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
+import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
+import { getCpSystemFilterSkus } from "@/lib/filter-parts"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -225,6 +231,10 @@ export function ScheduleFormDialog({
   const updateJob = useUpdateScheduleJob()
   const { data: products = [] } = useProducts()
   const { data: users = [] } = useUsers()
+  const { data: customers = [] } = useCustomers()
+  const { data: saleListEntries = [] } = useSaleListEntries()
+  const { data: filterChangePlans = [] } = useFilterChangePlans()
+  const { data: cpSystems = [] } = useCpSystems()
   // Technician logins, plus the fixed crews' members whatever their role (see assignmentAccounts).
   const technicianAccounts = React.useMemo(() => assignmentAccounts(users), [users])
   const { t } = useTranslation("schedule")
@@ -339,10 +349,35 @@ export function ScheduleFormDialog({
       await updateJob.mutateAsync({ id: job.id, input })
     } else {
       // Not form fields — carried over from the visit being scheduled.
-      const created = await createJob.mutateAsync({ ...input, customerId: prefill?.customerId, filterCodes: prefill?.filterCodes })
+      const link = prefill ? {} : memberLinkFor(values)
+      const created = await createJob.mutateAsync({ ...input, customerId: prefill?.customerId ?? link.customerId, filterCodes: prefill?.filterCodes ?? link.filterCodes })
       onCreated?.(created)
     }
     onOpenChange(false)
+  }
+
+  // A hand-made job (Schedule Job) carries its member, found by Order No.
+  // through the Sale List like every Add form — so approving it gives the new
+  // or linked record the member's Account Name, Address and Contact Number
+  // (ensure_schedule_job_module_record) and every Schedule view can show
+  // them. A Filter Change job also carries the order's filters: those of its
+  // own upcoming Filter Change (the record approval links it to — never
+  // overwritten with something else), else its CP System's filters (as the
+  // Filter Change Add form suggests). An unknown Order No. carries nothing.
+  function memberLinkFor(values: FormValues): { customerId?: string; filterCodes?: string } {
+    const orderNo = (values.orderNo ?? "").trim()
+    if (!orderNo) return {}
+    const customerId = findCustomerByOrderNumber(customers, saleListEntries, orderNo)?.id
+    if (values.jobType !== "filter_change") return { customerId }
+    const days = (d: string) => Math.abs(new Date(d).getTime() - new Date(values.scheduledDate).getTime()) / 86_400_000
+    const upcoming = filterChangePlans
+      .filter((p) => p.status === "Pending" && !p.scheduleJobId && p.orderNumber.trim() === orderNo && days(p.preD || p.planDate) <= 60)
+      .sort((a, b) => days(a.preD || a.planDate) - days(b.preD || b.planDate))[0]
+    if (upcoming) return { customerId, filterCodes: upcoming.filterType.trim() || undefined }
+    const sale = saleListEntries.find((e) => e.orderNumber.trim() === orderNo)
+    const system = sale?.cpSystemId ? cpSystems.find((c) => c.id === sale.cpSystemId) : undefined
+    const skus = system ? getCpSystemFilterSkus(system, products) : []
+    return { customerId, filterCodes: skus.join(", ") || undefined }
   }
 
   // Admin Schedule Approval workflow's explicit "Approve Schedule" action —
