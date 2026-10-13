@@ -180,7 +180,10 @@ export function useStockMovementRows() {
         actualStock,
         currentStock: currentStockByMovementId.get(m.id) ?? actualStock,
         minStockLevel: product?.minStockLevel ?? 0,
-        userName: users.find((u) => u.id === m.userId)?.name ?? "Unknown",
+        // No user at all means the system made it (Filter Change / install
+        // completions); "Unknown" is kept for an id that no longer matches a
+        // user (a deleted account).
+        userName: m.userId ? (users.find((u) => u.id === m.userId)?.name ?? "Unknown") : "System (Auto)",
         approvedByName: m.approvedBy ? (users.find((u) => u.id === m.approvedBy)?.name ?? "Unknown") : undefined,
         rejectedByName: m.rejectedBy ? (users.find((u) => u.id === m.rejectedBy)?.name ?? "Unknown") : undefined,
         source: (AUTOMATED_STOCK_MOVEMENT_REASONS as readonly string[]).includes(m.reason) ? "System" : "Manual",
