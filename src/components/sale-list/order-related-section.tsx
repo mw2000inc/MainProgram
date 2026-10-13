@@ -76,9 +76,14 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
   }, [data, dateKey, selectedMonth])
 
   return (
-    <div className="space-y-2">
+    // A column: the month pills keep their own height and the panel fills
+    // what's left. The panel's card is h-full, so in a plain block it took
+    // 100% of this wrapper's height — pills included — and stuck out the
+    // bottom by the pills' height, over whatever section came next (e.g.
+    // Filter Changes' "Showing 1-10 of 10" landing on the Repairs title).
+    <div className="flex h-full flex-col gap-2">
       {dateKey && monthGroups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => setSelectedMonth("all")}
@@ -106,22 +111,24 @@ export function OrderRelatedSection<TData extends { id: string; status?: string 
           ))}
         </div>
       )}
-      <DashboardPlanPanel
-        title={title}
-        icon={icon}
-        columns={columns}
-        expandedColumns={expandedColumns}
-        data={scopedData}
-        emptyMessage={emptyMessage}
-        canAdd={canAdd}
-        addLabel={t("add")}
-        onAdd={onAdd}
-        exportColumns={exportColumns}
-        exportFileName={exportFileName}
-        tableContainerClassName={tableContainerClassName}
-        tableClassName={tableClassName}
-        headerAlwaysRow={headerAlwaysRow}
-      />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <DashboardPlanPanel
+          title={title}
+          icon={icon}
+          columns={columns}
+          expandedColumns={expandedColumns}
+          data={scopedData}
+          emptyMessage={emptyMessage}
+          canAdd={canAdd}
+          addLabel={t("add")}
+          onAdd={onAdd}
+          exportColumns={exportColumns}
+          exportFileName={exportFileName}
+          tableContainerClassName={tableContainerClassName}
+          tableClassName={tableClassName}
+          headerAlwaysRow={headerAlwaysRow}
+        />
+      </div>
     </div>
   )
 }

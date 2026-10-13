@@ -224,54 +224,66 @@ export function getSaleListColumns({
   onEdit: (entry: SaleListRow) => void
   onDelete: (entry: SaleListRow) => void
 }): ColumnDef<SaleListRow, unknown>[] {
+  // Fixed widths (the page renders this table with table-fixed): long text
+  // truncates with "…" instead of widening its column, so the columns never
+  // change size as the windowed rows scroll in and out.
   const columns: ColumnDef<SaleListRow, unknown>[] = [
     {
       accessorKey: "orderNumber",
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
+      meta: { headerClassName: "w-[125px]", cellClassName: "w-[125px] max-w-[125px] truncate" },
     },
     {
       accessorKey: "installedDate",
       header: () => <ColumnHeader tKey="installedDate" ns="fields" />,
       cell: ({ row }) => (row.original.installedDate ? formatDate(row.original.installedDate) : "—"),
+      meta: { headerClassName: "w-[125px]", cellClassName: "w-[125px] max-w-[125px] truncate" },
     },
     {
       accessorKey: "accountLabel",
       header: () => <ColumnHeader tKey="account" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.accountLabel} />,
+      meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] max-w-[180px] truncate" },
     },
     {
       accessorKey: "productNo",
       header: () => <ColumnHeader tKey="productNo" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.productNo} />,
+      meta: { headerClassName: "w-[170px]", cellClassName: "w-[170px] max-w-[170px] truncate" },
     },
     {
       accessorKey: "sc",
       header: () => <ColumnHeader tKey="sc" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.sc} />,
+      meta: { headerClassName: "w-[170px]", cellClassName: "w-[170px] max-w-[170px] truncate" },
     },
-    { accessorKey: "cf", header: () => <ColumnHeader tKey="cf" ns="fields" /> },
-    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" /> },
-    { accessorKey: "cpY1Y2", header: () => <ColumnHeader tKey="cpY1Y2" ns="fields" /> },
+    { accessorKey: "cf", header: () => <ColumnHeader tKey="cf" ns="fields" />, meta: { headerClassName: "w-[75px]", cellClassName: "w-[75px] max-w-[75px] truncate" }, },
+    { accessorKey: "ct", header: () => <ColumnHeader tKey="ct" ns="fields" />, meta: { headerClassName: "w-[75px]", cellClassName: "w-[75px] max-w-[75px] truncate" }, },
+    { accessorKey: "cpY1Y2", header: () => <ColumnHeader tKey="cpY1Y2" ns="fields" />, meta: { headerClassName: "w-[100px]", cellClassName: "w-[100px] max-w-[100px] truncate" }, },
     {
       accessorKey: "cpStart",
       header: () => <ColumnHeader tKey="cpStart" ns="fields" />,
       cell: ({ row }) => (row.original.cpStart ? formatDate(row.original.cpStart) : "—"),
+      meta: { headerClassName: "w-[115px]", cellClassName: "w-[115px] max-w-[115px] truncate" },
     },
     {
       accessorKey: "cpEnd",
       header: () => <ColumnHeader tKey="cpEnd" ns="fields" />,
       cell: ({ row }) => (row.original.cpEnd ? formatDate(row.original.cpEnd) : "—"),
+      meta: { headerClassName: "w-[115px]", cellClassName: "w-[115px] max-w-[115px] truncate" },
     },
     {
       accessorKey: "note",
       header: () => <ColumnHeader tKey="note" ns="fields" />,
       cell: ({ row }) => <NoteCell entry={row.original} />,
+      meta: { headerClassName: "w-[170px]", cellClassName: "w-[170px] max-w-[170px] truncate" },
     },
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
       cell: ({ row }) => <StatusCell status={row.original.status} />,
+      meta: { headerClassName: "w-[100px]", cellClassName: "w-[100px] max-w-[100px] truncate" },
     },
   ]
 
@@ -279,6 +291,7 @@ export function getSaleListColumns({
     columns.push({
       id: "actions",
       header: "",
+      meta: { headerClassName: "w-[90px]", cellClassName: "w-[90px] max-w-[90px] truncate" },
       cell: ({ row }) => (
         <ActionsCell entry={row.original} canEdit={canEdit} canDelete={canDelete} onEdit={onEdit} onDelete={onDelete} />
       ),

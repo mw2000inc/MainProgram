@@ -106,6 +106,9 @@ interface DataTableProps<TData> {
   // removes its header too. Column sorting is turned off while this is set —
   // sorting would scatter the groups and leave the same header repeated.
   groupBy?: (row: TData) => string
+  // Opt-in, with groupBy: shown at the right end of each group's header row
+  // (e.g. an "Approve all for <date>" button), given that group's label.
+  groupHeaderAction?: (label: string) => React.ReactNode
   // Extra classes merged onto the one real scroll wrapper (see that div's
   // own comment below — both this and scrollContainerClassName land on the
   // SAME element now, ui/table.tsx's own container no longer scrolls at
@@ -208,6 +211,7 @@ export function DataTable<TData>({
   onRowClick,
   getRowClassName,
   groupBy,
+  groupHeaderAction,
   tableContainerClassName,
   tableClassName,
   scrollContainerClassName,
@@ -429,6 +433,11 @@ export function DataTable<TData>({
         ref={scrollRef}
         className={cn(
           "relative h-full w-full min-h-0 flex-1 rounded-lg border overflow-x-auto overflow-y-auto",
+          // Windowed lists swap rows and resize the spacers above/below them
+          // as they scroll: no scroll anchoring (it would "correct" the
+          // position against those swaps), a gutter that's always reserved,
+          // and paint containment keep the view steady.
+          windowed && "[overflow-anchor:none] [scrollbar-gutter:stable] [contain:paint]",
           scrollContainerClassName,
           tableContainerClassName
         )}
@@ -488,7 +497,7 @@ export function DataTable<TData>({
                     columns={columns}
                     clickable={!!onRowClick}
                     onRowClick={handleRowClick}
-                    className={getRowClassName?.(row.original)}
+                    className={cn(windowed && "[&>td]:whitespace-nowrap", getRowClassName?.(row.original))}
                     bodyCellClassName={bodyCellClassName}
                   />
                 )
@@ -501,7 +510,14 @@ export function DataTable<TData>({
                       colSpan={columns.length}
                       className="py-1.5 text-xs font-semibold text-muted-foreground"
                     >
-                      {label}
+                      {groupHeaderAction ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{label}</span>
+                          {groupHeaderAction(label)}
+                        </div>
+                      ) : (
+                        label
+                      )}
                     </TableCell>
                   </TableRow>,
                   bodyRow,

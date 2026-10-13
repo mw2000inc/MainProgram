@@ -332,6 +332,9 @@ export default function SaleListPage() {
               <DataTable
                 columns={tableColumns}
                 data={rows}
+                // Fixed layout from the columns' own widths (see
+                // getSaleListColumns) so they don't resize while scrolling.
+                tableClassName="table-fixed w-full min-w-[1610px]"
                 searchPlaceholder={t("fullSearchPlaceholder")}
                 emptyMessage={t("noEntriesFound")}
                 getRowClassName={getSaleListRowClassName}
