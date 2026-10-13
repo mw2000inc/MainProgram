@@ -34,6 +34,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
+import { formatFilterCodes } from "@/lib/filter-codes"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { useQueryClient } from "@tanstack/react-query"
@@ -132,6 +133,14 @@ function MarkJobDoneDialog({
           placeholder={t("whatDidYouDo")}
           autoFocus
         />
+        {/* The job's own filters are deducted when it's completed (its Filter
+            Change record's, or the job's own when it has none); the box
+            below is for anything else found on the visit. */}
+        {job?.jobType === "filter_change" && job.filterCodes?.trim() && (
+          <p className="rounded-md bg-muted px-3 py-2 text-xs" data-testid="mark-done-planned-filters">
+            {t("plannedFilters", { filters: formatFilterCodes(job.filterCodes) })}
+          </p>
+        )}
 
         <div className="space-y-3 rounded-md border p-3">
           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
@@ -940,7 +949,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <JobDetailLines details={jobDetails(job)} />
         {job.filterCodes && (
           <p className="text-xs text-muted-foreground">
-            {t("editFilters")}: <span className="font-medium text-foreground">{job.filterCodes}</span>
+            {t("editFilters")}: <span className="font-medium text-foreground">{formatFilterCodes(job.filterCodes)}</span>
           </p>
         )}
         {/* An errand's notes are its description, already shown as its label. */}

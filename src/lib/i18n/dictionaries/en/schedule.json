@@ -1,4 +1,10 @@
 {
+  "filtersToDeductOptional": "Filters to Deduct (Optional)",
+  "filterSearchPlaceholder": "Type a code or name — e.g. 013, UF44",
+  "filterNotInInventory": "Not in inventory — kept on the job, not deducted",
+  "filtersDeductNote": "Each filter is deducted (pending approval in Inventory) when the job is completed.",
+  "removeFilter": "Remove filter",
+  "plannedFilters": "Filters for this job (deducted on completion): {filters}",
   "duplicateOpenJob": "A {type} {state} already exists for Order No. {orderNo} on {date} — no second one was added.",
   "duplicateStateDraft": "draft",
   "duplicateStateJob": "job",

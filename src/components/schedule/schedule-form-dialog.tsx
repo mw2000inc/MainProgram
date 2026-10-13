@@ -42,6 +42,9 @@ import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { getCpSystemFilterSkus } from "@/lib/filter-parts"
 import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
+import { FilterDeductRows, newFilterRow, type FilterRow } from "@/components/schedule/filter-deduct-rows"
+import { encodeFilterCodes, filterCodeOf, parseFilterCodes } from "@/lib/filter-codes"
+import { syncJobFiltersToRecord } from "@/lib/api/schedule"
 import { toast } from "sonner"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
@@ -250,10 +253,25 @@ export function ScheduleFormDialog({
     defaultValues: defaultValues(defaultDate, job, prefill),
   })
 
+  // Filters to Deduct (Filter Change jobs): the job's filter codes as rows —
+  // or, for a job from before, its single product + quantity.
+  const [filterRows, setFilterRows] = React.useState<FilterRow[]>([])
   React.useEffect(() => {
-    if (open) form.reset(defaultValues(defaultDate, job, prefill))
+    if (!open) return
+    form.reset(defaultValues(defaultDate, job, prefill))
+    const codes = job ? job.filterCodes : prefill?.filterCodes
+    const legacy = job?.productId ? products.find((p) => p.id === job.productId) : undefined
+    const lines = codes?.trim() ? parseFilterCodes(codes) : legacy ? [{ code: legacy.sku, quantity: job?.quantity ?? 1 }] : []
+    setFilterRows(
+      lines.map((l) => {
+        const product = products.find((p) => p.sku.trim() === l.code)
+        return newFilterRow(product ? (product.name.includes(" / ") ? product.name : `${product.sku} / ${product.name}`) : l.code, String(l.quantity))
+      })
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, job, prefill])
+  // The rows as filter codes ("011, 011, 013" — quantity by repetition).
+  const filterCodesFromRows = () => encodeFilterCodes(filterRows.map((r) => ({ code: filterCodeOf(r.value), quantity: Math.min(99, Number(r.quantity) || 0) })))
 
   // A vehicle with a fixed crew (VEHICLE_CREWS — the Liteace) fills in both
   // technicians and links their logins; they can still be changed after.
@@ -347,8 +365,12 @@ export function ScheduleFormDialog({
       ...linkedIds(values),
       // Deduction fields only mean anything for filter-change jobs — don't
       // carry a stale product/quantity along if the type gets switched away.
-      productId: isFilterChange ? values.productId || undefined : undefined,
-      quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
+      // Filters to Deduct are saved as the job's filter codes (below). A job
+      // from before that had a single product: it's now one of those rows, so
+      // the old field is cleared (never deducted twice).
+      productId: isEdit && isFilterChange && job.productId ? "" : undefined,
+      quantity: undefined,
+      ...(isEdit && isFilterChange ? { filterCodes: filterCodesFromRows() } : {}),
       // A brand-new manually-created job must always start at
       // 'pending_approval', never whatever the Status field happens to
       // hold — that field is hidden for a new job (see the FormField
@@ -364,11 +386,20 @@ export function ScheduleFormDialog({
       status: isEdit ? values.status : prefill && !requiresSaturdayApproval(values.scheduledDate) ? "pending" : "pending_approval",
     }
     if (isEdit) {
+      // Its open Filter Change gets the same Filter, so completing it deducts
+      // exactly these.
+      if (isFilterChange && input.filterCodes !== (job.filterCodes ?? "")) await syncJobFiltersToRecord(job.id, input.filterCodes ?? "")
       await updateJob.mutateAsync({ id: job.id, input })
     } else {
       // Not form fields — carried over from the visit being scheduled.
       const link = prefill ? {} : memberLinkFor(values)
-      const created = await createJob.mutateAsync({ ...input, customerId: prefill?.customerId ?? link.customerId, filterCodes: prefill?.filterCodes ?? link.filterCodes })
+      const typed = isFilterChange ? filterCodesFromRows() : ""
+      const created = await createJob.mutateAsync({
+        ...input,
+        customerId: prefill?.customerId ?? link.customerId,
+        // The filters entered here; none → the visit's, else the order's own.
+        filterCodes: typed || prefill?.filterCodes || link.filterCodes,
+      })
       onCreated?.(created)
     }
     onOpenChange(false)
@@ -429,10 +460,12 @@ export function ScheduleFormDialog({
       technician: technicianPairOf(values).primary,
       technician2: technicianPairOf(values).secondary,
       ...linkedIds(values),
-      productId: isFilterChange ? values.productId || undefined : undefined,
-      quantity: isFilterChange && values.quantity ? Number(values.quantity) : undefined,
+      productId: isFilterChange && job.productId ? "" : undefined,
+      quantity: undefined,
+      ...(isFilterChange ? { filterCodes: filterCodesFromRows() } : {}),
       status: "pending" as ScheduleJobStatus,
     }
+    if (isFilterChange && input.filterCodes !== (job.filterCodes ?? "")) await syncJobFiltersToRecord(job.id, input.filterCodes ?? "")
     await updateJob.mutateAsync({ id: job.id, input })
     onOpenChange(false)
   }
@@ -705,45 +738,10 @@ export function ScheduleFormDialog({
               />
             )}
             {isFilterChange && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="productId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("filterToDeductOptional")}</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder={t("selectInventoryItem")} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name} ({p.sku})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("quantityToDeduct")}</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="1" step="1" placeholder="1" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t("filtersToDeductOptional")}</p>
+                <FilterDeductRows rows={filterRows} onChange={setFilterRows} products={products} />
+              </div>
             )}
             <FormField
               control={form.control}

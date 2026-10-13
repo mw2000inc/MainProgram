@@ -1,4 +1,10 @@
 {
+  "filtersToDeductOptional": "차감할 필터 (선택)",
+  "filterSearchPlaceholder": "코드 또는 이름 입력 — 예: 013, UF44",
+  "filterNotInInventory": "재고에 없음 — 작업에는 남지만 차감되지 않음",
+  "filtersDeductNote": "작업이 완료되면 각 필터가 차감됩니다 (재고에서 승인 대기).",
+  "removeFilter": "필터 삭제",
+  "plannedFilters": "이 작업의 필터 (완료 시 차감): {filters}",
   "duplicateOpenJob": "주문 번호 {orderNo}에 대한 {type} {state}이(가) {date}에 이미 있습니다 — 중복으로 추가하지 않았습니다.",
   "duplicateStateDraft": "초안",
   "duplicateStateJob": "작업",

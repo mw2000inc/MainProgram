@@ -146,6 +146,18 @@ export async function findOpenJobForOrder(
   return row ? { id: row.id, status: row.status as ScheduleJobStatus, scheduledDate: row.scheduled_date } : undefined
 }
 
+// A Filter Change job's filters edited in the Schedule Job form go to its
+// still-open Filter Change record too — completing the record is what
+// deducts them (20261019000000), so the two must list the same filters.
+export async function syncJobFiltersToRecord(jobId: string, filterCodes: string): Promise<void> {
+  const { error } = await supabase
+    .from("filter_change_plans")
+    .update({ filter_type: filterCodes })
+    .eq("schedule_job_id", jobId)
+    .not("status", "in", "(Completed,Cancelled)")
+  if (error) throw error
+}
+
 export async function linkVisitToScheduleJob(
   table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections",
   recordId: string,
