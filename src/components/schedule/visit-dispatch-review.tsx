@@ -4,6 +4,7 @@ import * as React from "react"
 import { CheckCheck, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
@@ -30,7 +31,8 @@ export interface VisitDraft {
 
 // Itemized review before Bulk Create / Approve All & Dispatch: every visit
 // as the job it will become, every field editable. Edits stay here until
-// "Confirm & Create Jobs"; Cancel creates nothing. The Schedule table's own
+// "Confirm & Create Jobs"; Cancel creates nothing. Each row has a checkbox:
+// unticked visits are left out of this batch (they stay unscheduled). The Schedule table's own
 // rules apply: moving a job onto a Saturday clears its technician and
 // vehicle (Saturday is assigned by hand), picking a technician for it makes
 // it active, and the Liteace brings its crew. A weekday job needs a
@@ -56,12 +58,15 @@ export function VisitDispatchReview({
   // Optional second action (Generate Drafts): save the jobs as drafts awaiting
   // approval instead — no technician needed yet.
   onSaveDrafts?: (items: { visit: UnscheduledVisit; draft: VisitDraft }[]) => Promise<void>
-  confirmLabel?: string
+  // The confirm button's text for the number of ticked visits.
+  confirmLabel?: (count: number) => string
 }) {
   const { t } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
   const [drafts, setDrafts] = React.useState<Record<string, VisitDraft>>({})
   const [touched, setTouched] = React.useState<Set<string>>(new Set())
+  // Visits in this batch — all of them each time it opens.
+  const [included, setIncluded] = React.useState<Set<string>>(new Set())
   const [saving, setSaving] = React.useState(false)
   // A fresh proposal every time it opens.
   const [wasOpen, setWasOpen] = React.useState(false)
@@ -70,10 +75,21 @@ export function VisitDispatchReview({
     if (open) {
       setDrafts(Object.fromEntries(visits.map((v) => [v.key, initial(v)])))
       setTouched(new Set())
+      setIncluded(new Set(visits.map((v) => v.key)))
     }
   }
 
-  const rows = visits.map((visit) => ({ visit, draft: drafts[visit.key] ?? initial(visit) }))
+  const allRows = visits.map((visit) => ({ visit, draft: drafts[visit.key] ?? initial(visit) }))
+  // What the counts, checks and both actions work on: the ticked visits.
+  const rows = allRows.filter((r) => included.has(r.visit.key))
+  const toggle = (key: string) =>
+    setIncluded((s) => {
+      const next = new Set(s)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const allState: boolean | "indeterminate" = rows.length === 0 ? false : rows.length === allRows.length ? true : "indeterminate"
   const update = (visit: UnscheduledVisit, patch: Partial<VisitDraft>) => {
     setDrafts((d) => ({ ...d, [visit.key]: { ...(d[visit.key] ?? initial(visit)), ...patch } }))
     setTouched((s) => new Set(s).add(visit.key))
@@ -121,7 +137,8 @@ export function VisitDispatchReview({
           <DialogDescription className="sr-only">{t("visitReviewBanner", { count: rows.length })}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm" data-testid="visit-review-banner">
-          <span className="font-medium">{t("visitReviewBanner", { count: rows.length })}</span>
+          <span className="font-medium">{t("visitReviewBanner", { count: allRows.length })}</span>
+          <span data-testid="visit-review-selected">{t("batchReviewSelected", { selected: rows.length, count: allRows.length })}</span>
           {weekdayMissing > 0 && <span className="text-destructive">{t("visitReviewWeekdayMissing", { count: weekdayMissing })}</span>}
           {saturdayMissing > 0 && <span className="text-warning">{t("visitReviewSaturdayMissing", { count: saturdayMissing })}</span>}
           {touched.size > 0 && <span className="text-muted-foreground">{t("monthReviewEdited", { count: touched.size })}</span>}
@@ -136,7 +153,7 @@ export function VisitDispatchReview({
             )}
             <Button size="sm" className="gap-1.5" disabled={saving || rows.length === 0 || weekdayMissing > 0} onClick={confirm} data-testid="visit-review-confirm">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
-              {confirmLabel ?? t("visitReviewConfirm", { count: rows.length })}
+              {confirmLabel ? confirmLabel(rows.length) : t("visitReviewConfirm", { count: rows.length })}
             </Button>
           </div>
         </div>
@@ -144,6 +161,14 @@ export function VisitDispatchReview({
           <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-10 bg-background">
               <tr className="text-left text-xs text-muted-foreground">
+                <th className="w-8 px-2 py-2">
+                  <Checkbox
+                    checked={allState}
+                    onCheckedChange={() => setIncluded(allState === true ? new Set() : new Set(visits.map((v) => v.key)))}
+                    aria-label={t("batchReviewSelectAll")}
+                    data-testid="visit-review-select-all"
+                  />
+                </th>
                 {(["tableDate", "tableJobType", "tableCustomerOrder", "tableAddress", "tableTechnician", "tableVehicle", "tableDetails", "tableRemarks"] as const).map((key) => (
                   <th key={key} className="whitespace-nowrap px-2 py-2 font-medium">
                     {t(key)}
@@ -152,7 +177,8 @@ export function VisitDispatchReview({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ visit, draft }) => {
+              {allRows.map(({ visit, draft }) => {
+                const on = included.has(visit.key)
                 const missing = needsTechnician(draft)
                 const saturday = isSaturday(draft.date)
                 return (
@@ -160,8 +186,12 @@ export function VisitDispatchReview({
                     key={visit.key}
                     data-testid="visit-review-row"
                     data-needs-technician={missing || undefined}
-                    className={cn("border-t align-top", missing && (saturday ? "bg-warning/5" : "bg-destructive/5"))}
+                    data-included={on || undefined}
+                    className={cn("border-t align-top", !on && "opacity-50", on && missing && (saturday ? "bg-warning/5" : "bg-destructive/5"))}
                   >
+                    <td className="px-2 py-2">
+                      <Checkbox checked={on} onCheckedChange={() => toggle(visit.key)} aria-label={t("batchReviewInclude")} data-testid="visit-review-include" />
+                    </td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       <InlineDateCell value={draft.date} onCommit={(next) => next && setDate(visit, draft, next)} />
                       {saturday && <div className="mt-0.5 text-[11px] font-medium text-warning">{t("monthReviewSaturday")}</div>}

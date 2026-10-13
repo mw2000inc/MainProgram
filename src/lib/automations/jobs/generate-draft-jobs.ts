@@ -2,20 +2,23 @@ import "server-only"
 import { addDays, format, parseISO } from "date-fns"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
-import { dispatchDateFor } from "@/lib/schedule-timeframe"
+import { autoJobDate } from "@/lib/schedule-timeframe"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
 import type { UnscheduledVisit, VisitTable } from "@/lib/scheduling/unscheduled-visits"
 import type { ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 import type { AutomationContext, AutomationResult } from "../types"
 
-// Draft window: visits from a few days back (Friday's still-open visits on a
-// Monday) through a week ahead.
+// Draft window: visits from a few days back (on a Monday, Friday's still-open
+// visits and the weekend's) through a month ahead — the admin approves a
+// month of Filter Changes and Collections in advance.
 const LOOKBACK_DAYS = 3
-const LOOKAHEAD_DAYS = 7
+const LOOKAHEAD_DAYS = 30
 
 // Pre-schedules the Daily Report's upcoming visits as DRAFT jobs for an admin
-// to review. For every dispatch-confirmed, still-pending Filter Change /
-// Installation / Repair / Collection visit in the window that no job covers:
+// to review. For every dispatch-confirmed, still-pending Filter Change or
+// Collection visit in the window that no job covers (Installations and
+// Repairs are scheduled by hand — Schedule Job — as requests come in):
 //   - a job is created as 'pending_approval' with source 'automation' — a
 //     draft: admins see it in the Schedule with a "Draft · Auto-assigned"
 //     badge and approve it ("Approve & Dispatch All Drafts"); technicians
@@ -23,24 +26,25 @@ const LOOKAHEAD_DAYS = 7
 //   - technician, vehicle and the technicians' logins come from
 //     createDispatchAssigner (planned technician → customer's technician →
 //     least-busy field technician that day);
-//   - it's dated the visit's own date (a Friday visit on Saturday), or today
-//     for one already past;
+//   - it's dated Monday to Friday only (autoJobDate): the visit's own date,
+//     or today for one already past — a Saturday or Sunday becomes the
+//     following Monday (Manila calendar). Saturday work is assigned by hand;
 //   - the visit is linked to it straight away, so it leaves Unscheduled
 //     Visits and is never drafted twice.
 // A visit whose order already has an open job of the same type is skipped.
 //
-// With ctx.date (the Daily Report's "Generate Drafts" on a chosen day), only
-// drafts whose job lands on that date are made: visits dated that day, a
-// Friday visit for a Saturday, and — when that day is today — the open
-// visits of the last few days that roll onto today. The scheduled run keeps
-// the full window above.
+// With ctx.date (a one-day run), only drafts whose job lands on that date are
+// made: visits dated that day, the weekend's visits for a Monday, and — when
+// that day is today — the open visits of the last few days that roll onto
+// today. The scheduled run keeps the full window above.
 export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<AutomationResult> {
   const admin = createAdminClient()
-  const today = new Date().toISOString().slice(0, 10)
+  // The Manila business day — not the server's UTC date, which is still
+  // yesterday before 08:00 Manila.
+  const today = businessToday()
   const onlyDate = ctx?.date
-  const start = onlyDate
-    ? format(addDays(parseISO(onlyDate), onlyDate === today ? -LOOKBACK_DAYS : -1), "yyyy-MM-dd")
-    : format(addDays(parseISO(today), -LOOKBACK_DAYS), "yyyy-MM-dd")
+  // Three days back either way: covers the weekend before a Monday.
+  const start = format(addDays(parseISO(onlyDate ?? today), -LOOKBACK_DAYS), "yyyy-MM-dd")
   const end = onlyDate ?? format(addDays(parseISO(today), LOOKAHEAD_DAYS), "yyyy-MM-dd")
 
   const [customersRes, accountsRes, jobsRes] = await Promise.all([
@@ -70,8 +74,6 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
   const inWindow = (pre: string, base: string) => `and(${pre}.gte.${start},${pre}.lte.${end}),and(${pre}.is.null,${base}.gte.${start},${base}.lte.${end})`
   const sources: { table: VisitTable; jobType: ScheduleJobType; pre: string; base: string; done: string; order: string }[] = [
     { table: "filter_change_plans", jobType: "filter_change", pre: "pre_d", base: "plan_date", done: "acc_d", order: "order_number" },
-    { table: "install_plans", jobType: "installation", pre: "pre_installed_date", base: "input_date", done: "installed_date", order: "order_no" },
-    { table: "repair_plans", jobType: "repair", pre: "pre_d", base: "issued_date", done: "acc_d", order: "order_no" },
     { table: "collections", jobType: "collection", pre: "pre_d", base: "collection_date", done: "acc_d", order: "order_no" },
   ]
   for (const src of sources) {
@@ -145,8 +147,7 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
       skippedOpenJob++
       continue
     }
-    const own = dispatchDateFor(visit.date)
-    const date = own < today ? today : own
+    const date = autoJobDate(visit.date, today)
     // A one-day run makes only that day's drafts.
     if (onlyDate && date !== onlyDate) continue
     const assignment = assigner(visit, date)

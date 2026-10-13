@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { addDays, format, parseISO } from "date-fns"
+import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, CalendarRange, CheckCheck, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -63,11 +63,14 @@ import { updateScheduleJob } from "@/lib/api/schedule"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import {
-  dispatchDateFor,
+  autoJobDate,
   isSaturday,
+  isWeekend,
   saturdaysInRange,
 } from "@/lib/schedule-timeframe"
-import { formatScheduleRange } from "@/components/schedule/schedule-date-range-picker"
+import { formatScheduleRange, ScheduleDateRangePicker } from "@/components/schedule/schedule-date-range-picker"
+import { JobApprovalReview, type JobApprovalEdit } from "@/components/schedule/job-approval-review"
+import { scheduleTimeframeRange } from "@/lib/schedule-timeframe"
 import { StockMovementHistoryDialog } from "@/components/dashboard/stock-movement-history-dialog"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -430,6 +433,9 @@ function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: str
   )
 }
 
+// How far ahead the full-screen view looks by default.
+const FULL_SCREEN_DAYS_AHEAD = 30
+
 export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; title?: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -484,10 +490,23 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       // ignore — the choice just won't be remembered
     }
   }
-  // The Daily Report's own date — this panel shows that one day only, like
-  // every other panel on the report (no separate range of its own; the
-  // Full Schedule page keeps ranges). Changing the report date changes it.
-  const range = React.useMemo(() => ({ start: date, end: date }), [date])
+  // The Daily Report's own date — the card shows that one day only, like
+  // every other panel on the report. The full-screen view looks ahead
+  // instead: it opens on that date through 30 days later (fullRange), which
+  // the admin can move a month at a time or pick on the calendar; closing it
+  // goes back to the one day. Everything listed (jobs, unscheduled visits,
+  // Saturdays, export, history) follows `range`; the single-day actions
+  // (Generate Drafts, Approve All, overdue count) stay on the report date.
+  const [fullRange, setFullRange] = React.useState<{ start: string; end: string } | null>(null)
+  const dayRange = React.useMemo(() => ({ start: date, end: date }), [date])
+  const range = expanded && fullRange ? fullRange : dayRange
+  const monthAhead = (from: string) => ({ start: from, end: format(addDays(parseISO(from), FULL_SCREEN_DAYS_AHEAD), "yyyy-MM-dd") })
+  const shiftFullRange = (months: number) =>
+    setFullRange((r) => {
+      const cur = r ?? monthAhead(date)
+      const iso = (d: string) => format(addMonths(parseISO(d), months), "yyyy-MM-dd")
+      return { start: iso(cur.start), end: iso(cur.end) }
+    })
   const multiDay = range.start !== range.end
   const rangeLabel = formatScheduleRange(range)
   const [historyOpen, setHistoryOpen] = React.useState(false)
@@ -565,9 +584,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     [isAdmin, filterChangePlans, installPlans, repairPlans, collectionRecords, customers, range]
   )
   const [visitToSchedule, setVisitToSchedule] = React.useState<UnscheduledVisit | undefined>(undefined)
-  // The date a visit's job goes on by default: one due on a Friday on
-  // Saturday, otherwise its own date.
-  const visitDispatchDate = React.useCallback((v: UnscheduledVisit) => dispatchDateFor(v.date), [])
+  // The date a visit's job goes on by default when an admin schedules it
+  // (Create Job, Bulk Create, Approve All & Dispatch, Saturday coverage): its
+  // own date — a Friday visit stays on Friday. Generate Drafts instead uses
+  // the automatic, Monday-to-Friday dating (autoJobDate).
+  const visitDispatchDate = React.useCallback((v: UnscheduledVisit) => v.date, [])
   // Bulk Create Jobs: which visits are ticked, and the dialog.
   const [selectedVisitKeys, setSelectedVisitKeys] = React.useState<Set<string>>(new Set())
   // Approve All & Dispatch: progress while it runs (null when idle).
@@ -841,7 +862,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       <Checkbox
         checked={job.status === "completed" || selected.has(job.id)}
         onCheckedChange={() => toggleSelected(job.id)}
-        disabled={job.status !== "pending"}
+        disabled={!completable(job)}
         aria-label={t("selectJob")}
         data-testid="schedule-select-job"
         className="mt-0.5"
@@ -996,7 +1017,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
 
   const gridClass = "grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]"
   const selectMode = isAdmin
-  const pendingInView = React.useMemo(() => visibleJobs.filter((j) => j.status === "pending"), [visibleJobs])
+  // What batch completion may touch: pending jobs dated up to the report date
+  // (or today, if later). On the one-day card that's every pending job, as
+  // before; in the full-screen look-ahead it keeps later jobs in the window
+  // out of "Complete All Pending" and their checkboxes.
+  const completeUpTo = date > businessToday() ? date : businessToday()
+  const completable = (job: Pick<ScheduleJob, "status" | "scheduledDate">) => job.status === "pending" && job.scheduledDate <= completeUpTo
+  const pendingInView = visibleJobs.filter(completable)
   const toggleSelected = (id: string) =>
     setSelected((old) => {
       const next = new Set(old)
@@ -1006,7 +1033,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     })
   // Select / clear every pending job in a section (or the whole view).
   const toggleSelectAll = (jobs: typeof todaysJobs) => {
-    const ids = jobs.filter((j) => j.status === "pending").map((j) => j.id)
+    const ids = jobs.filter(completable).map((j) => j.id)
     setSelected((old) => {
       const allSelected = ids.length > 0 && ids.every((id) => old.has(id))
       const next = new Set(old)
@@ -1015,7 +1042,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     })
   }
   const selectAllState = (jobs: typeof todaysJobs): boolean | "indeterminate" => {
-    const ids = jobs.filter((j) => j.status === "pending").map((j) => j.id)
+    const ids = jobs.filter(completable).map((j) => j.id)
     const n = ids.filter((id) => selected.has(id)).length
     return n === 0 ? false : n === ids.length ? true : "indeterminate"
   }
@@ -1026,7 +1053,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
 
   const sectionHeader = (label: string, count: number, testId: string, jobs?: typeof todaysJobs) => (
     <div data-testid={testId} className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-      {selectMode && jobs && jobs.some((j) => j.status === "pending") && (
+      {selectMode && jobs && jobs.some(completable) && (
         <Checkbox
           checked={selectAllState(jobs)}
           onCheckedChange={() => toggleSelectAll(jobs)}
@@ -1090,7 +1117,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                   <Checkbox
                     checked={job.status === "completed" || selected.has(job.id)}
                     onCheckedChange={() => toggleSelected(job.id)}
-                    disabled={job.status !== "pending"}
+                    disabled={!completable(job)}
                     aria-label={t("selectJob")}
                     data-testid="schedule-select-job"
                   />
@@ -1249,9 +1276,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // technician (none on a Saturday), or — for Approve All & Dispatch — the
   // automatic assignment (createDispatchAssigner: planned → Liteace for
   // installs → same place → customer's → nearby → least busy; Saturdays
-  // unassigned). Each job is dated its visit's dispatch date (Friday visits on
-  // Saturday) unless changed.
-  // "generate" (Generate Drafts) proposes like "dispatch" and adds "Save Drafts".
+  // unassigned). Each job is dated its visit's own date unless changed.
+  // "generate" (Generate Drafts) proposes like "dispatch", dates each job the
+  // automatic way (Monday to Friday — autoJobDate), and adds "Save Drafts".
   const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch" | "generate"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
   const openVisitReview = (mode: "bulk" | "dispatch" | "generate", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
@@ -1259,7 +1286,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     const proposals: Record<string, VisitDraft> = {}
     for (const v of targets) {
       const edit = visitEdits[v.key] ?? {}
-      const date = edit.date ?? visitDispatchDate(v)
+      const date = edit.date ?? (mode === "generate" ? autoJobDate(v.date, businessToday()) : visitDispatchDate(v))
       let pair = { primary: "", secondary: "" }
       let vehicle = ""
       let technicianChosen = false
@@ -1544,6 +1571,16 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const draftJobs = todaysJobs.filter((j) => isDraftJob(j) && j.scheduledDate === date && !isSaturday(j.scheduledDate))
   const approveTargets = draftJobs
   const [approvingDrafts, setApprovingDrafts] = React.useState(false)
+  // "Approve All for <date>" opens the review first (JobApprovalReview);
+  // only the jobs ticked there are approved, with their edits.
+  const [jobReviewOpen, setJobReviewOpen] = React.useState(false)
+  const patchFromReview = (job: ScheduleJob, edit: JobApprovalEdit): JobPatch => {
+    const patch: JobPatch = {}
+    if (edit.primary !== (job.technician ?? "") || edit.secondary !== (job.technician2 ?? "")) Object.assign(patch, technicianInput(edit.primary, edit.secondary))
+    if (edit.vehicle !== (job.vehicle ?? "")) patch.vehicle = edit.vehicle
+    if (edit.notes !== (job.notes ?? "")) patch.notes = edit.notes
+    return patch
+  }
   // Approves the drafts in view — or, from the month review, the given jobs
   // with the edits made there saved in the same write.
   const approveAllDrafts = async (items: { job: ScheduleJob; patch: JobPatch }[] = approveTargets.map((job) => ({ job, patch: {} }))) => {
@@ -1563,18 +1600,26 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (approved) toast.success(t("draftsApproved", { count: approved }))
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
   }
-  // Generate Drafts: the visits the generator would draft for this day —
-  // dated this day, a Friday's visits for a Saturday, and (on today) the open
-  // visits of the last 3 days — shown in the review with the automatic
-  // assignment, nothing saved until Approve or Save Drafts; or, with none,
-  // "There are no schedules on this day" and a way to add one.
-  const [noSchedulesOpen, setNoSchedulesOpen] = React.useState(false)
+  // Generate Drafts: the visits the generator would draft for this day, dated
+  // the same automatic way (Monday to Friday only — autoJobDate): dated this
+  // day, the weekend's for a Monday, and (on today) the open visits of the
+  // last 3 days — shown in the review with the automatic assignment, nothing
+  // saved until Approve or Save Drafts. With none: "There are no schedules on
+  // this day"; on a Saturday or Sunday: "Automatic scheduling runs Monday to
+  // Friday only". Both offer Schedule Job (Saturday work is added by hand).
+  const [noSchedules, setNoSchedules] = React.useState<null | "none" | "weekend">(null)
   const openGenerateReview = () => {
+    if (isWeekend(date)) {
+      setNoSchedules("weekend")
+      return
+    }
     const today = businessToday()
-    const start = format(addDays(parseISO(date), date === today ? -3 : -1), "yyyy-MM-dd")
+    const start = format(addDays(parseISO(date), -3), "yyyy-MM-dd")
     const pool = buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, { start, end: date })
-    const targets = pool.filter((v) => visitDispatchDate(v) === date || (date === today && v.date < today))
-    if (targets.length === 0) setNoSchedulesOpen(true)
+    // Same scope as the daily generator: Filter Changes and Collections only
+    // (Installations and Repairs are scheduled by hand).
+    const targets = pool.filter((v) => (v.jobType === "filter_change" || v.jobType === "collection") && autoJobDate(v.date, today) === date)
+    if (targets.length === 0) setNoSchedules("none")
     else openVisitReview("generate", targets)
   }
   const saturdayBanner = () =>
@@ -1757,7 +1802,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           size="sm"
           className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 @xs/card-header:flex-1 @sm/card-header:flex-none"
           disabled={approvingDrafts || approveTargets.length === 0}
-          onClick={() => approveAllDrafts()}
+          onClick={() => setJobReviewOpen(true)}
           data-testid="drafts-approve-all"
         >
           {approvingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -1790,7 +1835,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <Button variant="ghost" size="icon" className="h-7 w-7" title={t("print")} onClick={handlePrint}>
           <Printer className="h-3.5 w-3.5" />
         </Button>
-        <FullScreenToggleButton isFullScreen={expanded} onToggle={() => setExpanded((v) => !v)} />
+        <FullScreenToggleButton
+          isFullScreen={expanded}
+          onToggle={() => {
+            if (!expanded) setFullRange(monthAhead(date))
+            else setFullRange(null)
+            setExpanded(!expanded)
+          }}
+        />
         {isAdmin && (
           <Button
             variant="outline"
@@ -1833,6 +1885,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         onOpenChange={(open) => {
           setExpanded(open)
           if (!open) {
+            setFullRange(null)
             setSelected(new Set())
             setSearch("")
             setStatusFilter("pending")
@@ -1848,6 +1901,50 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
               <span className="text-sm font-normal text-muted-foreground">· {rangeLabel}</span>
             </DialogTitle>
             <div className="flex flex-wrap items-center gap-2">
+              {/* The look-ahead window: a month back / forward, any range on
+                  the calendar, or back to the next 30 days. */}
+              <div className="flex items-center gap-1" data-testid="schedule-fullscreen-range">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  title={t("monthPrevious")}
+                  aria-label={t("monthPrevious")}
+                  onClick={() => shiftFullRange(-1)}
+                  data-testid="schedule-range-prev"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <ScheduleDateRangePicker
+                  selection={range}
+                  range={range}
+                  anchor={date}
+                  onChange={(sel) => setFullRange(typeof sel === "string" ? scheduleTimeframeRange(sel, date) : sel)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  title={t("monthNext")}
+                  aria-label={t("monthNext")}
+                  onClick={() => shiftFullRange(1)}
+                  data-testid="schedule-range-next"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => setFullRange(monthAhead(date))}
+                  data-testid="schedule-range-next30"
+                >
+                  {t("next30Days")}
+                </Button>
+              </div>
               <div role="group" aria-label={t("viewMode")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-view-mode">
                 {(["grid", "table"] as ViewMode[]).map((mode) => (
                   <button
@@ -1959,20 +2056,20 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       {isAdmin && <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />}
 
       {isAdmin && (
-        <Dialog open={noSchedulesOpen} onOpenChange={setNoSchedulesOpen}>
-          <DialogContent className="sm:max-w-sm" data-testid="no-schedules-dialog">
+        <Dialog open={!!noSchedules} onOpenChange={(o) => !o && setNoSchedules(null)}>
+          <DialogContent className="sm:max-w-sm" data-testid="no-schedules-dialog" data-reason={noSchedules ?? undefined}>
             <DialogHeader>
-              <DialogTitle>{t("noSchedulesTitle")}</DialogTitle>
-              <DialogDescription>{t("noSchedulesHint", { date: formatDate(date) })}</DialogDescription>
+              <DialogTitle>{t(noSchedules === "weekend" ? "weekendAutoTitle" : "noSchedulesTitle")}</DialogTitle>
+              <DialogDescription>{t(noSchedules === "weekend" ? "weekendAutoHint" : "noSchedulesHint", { date: formatDate(date) })}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setNoSchedulesOpen(false)}>
+              <Button variant="outline" onClick={() => setNoSchedules(null)}>
                 {tCommon("close")}
               </Button>
               <Button
                 className="gap-1.5"
                 onClick={() => {
-                  setNoSchedulesOpen(false)
+                  setNoSchedules(null)
                   openCreate()
                 }}
                 data-testid="no-schedules-add"
@@ -2016,6 +2113,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         />
       )}
       {isAdmin && (
+        <JobApprovalReview
+          open={jobReviewOpen}
+          onOpenChange={setJobReviewOpen}
+          jobs={approveTargets}
+          customerName={(job) => {
+            const customer = job.customerId ? customerById.get(job.customerId) : undefined
+            return customer ? customer.companyName || customer.fullName : undefined
+          }}
+          jobTypeLabel={(job) => jobLabel(job, t)}
+          onConfirm={(items) => approveAllDrafts(items.map(({ job, edit, changed }) => ({ job, patch: changed ? patchFromReview(job, edit) : {} })))}
+        />
+      )}
+      {isAdmin && (
         <VisitDispatchReview
           open={!!visitReview}
           onOpenChange={(o) => !o && setVisitReview(null)}
@@ -2027,7 +2137,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           initial={(v) => visitReview!.proposals[v.key]}
           onConfirm={(items) => createFromReview(items)}
           onSaveDrafts={visitReview?.mode === "generate" ? (items) => createFromReview(items, true) : undefined}
-          confirmLabel={visitReview?.mode === "generate" ? t("visitReviewApprove", { count: visitReview.visits.length }) : undefined}
+          confirmLabel={visitReview?.mode === "generate" ? (count) => t("visitReviewApprove", { count }) : undefined}
         />
       )}
       <ScheduleFormDialog

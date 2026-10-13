@@ -44,38 +44,32 @@ export function scheduleTimeframeRange(timeframe: ScheduleTimeframe, anchor: str
   }
 }
 
-// Friday roll-forward. Friday's unfinished work (pending jobs and visits
-// with no job yet) carries into Saturday's and Monday's schedule until it's
-// done, and anything newly dispatched on a Friday is dated Saturday.
-const FRIDAY = 5
+// Automatic scheduling runs Monday to Friday. The draft generator (the
+// daily run and the Daily Report's Generate Drafts) never dates a job on a
+// Saturday or Sunday: a visit due on a weekend goes on the following Monday,
+// and one already past due goes on today, or the following Monday when today
+// is a weekend. Friday visits stay on Friday. Dates are Manila calendar days
+// (yyyy-MM-dd). Saturday work is still scheduled by hand (Schedule Job,
+// Assign Saturday Coverage).
 const SATURDAY = 6
-const MONDAY = 1
+const SUNDAY = 0
 
-// The Friday whose unfinished work shows on `day`: the day before a
-// Saturday, three days before a Monday; null on any other day.
-export function carriedFridayFor(day: string): string | null {
-  const d = parseISO(day)
-  if (d.getDay() === SATURDAY) return format(addDays(d, -1), "yyyy-MM-dd")
-  if (d.getDay() === MONDAY) return format(addDays(d, -3), "yyyy-MM-dd")
-  return null
+export function isWeekend(day: string): boolean {
+  const d = parseISO(day).getDay()
+  return d === SATURDAY || d === SUNDAY
 }
 
-// Fridays carried into a timeframe — only those before it starts (a Friday
-// inside the timeframe already shows on its own day).
-export function carriedFridaysInRange(range: { start: string; end: string }): string[] {
-  const fridays = new Set<string>()
-  const end = parseISO(range.end)
-  for (let d = parseISO(range.start), n = 0; d <= end && n < 62; d = addDays(d, 1), n++) {
-    const friday = carriedFridayFor(format(d, "yyyy-MM-dd"))
-    if (friday && friday < range.start) fridays.add(friday)
-  }
-  return [...fridays]
+// The day itself on Monday–Friday, otherwise the following Monday.
+export function nextWorkingDay(day: string): string {
+  const d = parseISO(day)
+  const add = d.getDay() === SATURDAY ? 2 : d.getDay() === SUNDAY ? 1 : 0
+  return add ? format(addDays(d, add), "yyyy-MM-dd") : day
 }
 
-// The date to dispatch something due on `day`: a Friday becomes Saturday.
-export function dispatchDateFor(day: string): string {
-  const d = parseISO(day)
-  return d.getDay() === FRIDAY ? format(addDays(d, 1), "yyyy-MM-dd") : day
+// The date an automatically drafted job goes on, for a visit due on
+// `visitDate` when the business day is `today`.
+export function autoJobDate(visitDate: string, today: string): string {
+  return nextWorkingDay(visitDate < today ? today : visitDate)
 }
 
 // Saturday coverage is confirmed by an admin: a job dispatched for a Saturday

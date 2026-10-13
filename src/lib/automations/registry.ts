@@ -55,14 +55,14 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
   generateDraftJobs: {
     id: "generateDraftJobs",
     label: "Generate Draft Schedule Jobs",
-    description: "Pre-schedules the next week's confirmed visits as auto-assigned draft jobs (technician, vehicle, login) for an admin to review and approve.",
+    description: "Pre-schedules the next 30 days' confirmed Filter Change and Collection visits (Monday to Friday) as auto-assigned draft jobs (technician, vehicle, login) for an admin to review and approve. Installations and Repairs are scheduled by hand.",
     defaultEnabled: AUTOMATION_DEFAULTS.generateDraftJobs,
     run: runGenerateDraftJobs,
   },
   redateShortNoticeDrafts: {
     id: "redateShortNoticeDrafts",
     label: "Keep Drafts at 2 Days' Notice",
-    description: "Daily: moves unapproved Drafts due today or tomorrow (too late for a 2-day confirmation email) to the earliest date with full notice (Sunday → Monday). Past-dated Drafts are left for review. Never approves or sends anything.",
+    description: "Daily: moves unapproved Drafts due today or tomorrow (too late for a 2-day confirmation email) to the earliest working day with full notice (Monday to Friday; a weekend becomes Monday). Past-dated Drafts are left for review. Never approves or sends anything.",
     defaultEnabled: AUTOMATION_DEFAULTS.redateShortNoticeDrafts,
     run: runRedateShortNoticeDrafts,
   },

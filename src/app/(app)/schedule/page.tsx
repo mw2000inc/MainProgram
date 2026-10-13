@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { CalendarClock, Plus, List, Table2, Sparkles } from "lucide-react"
+import { CalendarClock, CalendarDays, Plus, List, Table2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -27,6 +27,7 @@ import { getScheduleColumns, formatTechnicians, matchesTechnician, computeStopNu
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { PendingApprovalsPanel, usePendingApprovalsCount } from "@/components/schedule/pending-approvals-panel"
 import { ScheduleMonthPicker } from "@/components/schedule/schedule-month-picker"
+import { ScheduleMonthCalendar } from "@/components/schedule/schedule-month-calendar"
 import { PendingScheduleApprovalPanel, usePendingScheduleApprovalCount } from "@/components/schedule/pending-schedule-approval-panel"
 import { DraftAssignmentsPanel } from "@/components/schedule/draft-assignments-panel"
 import {
@@ -93,7 +94,9 @@ function ScheduleContent() {
   const [deleting, setDeleting] = React.useState<ScheduleJob | undefined>(undefined)
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [filteredRows, setFilteredRows] = React.useState<ScheduleRow[]>([])
-  const [view, setView] = React.useState<"list" | "table">("list")
+  const [view, setView] = React.useState<"list" | "table" | "calendar">("list")
+  // The date "Schedule Job" opens on — today, or the day picked in the Calendar.
+  const [formDefaultDate, setFormDefaultDate] = React.useState(todayIso)
   const [tableDate, setTableDate] = React.useState(todayIso)
   // The tab follows the address (?tab=pendingSchedule etc.), so a link — e.g.
   // the Daily Report's "generated drafts are waiting" note — opens it and a
@@ -355,6 +358,16 @@ function ScheduleContent() {
                 >
                   <Table2 className="h-3.5 w-3.5" /> {t("tableView")}
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={view === "calendar" ? "default" : "ghost"}
+                  className="gap-1.5"
+                  onClick={() => setView("calendar")}
+                  data-testid="schedule-view-calendar"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" /> {t("calendarView")}
+                </Button>
               </div>
               {/* List view only — Table View already has its own Print
                   button for its differently-shaped, resolved-against-
@@ -376,6 +389,7 @@ function ScheduleContent() {
                   className="gap-1.5"
                   onClick={() => {
                     setEditing(undefined)
+                    setFormDefaultDate(todayIso())
                     setFormOpen(true)
                   }}
                 >
@@ -403,6 +417,24 @@ function ScheduleContent() {
         <TabsContent value="schedule" className="mt-4">
       {view === "table" ? (
           <ScheduleTableView date={tableDate} onDateChange={setTableDate} />
+        ) : view === "calendar" ? (
+          // The month picked above (or this month when it's "All months"),
+          // with drafts included — the whole month as planned.
+          <ScheduleMonthCalendar
+            jobs={jobsWithOrder}
+            month={monthFilter === "all" ? todayIso().slice(0, 7) : monthFilter}
+            onMonthChange={setMonthFilter}
+            canEdit={isAdmin}
+            onScheduleJob={(date) => {
+              setEditing(undefined)
+              setFormDefaultDate(date)
+              setFormOpen(true)
+            }}
+            onOpenJob={(job) => {
+              setEditing(job)
+              setFormOpen(true)
+            }}
+          />
         ) : (
           <SplitViewLayout
           isOpen={selection.isOpen}
@@ -531,7 +563,7 @@ function ScheduleContent() {
           setFormOpen(o)
           if (!o) setEditing(undefined)
         }}
-        defaultDate={todayIso()}
+        defaultDate={formDefaultDate}
         job={editing}
       />
 

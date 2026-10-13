@@ -2,6 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { businessToday, earliestFullNoticeDate, isShortNotice } from "@/lib/dispatch-lead-time"
+import { nextWorkingDay } from "@/lib/schedule-timeframe"
 import type { AutomationResult } from "../types"
 
 // Daily safety net for the confirmation-email lead time (dispatch-lead-time.ts):
@@ -9,7 +10,8 @@ import type { AutomationResult } from "../types"
 // otherwise sit at short notice, and approving it later couldn't send the
 // customer a confirmation with full notice. Every still-pending Draft whose
 // visit is today or tomorrow is moved (its rescheduled date, Pre D) to the
-// earliest date with full notice (Sunday → Monday), so it stays approvable
+// earliest working day with full notice (Monday to Friday — a Saturday or
+// Sunday becomes the following Monday, like the draft generator), so it stays approvable
 // in time. A Draft dated in the PAST is left alone: that's overdue backlog
 // (e.g. a newly entered order's long-past first payment) needing an admin's
 // decision, not a visit that just slipped — it stays under the queues'
@@ -30,7 +32,10 @@ export async function redateShortNoticeDrafts(
   opts: { onlyOrders?: (orderNo: string) => boolean; today?: string } = {}
 ): Promise<AutomationResult> {
   const today = opts.today ?? businessToday()
-  const newDate = earliestFullNoticeDate(today)
+  // Automatic moves follow the Monday-to-Friday rule (schedule-timeframe.ts);
+  // earliestFullNoticeDate itself only skips Sunday, which an admin's own
+  // "move the date" choice in /api/dispatch/approve still uses.
+  const newDate = nextWorkingDay(earliestFullNoticeDate(today))
   const moved: { table: string; order: string; from: string }[] = []
   const errors: string[] = []
 
@@ -58,7 +63,7 @@ export async function redateShortNoticeDrafts(
   return {
     ok: errors.length === 0,
     message: moved.length
-      ? `Moved ${moved.length} unapproved Draft(s) due today or tomorrow to ${newDate} (earliest date with 2 days' notice); ${errors.length} error(s).`
+      ? `Moved ${moved.length} unapproved Draft(s) due today or tomorrow to ${newDate} (earliest working day with 2 days' notice); ${errors.length} error(s).`
       : `No unapproved Drafts due today or tomorrow${errors.length ? `; ${errors.length} error(s)` : ""}.`,
     detail: { today, newDate, moved, errors },
   }

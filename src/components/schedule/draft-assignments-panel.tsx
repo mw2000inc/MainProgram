@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,7 +20,7 @@ import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { todayIso } from "@/lib/utils"
+import { cn, todayIso } from "@/lib/utils"
 
 const ENTITY_TYPE_LABEL: Record<DraftEntityType, string> = {
   filter_change_plans: "Filter Change",
@@ -50,12 +51,16 @@ function useEntityLabel(draft: DraftAssignment): string {
 
 function DraftRow({
   draft,
+  included,
+  onIncludedChange,
   override,
   onOverrideChange,
   onReject,
   rejecting,
 }: {
   draft: DraftAssignment
+  included: boolean
+  onIncludedChange: () => void
   override: { technician: string; technician2: string }
   onOverrideChange: (next: { technician: string; technician2: string }) => void
   onReject: () => void
@@ -63,7 +68,11 @@ function DraftRow({
 }) {
   const label = useEntityLabel(draft)
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between">
+    <div
+      className={cn("flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between", !included && "opacity-50")}
+      data-testid="draft-assignment-row"
+    >
+      <Checkbox checked={included} onCheckedChange={onIncludedChange} aria-label="Include in this batch" className="mt-1" data-testid="draft-assignment-include" />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{ENTITY_TYPE_LABEL[draft.entityType]}</Badge>
@@ -115,10 +124,22 @@ export function DraftAssignmentsPanel() {
   // and handleApproveAll), so there's no need to pre-seed or prune this as
   // `drafts` changes.
   const [overrides, setOverrides] = React.useState<Record<string, { technician: string; technician2: string }>>({})
+  // Rows the admin unticked (left out of this batch) — tracked as exclusions
+  // so a newly generated draft starts ticked.
+  const [excluded, setExcluded] = React.useState<Set<string>>(new Set())
+  const toggleExcluded = (id: string) =>
+    setExcluded((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const selectedDrafts = drafts.filter((d) => !excluded.has(d.id))
 
+  // Approves only the ticked rows, with any technician edits.
   async function handleApproveAll() {
     await approve.mutateAsync(
-      drafts.map((d) => ({
+      selectedDrafts.map((d) => ({
         id: d.id,
         entityType: d.entityType,
         entityId: d.entityId,
@@ -142,8 +163,14 @@ export function DraftAssignmentsPanel() {
             <Sparkles className="h-4 w-4" /> {generate.isPending ? "Generating..." : "Generate"}
           </Button>
           {drafts.length > 0 && (
-            <Button type="button" className="gap-1.5" onClick={handleApproveAll} disabled={approve.isPending}>
-              {approve.isPending ? "Approving..." : `Approve All (${drafts.length})`}
+            <Button
+              type="button"
+              className="gap-1.5"
+              onClick={handleApproveAll}
+              disabled={approve.isPending || selectedDrafts.length === 0}
+              data-testid="draft-assignments-approve"
+            >
+              {approve.isPending ? "Approving..." : `Confirm & Approve (${selectedDrafts.length} of ${drafts.length})`}
             </Button>
           )}
         </div>
@@ -160,6 +187,8 @@ export function DraftAssignmentsPanel() {
               <DraftRow
                 key={d.id}
                 draft={d}
+                included={!excluded.has(d.id)}
+                onIncludedChange={() => toggleExcluded(d.id)}
                 override={overrides[d.id] ?? { technician: d.proposedTechnician, technician2: d.proposedTechnician2 }}
                 onOverrideChange={(next) => setOverrides((prev) => ({ ...prev, [d.id]: next }))}
                 onReject={() => reject.mutate([d.id])}
