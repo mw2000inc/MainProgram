@@ -46,3 +46,7 @@ next-env.d.ts
 # populate-inventory.ts backups and dry-run logs (live data, never commit)
 /scripts/backups/
 /scripts/logs/
+
+# AppSheet exports used for read-only comparisons (live customer data, never commit)
+/appsheet-*.csv
+/appsheet-*.xlsx
