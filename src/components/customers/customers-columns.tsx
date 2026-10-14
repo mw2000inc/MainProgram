@@ -66,6 +66,21 @@ function RowActionsCell({
   )
 }
 
+// Member Account# order: the last 4 digits as a number; equal endings by the
+// whole value (natural compare); a value with no digits after every one that
+// has them, then by plain text.
+export function compareMemberAccountNumbers(a: string, b: string): number {
+  const lastFour = (v: string) => {
+    const digits = v.replace(/\D/g, "").slice(-4)
+    return digits ? Number.parseInt(digits, 10) : Number.NaN
+  }
+  const na = lastFour(a)
+  const nb = lastFour(b)
+  if (Number.isNaN(na) !== Number.isNaN(nb)) return Number.isNaN(na) ? 1 : -1
+  if (!Number.isNaN(na) && na !== nb) return na - nb
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+}
+
 // Matches the old AppSheet "Member List" screen's column layout exactly.
 export function getCustomerColumns({
   canDelete,
@@ -78,15 +93,16 @@ export function getCustomerColumns({
 }): ColumnDef<CustomerRow, unknown>[] {
   return [
     {
-      // Sorted on the trimmed value with a natural (numeric-aware) compare:
+      // Sorted by the account's last 4 digits as a number ("3728-000-0000-0799"
+      // → 799, "0007-000-0000-0010" → 10), so ascending runs 0001 → 9999
+      // whatever the prefix — see compareMemberAccountNumbers. Trimmed first:
       // some imported account numbers carry leading spaces or trailing tabs
-      // (" 3106-000-0000-0024", "0001-000-0000-0796\t"), which otherwise sort
-      // ahead of every digit. Blank ones (undefined here) always go last.
+      // (" 3106-000-0000-0024", "0001-000-0000-0796\t"). Blank ones
+      // (undefined here) always go last, in either direction.
       id: "memberAccountNumber",
       accessorFn: (row) => row.memberAccountNumber?.trim() || undefined,
       sortUndefined: "last",
-      sortingFn: (a, b, id) =>
-        String(a.getValue(id)).localeCompare(String(b.getValue(id)), undefined, { numeric: true, sensitivity: "base" }),
+      sortingFn: (a, b, id) => compareMemberAccountNumbers(String(a.getValue(id)), String(b.getValue(id))),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       meta: { headerClassName: "w-[150px] max-w-[150px] truncate", cellClassName: "w-[150px] max-w-[150px] truncate" },
       cell: ({ row }) => (
