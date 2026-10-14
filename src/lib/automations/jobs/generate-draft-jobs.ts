@@ -14,6 +14,10 @@ import type { AutomationContext, AutomationResult } from "../types"
 // month of Filter Changes and Collections in advance.
 const LOOKBACK_DAYS = 3
 const LOOKAHEAD_DAYS = 30
+// Visits dated before this day are never drafted automatically (admin,
+// 2026-10-14: October 2026's automatic drafts were cleared and October is
+// scheduled by hand). Visits from this day on are drafted as usual.
+export const AUTO_DRAFT_FROM = "2026-11-01"
 
 // Pre-schedules the Daily Report's upcoming visits as DRAFT jobs for an admin
 // to review. For every still-pending (confirmed or not yet confirmed) Filter Change or
@@ -167,7 +171,12 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
   let skippedOpenJob = 0
   const bySource: Record<string, number> = {}
   const errors: string[] = []
+  let skippedBeforeStart = 0
   for (const visit of visits.sort((a, b) => a.date.localeCompare(b.date))) {
+    if (visit.date < AUTO_DRAFT_FROM) {
+      skippedBeforeStart++
+      continue
+    }
     const dedupeKey = `${visit.jobType}|${visit.orderNo}`
     if (visit.orderNo && openJob.has(dedupeKey)) {
       skippedOpenJob++
@@ -221,7 +230,7 @@ export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<Aut
 
   return {
     ok: errors.length === 0,
-    message: `Drafted ${drafted} job(s) from ${visits.length} unscheduled visit(s) (${start} to ${end}); ${skippedOpenJob} skipped (order already has an open job); ${errors.length} error(s).`,
-    detail: { window: { start, end }, visits: visits.length, drafted, skippedOpenJob, bySource, errors },
+    message: `Drafted ${drafted} job(s) from ${visits.length} unscheduled visit(s) (${start} to ${end}); ${skippedOpenJob} skipped (order already has an open job); ${skippedBeforeStart} skipped (dated before ${AUTO_DRAFT_FROM}); ${errors.length} error(s).`,
+    detail: { window: { start, end }, visits: visits.length, drafted, skippedOpenJob, skippedBeforeStart, bySource, errors },
   }
 }
