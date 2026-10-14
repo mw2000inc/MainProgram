@@ -1,4 +1,11 @@
 {
+  "inOutColumn": "입고 / 출고",
+  "badgeUnitIn": "기기 입고",
+  "badgeUnitOut": "기기 출고",
+  "badgeReplacementOut": "기기 출고 (교체)",
+  "badgeReplacementIn": "기기 입고 (회수)",
+  "badgePartOut": "부품 출고",
+  "badgePartIn": "부품 입고",
   "editTitle": "수리 계획 수정",
   "addTitle": "수리 계획 추가",
   "editDescription": "이 수리 기록을 업데이트합니다.",

@@ -162,7 +162,8 @@ export function useStockMovementRows() {
       // install or repair that queued it.
       const fc = !job && m.filterChangePlanId ? fcById.get(m.filterChangePlanId) : undefined
       const install = !job && m.installPlanId ? installById.get(m.installPlanId) : undefined
-      const repairId = !job && m.repairPlanPartId ? repairPlanIdByPart[m.repairPlanPartId] : undefined
+      // A repair part's movement names its part; a replacement unit's, the repair.
+      const repairId = !job ? (m.repairPlanId ?? (m.repairPlanPartId ? repairPlanIdByPart[m.repairPlanPartId] : undefined)) : undefined
       const repair = repairId ? repairById.get(repairId) : undefined
       const related = job
         ? { customer: customer ? customer.companyName || customer.fullName : undefined, order: job.orderNo }
@@ -193,7 +194,8 @@ export function useStockMovementRows() {
           m.scheduleJobId ??
           (m.filterChangePlanId ? fcById.get(m.filterChangePlanId)?.scheduleJobId : undefined) ??
           (m.installPlanId ? installById.get(m.installPlanId)?.scheduleJobId : undefined) ??
-          (m.repairPlanPartId ? repairById.get(repairPlanIdByPart[m.repairPlanPartId] ?? "")?.scheduleJobId : undefined),
+          (m.repairPlanPartId ? repairById.get(repairPlanIdByPart[m.repairPlanPartId] ?? "")?.scheduleJobId : undefined) ??
+          (m.repairPlanId ? repairById.get(m.repairPlanId)?.scheduleJobId : undefined),
       }
     })
   }, [movements, products, users, scheduleJobs, customers, filterChangePlans, installPlans, repairPlans, repairPlanIdByPart])

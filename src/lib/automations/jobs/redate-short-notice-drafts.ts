@@ -16,7 +16,9 @@ import type { AutomationResult } from "../types"
 // (e.g. a newly entered order's long-past first payment) needing an admin's
 // decision, not a visit that just slipped — it stays under the queues'
 // "Overdue" filter. Never approves, sends an email, or touches a non-Draft
-// record — Step 1 (admin approval) stays with the admin. Runs before the
+// record — Step 1 (admin approval) stays with the admin. A record already
+// linked to a schedule job (drafted, approved) is left alone: approval first —
+// the admin approves that job for its own date, same-day included. Runs before the
 // reminder emails in the 6:00 AM (Manila) cron; the audit trigger records
 // every move.
 const TABLES = [
@@ -41,6 +43,9 @@ export async function redateShortNoticeDrafts(
 
   for (const t of TABLES) {
     const { data, error } = await admin.from(t.table).select(`id, ${t.pre}, ${t.base}, ${t.order}`).eq("dispatch_status", "Draft").eq("status", "Pending")
+      // A record that already has a schedule job is scheduled — the admin
+      // approves that job for its date (today included); it's never moved.
+      .is("schedule_job_id", null)
     if (error) {
       errors.push(`${t.table}: ${error.message}`)
       continue

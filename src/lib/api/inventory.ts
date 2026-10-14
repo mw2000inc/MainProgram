@@ -141,6 +141,7 @@ type StockMovementRow = {
   filter_change_plan_id?: string | null
   repair_plan_part_id?: string | null
   install_plan_id?: string | null
+  repair_plan_id?: string | null
   item_label?: string | null
   status: string
   approved_at: string | null
@@ -167,6 +168,7 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     filterChangePlanId: row.filter_change_plan_id ?? undefined,
     repairPlanPartId: row.repair_plan_part_id ?? undefined,
     installPlanId: row.install_plan_id ?? undefined,
+    repairPlanId: row.repair_plan_id ?? undefined,
     itemLabel: row.item_label ?? undefined,
     status: (row.status as StockMovement["status"]) ?? "approved",
     approvedAt: row.approved_at ?? undefined,

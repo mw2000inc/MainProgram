@@ -37,6 +37,9 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // Extra buttons shown in the panel header, before +Add (e.g. the
   // Inventory List's Approve All Pending).
   headerActions?: React.ReactNode
+  // A line above the rows (and in the expanded view), e.g. the Daily
+  // Report's "N awaiting approval".
+  notice?: React.ReactNode
   // Optional: different rows for the expanded (Maximize2) dialog than the
   // compact panel, e.g. the Inventory List's per-item totals across jobs.
   expandedData?: TData[]
@@ -145,6 +148,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   canAdd,
   addLabel,
   headerActions,
+  notice,
   expandedData,
   expandedToolbar,
   onExpandedChange,
@@ -409,6 +413,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
             instead of just more blank space below a fixed-size table. */}
         <CardContent ref={contentRef} className={cn("flex-1 flex flex-col space-y-2", !growToFit && "min-h-0")}>
           {selectionBar}
+          {notice}
           {loading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">{t("loading")}</div>
           ) : (
@@ -440,6 +445,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {statusRow}
             {selectionBar}
+            {notice}
             {table(dialogColumns, Math.max(filteredExpandedData.length, 1), true)}
           </div>
         </DialogContent>

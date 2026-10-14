@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase/client"
 import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
+import { stockMovementsKey } from "@/lib/hooks/use-inventory"
 import * as api from "@/lib/api/repair-plans"
 import type { RepairPlan } from "@/lib/types"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -19,6 +20,7 @@ export function useCreateRepairPlan() {
     mutationFn: (input: Omit<RepairPlan, "id" | "createdAt">) => api.createRepairPlan(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success("Repair plan added")
     },
     onError: () => toast.error("Failed to add repair plan"),
@@ -46,6 +48,7 @@ export function useUpdateRepairPlan() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success("Repair plan updated")
     },
     onError: () => toast.error("Failed to update repair plan"),
@@ -59,6 +62,7 @@ export function useDeleteRepairPlans() {
     mutationFn: (ids: string[]) => (ids.length === 1 ? api.deleteRepairPlan(ids[0]) : api.deleteRepairPlans(ids)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: repairPlansKey })
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success(t("removed"))
     },
     onError: () => toast.error(t("failedToRemove")),

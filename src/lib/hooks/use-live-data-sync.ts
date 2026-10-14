@@ -21,6 +21,8 @@ const KEYS_BY_TABLE: Record<string, QueryKey[]> = {
   repair_plans: [repairPlansKey],
   collections: [collectionsKey],
   stock_movements: [stockMovementsKey, productsKey],
+  // Every repair's parts and each repair's own list (20261106000000).
+  repair_plan_parts: [["repairPlanParts"]],
   // The Member list's "new" (green) flag, cleared by any admin (20261031000000).
   customers: [customersKey],
 }

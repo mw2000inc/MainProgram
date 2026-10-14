@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import * as api from "@/lib/api/repair-plan-parts"
+import { stockMovementsKey } from "@/lib/hooks/use-inventory"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { toast } from "sonner"
 
@@ -40,6 +41,8 @@ export function useCreateRepairPlanPart() {
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
       qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
+      // Its pending Inventory movement was queued / updated / removed.
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success("Part added")
     },
     onError: () => toast.error("Failed to add part"),
@@ -54,6 +57,8 @@ export function useUpdateRepairPlanPart() {
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
       qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
+      // Its pending Inventory movement was queued / updated / removed.
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success("Part updated")
     },
     onError: () => toast.error("Failed to update part"),
@@ -68,6 +73,8 @@ export function useDeleteRepairPlanPart() {
     onSuccess: (_data, { repairPlanId }) => {
       qc.invalidateQueries({ queryKey: repairPlanPartsKey(repairPlanId) })
       qc.invalidateQueries({ queryKey: allRepairPlanPartsKey })
+      // Its pending Inventory movement was queued / updated / removed.
+      qc.invalidateQueries({ queryKey: stockMovementsKey })
       toast.success(t("removed"))
     },
     onError: () => toast.error(t("failedToRemove")),

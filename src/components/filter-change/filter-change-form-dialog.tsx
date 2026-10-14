@@ -45,6 +45,7 @@ import { extractCityLabel } from "@/lib/geo/city-label"
 import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
 import { statusForAccD } from "@/components/filter-change/filter-change-columns"
+import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 
 // A factory, not a module-scope constant — validation messages need t(),
 // which only exists once useTranslation() has run inside the component (see
@@ -132,6 +133,7 @@ export function FilterChangeFormDialog({
 }) {
   const isEdit = !!plan
   const createPlan = useCreateFilterChangePlan()
+  const ensureVisitDraftJob = useVisitDraftJob()
   const updatePlan = useUpdateFilterChangePlan()
   const suggestTechnician = useSuggestTechnician()
   const suggestion = suggestTechnician.data ?? null
@@ -264,6 +266,25 @@ export function FilterChangeFormDialog({
         // stay at the 'Confirmed' default set at the database layer (see the
         // dispatch_confirmation_workflow migration).
         await createPlan.mutateAsync({ ...input, status: statusForAccD(values.accD), dispatchStatus: "Draft" })
+    // Approval first: a new, still-pending Filter Change gets its draft job
+    // straight away — on its Pre D, else its Plan D (today included) — with
+    // the order, member, address, technician(s) and filters, waiting in
+    // Schedule › Pending Schedule Approval under that date (useVisitDraftJob).
+    if (!isEdit && saved.status === "Pending") {
+      await ensureVisitDraftJob({
+        table: "filter_change_plans",
+        jobType: "filter_change",
+        recordId: saved.id,
+        existingJobId: saved.scheduleJobId,
+        date: values.preD || values.planDate,
+        orderNo: values.orderNumber,
+        address: input.address,
+        technician: input.serviceman,
+        technician2: input.serviceman2,
+        notes: [values.memberAccount, values.filterType].filter(Boolean).join(" — "),
+        filterCodes: values.filterType,
+      })
+    }
     onSaved?.(saved)
     onOpenChange(false)
   }

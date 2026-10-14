@@ -36,6 +36,7 @@ import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { formatFilterCodes } from "@/lib/filter-codes"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
+import { scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { useQueryClient } from "@tanstack/react-query"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -781,21 +782,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     // keeps this one view correct on its own even if a future RLS change
     // ever loosened the server-side policy. An admin still sees every
     // technician's jobs, same as before.
-    const filtered = jobs.filter(
-      (j) =>
-        j.scheduledDate >= range.start &&
-        j.scheduledDate <= range.end &&
-        (isAdmin || j.technicianUserId === user?.id || j.technician2UserId === user?.id)
-    )
-    // Day first (a multi-day timeframe), then technician and route order.
-    return [...filtered].sort((a, b) => {
-      if (a.scheduledDate !== b.scheduledDate) return a.scheduledDate.localeCompare(b.scheduledDate)
-      if (a.technician !== b.technician) return a.technician.localeCompare(b.technician)
-      if (a.routeSequence == null && b.routeSequence == null) return 0
-      if (a.routeSequence == null) return 1
-      if (b.routeSequence == null) return -1
-      return a.routeSequence - b.routeSequence
-    })
+    // The shared list (scheduleDayJobs) — the Daily Report's Filter Change /
+    // Collection / Install / Repair panels read the same one for the day.
+    return scheduleDayJobs(jobs, range, { isAdmin, userId: user?.id })
   }, [jobs, range, isAdmin, user?.id])
 
   // Approval first: the panel — list, counts, export, stop numbers — shows

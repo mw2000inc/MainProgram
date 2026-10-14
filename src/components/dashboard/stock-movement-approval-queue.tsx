@@ -121,7 +121,7 @@ export function StockMovementApprovalQueue({
       const plan = m.filterChangePlanId ? fcById.get(m.filterChangePlanId) : undefined
       const job = !plan && m.scheduleJobId ? jobById.get(m.scheduleJobId) : undefined
       const install = !plan && !job && m.installPlanId ? installById.get(m.installPlanId) : undefined
-      const repairId = !plan && !job && !install && m.repairPlanPartId ? repairPlanIdByPart[m.repairPlanPartId] : undefined
+      const repairId = !plan && !job && !install ? (m.repairPlanId ?? (m.repairPlanPartId ? repairPlanIdByPart[m.repairPlanPartId] : undefined)) : undefined
       const repair = repairId ? repairById.get(repairId) : undefined
       if (plan) {
         const codes = [...new Set(plan.filterType.split(",").map((c) => c.trim()).filter(Boolean))]
@@ -171,7 +171,7 @@ export function StockMovementApprovalQueue({
           // together rather than showing as one group each.
           key: m.referenceNumber ? `ref-${m.reason}-${m.referenceNumber}` : `mv-${m.id}`,
           serviceType:
-            m.reason === "Repair" ? "repair" : m.reason === "Filter Change" ? "filter_change" : m.reason === "Installation" ? "installation" : "other",
+            m.reason === "Repair" || m.reason === "Repair Unit" ? "repair" : m.reason === "Filter Change" ? "filter_change" : m.reason === "Installation" ? "installation" : "other",
           customer: m.relatedCustomerName ?? "",
           orderNo: m.referenceNumber,
           technician: "",

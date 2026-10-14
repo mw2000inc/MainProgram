@@ -28,7 +28,8 @@ import { JOB_TYPE_LABELS } from "@/components/schedule/schedule-columns"
 import { ScheduleFormDialog } from "@/components/schedule/schedule-form-dialog"
 import { JobApprovalReview, type JobApprovalEdit } from "@/components/schedule/job-approval-review"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDate, tomorrowIso } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
 
@@ -312,7 +313,7 @@ export function PendingScheduleApprovalPanel() {
           setFormOpen(o)
           if (!o) setReviewing(undefined)
         }}
-        defaultDate={reviewing?.scheduledDate ?? tomorrowIso()}
+        defaultDate={reviewing?.scheduledDate ?? businessToday()}
         job={reviewing}
       />
       <JobApprovalReview

@@ -1,5 +1,5 @@
 import { TECHNICIANS, VEHICLE_CREWS } from "@/lib/constants"
-import { crewOfTechnician, isAssignedTechnician, matchTechnicianAccount, normalizeTechnicianPair, type TechnicianAccount } from "@/lib/technicians"
+import { crewOfTechnician, isAssignedTechnician, isAutoAssignableTechnician, matchTechnicianAccount, normalizeTechnicianPair, type TechnicianAccount } from "@/lib/technicians"
 import type { Customer, ScheduleJob } from "@/lib/types"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { isSaturday } from "@/lib/schedule-timeframe"
@@ -44,6 +44,13 @@ import { haversineKm, NEARBY_KM, neighborhoodKeys, toPoint, type Point } from "@
 // Crews always travel together: if either technician is a crew member, or
 // the vehicle is a crew's vehicle, the job gets the whole crew (Eubert
 // Montalbo AND Jayson Sapitin) and that vehicle — both logins linked.
+//
+// NEVER MELL, BUTCH OR PRITZ (AUTO_ASSIGN_EXCLUDED_TECHNICIANS): every rule
+// above skips a pair whose technician is one of them (a second technician
+// who is one is just dropped), and a team of theirs is never joined — the
+// next rule decides instead. So only the field technicians with logins are
+// ever picked: Jerson Capellan, Joselito Camperoso, Jeric Salirio, and the
+// Liteace crew (Eubert Montalbo + Jayson Sapitin).
 //
 // SATURDAYS ARE NEVER AUTO-ASSIGNED ("saturday"): technician availability
 // changes every Saturday, so a Saturday job is always left Unassigned, with
@@ -91,7 +98,7 @@ export function previousTechniciansByOrder(
 // The field technicians automatic assignment (and Saturday coverage) can use:
 // login accounts whose name is on the TECHNICIANS roster, alphabetically.
 export function fieldTechnicianNames(accounts: TechnicianAccount[]): string[] {
-  const roster = TECHNICIANS.filter(isAssignedTechnician)
+  const roster = TECHNICIANS.filter(isAutoAssignableTechnician)
   return accounts
     .filter((account) => roster.some((name) => matchTechnicianAccount(name, [account])))
     .map((account) => account.name)
@@ -116,6 +123,10 @@ export function createDispatchAssigner(input: {
 }): (visit: UnscheduledVisit, date: string) => DispatchAssignment {
   // Field technicians eligible for balancing: accounts that are on the roster.
   const fieldTechnicians = fieldTechnicianNames(input.accounts)
+  // A pair automatic assignment may use: its technician auto-assignable (else
+  // none), a second one who isn't dropped.
+  const usable = (p: { primary: string; secondary: string } | undefined) =>
+    p && isAutoAssignableTechnician(p.primary) ? { primary: p.primary, secondary: isAutoAssignableTechnician(p.secondary) ? p.secondary : "" } : undefined
 
   // Each technician's errands per day (see errandOf): distinct places.
   const errands = new Map<string, Set<string>>()
@@ -156,7 +167,7 @@ export function createDispatchAssigner(input: {
   type Team = { pair: { primary: string; secondary: string }; vehicle: string }
   const teamAt = new Map<string, Team>()
   const rememberTeam = (keys: string[], team: Team) => {
-    if (!isAssignedTechnician(team.pair.primary)) return
+    if (!isAutoAssignableTechnician(team.pair.primary)) return
     for (const k of keys) if (!teamAt.has(k)) teamAt.set(k, team)
   }
   // Every assigned stop per day, for the neighborhood match: its map point
@@ -167,7 +178,7 @@ export function createDispatchAssigner(input: {
     return toPoint(lat, lon) ?? toPoint(customer?.latitude, customer?.longitude)
   }
   const rememberStop = (date: string, point: Point | undefined, address: string | undefined, team: Team) => {
-    if (isAssignedTechnician(team.pair.primary)) stops.push({ date, point, keys: neighborhoodKeys(address), team })
+    if (isAutoAssignableTechnician(team.pair.primary)) stops.push({ date, point, keys: neighborhoodKeys(address), team })
   }
   // The closest same-day team within NEARBY_KM; without coordinates on
   // either side, the first one sharing a neighborhood key.
@@ -205,7 +216,7 @@ export function createDispatchAssigner(input: {
     if (isSaturday(date)) return { pair: { primary: "", secondary: "" }, vehicle: "", source: "saturday" }
     const keys = placeKeys(date, visit.customerId, visit.address)
     const point = pointOf(visit.customerId)
-    let pair = normalizeTechnicianPair(isAssignedTechnician(visit.technician) ? visit.technician : "", visit.technician2)
+    let pair = usable(normalizeTechnicianPair(visit.technician, visit.technician2)) ?? { primary: "", secondary: "" }
     let source: AssignmentSource = "planned"
     let teamVehicle = ""
     let nearby: Team | undefined
@@ -233,9 +244,9 @@ export function createDispatchAssigner(input: {
       source = "location"
     } else if (!isAssignedTechnician(pair.primary)) {
       const customer = visit.customerId ? customerById.get(visit.customerId) : undefined
-      const customerPair = customer ? normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2) : undefined
+      const customerPair = usable(customer ? normalizeTechnicianPair(customer.assignedTechnician, customer.assignedTechnician2) : undefined)
       const candidates = fieldTechnicians.filter((name) => !isFullCrew({ primary: name, secondary: "" }))
-      const previousPair = input.previous?.get((visit.orderNo ?? "").trim())
+      const previousPair = usable(input.previous?.get((visit.orderNo ?? "").trim()))
       if (customerPair && isAssignedTechnician(customerPair.primary) && !isFullCrew(customerPair)) {
         pair = customerPair
         source = "customer"

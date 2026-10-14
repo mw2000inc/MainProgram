@@ -1,4 +1,8 @@
 {
+  "awaitingApproval": "Awaiting approval",
+  "awaitingApprovalNotice": "{count} of {total} awaiting approval — approve their jobs in Schedule › Pending Schedule Approval before marking them complete.",
+  "awaitingApprovalNoticeAmount": "{count} of {total} awaiting approval ({amount} of {totalAmount}) — approve their jobs in Schedule › Pending Schedule Approval before marking them collected.",
+  "awaitingApprovalCannotComplete": "Its job is awaiting approval — approve it in Schedule › Pending Schedule Approval first.",
   "title": "Pending Dispatch Approval",
   "description": "Newly-scheduled Filter Change, Installation, Collection, and Repair items wait here for admin approval. Approving sends a real email to the address entered below.",
   "approving": "Approving...",

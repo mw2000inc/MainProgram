@@ -1,4 +1,11 @@
 {
+  "inOutColumn": "In / Out",
+  "badgeUnitIn": "UNIT IN",
+  "badgeUnitOut": "UNIT OUT",
+  "badgeReplacementOut": "UNIT OUT (replacement)",
+  "badgeReplacementIn": "UNIT IN (pulled out)",
+  "badgePartOut": "PART OUT",
+  "badgePartIn": "PART IN",
   "editTitle": "Edit Repair Plan",
   "addTitle": "Add Repair Plan",
   "editDescription": "Update this repair record.",

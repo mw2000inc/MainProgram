@@ -4,7 +4,7 @@ import { geocodeWithFallback, type GeoPoint } from "@/lib/nominatim-server"
 import { TECHNICIANS } from "@/lib/constants"
 import { haversineKm } from "./proximity"
 import { createDispatchAssigner, type AssignmentSource } from "./dispatch-assignment"
-import { assignmentAccounts, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, isAutoAssignableTechnician, technicianAccountIds } from "@/lib/technicians"
 import type { UnscheduledVisit } from "./unscheduled-visits"
 import type { ScheduleJobType } from "@/lib/types"
 
@@ -73,10 +73,10 @@ const DISTANCE_WEIGHT = 4
 // assignment is completely untouched by this — an admin can still type or
 // pick any of these three names directly into any technician field; only
 // this shared candidate pool an algorithm scores from is affected.
-const AUTO_SUGGEST_EXCLUDED = new Set<string>(["N/A", "Mell", "Butch", "Pritz"])
-
+// The list itself lives in lib/technicians.ts (AUTO_ASSIGN_EXCLUDED_TECHNICIANS),
+// shared with the draft assigner (dispatch-assignment.ts).
 export function autoSuggestTechnicianRoster(): string[] {
-  return TECHNICIANS.filter((t) => !AUTO_SUGGEST_EXCLUDED.has(t))
+  return TECHNICIANS.filter((t) => isAutoAssignableTechnician(t))
 }
 
 export type DispatchEntityType = "filter_change_plans" | "install_plans" | "collections" | "repair_plans"

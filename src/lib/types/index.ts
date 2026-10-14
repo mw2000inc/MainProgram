@@ -231,6 +231,8 @@ export type StockMovementReason =
   | "Adjustment"
   | "Filter Change"
   | "Repair"
+  // A repair's replacement unit going OUT / coming IN (20261106000000).
+  | "Repair Unit"
   | "Installation"
 
 export interface StockMovement {
@@ -257,6 +259,9 @@ export interface StockMovement {
   filterChangePlanId?: string
   repairPlanPartId?: string
   installPlanId?: string
+  // The repair whose replacement unit it is (IN / OUT + Model — the
+  // repair_inventory_directions migration); set only by that trigger.
+  repairPlanId?: string
   // What the job recorded, for an item not yet mapped to a product (an
   // install model or hand-typed repair part — see the
   // inventory_queue_installs_repairs migration). productId is "" until an

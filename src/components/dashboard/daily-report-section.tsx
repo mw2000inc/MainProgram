@@ -26,6 +26,7 @@ import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-
 import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { panelLinkJobs, scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
   getFilterChangeDailyReportExpandedColumns,
@@ -58,6 +59,7 @@ import { DailyReportExportMenu } from "@/components/dashboard/daily-report-expor
 import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
+import { useAllRepairPlanParts } from "@/lib/hooks/use-repair-plan-parts"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
 import { useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useApproveStockMovements, useRejectStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
@@ -67,8 +69,9 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import type { DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize } from "@/lib/types"
+import type { CollectionPlan, DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize, RepairPlan, RepairPlanPart } from "@/lib/types"
 import { completionDateFor } from "@/lib/completion-date"
+import { toast } from "sonner"
 
 // Every panel this section can render. "date" used to be one of these (a
 // full draggable/resizable card) — it's now a compact button in the toolbar
@@ -205,13 +208,93 @@ function DispatchStatusCell({ status }: { status: DispatchStatus | undefined }) 
 // all. Same "utility column bolted on at the panel, not the shared
 // definition" shape as DashboardPlanPanel's own select-mode checkbox
 // column.
-function withDispatchStatusColumn<T extends DispatchFields>(columns: ColumnDef<T, unknown>[]): ColumnDef<T, unknown>[] {
+// A row whose job is still a draft (it's on the panel because its job is on
+// the Schedule panel today) also gets "Awaiting approval".
+function withDispatchStatusColumn<T extends DispatchFields & { scheduleJobId?: string }>(
+  columns: ColumnDef<T, unknown>[],
+  isAwaiting: (row: T) => boolean
+): ColumnDef<T, unknown>[] {
   const statusColumn: ColumnDef<T, unknown> = {
     id: "__dispatchStatus",
     header: "",
-    cell: ({ row }) => <DispatchStatusCell status={row.original.dispatchStatus} />,
+    cell: ({ row }) =>
+      isAwaiting(row.original) ? (
+        <span className="flex items-center gap-1" data-testid="awaiting-approval-badge">
+          <AwaitingApprovalBadge />
+          <DispatchStatusCell status={row.original.dispatchStatus} />
+        </span>
+      ) : (
+        <DispatchStatusCell status={row.original.dispatchStatus} />
+      ),
   }
   return [statusColumn, ...columns]
+}
+
+// The Repair panel's "In / Out" column: the customer's unit (Unit In / Out —
+// not stock), a replacement unit going OUT to / coming IN from the customer
+// with its model, and each part with its part no. — OUT leaves stock, IN
+// comes back (both queued for approval in Inventory, 20261106000000).
+function withRepairInOutColumn(columns: ColumnDef<RepairPlan, unknown>[], partsByRepair: Map<string, RepairPlanPart[]>): ColumnDef<RepairPlan, unknown>[] {
+  const column: ColumnDef<RepairPlan, unknown> = {
+    id: "__repairInOut",
+    header: () => <RepairInOutHeader />,
+    cell: ({ row }) => <RepairInOutCell repair={row.original} parts={partsByRepair.get(row.original.id) ?? []} />,
+  }
+  return [columns[0], column, ...columns.slice(1)]
+}
+
+function RepairInOutHeader() {
+  const { t } = useTranslation("repair")
+  return <>{t("inOutColumn")}</>
+}
+
+function RepairInOutCell({ repair, parts }: { repair: RepairPlan; parts: RepairPlanPart[] }) {
+  const { t } = useTranslation("repair")
+  const unit = (repair.unitInOut ?? "").trim().toLowerCase()
+  const replacement = (repair.inOut ?? "").trim().toUpperCase()
+  const tone = (dir: string) => (dir === "OUT" ? "danger" : "success")
+  return (
+    <div className="flex min-w-48 max-w-80 flex-wrap items-center gap-1 py-0.5" data-testid="repair-in-out">
+      {(unit === "in" || unit === "out") && <StatusBadge tone="neutral" label={t(unit === "in" ? "badgeUnitIn" : "badgeUnitOut")} />}
+      {(replacement === "IN" || replacement === "OUT") && repair.model?.trim() && (
+        <span className="flex items-center gap-1" title={repair.model}>
+          <StatusBadge tone={tone(replacement)} label={t(replacement === "OUT" ? "badgeReplacementOut" : "badgeReplacementIn")} />
+          <span className="max-w-40 truncate text-xs">{repair.model}</span>
+        </span>
+      )}
+      {parts.map((p) => {
+        const label = p.productSku || p.productName
+        return (
+          <span key={p.id} className="flex items-center gap-1" title={p.productName}>
+            <StatusBadge tone={tone(p.inOut)} label={t(p.inOut === "OUT" ? "badgePartOut" : "badgePartIn")} />
+            <span className="text-xs">
+              {label}
+              {p.quantity !== 1 ? ` ×${p.quantity}` : ""}
+            </span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function AwaitingApprovalBadge() {
+  const { t } = useTranslation("dispatch")
+  return <StatusBadge tone="warning" label={t("awaitingApproval")} />
+}
+
+// Why a panel has rows that can't be completed yet; for Collections, how much
+// of the day's amount they are.
+function AwaitingApprovalNotice({ count, total, amount, totalAmount }: { count: number; total: number; amount?: number; totalAmount?: number }) {
+  const { t } = useTranslation("dispatch")
+  if (count === 0) return null
+  return (
+    <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs" data-testid="awaiting-approval-notice">
+      {amount !== undefined && totalAmount !== undefined
+        ? t("awaitingApprovalNoticeAmount", { count: String(count), total: String(total), amount: `₱${amount.toLocaleString()}`, totalAmount: `₱${totalAmount.toLocaleString()}` })
+        : t("awaitingApprovalNotice", { count: String(count), total: String(total) })}
+    </p>
+  )
 }
 
 // Row-level tint, applied on top of the badge column above — the two
@@ -431,7 +514,35 @@ export function DailyReportSection() {
   const { data: filterChangePlans = [], isPending: pFilter } = useFilterChangePlans()
   const { data: installPlans = [], isPending: pInstall } = useInstallPlans()
   const { data: repairPlans = [], isPending: pRepair } = useRepairPlans()
+  const { data: repairParts = [] } = useAllRepairPlanParts()
+  const partsByRepair = React.useMemo(() => {
+    const map = new Map<string, RepairPlanPart[]>()
+    for (const p of repairParts) map.set(p.repairPlanId, [...(map.get(p.repairPlanId) ?? []), p])
+    return map
+  }, [repairParts])
   const { data: collectionPlans = [], isPending: pCollections } = useCollections()
+  // The Schedule panel's own list for the report date (scheduleDayJobs, the
+  // same call ScheduleAgenda makes) — a record linked to one of these jobs
+  // (draft, approved or completed) is on its panel today, see the day lists
+  // below. A row whose job is still a draft is "awaiting approval": badged,
+  // counted, and it can't be completed or collected from the panel.
+  const { data: scheduleJobs = [] } = useScheduleJobs()
+  const reportDayJobs = React.useMemo(
+    () => panelLinkJobs(scheduleDayJobs(scheduleJobs, { start: reportDate, end: reportDate }, { isAdmin, userId: user?.id })),
+    [scheduleJobs, reportDate, isAdmin, user?.id]
+  )
+  const draftJobIds = React.useMemo(() => new Set(scheduleJobs.filter((j) => j.status === "pending_approval").map((j) => j.id)), [scheduleJobs])
+  const isAwaiting = React.useCallback((r: { scheduleJobId?: string }) => !!r.scheduleJobId && draftJobIds.has(r.scheduleJobId), [draftJobIds])
+  // false (and says why) when a change would complete / collect a row whose
+  // job isn't approved yet.
+  const allowCompletion = React.useCallback(
+    (r: { scheduleJobId?: string }, completes: boolean) => {
+      if (!completes || !isAwaiting(r)) return true
+      toast.error(tDispatch("awaitingApprovalCannotComplete"))
+      return false
+    },
+    [isAwaiting, tDispatch]
+  )
   // RLS returns this empty for a technician (stock_movements is admin-only
   // — see the technician_role migration) rather than erroring, so this is
   // safe to call unconditionally; the panel itself is hidden for that role
@@ -513,6 +624,7 @@ export function DailyReportSection() {
     () => ({
       onStatusChange: isAdmin
         ? (plan: FilterChangePlan, status: string) => {
+            if (!allowCompletion(plan, status === "Completed")) return
             const accD = completionDateFor(status, plan.status, plan.accD)
             updateFilterChangePlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
           }
@@ -523,11 +635,13 @@ export function DailyReportSection() {
       // column already uses, so the panel's own day-filtered rows update
       // immediately without a manual refetch.
       onFieldChange: isAdmin
-        ? (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) =>
+        ? (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => {
+            if (!allowCompletion(plan, !!patch.accD || patch.status === "Completed")) return
             updateFilterChangePlan.mutate({ id: plan.id, input: patch })
+          }
         : undefined,
     }),
-    [isAdmin, updateFilterChangePlan]
+    [isAdmin, updateFilterChangePlan, allowCompletion]
   )
   // The full 10-column set (getFilterChangeDailyReportExpandedColumns),
   // used for BOTH the compact panel and the Maximize2 dialog now — see the
@@ -538,8 +652,8 @@ export function DailyReportSection() {
   // narrower 5) is untouched and still used as-is by member-order-detail.tsx's
   // own embedded panel, which has its own, different reason to stay compact.
   const filterChangeColumns = React.useMemo(
-    () => withDispatchStatusColumn(getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams)),
-    [filterChangeColumnParams]
+    () => withDispatchStatusColumn(getFilterChangeDailyReportExpandedColumns(filterChangeColumnParams), isAwaiting),
+    [filterChangeColumnParams, isAwaiting]
   )
   const installColumns = React.useMemo(
     () =>
@@ -548,6 +662,7 @@ export function DailyReportSection() {
           getInstallColumns({
             onStatusChange: isAdmin
               ? (plan, status) => {
+                  if (!allowCompletion(plan, status === "Completed")) return
                   const installedDate = completionDateFor(status, plan.status, plan.installedDate)
                   updateInstallPlan.mutate({ id: plan.id, input: { status, ...(installedDate !== undefined ? { installedDate } : {}) } })
                 }
@@ -555,9 +670,10 @@ export function DailyReportSection() {
             onFieldChange: isAdmin ? (plan, patch) => updateInstallPlan.mutate({ id: plan.id, input: patch }) : undefined,
           }),
           visibleFieldsFor("installation")
-        )
+        ),
+        isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateInstallPlan]
+    [visibleFieldsFor, isAdmin, updateInstallPlan, allowCompletion, isAwaiting]
   )
   const repairColumns = React.useMemo(
     () =>
@@ -566,31 +682,46 @@ export function DailyReportSection() {
           getRepairColumns({
             onStatusChange: isAdmin
               ? (plan, status) => {
+                  if (!allowCompletion(plan, status === "Completed")) return
                   const accD = completionDateFor(status, plan.status, plan.accD)
                   updateRepairPlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
                 }
               : undefined,
           }),
           visibleFieldsFor("repair")
-        )
+        ),
+        isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateRepairPlan]
+    [visibleFieldsFor, isAdmin, updateRepairPlan, allowCompletion, isAwaiting]
+  )
+  const repairColumnsWithInOut = React.useMemo(() => withRepairInOutColumn(repairColumns, partsByRepair), [repairColumns, partsByRepair]
   )
   const collectionsColumns = React.useMemo(
     () =>
       withDispatchStatusColumn(
         filterColumnsByVisibility(
           getCollectionsDailyReportColumns({
-            onStatusChange: isAdmin ? (entry, status) => updateCollection.mutate({ id: entry.id, input: { status } }) : undefined,
+            onStatusChange: isAdmin
+              ? (entry, status) => {
+                  if (!allowCompletion(entry, status === "Collected" || status === "Completed")) return
+                  updateCollection.mutate({ id: entry.id, input: { status } })
+                }
+              : undefined,
             // C/T/Pre D/Acc D/Amount/Note/Serviceman edited straight from
             // the panel cell (see getCollectionsDailyReportColumns) — same
             // mutate-and-invalidate hook the status column above already uses.
-            onFieldChange: isAdmin ? (entry, patch) => updateCollection.mutate({ id: entry.id, input: patch }) : undefined,
+            onFieldChange: isAdmin
+              ? (entry, patch) => {
+                  if (!allowCompletion(entry, !!patch.accD)) return
+                  updateCollection.mutate({ id: entry.id, input: patch })
+                }
+              : undefined,
           }),
           visibleFieldsFor("collection")
-        )
+        ),
+        isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateCollection]
+    [visibleFieldsFor, isAdmin, updateCollection, allowCompletion, isAwaiting]
   )
   // Not one of the six admin-configurable sections (see the PanelId comment
   // above), so no visibleFieldsFor entry exists for it — always the full
@@ -652,7 +783,6 @@ export function DailyReportSection() {
   // Unscheduled Visits / drafts. A record already done always shows.
   // Technicians never receive draft jobs (RLS), so for them the same rule
   // holds automatically.
-  const { data: scheduleJobs = [] } = useScheduleJobs()
   const approvedJobIds = React.useMemo(
     () => new Set(scheduleJobs.filter((j) => j.status === "pending" || j.status === "completed").map((j) => j.id)),
     [scheduleJobs]
@@ -673,9 +803,17 @@ export function DailyReportSection() {
       status === "Pending" ? preD === reportDate : (preD || baseDate) === reportDate,
     [reportDate]
   )
+  // ...OR the record is linked to a job the Schedule panel lists today
+  // (reportDayJobs — draft, approved or completed), whatever its Pre D or
+  // confirmation: the four panels show everything the Schedule panel has for
+  // the day. A row with a draft job is marked "Awaiting approval" (above).
+  const onScheduleToday = React.useCallback((r: { scheduleJobId?: string }) => !!r.scheduleJobId && reportDayJobs.has(r.scheduleJobId), [reportDayJobs])
   const dayFilterChangePlans = React.useMemo(
-    () => filterChangePlans.filter((p) => isOnReportDay(p.status, p.preD, p.planDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [filterChangePlans, isOnReportDay, isApprovedForReport]
+    () =>
+      filterChangePlans.filter(
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.planDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+      ),
+    [filterChangePlans, isOnReportDay, isApprovedForReport, onScheduleToday]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
   // is preInstalledDate (input date is the plan/entry date, installedDate
@@ -688,22 +826,33 @@ export function DailyReportSection() {
     () =>
       installPlans.filter(
         (p) =>
-          (p.status === "Completed"
+          onScheduleToday(p) ||
+          ((p.status === "Completed"
             ? (p.installedDate || p.preInstalledDate || p.inputDate) === reportDate
             : isOnReportDay(p.status, p.preInstalledDate, p.inputDate)) &&
-          isDailyReportEligible(p.dispatchStatus) &&
-          isApprovedForReport(p)
+            isDailyReportEligible(p.dispatchStatus) &&
+            isApprovedForReport(p))
       ),
-    [installPlans, isOnReportDay, isApprovedForReport, reportDate]
+    [installPlans, isOnReportDay, isApprovedForReport, reportDate, onScheduleToday]
   )
   const dayRepairPlans = React.useMemo(
-    () => repairPlans.filter((p) => isOnReportDay(p.status, p.preD, p.issuedDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [repairPlans, isOnReportDay, isApprovedForReport]
+    () =>
+      repairPlans.filter(
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.issuedDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+      ),
+    [repairPlans, isOnReportDay, isApprovedForReport, onScheduleToday]
   )
   const dayCollectionPlans = React.useMemo(
-    () => collectionPlans.filter((p) => isOnReportDay(p.status, p.preD, p.collectionDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p)),
-    [collectionPlans, isOnReportDay, isApprovedForReport]
+    () =>
+      collectionPlans.filter(
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.collectionDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+      ),
+    [collectionPlans, isOnReportDay, isApprovedForReport, onScheduleToday]
   )
+  // Rows awaiting approval per panel, for the notices.
+  const awaitingCount = <T extends { scheduleJobId?: string }>(rows: T[]) => rows.filter(isAwaiting).length
+  const awaitingCollections = dayCollectionPlans.filter(isAwaiting)
+  const sumAmount = (rows: CollectionPlan[]) => rows.reduce((n, c) => n + (c.amount || 0), 0)
   // Filtered by the movement's own `date` (its as-of day — defaults to the
   // day it was recorded, and matches the completed job's scheduledDate for
   // the filter-change deduction path), same convention as every other
@@ -767,6 +916,7 @@ export function DailyReportSection() {
         icon={Droplets}
         columns={filterChangeColumns}
         data={dayFilterChangePlans}
+        notice={<AwaitingApprovalNotice count={awaitingCount(dayFilterChangePlans)} total={dayFilterChangePlans.length} />}
         loading={pFilter}
         emptyMessage={tFilterChange("noPlansForDate")}
         canAdd={isAdmin}
@@ -797,6 +947,7 @@ export function DailyReportSection() {
         icon={HardHat}
         columns={installColumns}
         data={dayInstallPlans}
+        notice={<AwaitingApprovalNotice count={awaitingCount(dayInstallPlans)} total={dayInstallPlans.length} />}
         loading={pInstall}
         emptyMessage={tInstall("noPlansForDate")}
         canAdd={isAdmin}
@@ -814,8 +965,9 @@ export function DailyReportSection() {
       <DashboardPlanPanel
         title={labelFor("repair")}
         icon={Wrench}
-        columns={repairColumns}
+        columns={repairColumnsWithInOut}
         data={dayRepairPlans}
+        notice={<AwaitingApprovalNotice count={awaitingCount(dayRepairPlans)} total={dayRepairPlans.length} />}
         loading={pRepair}
         emptyMessage={tRepair("noPlansForDate")}
         canAdd={isAdmin}
@@ -835,6 +987,14 @@ export function DailyReportSection() {
         icon={Banknote}
         columns={collectionsColumns}
         data={dayCollectionPlans}
+        notice={
+          <AwaitingApprovalNotice
+            count={awaitingCollections.length}
+            total={dayCollectionPlans.length}
+            amount={sumAmount(awaitingCollections)}
+            totalAmount={sumAmount(dayCollectionPlans)}
+          />
+        }
         loading={pCollections}
         emptyMessage={tCollection("noPlansForDate")}
         canAdd={isAdmin}

@@ -31,6 +31,8 @@ const joined = (...parts: (string | number | undefined | null)[]) => parts.filte
 // Summary sheet plus a sheet per section), one CSV, or one PDF, each row with
 // date, technician, vehicle, order number, customer, status and notes.
 // Technicians get the same view they see (RLS already limits their data).
+const AWAITING = "Awaiting approval"
+
 export function DailyReportExportMenu({
   reportDate,
   filterChanges,
@@ -60,6 +62,10 @@ export function DailyReportExportMenu({
       return c ? c.companyName || c.fullName : ""
     }
     const vehicleOf = (scheduleJobId?: string) => (scheduleJobId ? (jobById.get(scheduleJobId)?.vehicle ?? "") : "")
+    // A record whose job is still a draft (on the panels because its job is
+    // on the Schedule panel today) is labelled in its Status.
+    const statusOf = (status: string, scheduleJobId?: string) =>
+      scheduleJobId && jobById.get(scheduleJobId)?.status === "pending_approval" ? `${status} · ${AWAITING}` : status
     // Same jobs the Schedule widget lists for the day: not ones still
     // awaiting approval (except, for admins, drafts / Saturday jobs — shown
     // there for review) and, for a technician, only their own.
@@ -88,7 +94,7 @@ export function DailyReportExportMenu({
       Vehicle: vehicleOf(p.scheduleJobId),
       "Order No": p.orderNumber,
       Customer: p.memberAccount || customerName(p.customerId),
-      Status: p.status,
+      Status: statusOf(p.status, p.scheduleJobId),
       Details: joined(p.filterType && `Filters ${p.filterType}`, p.accD && `Done ${p.accD}`),
       Notes: p.note ?? "",
     }))
@@ -99,7 +105,7 @@ export function DailyReportExportMenu({
       Vehicle: vehicleOf(p.scheduleJobId),
       "Order No": p.orderNo,
       Customer: p.name,
-      Status: p.status,
+      Status: statusOf(p.status, p.scheduleJobId),
       Details: joined(p.model && `Model ${p.model}`, p.installedDate && `Installed ${p.installedDate}`),
       Notes: p.note ?? "",
     }))
@@ -110,7 +116,7 @@ export function DailyReportExportMenu({
       Vehicle: vehicleOf(p.scheduleJobId),
       "Order No": p.orderNo,
       Customer: p.accountName,
-      Status: p.status,
+      Status: statusOf(p.status, p.scheduleJobId),
       Details: joined(p.problem && `Issue: ${p.problem}`, p.solutionStatus && `Solution: ${p.solutionStatus}`, p.partNo && `Parts: ${p.partNo}`),
       Notes: p.note ?? "",
     }))
@@ -121,7 +127,7 @@ export function DailyReportExportMenu({
       Vehicle: vehicleOf(p.scheduleJobId),
       "Order No": p.orderNo,
       Customer: p.accountName || customerName(p.customerId),
-      Status: p.status,
+      Status: statusOf(p.status, p.scheduleJobId),
       Details: joined(p.ct && `C/T ${p.ct}`, p.amount ? `Amount ₱${p.amount.toLocaleString()}` : ""),
       Notes: p.note ?? "",
     }))
@@ -146,6 +152,8 @@ export function DailyReportExportMenu({
     ]
   }, [jobs, customers, filterChanges, installs, repairs, collections, stockMovements, reportDate, isAdmin, user?.id])
 
+  const draftIds = new Set(jobs.filter((j) => j.status === "pending_approval").map((j) => j.id))
+  const awaitingCollections = collections.filter((c) => !!c.scheduleJobId && draftIds.has(c.scheduleJobId))
   const fileName = `daily-report-${reportDate}`
   const allRows = sections.flatMap((s) => s.rows)
   const done = (s: string) => /^(completed|collected|approved)$/i.test(s)
@@ -155,6 +163,12 @@ export function DailyReportExportMenu({
       { Item: "Report date", Value: formatDate(reportDate) },
       ...sections.map((s) => ({ Item: s.name, Value: `${s.rows.length} (${s.rows.filter((r) => done(r.Status)).length} done)` })),
       { Item: "Collections total", Value: `₱${collections.reduce((n, c) => n + (c.amount || 0), 0).toLocaleString()}` },
+      ...(awaitingCollections.length
+        ? [{ Item: `Collections ${AWAITING.toLowerCase()}`, Value: `${awaitingCollections.length} (₱${awaitingCollections.reduce((n, c) => n + (c.amount || 0), 0).toLocaleString()})` }]
+        : []),
+      ...sections
+        .filter((s) => s.rows.some((r) => r.Status.endsWith(AWAITING)))
+        .map((s) => ({ Item: `${s.name} ${AWAITING.toLowerCase()}`, Value: String(s.rows.filter((r) => r.Status.endsWith(AWAITING)).length) })),
       { Item: "Generated", Value: new Date().toLocaleString() },
     ]
     exportWorkbook([{ name: "Summary", rows: summary, headers: ["Item", "Value"] }, ...sections.map((s) => ({ ...s, headers: [...COLUMNS] }))], fileName)

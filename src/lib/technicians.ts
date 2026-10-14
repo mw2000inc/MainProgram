@@ -16,6 +16,21 @@ export const NOT_APPLICABLE_TECHNICIAN = "N/A"
 // this feeds is a free-typable combobox (technician-combobox.tsx) with no DB
 // enum guarding it, so nothing rules out an admin typing it in, unlike
 // status elsewhere which IS a Postgres enum and can't drift like this.
+// Standing rule (confirmed with the admin, again on 2026-10-14 for Mell):
+// these roster names are NEVER picked by any automatic assignment — the
+// nightly drafts, Approve All & Dispatch, the Add forms' drafts, Suggest
+// Technician, smart scheduling — whichever rule would otherwise carry them
+// (a record's planned Serviceman, the team already at the same place or
+// nearby, the member's default, whoever serviced the order last). They stay
+// in every dropdown for an admin to pick by hand.
+export const AUTO_ASSIGN_EXCLUDED_TECHNICIANS: readonly string[] = ["Mell", "Butch", "Pritz"]
+
+// A name automatic assignment may use: a real technician, not excluded above.
+export function isAutoAssignableTechnician(name: string | null | undefined): boolean {
+  const trimmed = (name ?? "").trim().toLowerCase()
+  return isAssignedTechnician(name) && !AUTO_ASSIGN_EXCLUDED_TECHNICIANS.some((n) => n.toLowerCase() === trimmed)
+}
+
 export function isAssignedTechnician(name: string | null | undefined): boolean {
   const trimmed = (name ?? "").trim()
   if (trimmed === "" || trimmed === NOT_APPLICABLE_TECHNICIAN) return false

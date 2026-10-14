@@ -5,6 +5,8 @@ import { toast } from "sonner"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { collectionsKey } from "@/lib/hooks/use-collections"
+import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { installPlansKey } from "@/lib/hooks/use-install-plans"
 import { useUsers } from "@/lib/hooks/use-misc"
@@ -19,8 +21,8 @@ import { assignmentAccounts, crewOfTechnician, normalizeTechnicianPair, technici
 import { formatDate } from "@/lib/utils"
 
 type DraftOptions = {
-  table: "install_plans" | "repair_plans" | "collections"
-  jobType: "installation" | "repair" | "collection"
+  table: "install_plans" | "repair_plans" | "collections" | "filter_change_plans"
+  jobType: "installation" | "repair" | "collection" | "filter_change"
   recordId: string
   // The record's job, if it already has one — then nothing is created.
   existingJobId?: string
@@ -35,11 +37,14 @@ type DraftOptions = {
   notes?: string | null
   accountName?: string
   amount?: number
+  // A Filter Change's filters (its Filter field) — what the technician brings
+  // and what's deducted on completion.
+  filterCodes?: string
 }
 
-const VISIT_KEYS = { install_plans: installPlansKey, repair_plans: repairPlansKey, collections: collectionsKey } as const
+const VISIT_KEYS = { install_plans: installPlansKey, repair_plans: repairPlansKey, collections: collectionsKey, filter_change_plans: filterChangePlansKey } as const
 
-// Approval first: an Installation, Repair or Collection saved with a date gets its draft
+// Approval first: an Installation, Repair, Collection or Filter Change saved with a date gets its draft
 // schedule job straight away ('pending_approval', on that date), with the
 // order, member, address (the record's, else the member's), technicians (and their logins, so it reaches their
 // own Daily Report once approved — technicians never see drafts) and the
@@ -64,6 +69,11 @@ export function useVisitDraftJob() {
 
   return async function ensureVisitDraftJob(o: DraftOptions) {
     if (!o.date || o.existingJobId) return
+    // Today (or any later date) is drafted on that date — a same-day entry
+    // waits under today in Pending Schedule Approval and reaches today's
+    // Daily Report once approved. An already-past date is drafted for today.
+    const today = businessToday()
+    const date = o.date < today ? today : o.date
     const orderNo = (o.orderNo ?? "").trim()
     const customer = orderNo ? findCustomerByOrderNumber(customers, saleListEntries, orderNo) : undefined
     const accounts = assignmentAccounts(users)
@@ -81,7 +91,7 @@ export function useVisitDraftJob() {
             table: o.table,
             recordId: o.recordId,
             jobType: o.jobType,
-            date: o.date,
+            date,
             orderNo,
             customerId: customer?.id,
             name: o.accountName ?? orderNo,
@@ -89,7 +99,7 @@ export function useVisitDraftJob() {
             technician: "",
             technician2: "",
           },
-          o.date
+          date
         )
     const base = assigned?.pair ?? picked
     const crew = crewOfTechnician(base.primary) ?? crewOfTechnician(base.secondary)
@@ -112,7 +122,7 @@ export function useVisitDraftJob() {
       const job = await createJob.mutateAsync({
         jobType: o.jobType,
         status: "pending_approval",
-        scheduledDate: o.date,
+        scheduledDate: date,
         orderNo: orderNo || undefined,
         customerId: customer?.id,
         technician: pair.primary,
@@ -122,12 +132,13 @@ export function useVisitDraftJob() {
         vehicle: crew?.vehicle ?? assigned?.vehicle ?? "",
         secondaryAddress: address || undefined,
         notes: notes || undefined,
+        filterCodes: o.filterCodes?.trim() || undefined,
       })
       await linkVisitToScheduleJob(o.table, o.recordId, job.id)
       // At once in Pending Schedule Approval and the record's own table.
       qc.invalidateQueries({ queryKey: VISIT_KEYS[o.table] })
       qc.invalidateQueries({ queryKey: scheduleJobsKey })
-      toast.success(t("visitDraftCreated", { type: t(o.jobType), date: formatDate(o.date) }))
+      toast.success(t("visitDraftCreated", { type: t(o.jobType), date: formatDate(date) }))
     } catch (error) {
       toast.error(t("visitDraftFailed", { message: error instanceof Error ? error.message : String(error) }))
     }

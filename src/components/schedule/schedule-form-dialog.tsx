@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAutoAssignableTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -43,17 +43,38 @@ import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { getCpSystemFilterSkus } from "@/lib/filter-parts"
 import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
 import { FilterDeductRows, newFilterRow, type FilterRow } from "@/components/schedule/filter-deduct-rows"
-import { encodeFilterCodes, filterCodeOf, parseFilterCodes } from "@/lib/filter-codes"
+import { encodeFilterCodes, filterCodeOf, formatFilterCodes, parseFilterCodes } from "@/lib/filter-codes"
 import { syncJobFiltersToRecord } from "@/lib/api/schedule"
+import { useJobDetails } from "@/lib/scheduling/job-account-name"
+import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
+import type { CpSystem, FilterChangePlan, Product, SaleListEntry } from "@/lib/types"
 import { toast } from "sonner"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { JOB_TYPE_LABELS, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { isReasonableDateString } from "@/lib/form-schemas"
-import { tomorrowIso } from "@/lib/utils"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import type { ScheduleJob, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
 const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
+
+// The filters an order needs for a Filter Change on a date: those of its own
+// upcoming Filter Change (within 60 days, not yet linked to a job — the
+// record approval links the job to), else its CP System's (Sale List).
+function orderFilterCodes(
+  orderNo: string,
+  scheduledDate: string,
+  data: { filterChangePlans: FilterChangePlan[]; saleListEntries: SaleListEntry[]; cpSystems: CpSystem[]; products: Product[] }
+): string | undefined {
+  const days = (d: string) => Math.abs(new Date(d).getTime() - new Date(scheduledDate).getTime()) / 86_400_000
+  const upcoming = data.filterChangePlans
+    .filter((p) => p.status === "Pending" && !p.scheduleJobId && p.orderNumber.trim() === orderNo && days(p.preD || p.planDate) <= 60)
+    .sort((a, b) => days(a.preD || a.planDate) - days(b.preD || b.planDate))[0]
+  if (upcoming) return upcoming.filterType.trim() || undefined
+  const sale = data.saleListEntries.find((e) => e.orderNumber.trim() === orderNo)
+  const system = sale?.cpSystemId ? data.cpSystems.find((c) => c.id === sale.cpSystemId) : undefined
+  return (system ? getCpSystemFilterSkus(system, data.products) : []).join(", ") || undefined
+}
 // pending_approval included so editing an already-pending-approval job shows
 // its real current status correctly in this dropdown (and an admin can
 // manually set it back if they want) — the dedicated "Approve Schedule"
@@ -101,7 +122,9 @@ function createSchema(
       // the date input's own `min` attribute never guards against (that
       // only sets a *lower* bound), before it reaches the database.
       .refine(isReasonableDateString, tCommon("invalidDate"))
-      .refine((v) => v === originalDate || v >= tomorrowIso(), { message: t("scheduleAtLeastOneDayAhead") }),
+      // Today or later (Manila) — a same-day job goes to Pending Schedule
+      // Approval under today and onto today's Daily Report once approved.
+      .refine((v) => v === originalDate || v >= businessToday(), { message: t("scheduleAtLeastOneDayAhead") }),
     // Free text ("ANYTIME", "MORNING", "2:00 PM") — see ScheduleJob.scheduledTime.
     scheduledTime: z.string().optional(),
     status: z.custom<ScheduleJobStatus>((v) => typeof v === "string" && v.length > 0, t("selectStatus")),
@@ -193,7 +216,7 @@ function defaultValues(defaultDate: string, job?: ScheduleJob, prefill?: Schedul
     // Job" from *today's* Daily Report shouldn't default to a date the form
     // itself is about to reject. Any defaultDate already tomorrow or beyond
     // (opened from a future day) is left alone.
-    scheduledDate: defaultDate < tomorrowIso() ? tomorrowIso() : defaultDate,
+    scheduledDate: defaultDate < businessToday() ? businessToday() : defaultDate,
     scheduledTime: "",
     // Admin Schedule Approval workflow: a brand-new manually-created job
     // starts out awaiting approval, not immediately active — see the
@@ -256,18 +279,26 @@ export function ScheduleFormDialog({
   // Filters to Deduct (Filter Change jobs): the job's filter codes as rows —
   // or, for a job from before, its single product + quantity.
   const [filterRows, setFilterRows] = React.useState<FilterRow[]>([])
+  // Rows for filter lines — an inventory code shows as its product's name.
+  const rowsFor = (lines: { code: string; quantity: number }[]) =>
+    lines.map((l) => {
+      const product = products.find((p) => p.sku.trim() === l.code)
+      return newFilterRow(product ? (product.name.includes(" / ") ? product.name : `${product.sku} / ${product.name}`) : l.code, String(l.quantity))
+    })
+  // The Order No. the dialog opened with, and the one last auto-filled from —
+  // details are filled only after the Order No. is typed or changed, so
+  // opening an existing job never changes it by itself.
+  const openedOrderRef = React.useRef("")
+  const autofilledOrderRef = React.useRef("")
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, job, prefill))
     const codes = job ? job.filterCodes : prefill?.filterCodes
     const legacy = job?.productId ? products.find((p) => p.id === job.productId) : undefined
     const lines = codes?.trim() ? parseFilterCodes(codes) : legacy ? [{ code: legacy.sku, quantity: job?.quantity ?? 1 }] : []
-    setFilterRows(
-      lines.map((l) => {
-        const product = products.find((p) => p.sku.trim() === l.code)
-        return newFilterRow(product ? (product.name.includes(" / ") ? product.name : `${product.sku} / ${product.name}`) : l.code, String(l.quantity))
-      })
-    )
+    setFilterRows(rowsFor(lines))
+    openedOrderRef.current = (job?.orderNo ?? prefill?.orderNo ?? "").trim()
+    autofilledOrderRef.current = openedOrderRef.current
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, job, prefill])
   // The rows as filter codes ("011, 011, 013" — quantity by repetition).
@@ -405,6 +436,66 @@ export function ScheduleFormDialog({
     onOpenChange(false)
   }
 
+  // Order No. lookup: the order's Account Name, Address and Contact Number
+  // (useJobDetails — its records, else its member through the Sale List), its
+  // technician (the member's default, else whoever last serviced the order),
+  // product / CP System and, for a Filter Change, the filters it needs. Shown
+  // as a card under the field; a still-empty Technician and Filters to Deduct
+  // are filled from it, and the address becomes Secondary Address's
+  // placeholder. Everything stays editable.
+  const jobDetails = useJobDetails()
+  const previousTechnicians = usePreviousTechnicians()
+  const orderNoValue = (form.watch("orderNo") ?? "").trim()
+  const scheduledDateValue = form.watch("scheduledDate")
+  const orderInfo = React.useMemo(() => {
+    if (!orderNoValue) return undefined
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNoValue)
+    const details = jobDetails({ id: job?.id ?? "", orderNo: orderNoValue, jobType, customerId: customer?.id } as ScheduleJob)
+    const sale = saleListEntries.find((e) => e.orderNumber.trim() === orderNoValue)
+    const system = sale?.cpSystemId ? cpSystems.find((c) => c.id === sale.cpSystemId) : undefined
+    const memberPair = customer ? normalizeTechnicianPair(customer.assignedTechnician ?? "", customer.assignedTechnician2 ?? "") : undefined
+    const lastPair = previousTechnicians.get(orderNoValue)
+    const technician =
+      // Never an excluded name (AUTO_ASSIGN_EXCLUDED_TECHNICIANS — e.g. Mell).
+      memberPair && isAutoAssignableTechnician(memberPair.primary)
+        ? { pair: memberPair, source: "member" as const }
+        : lastPair && isAutoAssignableTechnician(lastPair.primary)
+          ? { pair: lastPair, source: "previous" as const }
+          : undefined
+    return {
+      found: !!customer || !!sale || !!details.accountName,
+      ...details,
+      product: sale?.productNo?.trim() || undefined,
+      system: system?.systemCode,
+      technician,
+      filterCodes: jobType === "filter_change" ? orderFilterCodes(orderNoValue, scheduledDateValue, { filterChangePlans, saleListEntries, cpSystems, products }) : undefined,
+    }
+  }, [orderNoValue, scheduledDateValue, jobType, job?.id, customers, saleListEntries, cpSystems, filterChangePlans, products, jobDetails, previousTechnicians])
+
+  React.useEffect(() => {
+    if (!open || !orderInfo?.found || orderNoValue === autofilledOrderRef.current) return
+    autofilledOrderRef.current = orderNoValue
+    let filled = false
+    if (!form.getValues("technician")?.trim() && orderInfo.technician) {
+      const base = orderInfo.technician.pair
+      const crew = crewOfTechnician(base.primary) ?? crewOfTechnician(base.secondary)
+      const pair = crew ? { primary: crew.primary, secondary: crew.secondary } : base
+      const ids = technicianAccountIds(pair.primary, pair.secondary, technicianAccounts)
+      form.setValue("technician", pair.primary, { shouldDirty: true, shouldValidate: true })
+      form.setValue("technician2", pair.secondary || NONE_SENTINEL, { shouldDirty: true })
+      form.setValue("technicianUserId", ids.technicianUserId || NONE_SENTINEL, { shouldDirty: true })
+      form.setValue("technician2UserId", ids.technician2UserId || NONE_SENTINEL, { shouldDirty: true })
+      if (crew && !form.getValues("vehicle")) form.setValue("vehicle", crew.vehicle, { shouldDirty: true })
+      filled = true
+    }
+    if (orderInfo.filterCodes && !filterRows.some((r) => filterCodeOf(r.value))) {
+      setFilterRows(rowsFor(parseFilterCodes(orderInfo.filterCodes)))
+      filled = true
+    }
+    if (filled) toast.success(t("orderDetailsFilled"))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, orderInfo, orderNoValue])
+
   // A hand-made job (Schedule Job) carries its member, found by Order No.
   // through the Sale List like every Add form — so approving it gives the new
   // or linked record the member's Account Name, Address and Contact Number
@@ -418,15 +509,7 @@ export function ScheduleFormDialog({
     if (!orderNo) return {}
     const customerId = findCustomerByOrderNumber(customers, saleListEntries, orderNo)?.id
     if (values.jobType !== "filter_change") return { customerId }
-    const days = (d: string) => Math.abs(new Date(d).getTime() - new Date(values.scheduledDate).getTime()) / 86_400_000
-    const upcoming = filterChangePlans
-      .filter((p) => p.status === "Pending" && !p.scheduleJobId && p.orderNumber.trim() === orderNo && days(p.preD || p.planDate) <= 60)
-      .sort((a, b) => days(a.preD || a.planDate) - days(b.preD || b.planDate))[0]
-    if (upcoming) return { customerId, filterCodes: upcoming.filterType.trim() || undefined }
-    const sale = saleListEntries.find((e) => e.orderNumber.trim() === orderNo)
-    const system = sale?.cpSystemId ? cpSystems.find((c) => c.id === sale.cpSystemId) : undefined
-    const skus = system ? getCpSystemFilterSkus(system, products) : []
-    return { customerId, filterCodes: skus.join(", ") || undefined }
+    return { customerId, filterCodes: orderFilterCodes(orderNo, values.scheduledDate, { filterChangePlans, saleListEntries, cpSystems, products }) }
   }
 
   // Admin Schedule Approval workflow's explicit "Approve Schedule" action —
@@ -643,9 +726,49 @@ export function ScheduleFormDialog({
                 <FormItem>
                   <FormLabel>{t("orderNoOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="001-0001" {...field} />
+                    <Input placeholder="001-0001" {...field} data-testid="schedule-form-order-no" />
                   </FormControl>
                   <FormMessage />
+                  {orderInfo?.found && (
+                    <div className="space-y-0.5 rounded-md border bg-muted/40 px-3 py-2 text-xs" data-testid="order-preview">
+                      <p>
+                        <span className="text-muted-foreground">{t("previewAccount")}: </span>
+                        <span className="font-medium">{orderInfo.accountName ?? "—"}</span>
+                      </p>
+                      <p className="wrap-break-word">
+                        <span className="text-muted-foreground">{t("previewAddress")}: </span>
+                        {orderInfo.address ?? "—"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">{t("previewPhone")}: </span>
+                        {orderInfo.contactNumber ?? "—"}
+                      </p>
+                      {orderInfo.technician && (
+                        <p>
+                          <span className="text-muted-foreground">{t("previewTechnician")}: </span>
+                          {formatTechnicians(orderInfo.technician.pair.primary, orderInfo.technician.pair.secondary)}{" "}
+                          <span className="text-muted-foreground">
+                            ({t(orderInfo.technician.source === "member" ? "previewTechnicianMember" : "previewTechnicianPrevious")})
+                          </span>
+                        </p>
+                      )}
+                      {(orderInfo.product || orderInfo.system) && (
+                        <p>
+                          <span className="text-muted-foreground">{t("previewProduct")}: </span>
+                          {[orderInfo.product, orderInfo.system && `CP ${orderInfo.system}`].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                      {isFilterChange && (
+                        <p>
+                          <span className="text-muted-foreground">{t("previewFilters")}: </span>
+                          {orderInfo.filterCodes ? formatFilterCodes(orderInfo.filterCodes) : t("previewNoFilters")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {orderInfo && !orderInfo.found && orderNoValue.length >= 8 && (
+                    <p className="text-xs text-muted-foreground" data-testid="order-preview-none">{t("orderNotFoundPreview")}</p>
+                  )}
                 </FormItem>
               )}
             />
@@ -662,7 +785,7 @@ export function ScheduleFormDialog({
                         because of that pre-existing value (see createSchema's
                         own comment on why the validation itself mirrors this
                         same "unchanged is fine" allowance). */}
-                    <Input type="date" min={isEdit ? undefined : tomorrowIso()} {...field} />
+                    <Input type="date" min={isEdit ? undefined : businessToday()} {...field} />
                   </FormControl>
                   <p className="text-xs text-muted-foreground">{t("scheduleAtLeastOneDayAheadHelp")}</p>
                   {hasSecondTechnician && (
@@ -697,7 +820,7 @@ export function ScheduleFormDialog({
                 <FormItem>
                   <FormLabel>{t("secondaryAddressOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t("secondaryAddressPlaceholder")} {...field} />
+                    <Input placeholder={orderInfo?.address ? t("secondaryAddressFromOrder", { address: orderInfo.address }) : t("secondaryAddressPlaceholder")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -1,4 +1,8 @@
 {
+  "awaitingApproval": "승인 대기",
+  "awaitingApprovalNotice": "{total}건 중 {count}건 승인 대기 — 완료 처리 전에 일정 › 일정 승인 대기에서 작업을 승인하세요.",
+  "awaitingApprovalNoticeAmount": "{total}건 중 {count}건 승인 대기 ({totalAmount} 중 {amount}) — 수금 처리 전에 일정 › 일정 승인 대기에서 작업을 승인하세요.",
+  "awaitingApprovalCannotComplete": "작업이 승인 대기 중입니다 — 먼저 일정 › 일정 승인 대기에서 승인하세요.",
   "title": "발송 승인 대기",
   "description": "새로 예약된 필터 교체, 설치, 수거, 수리 항목이 관리자 승인을 기다리고 있습니다. 승인하면 아래 입력된 이메일 주소로 실제 이메일이 발송됩니다.",
   "approving": "승인 중...",
