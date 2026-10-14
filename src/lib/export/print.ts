@@ -1,11 +1,15 @@
 interface PrintTableOptions {
   title: string
   subtitle?: string
-  columns: { header: string; key: string }[]
+  // width: a CSS width for that column (e.g. "16%") — wide text columns get
+  // more room, short codes less; the rest share what's left.
+  columns: { header: string; key: string; width?: string }[]
   rows: Record<string, unknown>[]
+  // A4 landscape for wide tables (the Schedule's 10 columns).
+  landscape?: boolean
 }
 
-export function printTable({ title, subtitle, columns, rows }: PrintTableOptions) {
+export function printTable({ title, subtitle, columns, rows, landscape }: PrintTableOptions) {
   const printWindow = window.open("", "_blank", "width=1000,height=800")
   if (!printWindow) return
 
@@ -26,12 +30,16 @@ export function printTable({ title, subtitle, columns, rows }: PrintTableOptions
           body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #0F172A; }
           h1 { font-size: 18px; margin: 0 0 4px; }
           p.subtitle { font-size: 12px; color: #64748B; margin: 0 0 16px; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th, td { border: 1px solid #E2E8F0; padding: 6px 8px; text-align: left; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: ${columns.some((c) => c.width) ? "fixed" : "auto"}; }
+          th, td { border: 1px solid #E2E8F0; padding: 6px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
           th { background: #0077B6; color: #fff; }
           tr:nth-child(even) { background: #F8FAFC; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; }
+          ${landscape ? "@page { size: A4 landscape; margin: 10mm; }" : ""}
           @media print {
             body { padding: 0; }
+            th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
         </style>
       </head>
@@ -39,6 +47,7 @@ export function printTable({ title, subtitle, columns, rows }: PrintTableOptions
         <h1>${escapeHtml(title)}</h1>
         ${subtitle ? `<p class="subtitle">${escapeHtml(subtitle)}</p>` : ""}
         <table>
+          ${columns.some((c) => c.width) ? `<colgroup>${columns.map((c) => `<col${c.width ? ` style="width:${c.width}"` : ""}>`).join("")}</colgroup>` : ""}
           <thead><tr>${columns.map((c) => `<th>${escapeHtml(c.header)}</th>`).join("")}</tr></thead>
           <tbody>${tableRows}</tbody>
         </table>

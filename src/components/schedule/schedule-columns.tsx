@@ -44,6 +44,9 @@ export const SCHEDULE_EXPORT_COLUMNS = [
   { header: "Technician", key: "technician" },
   { header: "Vehicle", key: "vehicle" },
   { header: "Order No", key: "orderNo" },
+  // Filled by the caller from useJobDetails (record → member → Sale List).
+  { header: "Customer Name", key: "customerName" },
+  { header: "Address", key: "address" },
   { header: "Status", key: "status" },
   { header: "Notes", key: "notes" },
   { header: "Remarks", key: "remarks" },

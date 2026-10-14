@@ -1,4 +1,6 @@
 {
+  "cpSystemMissingHint": "S/C 또는 CP 시스템이 없습니다 — 설정할 때까지 이 주문의 필터 교체 방문에 필터가 표시되지 않습니다.",
+  "cpSystemUsually": "이 제품의 일반적인 시스템:",
   "editTitle": "판매 목록 항목 수정",
   "addTitle": "판매 목록 항목 추가",
   "editDescription": "이 회원의 설치 / 케어플랜 적용 내역을 업데이트합니다.",

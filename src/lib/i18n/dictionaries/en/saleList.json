@@ -1,4 +1,6 @@
 {
+  "cpSystemMissingHint": "No S/C or CP System — this order's Filter Change visits will have no filters until one is set.",
+  "cpSystemUsually": "This product is usually on:",
   "editTitle": "Edit Sale List Entry",
   "addTitle": "Add Sale List Entry",
   "editDescription": "Update this member's install / care-plan coverage.",

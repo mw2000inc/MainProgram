@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/shared/currency-input"
-import { useCreateSaleListEntry, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
+import { useCreateSaleListEntry, useSaleListEntries, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
@@ -164,6 +164,7 @@ export function SaleListFormDialog({
   const { data: customers = [] } = useCustomers()
   const { data: products = [] } = useProducts()
   const { data: cpSystems = [] } = useCpSystems()
+  const { data: allEntries = [] } = useSaleListEntries()
   const { t } = useTranslation("saleList")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
@@ -195,6 +196,25 @@ export function SaleListFormDialog({
   const cpEndTouchedRef = React.useRef(!!entry?.cpEnd)
   const cpStartValue = form.watch("cpStart")
   const ctValue = form.watch("ct")
+  const productValue = form.watch("productNo")
+  const scValue = form.watch("sc")
+  const cpSystemValue = form.watch("cpSystemId")
+  // No S/C and no CP System → its Filter Change visits get no filters. The
+  // CP Systems other orders with the same product code use, most used first
+  // (a product only ever on one system is linked automatically on save —
+  // 20261108000000).
+  const usualSystems = React.useMemo(() => {
+    const code = (p: string | undefined) => (p ?? "").trim().split(" / ")[0].trim().toUpperCase()
+    const mine = code(productValue)
+    if (!mine) return []
+    const counts = new Map<string, number>()
+    for (const e of allEntries) if (e.cpSystemId && e.id !== entry?.id && code(e.productNo) === mine) counts.set(e.cpSystemId, (counts.get(e.cpSystemId) ?? 0) + 1)
+    return [...counts]
+      .map(([id, n]) => ({ id, n, code: cpSystems.find((s) => s.id === id)?.systemCode ?? "" }))
+      .filter((s) => s.code)
+      .sort((a, b) => b.n - a.n)
+  }, [productValue, allEntries, cpSystems, entry?.id])
+  const showCpHint = !!productValue?.trim() && !scValue?.trim() && !cpSystemValue
 
   React.useEffect(() => {
     if (open) form.reset(defaultValues(entry, defaultCustomerId))
@@ -348,6 +368,21 @@ export function SaleListFormDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    {showCpHint && (
+                      <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs" data-testid="cp-system-hint">
+                        <p>{t("cpSystemMissingHint")}</p>
+                        {usualSystems.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="text-muted-foreground">{t("cpSystemUsually")}</span>
+                            {usualSystems.slice(0, 6).map((s) => (
+                              <Button key={s.id} type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => field.onChange(s.id)}>
+                                {s.code} ({s.n})
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

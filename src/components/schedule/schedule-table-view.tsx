@@ -21,7 +21,7 @@ import { useCustomers } from "@/lib/hooks/use-customers"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { useJobAccountName } from "@/lib/scheduling/job-account-name"
+import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { useAuth } from "@/lib/auth/auth-context"
 import { printScheduleTable, type ScheduleTableRow } from "@/lib/export/print"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -48,7 +48,7 @@ function resolveRows(
   filterChangePlans: FilterChangePlan[],
   collections: CollectionPlan[],
   saleListEntries: SaleListEntry[],
-  accountNameOf: (job: ScheduleJob) => string | undefined
+  detailsOf: (job: ScheduleJob) => JobDetails
 ): ScheduleTableRow[] {
   return dayJobs.map((job) => {
     const customer = job.customerId ? customers.find((c) => c.id === job.customerId) : undefined
@@ -78,11 +78,12 @@ function resolveRows(
     return {
       time: job.scheduledTime ?? "",
       contactPerson: customer?.fullName ?? "",
-      contactNo: customer?.contactNumber ?? "",
+      contactNo: detailsOf(job).contactNumber ?? customer?.contactNumber ?? "",
       orderNumber: job.orderNo ?? "",
       // Same Account Name as every other Schedule view (useJobAccountName).
-      memberAcctName: accountNameOf(job) ?? "",
-      address: customer?.address ?? "",
+      memberAcctName: detailsOf(job).accountName ?? "",
+      // The job's own address, else its record's, else its member's.
+      address: detailsOf(job).address ?? customer?.address ?? "",
       itemOut: filterChangeMatch?.filterType ?? "",
       technician: formatTechnicians(job.technician, job.technician2),
       collection: collectionMatch ? formatCurrency(collectionMatch.amount) : "",
@@ -113,7 +114,7 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   const { data: collections = [], isPending: p4 } = useCollections()
   const { data: saleListEntries = [], isPending: p5 } = useSaleListEntries()
   const isPending = p1 || p2 || p3 || p4 || p5
-  const jobAccountName = useJobAccountName()
+  const jobDetails = useJobDetails()
 
   // Same "All" + roster filter as the Schedule page's own List view (see
   // matchesTechnician's own comment on why the match itself is shared) —
@@ -151,8 +152,8 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
   // Printing reflects whatever's currently filtered on screen, same as
   // every other page's export/print already does.
   const rows = React.useMemo(
-    () => resolveRows(scopedDayJobs, customers, filterChangePlans, collections, saleListEntries, jobAccountName),
-    [scopedDayJobs, customers, filterChangePlans, collections, saleListEntries, jobAccountName]
+    () => resolveRows(scopedDayJobs, customers, filterChangePlans, collections, saleListEntries, jobDetails),
+    [scopedDayJobs, customers, filterChangePlans, collections, saleListEntries, jobDetails]
   )
 
   const dateHeading = formatDate(date, "MMMM d, yyyy — EEEE")

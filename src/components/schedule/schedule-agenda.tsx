@@ -842,12 +842,19 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // "filter_change"-style enum value or a lone primary technician.
   const exportRows = React.useMemo(
     () =>
-      todaysJobs.map((j) => ({
-        ...j,
-        jobType: JOB_TYPE_LABELS[j.jobType],
-        technician: formatTechnicians(j.technician, j.technician2),
-      })),
-    [todaysJobs]
+      todaysJobs.map((j) => {
+        // Who and where (useJobDetails: the job's own address, else its
+        // record's, else its member's — found through the Sale List).
+        const details = jobDetails(j)
+        return {
+          ...j,
+          jobType: JOB_TYPE_LABELS[j.jobType],
+          technician: formatTechnicians(j.technician, j.technician2),
+          customerName: details.accountName ?? "",
+          address: details.address ?? "",
+        }
+      }),
+    [todaysJobs, jobDetails]
   )
 
   function toggleComplete(job: ScheduleJob) {
@@ -860,11 +867,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   }
 
   function handlePrint() {
+    // A4 landscape; the text columns (customer, address, notes) get the room.
+    const widths: Record<string, string> = { scheduledDate: "8%", jobType: "8%", technician: "11%", vehicle: "6%", orderNo: "7%", customerName: "13%", address: "19%", status: "7%", notes: "12%", remarks: "9%" }
     printTable({
       title: "Schedule",
-      subtitle: formatDate(date),
-      columns: SCHEDULE_EXPORT_COLUMNS,
-      rows: exportRows,
+      subtitle: multiDay ? rangeLabel : formatDate(date),
+      columns: SCHEDULE_EXPORT_COLUMNS.map((c) => ({ ...c, width: widths[c.key] })),
+      rows: exportRows.map((r) => ({ ...r, scheduledDate: formatDate(r.scheduledDate), status: tStatus(STATUS_LABEL_KEY[r.status]) })),
+      landscape: true,
     })
   }
 

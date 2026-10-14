@@ -48,6 +48,7 @@ import { isOverdueJob } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob, ScheduleJobType } from "@/lib/types"
+import { useJobDetails } from "@/lib/scheduling/job-account-name"
 
 // Same derivation schedule-form-dialog.tsx's own job-type Select already
 // uses — a closed 6-value enum, so listing every value statically (rather
@@ -279,14 +280,22 @@ function ScheduleContent() {
   // Reads filteredRows (the search box's own current result), so the
   // export matches whatever's actually on screen, same as scopedPlans on
   // the other list pages.
+  // Customer Name / Address for the export (the same lookup as every
+  // Schedule view, useJobDetails).
+  const jobDetails = useJobDetails()
   const exportRows = React.useMemo(
     () =>
-      filteredRows.map((j) => ({
-        ...j,
-        jobType: JOB_TYPE_LABELS[j.jobType],
-        technician: formatTechnicians(j.technician, j.technician2),
-      })),
-    [filteredRows]
+      filteredRows.map((j) => {
+        const details = jobDetails(j)
+        return {
+          ...j,
+          jobType: JOB_TYPE_LABELS[j.jobType],
+          technician: formatTechnicians(j.technician, j.technician2),
+          customerName: details.accountName ?? "",
+          address: details.address ?? "",
+        }
+      }),
+    [filteredRows, jobDetails]
   )
 
   // getScheduleColumns is typed against plain ScheduleJob since it's also
