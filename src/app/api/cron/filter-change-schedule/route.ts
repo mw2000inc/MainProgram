@@ -3,7 +3,11 @@ import { runAutomation } from "@/lib/automations/engine"
 
 export const dynamic = "force-dynamic"
 
-// Runs on a schedule (see vercel.json). This route is just the scheduled
+// NO LONGER SCHEDULED (admin, 2026-10-14: scheduling is fully manual — its
+// vercel.json cron was removed and generateDraftJobs defaults to off). Kept
+// so the route can still be called by hand.
+//
+// Was: runs on a schedule (see vercel.json). This route is just the scheduled
 // trigger for the daily draft generation (Automation Hub,
 // src/lib/automations/jobs/generate-draft-jobs.ts — registered as
 // "generateDraftJobs", toggleable from Settings > Automations and

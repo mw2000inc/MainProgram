@@ -55,7 +55,7 @@ export const AUTOMATIONS: Record<AutomationId, AutomationDefinition> = {
   generateDraftJobs: {
     id: "generateDraftJobs",
     label: "Generate Draft Schedule Jobs",
-    description: "Pre-schedules the next 30 days' confirmed Filter Change and Collection visits (Monday to Friday) as auto-assigned draft jobs (technician, vehicle, login) for an admin to review and approve. Installations and Repairs are scheduled by hand.",
+    description: "Off by default — scheduling is manual and this no longer runs on a timer. Run by hand, it pre-schedules the next 30 days' Filter Change and Collection visits (Monday to Friday) as auto-assigned draft jobs for an admin to review and approve.",
     defaultEnabled: AUTOMATION_DEFAULTS.generateDraftJobs,
     run: runGenerateDraftJobs,
   },

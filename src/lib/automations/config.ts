@@ -15,7 +15,10 @@ export const AUTOMATION_DEFAULTS: Record<AutomationId, boolean> = {
   generateFilterChangeJobs: false,
   filterChangeInventoryDeduction: true,
   sendScheduleReminders: true,
-  generateDraftJobs: true,
+  // Off (admin, 2026-10-14): scheduling is fully manual — no automatic
+  // drafts. Its daily cron is removed from vercel.json; an admin can still
+  // run it by hand from Settings > Automations.
+  generateDraftJobs: false,
   redateShortNoticeDrafts: true,
 }
 

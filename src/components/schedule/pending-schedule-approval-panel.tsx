@@ -57,9 +57,14 @@ const STICKY_ACTIONS =
 // these rows (schedule_jobs_select); this panel is reachable at all only
 // because whoever's viewing it is already an admin (is_admin() bypasses
 // that restriction entirely).
+// Only drafts dated today or later: a draft whose day has passed unapproved
+// is stale — the 6 AM cron deletes it (purgePastDrafts) so its visit can be
+// scheduled again — and until then it's
+// hidden here and from the tab's count.
 function usePendingScheduleApprovalJobs() {
   const { data: jobs = [], isPending } = useScheduleJobs()
-  const pending = React.useMemo(() => jobs.filter((j) => j.status === "pending_approval"), [jobs])
+  const today = businessToday()
+  const pending = React.useMemo(() => jobs.filter((j) => j.status === "pending_approval" && j.scheduledDate >= today), [jobs, today])
   return { jobs: pending, isPending }
 }
 

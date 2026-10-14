@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 import { runAutomation } from "@/lib/automations/engine"
+import { purgePastDrafts } from "@/lib/automations/jobs/generate-draft-jobs"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { businessToday } from "@/lib/dispatch-lead-time"
 
 export const dynamic = "force-dynamic"
 
@@ -18,9 +21,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // Unapproved drafts whose day has passed are deleted (their records stay,
+  // unlinked, for an admin to schedule again — purgePastDrafts).
+  const purged = await purgePastDrafts(createAdminClient(), businessToday())
+
   // First keep every unapproved Draft at 2 days' notice (same daily cron,
   // no extra Vercel schedule; toggleable separately in Settings).
   const redated = await runAutomation("redateShortNoticeDrafts", { triggeredBy: "cron" })
   const result = await runAutomation("sendScheduleReminders", { triggeredBy: "cron" })
-  return NextResponse.json({ ...result, redated })
+  return NextResponse.json({ ...result, redated, purgedPastDrafts: purged })
 }

@@ -44,6 +44,37 @@ export const AUTO_DRAFT_FROM = "2026-11-01"
 // made: visits dated that day, the weekend's visits for a Monday, and — when
 // that day is today — the open visits of the last few days that roll onto
 // today. The scheduled run keeps the full window above.
+// Drafts whose day has passed without approval are stale: every unapproved
+// ('pending_approval') job dated before today is deleted — any source. Its
+// linked Filter Change / Collection / Install / Repair record is untouched
+// apart from losing the link (schedule_job_id on delete set null), so the
+// record shows in Unscheduled Visits again and the run below can draft it
+// anew (a past visit is drafted for today). Approved, completed and
+// cancelled jobs are never touched; nor is a draft with stock movements or
+// recorded filters (a draft can't have either — belt and braces). Run by the
+// 6 AM cron (api/cron/send-schedule-reminders).
+export async function purgePastDrafts(admin: ReturnType<typeof createAdminClient>, today: string): Promise<{ purged: number; error?: string }> {
+  const { data: stale, error } = await admin.from("schedule_jobs").select("id").eq("status", "pending_approval").lt("scheduled_date", today)
+  if (error) return { purged: 0, error: error.message }
+  const ids = (stale ?? []).map((j) => j.id as string)
+  if (ids.length === 0) return { purged: 0 }
+  const [{ data: moved }, { data: items }] = await Promise.all([
+    admin.from("stock_movements").select("schedule_job_id").in("schedule_job_id", ids),
+    admin.from("schedule_job_filter_items").select("schedule_job_id").in("schedule_job_id", ids),
+  ])
+  const keep = new Set([...(moved ?? []), ...(items ?? [])].map((r) => r.schedule_job_id as string))
+  const remove = ids.filter((id) => !keep.has(id))
+  if (remove.length === 0) return { purged: 0 }
+  const { data: deleted, error: deleteError } = await admin
+    .from("schedule_jobs")
+    .delete()
+    .in("id", remove)
+    .eq("status", "pending_approval")
+    .lt("scheduled_date", today)
+    .select("id")
+  return { purged: deleted?.length ?? 0, error: deleteError?.message }
+}
+
 export async function runGenerateDraftJobs(ctx?: AutomationContext): Promise<AutomationResult> {
   const admin = createAdminClient()
   // The Manila business day — not the server's UTC date, which is still
