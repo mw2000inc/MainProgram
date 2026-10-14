@@ -404,6 +404,9 @@ export interface Announcement {
   id: string
   title: string
   body: string
+  // The day it's for (yyyy-MM-dd) — the Daily Report shows it on that date
+  // only (20261110000000_announcement_date).
+  announcementDate: string
   createdBy: string
   createdAt: string
   updatedAt: string

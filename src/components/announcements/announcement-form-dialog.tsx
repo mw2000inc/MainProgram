@@ -24,23 +24,36 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useCreateAnnouncement, useUpdateAnnouncement } from "@/lib/hooks/use-announcements"
+import { businessToday } from "@/lib/dispatch-lead-time"
 import type { Announcement } from "@/lib/types"
 
 const schema = z.object({
   title: z.string().min(2, "Title is required"),
   body: z.string().min(2, "Message is required"),
+  announcementDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
 })
 
 type FormValues = z.infer<typeof schema>
+
+function initialValues(announcement: Announcement | undefined, defaultDate: string | undefined): FormValues {
+  return {
+    title: announcement?.title ?? "",
+    body: announcement?.body ?? "",
+    announcementDate: announcement?.announcementDate ?? defaultDate ?? businessToday(),
+  }
+}
 
 export function AnnouncementFormDialog({
   open,
   onOpenChange,
   announcement,
+  defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   announcement?: Announcement
+  // A new announcement's day — the Daily Report date it's posted from.
+  defaultDate?: string
 }) {
   const createAnnouncement = useCreateAnnouncement()
   const updateAnnouncement = useUpdateAnnouncement()
@@ -48,13 +61,13 @@ export function AnnouncementFormDialog({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { title: announcement?.title ?? "", body: announcement?.body ?? "" },
+    defaultValues: initialValues(announcement, defaultDate),
   })
 
   React.useEffect(() => {
-    if (open) form.reset({ title: announcement?.title ?? "", body: announcement?.body ?? "" })
+    if (open) form.reset(initialValues(announcement, defaultDate))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, announcement])
+  }, [open, announcement, defaultDate])
 
   async function onSubmit(values: FormValues) {
     if (isEdit) {
@@ -87,6 +100,20 @@ export function AnnouncementFormDialog({
                   <FormControl>
                     <Input placeholder="e.g. New delivery schedule" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="announcementDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Shown on the Daily Report for this date.</p>
                   <FormMessage />
                 </FormItem>
               )}

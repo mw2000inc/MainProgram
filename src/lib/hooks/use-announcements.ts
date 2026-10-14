@@ -5,14 +5,20 @@ import { toast } from "sonner"
 export const announcementsKey = ["announcements"] as const
 export const commentsKey = (announcementId: string) => ["announcementComments", announcementId] as const
 
-export function useAnnouncements() {
-  return useQuery({ queryKey: announcementsKey, queryFn: api.listAnnouncements })
+// With a date: that day's announcements only, cached per date — changing the
+// Daily Report date fetches the new day. Every write invalidates them all
+// (announcementsKey is the prefix).
+export function useAnnouncements(date?: string) {
+  return useQuery({
+    queryKey: date ? [...announcementsKey, date] : announcementsKey,
+    queryFn: () => api.listAnnouncements(date),
+  })
 }
 
 export function useCreateAnnouncement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { title: string; body: string }) => api.createAnnouncement(input),
+    mutationFn: (input: api.AnnouncementInput) => api.createAnnouncement(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: announcementsKey })
       toast.success("Announcement posted")
@@ -24,7 +30,7 @@ export function useCreateAnnouncement() {
 export function useUpdateAnnouncement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { title: string; body: string } }) => api.updateAnnouncement(id, input),
+    mutationFn: ({ id, input }: { id: string; input: api.AnnouncementInput }) => api.updateAnnouncement(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: announcementsKey })
       toast.success("Announcement updated")

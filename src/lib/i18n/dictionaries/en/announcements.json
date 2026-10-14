@@ -1,6 +1,7 @@
 {
   "newAnnouncement": "New Announcement",
   "noAnnouncementsYet": "No announcements yet.",
+  "noAnnouncementsForDate": "No announcements for this date.",
   "deleteAnnouncement": "Delete announcement?",
   "deleteAnnouncementDescription": "This will permanently remove this announcement and all of its comments.",
   "noCommentsYet": "No comments yet.",

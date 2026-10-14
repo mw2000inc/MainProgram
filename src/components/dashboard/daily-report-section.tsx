@@ -952,7 +952,7 @@ export function DailyReportSection() {
   // ResizablePanel below (see resizable()). Titles come from the admin's
   // configured label (labelFor), not a hardcoded string.
   const rawContent: Record<PanelId, React.ReactNode> = {
-    announcements: <AnnouncementPanel title={labelFor("announcements")} />,
+    announcements: <AnnouncementPanel title={labelFor("announcements")} date={reportDate} />,
     schedule: <ScheduleAgenda date={reportDate} title={labelFor("schedule")} />,
     "filter-change": (
       <DashboardPlanPanel

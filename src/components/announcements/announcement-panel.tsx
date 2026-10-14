@@ -17,12 +17,14 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDateTime } from "@/lib/utils"
 import type { Announcement } from "@/lib/types"
 
-export function AnnouncementPanel({ title = "Announcements" }: { title?: string } = {}) {
+// With a date (the Daily Report's): only that day's announcements, and a new
+// one defaults to that day.
+export function AnnouncementPanel({ title = "Announcements", date }: { title?: string; date?: string } = {}) {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
   const dragHandle = useDragHandle()
   const { t } = useTranslation("announcements")
-  const { data: announcements = [], isPending } = useAnnouncements()
+  const { data: announcements = [], isPending } = useAnnouncements(date)
   const deleteAnnouncement = useDeleteAnnouncement()
 
   const [formOpen, setFormOpen] = React.useState(false)
@@ -67,7 +69,7 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
         )}
         {!isPending && announcements.length === 0 && (
           <p className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center">
-            {t("noAnnouncementsYet")}
+            {date ? t("noAnnouncementsForDate") : t("noAnnouncementsYet")}
           </p>
         )}
         {announcements.map((a, i) => (
@@ -114,7 +116,7 @@ export function AnnouncementPanel({ title = "Announcements" }: { title?: string 
         ))}
       </CardContent>
 
-      <AnnouncementFormDialog open={formOpen} onOpenChange={setFormOpen} announcement={editing} />
+      <AnnouncementFormDialog open={formOpen} onOpenChange={setFormOpen} announcement={editing} defaultDate={date} />
 
       <ConfirmDialog
         open={!!deleting}
