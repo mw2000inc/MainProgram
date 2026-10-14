@@ -470,6 +470,9 @@ export interface ScheduleJob {
   // schedule_jobs_select: technician_user_id = auth.uid() OR
   // technician_2_user_id = auth.uid()).
   technician2UserId?: string
+  // Every assigned technician's login as one list — generated from the two
+  // above (20261109000000), read-only.
+  technicianUserIds?: string[]
   customerId?: string
   orderNo?: string
   scheduledDate: string

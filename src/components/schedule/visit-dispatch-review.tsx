@@ -10,7 +10,7 @@ import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell } from "@/compon
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { isSaturday } from "@/lib/schedule-timeframe"
-import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians"
+import { isAssignedTechnician, normalizeTechnicianPair, crewFillForVehicle } from "@/lib/technicians"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 import type { UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
@@ -101,7 +101,7 @@ export function VisitDispatchReview({
     update(visit, { primary: pair.primary, secondary: pair.secondary, technicianChosen: isAssignedTechnician(pair.primary) })
   }
   const setVehicle = (visit: UnscheduledVisit, vehicle: string) => {
-    const crew = crewForVehicle(vehicle)
+    const crew = crewFillForVehicle(vehicle, (drafts[visit.key] ?? initial(visit)).primary)
     update(visit, { vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary, technicianChosen: true } : {}) })
   }
 

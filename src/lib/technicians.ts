@@ -135,6 +135,13 @@ export function assignmentAccounts<A extends TechnicianAccount & { role?: string
   return profiles.filter((p) => p.role === "technician" || !!crewOfTechnician(p.name))
 }
 
+// Picking a crew's vehicle (the Liteace) fills in its two technicians — but
+// only while no technician is chosen yet: technicians an admin picked by hand
+// are never replaced by the vehicle (admin, 2026-10-14).
+export function crewFillForVehicle(vehicle: string | null | undefined, currentPrimary: string | null | undefined): { primary: string; secondary: string } | undefined {
+  return isAssignedTechnician(currentPrimary) ? undefined : crewForVehicle(vehicle)
+}
+
 // The fixed crew for a vehicle (VEHICLE_CREWS), or undefined for a vehicle
 // any technician can take.
 export function crewForVehicle(vehicle: string | null | undefined): { primary: string; secondary: string } | undefined {

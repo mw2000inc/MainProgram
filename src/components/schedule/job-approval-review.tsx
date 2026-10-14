@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { InlineComboboxCell, InlineTextAreaCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { crewForVehicle, isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians"
+import { isAssignedTechnician, normalizeTechnicianPair, crewFillForVehicle } from "@/lib/technicians"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { cn, formatDate } from "@/lib/utils"
 import type { ScheduleJob } from "@/lib/types"
@@ -78,7 +78,7 @@ export function JobApprovalReview({
   }
   // A vehicle with a fixed crew (the Liteace) brings its two technicians.
   const setVehicle = (job: ScheduleJob, vehicle: string) => {
-    const crew = crewForVehicle(vehicle)
+    const crew = crewFillForVehicle(vehicle, (edits[job.id] ?? initial(job)).primary)
     update(job, { vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary } : {}) })
   }
   const toggle = (id: string) =>

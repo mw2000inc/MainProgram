@@ -9,7 +9,6 @@ import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { InlineDateCell, InlineGridPickerCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
-import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import { pairPatchToFields } from "@/lib/technicians"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { getFilterPartOptions } from "@/lib/filter-parts"
@@ -22,6 +21,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+import { TechnicianStack } from "@/components/shared/technician-stack"
 
 // The linked customer's own "SK001-####" order_number, never rendered as a
 // column — exists purely so DataTable's generic search on the standalone
@@ -304,7 +304,7 @@ function dailyReportColumnDefs({
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) {
-          return <span className="inline-block min-w-[150px]">{plan.serviceman ? formatTechnicians(plan.serviceman, plan.serviceman2, "&") : "—"}</span>
+          return <TechnicianStack primary={plan.serviceman} secondary={plan.serviceman2} />
         }
         return (
           <InlineTechnicianPairCell
@@ -391,7 +391,7 @@ export function getFilterChangeExpandedColumns(
     editable?.serviceman ?? {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+      cell: ({ row }) => <TechnicianStack primary={row.original.serviceman} secondary={row.original.serviceman2} />,
     },
     {
       accessorKey: "note",
@@ -459,7 +459,7 @@ export function getFilterChangeFullColumns({
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+      cell: ({ row }) => <TechnicianStack primary={row.original.serviceman} secondary={row.original.serviceman2} />,
     },
     {
       accessorKey: "note",

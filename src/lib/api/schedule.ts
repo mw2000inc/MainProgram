@@ -22,6 +22,8 @@ type ScheduleJobRow = {
   secondary_address: string | null
   technician_user_id: string | null
   technician_2_user_id: string | null
+  // Generated: both logins as a list (20261109000000); absent until then.
+  technician_user_ids?: string[] | null
   latitude: number | null
   longitude: number | null
   location_source: ScheduleJob["locationSource"] | null
@@ -52,6 +54,7 @@ function fromRow(row: ScheduleJobRow): ScheduleJob {
     secondaryAddress: row.secondary_address ?? undefined,
     technicianUserId: row.technician_user_id ?? undefined,
     technician2UserId: row.technician_2_user_id ?? undefined,
+    technicianUserIds: row.technician_user_ids ?? undefined,
     latitude: row.latitude ?? undefined,
     longitude: row.longitude ?? undefined,
     locationSource: row.location_source ?? undefined,

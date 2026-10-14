@@ -19,7 +19,7 @@ import { collectionsKey } from "@/lib/hooks/use-collections"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useJobAccountName } from "@/lib/scheduling/job-account-name"
-import { assignmentAccounts, crewForVehicle, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { InlineComboboxCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
@@ -132,7 +132,7 @@ export function PendingScheduleApprovalPanel() {
   const saveTechnicians = (job: ScheduleJob, p: { primary?: string; secondary?: string }) =>
     updateJob.mutate({ id: job.id, input: technicianFields(p.primary ?? job.technician ?? "", p.secondary ?? job.technician2 ?? "") })
   const saveVehicle = (job: ScheduleJob, vehicle: string) => {
-    const crew = crewForVehicle(vehicle)
+    const crew = crewFillForVehicle(vehicle, job.technician)
     updateJob.mutate({ id: job.id, input: { vehicle, ...(crew ? technicianFields(crew.primary, crew.secondary) : {}) } })
   }
 

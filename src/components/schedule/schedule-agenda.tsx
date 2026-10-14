@@ -57,7 +57,7 @@ import { printTable } from "@/lib/export/print"
 import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
@@ -740,7 +740,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   }
   // A vehicle with a fixed crew (the Liteace) brings its two technicians.
   const saveVehicle = (job: ScheduleJob, vehicle: string) => {
-    const crew = crewForVehicle(vehicle)
+    const crew = crewFillForVehicle(vehicle, job.technician)
     saveJob(job, { vehicle, ...(crew ? technicianInput(crew.primary, crew.secondary) : {}) })
   }
   // Pending -> Completed goes through the same completion as the batch
@@ -1557,7 +1557,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                           showAllOnExactMatch
                           onCommit={(next) => {
                             const vehicle = next.trim()
-                            const crew = crewForVehicle(vehicle)
+                            const crew = crewFillForVehicle(vehicle, edit.primary ?? v.technician)
                             editVisit(v, { vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary } : {}) })
                           }}
                         />

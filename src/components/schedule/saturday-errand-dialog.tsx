@@ -19,7 +19,7 @@ import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import { isSaturday } from "@/lib/schedule-timeframe"
-import { assignmentAccounts, crewForVehicle, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
 
 const NONE = "__none"
 
@@ -74,7 +74,7 @@ export function SaturdayErrandDialog({
   const pickVehicle = (value: string) => {
     const v = value === NONE ? "" : value
     setVehicle(v)
-    const crew = crewForVehicle(v)
+    const crew = crewFillForVehicle(v, technician)
     if (crew) {
       setTechnician(crew.primary)
       setTechnician2(crew.secondary)

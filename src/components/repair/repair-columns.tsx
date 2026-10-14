@@ -10,6 +10,7 @@ import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { RepairPlan } from "@/lib/types"
+import { TechnicianStack } from "@/components/shared/technician-stack"
 
 export const REPAIR_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
 
@@ -97,7 +98,7 @@ export function getRepairColumns({
     {
       accessorKey: "th",
       header: () => <ColumnHeader tKey="th" ns="fields" />,
-      cell: ({ row }) => (row.original.th ? formatTechnicians(row.original.th, row.original.th2, "&") : "—"),
+      cell: ({ row }) => <TechnicianStack primary={row.original.th} secondary={row.original.th2} />,
     },
     {
       accessorKey: "status",

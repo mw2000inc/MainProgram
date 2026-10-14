@@ -17,6 +17,7 @@ import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { CollectionPlan } from "@/lib/types"
+import { TechnicianStack } from "@/components/shared/technician-stack"
 
 // The linked customer's own "SK001-####" order_number, never rendered as a
 // column — exists purely so DataTable's generic search on the standalone
@@ -172,7 +173,7 @@ export function getCollectionsColumns({
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+      cell: ({ row }) => <TechnicianStack primary={row.original.serviceman} secondary={row.original.serviceman2} />,
     },
     {
       accessorKey: "status",
@@ -401,7 +402,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "serviceman",
       header: () => <ColumnHeader tKey="serviceman" ns="fields" />,
-      cell: ({ row }) => (row.original.serviceman ? formatTechnicians(row.original.serviceman, row.original.serviceman2, "&") : "—"),
+      cell: ({ row }) => <TechnicianStack primary={row.original.serviceman} secondary={row.original.serviceman2} />,
     },
     {
       accessorKey: "status",

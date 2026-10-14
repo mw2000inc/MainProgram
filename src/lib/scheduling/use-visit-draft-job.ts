@@ -101,9 +101,11 @@ export function useVisitDraftJob() {
           },
           date
         )
-    const base = assigned?.pair ?? picked
-    const crew = crewOfTechnician(base.primary) ?? crewOfTechnician(base.secondary)
-    const pair = crew ? { primary: crew.primary, secondary: crew.secondary } : base
+    // Technicians picked on the form are kept exactly as picked; only an
+    // automatic pick brings the whole crew (createDispatchAssigner already
+    // applies that rule itself).
+    const pair = assigned?.pair ?? picked
+    const crew = assigned ? crewOfTechnician(pair.primary) ?? crewOfTechnician(pair.secondary) : undefined
     const ids = technicianAccountIds(pair.primary, pair.secondary, accounts)
     const product = orderNo ? saleListEntries.find((e) => e.orderNumber.trim() === orderNo)?.productNo?.trim() : undefined
     const notes =

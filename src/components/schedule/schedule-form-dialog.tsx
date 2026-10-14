@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAutoAssignableTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAutoAssignableTechnician, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
 import { requiresSaturdayApproval } from "@/lib/schedule-timeframe"
 import { useCreateScheduleJob, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -307,7 +307,8 @@ export function ScheduleFormDialog({
   // A vehicle with a fixed crew (VEHICLE_CREWS — the Liteace) fills in both
   // technicians and links their logins; they can still be changed after.
   function applyVehicleCrew(vehicle: string) {
-    const crew = crewForVehicle(vehicle)
+    // Only while no technician is chosen — never replaces a manual pick.
+    const crew = crewFillForVehicle(vehicle, form.getValues("technician"))
     if (!crew) return
     const ids = technicianAccountIds(crew.primary, crew.secondary, technicianAccounts)
     form.setValue("technician", crew.primary, { shouldDirty: true, shouldValidate: true })

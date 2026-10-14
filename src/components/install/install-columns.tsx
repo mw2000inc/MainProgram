@@ -14,6 +14,7 @@ import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
+import { TechnicianStack } from "@/components/shared/technician-stack"
 
 export const INSTALL_STATUS_OPTIONS = ["Pending", "Completed", "Cancelled"] as const
 
@@ -112,7 +113,7 @@ export function getInstallColumns({
       cell: ({ row }) => {
         const plan = row.original
         if (!onFieldChange) {
-          return <span className="inline-block min-w-37.5">{plan.serviceman ? formatTechnicians(plan.serviceman, plan.serviceman2, "&") : "—"}</span>
+          return <TechnicianStack primary={plan.serviceman} secondary={plan.serviceman2} />
         }
         return (
           <InlineTechnicianPairCell
