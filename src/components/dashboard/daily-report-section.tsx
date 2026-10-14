@@ -28,6 +28,15 @@ import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { panelLinkJobs, scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
 import { ClearScheduleDialog } from "@/components/shared/clear-schedule-dialog"
+import { clearSchedulesForRecords } from "@/lib/api/schedule"
+import { deleteStockMovement } from "@/lib/api/inventory"
+import { useQueryClient } from "@tanstack/react-query"
+import { stockMovementsKey, productsKey } from "@/lib/hooks/use-inventory"
+import { RecordDetailDialog, type DetailField } from "@/components/shared/record-detail-dialog"
+import { formatTechnicians } from "@/components/schedule/schedule-columns"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useCpSystems } from "@/lib/hooks/use-cp-systems"
+import { formatCurrency, formatDate as formatDay } from "@/lib/utils"
 import { CalendarX2 } from "lucide-react"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
@@ -63,7 +72,7 @@ import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
 import { useAllRepairPlanParts } from "@/lib/hooks/use-repair-plan-parts"
 import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { scheduleJobsKey, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { useApproveStockMovements, useRejectStockMovements, useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useMyDailyReportLayout, useSaveMyDailyReportLayout } from "@/lib/hooks/use-daily-report-layout"
 import { useDailyReportSections } from "@/lib/hooks/use-daily-report-sections"
@@ -363,6 +372,35 @@ export function DailyReportSection() {
   const { t: tInventory } = useTranslation("inventory")
   const { t: tDispatch } = useTranslation("dispatch")
   const { t: tSchedule } = useTranslation("schedule")
+  const { t: tFieldsDetail } = useTranslation("fields")
+  // A row click opens its record as a centered detail card right here (no
+  // page change); Edit opens that record's own form on top. Both read the
+  // live lists, so the card shows an edit straight away.
+  const [detail, setDetail] = React.useState<{ kind: "fc" | "install" | "repair" | "collection"; id: string } | null>(null)
+  const [editing, setEditing] = React.useState<{ kind: "fc" | "install" | "repair" | "collection"; id: string } | null>(null)
+  const { data: detailSaleEntries = [] } = useSaleListEntries()
+  const { data: detailCpSystems = [] } = useCpSystems()
+  // Deleting records also removes their open schedule job (draft or
+  // approved — the same rule as Clear Schedule: a completed job, or one with
+  // stock recorded, is kept), so nothing is left behind on the Schedule board.
+  const qcDelete = useQueryClient()
+  const deleteRecordsWithJobs = React.useCallback(
+    async (table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections", ids: string[], remove: (ids: string[]) => Promise<unknown>) => {
+      await clearSchedulesForRecords(table, ids)
+      await remove(ids)
+      qcDelete.invalidateQueries({ queryKey: scheduleJobsKey })
+    },
+    [qcDelete]
+  )
+  const deleteMovements = React.useCallback(
+    async (ids: string[]) => {
+      for (const id of ids) await deleteStockMovement(id)
+      qcDelete.invalidateQueries({ queryKey: stockMovementsKey })
+      qcDelete.invalidateQueries({ queryKey: productsKey })
+      toast.success(tInventory("movementsDeleted", { count: String(ids.length) }))
+    },
+    [qcDelete, tInventory]
+  )
   const { t: tCommon } = useTranslation("common")
   const { t: tAllCollection } = useTranslation("allCollection")
 
@@ -950,10 +988,10 @@ export function DailyReportSection() {
         canAdd={isAdmin}
         onAdd={() => setFilterChangeFormOpen(true)}
         canDelete={isAdmin}
-        onDeleteSelected={(ids) => deleteFilterChangePlans.mutateAsync(ids)}
+        onDeleteSelected={(ids) => deleteRecordsWithJobs("filter_change_plans", ids, (x) => deleteFilterChangePlans.mutateAsync(x))}
         exportColumns={FILTER_CHANGE_EXPORT_COLUMNS}
         exportFileName="filter-change-plan"
-        onRowClick={isAdmin ? (row) => router.push(`/filter-change?id=${row.id}`) : undefined}
+        onRowClick={(row) => setDetail({ kind: "fc", id: row.id })}
         panelHeight={sizes["filter-change"]?.height}
         // Now the full 10-column set (see filterChangeColumns above) —
         // min-w-max forces the table to its natural, un-compressed content
@@ -981,10 +1019,10 @@ export function DailyReportSection() {
         canAdd={isAdmin}
         onAdd={() => setInstallFormOpen(true)}
         canDelete={isAdmin}
-        onDeleteSelected={(ids) => deleteInstallPlans.mutateAsync(ids)}
+        onDeleteSelected={(ids) => deleteRecordsWithJobs("install_plans", ids, (x) => deleteInstallPlans.mutateAsync(x))}
         exportColumns={INSTALL_EXPORT_COLUMNS}
         exportFileName="install-plan"
-        onRowClick={isAdmin ? (row) => router.push(`/install?id=${row.id}`) : undefined}
+        onRowClick={(row) => setDetail({ kind: "install", id: row.id })}
         panelHeight={sizes.installation?.height}
         getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
@@ -1001,10 +1039,10 @@ export function DailyReportSection() {
         canAdd={isAdmin}
         onAdd={() => setRepairFormOpen(true)}
         canDelete={isAdmin}
-        onDeleteSelected={(ids) => deleteRepairPlans.mutateAsync(ids)}
+        onDeleteSelected={(ids) => deleteRecordsWithJobs("repair_plans", ids, (x) => deleteRepairPlans.mutateAsync(x))}
         exportColumns={REPAIR_EXPORT_COLUMNS}
         exportFileName="repair-plan"
-        onRowClick={isAdmin ? (row) => router.push(`/repair-plan?id=${row.id}`) : undefined}
+        onRowClick={(row) => setDetail({ kind: "repair", id: row.id })}
         panelHeight={sizes.repair?.height}
         getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
       />
@@ -1028,10 +1066,10 @@ export function DailyReportSection() {
         canAdd={isAdmin}
         onAdd={() => setCollectionsFormOpen(true)}
         canDelete={isAdmin}
-        onDeleteSelected={(ids) => deleteCollections.mutateAsync(ids)}
+        onDeleteSelected={(ids) => deleteRecordsWithJobs("collections", ids, (x) => deleteCollections.mutateAsync(x))}
         exportColumns={COLLECTIONS_EXPORT_COLUMNS}
         exportFileName="collection-plan"
-        onRowClick={isAdmin ? (row) => router.push(`/collection-plan?id=${row.id}`) : undefined}
+        onRowClick={(row) => setDetail({ kind: "collection", id: row.id })}
         panelHeight={sizes.collection?.height}
         tableContainerClassName="scrollbar-always-visible"
         getRowClassName={(row) => dispatchRowClassName(row.dispatchStatus)}
@@ -1068,6 +1106,13 @@ export function DailyReportSection() {
         columns={inventoryListExpandedColumns}
         columnsForWidth={inventoryColumnsForWidth}
         data={dayStockMovementRows}
+        // A row's trash deletes every movement it combines; not on the
+        // expanded view's per-item totals (that would remove many at once).
+        canDelete={isAdmin}
+        onDeleteSelected={deleteMovements}
+        rowDeleteIds={(row) => row.mergedIds ?? [row.id]}
+        rowDeleteInExpanded={false}
+        rowDeleteNote={tInventory("deleteApprovedNote")}
         expandedData={reviewAllPending ? allPendingRows : dayStockItemTotals}
         expandedColumns={reviewAllPending ? reviewColumns : undefined}
         onExpandedChange={(open) => !open && setReviewAllPending(false)}
@@ -1301,6 +1346,131 @@ export function DailyReportSection() {
       <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} />
       <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} />
       <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} />
+      {(() => {
+        if (!detail) return null
+        const tf = tFieldsDetail
+        const d = (v?: string) => (v ? formatDay(v) : undefined)
+        const techs = (a?: string, b?: string) => (a?.trim() ? formatTechnicians(a, b ?? "") : undefined)
+        let title: React.ReactNode = ""
+        let subtitle: React.ReactNode = ""
+        let fields: DetailField[] = []
+        let icon = Droplets
+        if (detail.kind === "fc") {
+          const p = filterChangePlans.find((x) => x.id === detail.id)
+          if (!p) return null
+          const sale = detailSaleEntries.find((e) => e.orderNumber.trim() === p.orderNumber.trim())
+          const cp = sale?.cpSystemId ? detailCpSystems.find((s) => s.id === sale.cpSystemId)?.systemCode : undefined
+          const month = p.preD || p.planDate
+          title = p.memberAccount || p.orderNumber
+          subtitle = labelFor("filter_change")
+          fields = [
+            { label: tf("orderNumber"), value: p.orderNumber },
+            { label: tf("filter"), value: p.filterType },
+            { label: tf("planD"), value: d(p.planDate) },
+            { label: tf("preD"), value: d(p.preD) },
+            { label: tf("accD"), value: d(p.accD) },
+            { label: tf("serviceman"), value: techs(p.serviceman, p.serviceman2) },
+            { label: tCommon("yearMonth"), value: month ? formatDay(month, "yyyy-MM") : undefined },
+            { label: tCommon("year"), value: month ? month.slice(0, 4) : undefined },
+            { label: tf("memberAccount"), value: p.memberAccount },
+            { label: tf("contactNumber"), value: p.contactNumber },
+            { label: tf("address"), value: p.address },
+            { label: tf("productNo"), value: p.productNo || sale?.productNo },
+            { label: `${tf("sc")} / CP`, value: [p.sc, cp].filter(Boolean).join(" · ") },
+            { label: tf("status"), value: p.status },
+            { label: tf("note"), value: p.note },
+          ]
+        } else if (detail.kind === "collection") {
+          const c = collectionPlans.find((x) => x.id === detail.id)
+          if (!c) return null
+          icon = Banknote
+          title = c.accountName || c.orderNo
+          subtitle = labelFor("collection")
+          fields = [
+            { label: tf("orderNo"), value: c.orderNo },
+            { label: tf("amount"), value: formatCurrency(Number(c.amount) || 0) },
+            { label: tf("ct"), value: c.ct },
+            { label: tf("planD"), value: d(c.collectionDate) },
+            { label: tf("preD"), value: d(c.preD) },
+            { label: tf("accD"), value: d(c.accD) },
+            { label: tf("serviceman"), value: techs(c.serviceman, c.serviceman2) },
+            { label: tf("paymentType"), value: c.paymentType },
+            { label: tf("status"), value: c.collected ? `${c.status} · collected` : c.status },
+            { label: tf("note"), value: c.note },
+          ]
+        } else if (detail.kind === "install") {
+          const p = installPlans.find((x) => x.id === detail.id)
+          if (!p) return null
+          icon = HardHat
+          title = p.name || p.orderNo
+          subtitle = labelFor("installation")
+          fields = [
+            { label: tf("orderNo"), value: p.orderNo },
+            { label: tf("name"), value: p.name },
+            { label: tf("contactNumber"), value: p.contactNumber },
+            { label: tf("address"), value: p.address },
+            { label: tf("model"), value: p.model },
+            { label: tf("inOrOut"), value: p.inOut },
+            { label: tf("inputDate"), value: d(p.inputDate) },
+            { label: tf("preInstalledDate"), value: d(p.preInstalledDate) },
+            { label: tf("installedDate"), value: d(p.installedDate) },
+            { label: tf("serviceman"), value: techs(p.serviceman, p.serviceman2) },
+            { label: tf("status"), value: p.status },
+            { label: tf("note"), value: p.note },
+          ]
+        } else {
+          const r = repairPlans.find((x) => x.id === detail.id)
+          if (!r) return null
+          icon = Wrench
+          title = r.accountName || r.orderNo
+          subtitle = labelFor("repair")
+          fields = [
+            { label: tf("orderNo"), value: r.orderNo },
+            { label: tf("accountName"), value: r.accountName },
+            { label: tf("contactNumber"), value: r.contactNumber },
+            { label: tf("address"), value: r.address },
+            { label: tf("problem"), value: r.problem },
+            { label: tf("solutionStatus"), value: r.solutionStatus },
+            { label: tf("issuedDate"), value: d(r.issuedDate) },
+            { label: tf("preD"), value: d(r.preD) },
+            { label: tf("accD"), value: d(r.accD) },
+            { label: tf("th"), value: techs(r.th, r.th2) },
+            { label: tf("unitInOut"), value: r.unitInOut },
+            { label: tf("model"), value: r.model },
+            { label: tf("partNo"), value: r.partNo },
+            { label: tf("status"), value: r.status },
+            { label: tf("note"), value: r.note },
+          ]
+        }
+        return (
+          <RecordDetailDialog
+            open
+            onOpenChange={(open) => !open && setDetail(null)}
+            title={title}
+            subtitle={subtitle}
+            icon={icon}
+            fields={fields}
+            onEdit={isAdmin ? () => setEditing(detail) : undefined}
+          />
+        )
+      })()}
+      {editing?.kind === "fc" && (
+        <FilterChangeFormDialog
+          open
+          onOpenChange={(open) => !open && setEditing(null)}
+          defaultDate={reportDate}
+          plan={filterChangePlans.find((x) => x.id === editing.id)}
+        />
+      )}
+      {editing?.kind === "install" && (
+        <InstallFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={installPlans.find((x) => x.id === editing.id)} />
+      )}
+      {editing?.kind === "repair" && (
+        <RepairFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={repairPlans.find((x) => x.id === editing.id)} />
+      )}
+      {editing?.kind === "collection" && (
+        <CollectionsFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} entry={collectionPlans.find((x) => x.id === editing.id)} />
+      )}
       <ClearScheduleDialog
         table="filter_change_plans"
         recordIds={clearingFcIds}

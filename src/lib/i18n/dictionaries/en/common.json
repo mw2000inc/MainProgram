@@ -1,4 +1,9 @@
 {
+  "removeEntryTitle": "Remove this entry?",
+  "removeEntryConfirm": "Are you sure you want to remove this entry? This action cannot be undone.",
+  "removeEntryCombined": "This row combines {count} entries; all of them are removed.",
+  "yearMonth": "Year Month",
+  "year": "Year",
   "customerDetails": "Customer Details",
   "contactPerson": "Contact Person",
   "productModel": "Product / Model",

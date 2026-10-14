@@ -1,4 +1,6 @@
 {
+  "deleteApprovedNote": "An already approved movement also reverses its stock change.",
+  "movementsDeleted": "{count} stock movement(s) deleted",
   "editTitle": "Edit Product",
   "addTitle": "Add Product",
   "editDescription": "Update this inventory item.",

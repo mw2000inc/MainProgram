@@ -61,6 +61,13 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   onAdd?: () => void
   canDelete?: boolean
   onDeleteSelected?: (ids: string[]) => Promise<void>
+  // A trash button at the end of every row (canDelete), deleting through
+  // onDeleteSelected after a confirmation. rowDeleteIds picks what a row
+  // deletes (default: its id; null = no button on that row — e.g. a combined
+  // total); rowDeleteInExpanded=false keeps it off the expanded view.
+  rowDeleteIds?: (row: TData) => string[] | null
+  rowDeleteInExpanded?: boolean
+  rowDeleteNote?: string
   // When provided, shows a CSV/Excel export menu in the panel header.
   exportColumns?: ExportColumn[]
   exportFileName?: string
@@ -161,6 +168,9 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   onAdd,
   canDelete,
   onDeleteSelected,
+  rowDeleteIds,
+  rowDeleteInExpanded = true,
+  rowDeleteNote,
   exportColumns,
   exportFileName,
   onRowClick,
@@ -187,6 +197,8 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     onExpandedChange?.(open)
   }
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
+  // The row whose trash button was pressed: what it deletes.
+  const [rowDelete, setRowDelete] = React.useState<string[] | null>(null)
   const [deleting, setDeleting] = React.useState(false)
 
   const statusOptions = React.useMemo(
@@ -246,10 +258,43 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
     () => (columnsForWidth && contentWidth ? columnsForWidth(contentWidth) : columns),
     [columnsForWidth, contentWidth, columns]
   )
-  const compactColumns = React.useMemo(() => withSelectColumn(baseCompactColumns), [withSelectColumn, baseCompactColumns])
+  // The trailing trash column (see rowDeleteIds).
+  const withRowDelete = React.useCallback(
+    (base: ColumnDef<TData, unknown>[]): ColumnDef<TData, unknown>[] => {
+      if (!canDelete || !onDeleteSelected) return base
+      const column: ColumnDef<TData, unknown> = {
+        id: "__rowDelete",
+        header: "",
+        cell: ({ row }) => {
+          const ids = rowDeleteIds ? rowDeleteIds(row.original) : [row.original.id]
+          if (!ids || ids.length === 0) return null
+          return (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-danger hover:text-danger"
+              title={t("delete")}
+              aria-label={t("delete")}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setRowDelete(ids)
+              }}
+              data-testid="panel-row-delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )
+        },
+      }
+      return [...base, column]
+    },
+    [canDelete, onDeleteSelected, rowDeleteIds, t]
+  )
+  const compactColumns = React.useMemo(() => withRowDelete(withSelectColumn(baseCompactColumns)), [withRowDelete, withSelectColumn, baseCompactColumns])
   const dialogColumns = React.useMemo(
-    () => withSelectColumn(expandedColumns ?? columns),
-    [withSelectColumn, expandedColumns, columns]
+    () => (rowDeleteInExpanded ? withRowDelete : (c: ColumnDef<TData, unknown>[]) => c)(withSelectColumn(expandedColumns ?? columns)),
+    [withRowDelete, rowDeleteInExpanded, withSelectColumn, expandedColumns, columns]
   )
 
   function exitSelectMode() {
@@ -475,6 +520,24 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!rowDelete}
+        onOpenChange={(open) => !open && setRowDelete(null)}
+        title={t("removeEntryTitle")}
+        description={[t("removeEntryConfirm"), rowDelete && rowDelete.length > 1 ? t("removeEntryCombined", { count: rowDelete.length }) : "", rowDeleteNote ?? ""].filter(Boolean).join(" ")}
+        loading={deleting}
+        onConfirm={async () => {
+          if (!onDeleteSelected || !rowDelete) return
+          setDeleting(true)
+          try {
+            await onDeleteSelected(rowDelete)
+            setRowDelete(null)
+          } finally {
+            setDeleting(false)
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={confirmingDelete}

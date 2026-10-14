@@ -1,4 +1,6 @@
 {
+  "deleteApprovedNote": "이미 승인된 이동은 재고 변경도 되돌립니다.",
+  "movementsDeleted": "재고 이동 {count}건 삭제됨",
   "editTitle": "제품 수정",
   "addTitle": "제품 추가",
   "editDescription": "이 재고 항목을 업데이트합니다.",
