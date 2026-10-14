@@ -1,4 +1,11 @@
 {
+  "customerDetails": "고객 상세",
+  "contactPerson": "담당자",
+  "productModel": "제품 / 모델",
+  "otherOrders": "다른 주문",
+  "notes": "메모",
+  "customerNotOnMemberList": "이 주문은 판매 목록에서 회원과 연결되어 있지 않아 기록에 있는 정보만 표시됩니다.",
+  "openMemberPage": "회원 페이지 열기",
   "clearDate": "날짜 지우기",
   "save": "저장",
   "cancel": "취소",

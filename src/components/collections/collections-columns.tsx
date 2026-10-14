@@ -334,7 +334,7 @@ export function getCollectionsFullColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.resolvedCustomerId} />,
+      cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.resolvedCustomerId} orderNo={row.original.orderNo} />,
     },
     {
       id: "sc",

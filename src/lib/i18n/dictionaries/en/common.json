@@ -1,4 +1,11 @@
 {
+  "customerDetails": "Customer Details",
+  "contactPerson": "Contact Person",
+  "productModel": "Product / Model",
+  "otherOrders": "Other orders",
+  "notes": "Notes",
+  "customerNotOnMemberList": "This order isn't linked to a member on the Sale List, so only what the record itself has is shown.",
+  "openMemberPage": "Open member page",
   "clearDate": "Clear date",
   "save": "Save",
   "cancel": "Cancel",

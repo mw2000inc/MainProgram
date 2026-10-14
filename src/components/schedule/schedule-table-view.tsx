@@ -28,6 +28,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { technicianFilterOptions } from "@/lib/technicians"
 import type { ScheduleJob, Customer, FilterChangePlan, CollectionPlan, SaleListEntry } from "@/lib/types"
+import { CustomerNameButton } from "@/components/shared/customer-details"
 
 // Picks the best soft-match among same-order-number candidates from a
 // sibling table (filter_change_plans/collections/sale_list_entries — none
@@ -269,7 +270,15 @@ export function ScheduleTableView({ date, onDateChange }: { date: string; onDate
                       <td className="border px-2.5 py-2">{row.contactPerson || "—"}</td>
                       <td className="border px-2.5 py-2 whitespace-nowrap">{row.contactNo || "—"}</td>
                       <td className="border px-2.5 py-2 whitespace-nowrap">{row.orderNumber || "—"}</td>
-                      <td className="border px-2.5 py-2">{row.memberAcctName || "—"}</td>
+                      <td className="border px-2.5 py-2">
+                        {row.memberAcctName ? (
+                          <CustomerNameButton target={{ orderNo: row.orderNumber, name: row.memberAcctName, address: row.address, contactNumber: row.contactNo }} className="whitespace-normal">
+                            {row.memberAcctName}
+                          </CustomerNameButton>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="border px-2.5 py-2">{row.address || "—"}</td>
                       <td className="border px-2.5 py-2">{row.itemOut || "—"}</td>
                       <td className="border px-2.5 py-2 whitespace-nowrap">{row.technician || "—"}</td>

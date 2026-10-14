@@ -27,6 +27,8 @@ import { DashboardPlanPanel } from "@/components/dashboard/dashboard-plan-panel"
 import { SortablePanel } from "@/components/dashboard/sortable-panel"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { panelLinkJobs, scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
+import { ClearScheduleDialog } from "@/components/shared/clear-schedule-dialog"
+import { CalendarX2 } from "lucide-react"
 import { ScheduleAgenda } from "@/components/schedule/schedule-agenda"
 import {
   getFilterChangeDailyReportExpandedColumns,
@@ -360,6 +362,7 @@ export function DailyReportSection() {
   const { t: tCollection } = useTranslation("collection")
   const { t: tInventory } = useTranslation("inventory")
   const { t: tDispatch } = useTranslation("dispatch")
+  const { t: tSchedule } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
   const { t: tAllCollection } = useTranslation("allCollection")
 
@@ -527,6 +530,9 @@ export function DailyReportSection() {
   // below. A row whose job is still a draft is "awaiting approval": badged,
   // counted, and it can't be completed or collected from the panel.
   const { data: scheduleJobs = [] } = useScheduleJobs()
+  // Clear Schedule from the Filter Change panel's select mode.
+  const [clearingFcIds, setClearingFcIds] = React.useState<string[]>([])
+  const clearDoneRef = React.useRef<(() => void) | null>(null)
   const reportDayJobs = React.useMemo(
     () => panelLinkJobs(scheduleDayJobs(scheduleJobs, { start: reportDate, end: reportDate }, { isAdmin, userId: user?.id })),
     [scheduleJobs, reportDate, isAdmin, user?.id]
@@ -916,6 +922,28 @@ export function DailyReportSection() {
         icon={Droplets}
         columns={filterChangeColumns}
         data={dayFilterChangePlans}
+        selectionActions={
+          isAdmin
+            ? (ids, done) => {
+                const scheduled = ids.filter((id) => dayFilterChangePlans.find((p) => p.id === id)?.scheduleJobId)
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-2"
+                    disabled={scheduled.length === 0}
+                    onClick={() => {
+                      clearDoneRef.current = done
+                      setClearingFcIds(scheduled)
+                    }}
+                    data-testid="panel-clear-schedule"
+                  >
+                    <CalendarX2 className="h-3.5 w-3.5" /> {tSchedule("clearScheduleCount", { count: String(scheduled.length) })}
+                  </Button>
+                )
+              }
+            : undefined
+        }
         notice={<AwaitingApprovalNotice count={awaitingCount(dayFilterChangePlans)} total={dayFilterChangePlans.length} />}
         loading={pFilter}
         emptyMessage={tFilterChange("noPlansForDate")}
@@ -1273,6 +1301,12 @@ export function DailyReportSection() {
       <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} />
       <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} />
       <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} />
+      <ClearScheduleDialog
+        table="filter_change_plans"
+        recordIds={clearingFcIds}
+        onOpenChange={(open) => !open && setClearingFcIds([])}
+        onDone={() => clearDoneRef.current?.()}
+      />
       <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} />
       <StockMovementFormDialog
         open={inventoryFormOpen || !!editingStockMovement}

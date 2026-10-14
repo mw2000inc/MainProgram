@@ -35,6 +35,7 @@ import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedu
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { formatFilterCodes } from "@/lib/filter-codes"
+import { CustomerNameButton } from "@/components/shared/customer-details"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
 import { linkVisitToScheduleJob } from "@/lib/api/schedule"
@@ -455,12 +456,22 @@ const FULL_SCREEN_DAYS_AHEAD = 30
 
 // Who and where: the job's Account Name, Address (with a Maps link) and
 // Contact Number (tap to call). Lines without a value are left out.
-function JobDetailLines({ details }: { details: JobDetails }) {
+function JobDetailLines({ details, job }: { details: JobDetails; job?: Pick<ScheduleJob, "customerId" | "orderNo"> }) {
   const { accountName, address, contactNumber } = details
   if (!accountName && !address && !contactNumber) return null
   return (
     <div className="space-y-0.5 text-xs" data-testid="schedule-job-details">
-      {accountName && <p className="font-medium text-foreground wrap-break-word" data-testid="schedule-job-account">{accountName}</p>}
+      {accountName && (
+        <p className="font-medium text-foreground wrap-break-word" data-testid="schedule-job-account">
+          {job && (job.customerId || job.orderNo) ? (
+            <CustomerNameButton target={{ customerId: job.customerId, orderNo: job.orderNo, name: accountName, address, contactNumber }} className="whitespace-normal">
+              {accountName}
+            </CustomerNameButton>
+          ) : (
+            accountName
+          )}
+        </p>
+      )}
       {address && (
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
@@ -961,7 +972,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
             Auto-suggest modal (or the job form): where to go,
             which filters to bring, and the task itself (a custom
             errand's description lives in notes). */}
-        <JobDetailLines details={jobDetails(job)} />
+        <JobDetailLines details={jobDetails(job)} job={job} />
         {job.filterCodes && (
           <p className="text-xs text-muted-foreground">
             {t("editFilters")}: <span className="font-medium text-foreground">{formatFilterCodes(job.filterCodes)}</span>
@@ -1247,7 +1258,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 <InlineTextCell value={job.orderNo} className="w-32" onCommit={(next) => saveJob(job, { orderNo: next.trim() })} />
               </EditableCell>
               <td className="min-w-48 max-w-72 px-3 py-2" data-testid="schedule-customer-cell">
-                <JobDetailLines details={jobDetails(job)} />
+                <JobDetailLines details={jobDetails(job)} job={job} />
               </td>
               <EditableCell {...cellProps(job, "status")} display={<PlanStatusBadge status={job.status} />}>
                 <CellSelect

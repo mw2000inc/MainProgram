@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { ChevronDown, ChevronRight, Droplets, Plus, Sparkles } from "lucide-react"
+import { CalendarX2, ChevronDown, ChevronRight, Droplets, Plus, Sparkles } from "lucide-react"
+import { ClearScheduleDialog } from "@/components/shared/clear-schedule-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -125,6 +126,11 @@ function FilterChangePageContent() {
   const [editing, setEditing] = React.useState<FilterChangePlan | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<FilterChangePlan | undefined>(undefined)
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
+  const { t: tSchedule } = useTranslation("schedule")
+  // Clear Schedule: the records whose jobs are about to be removed (one row,
+  // the open record, or the ticked rows), and the ticked rows themselves.
+  const [clearingIds, setClearingIds] = React.useState<string[]>([])
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
   const [filteredRows, setFilteredRows] = React.useState<FilterChangeRow[]>([])
 
   // Folds in the linked customer's own "SK001-####" order_number (same
@@ -243,6 +249,28 @@ function FilterChangePageContent() {
       getFilterChangeFullColumns({
         canDelete: isAdmin,
         onDelete: (p) => setDeleting(p),
+        onClearSchedule: isAdmin ? (p) => setClearingIds([p.id]) : undefined,
+        selection: isAdmin
+          ? {
+              selected: selectedIds,
+              toggle: (id) =>
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                }),
+              setMany: (ids, on) =>
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  for (const id of ids) {
+                    if (on) next.add(id)
+                    else next.delete(id)
+                  }
+                  return next
+                }),
+            }
+          : undefined,
         onStatusChange: isAdmin
           ? (p, status) => {
               const accD = completionDateFor(status, p.status, p.accD)
@@ -250,8 +278,10 @@ function FilterChangePageContent() {
             }
           : undefined,
       }),
-    [isAdmin, updatePlan]
+    [isAdmin, updatePlan, selectedIds]
   )
+  // Ticked rows that have a schedule job.
+  const selectedScheduled = React.useMemo(() => rows.filter((p) => selectedIds.has(p.id) && p.scheduleJobId).map((p) => p.id), [rows, selectedIds])
 
   if (isPending) {
     return (
@@ -389,6 +419,25 @@ function FilterChangePageContent() {
                     emptyMessage={t("noPlansFound")}
                     onFilteredRowsChange={setFilteredRows}
                     onRowClick={(row) => selection.open(row)}
+                    toolbar={
+                      isAdmin && selectedIds.size > 0 ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9 gap-1.5"
+                            disabled={selectedScheduled.length === 0}
+                            onClick={() => setClearingIds(selectedScheduled)}
+                            data-testid="fc-bulk-clear-schedule"
+                          >
+                            <CalendarX2 className="h-4 w-4" /> {tSchedule("clearScheduleCount", { count: String(selectedScheduled.length) })}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-9" onClick={() => setSelectedIds(new Set())}>
+                            {tSchedule("clearSelection", { count: String(selectedIds.size) })}
+                          </Button>
+                        </>
+                      ) : undefined
+                    }
                   />
                 </div>
               </CardContent>
@@ -410,6 +459,13 @@ function FilterChangePageContent() {
                   : undefined
               }
               onDelete={isAdmin ? () => setDeleting(selected) : undefined}
+              headerActions={
+                isAdmin && selected.scheduleJobId ? (
+                  <Button variant="outline" className="gap-1.5 rounded-full px-3.5" onClick={() => setClearingIds([selected.id])} data-testid="fc-detail-clear-schedule">
+                    <CalendarX2 className="h-4 w-4" /> {tSchedule("clearSchedule")}
+                  </Button>
+                ) : undefined
+              }
               onPrev={selection.prev}
               onNext={selection.next}
               hasPrev={selection.hasPrev}
@@ -530,6 +586,12 @@ function FilterChangePageContent() {
           await applyAssignments.mutateAsync(assignments.map(({ id, technician }) => ({ planId: id, technician })))
           setSuggestionCache({})
         }}
+      />
+      <ClearScheduleDialog
+        table="filter_change_plans"
+        recordIds={clearingIds}
+        onOpenChange={(open) => !open && setClearingIds([])}
+        onDone={() => setSelectedIds(new Set())}
       />
     </div>
   )

@@ -10,6 +10,7 @@ import { isTechnicianAllowedPath } from "@/components/layout/nav-items"
 import { useSidebarCollapse } from "@/lib/sidebar-collapse-context"
 import { cn } from "@/lib/utils"
 import { useLiveDataSync } from "@/lib/hooks/use-live-data-sync"
+import { CustomerDetailsHost } from "@/components/shared/customer-details"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -52,6 +53,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">{children}</main>
+        {/* The Customer Details pop-up any customer name in a table opens. */}
+        <CustomerDetailsHost />
       </div>
     </div>
   )

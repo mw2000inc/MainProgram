@@ -32,6 +32,7 @@ import { formatDate } from "@/lib/utils"
 import { businessToday } from "@/lib/dispatch-lead-time"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { ScheduleJob } from "@/lib/types"
+import { CustomerNameButton } from "@/components/shared/customer-details"
 
 const VEHICLE_OPTIONS = VEHICLE_TYPES.map((v) => ({ value: v }))
 // The action column stays pinned to the table's right edge (visible however
@@ -192,7 +193,20 @@ export function PendingScheduleApprovalPanel() {
       { accessorKey: "orderNo", header: tDispatch("orderNoColumn"), cell: ({ row }) => row.original.orderNo || "—" },
       // Long names / addresses end in "…" (full text on hover) instead of
       // stretching the table and pushing the action buttons off-screen.
-      { id: "customer", header: tFields("accountName"), cell: ({ row }) => <TruncatedCell value={customerNameFor(row.original)} className="max-w-32" /> },
+      {
+        id: "customer",
+        header: tFields("accountName"),
+        cell: ({ row }) => {
+          const name = customerNameFor(row.original)
+          return name === "—" ? (
+            <TruncatedCell value={name} className="max-w-32" />
+          ) : (
+            <span className="block max-w-32">
+              <CustomerNameButton target={{ customerId: row.original.customerId, orderNo: row.original.orderNo, name }}>{name}</CustomerNameButton>
+            </span>
+          )
+        },
+      },
       { id: "location", header: t("locationColumn"), cell: ({ row }) => <TruncatedCell value={locationFor(row.original)} className="max-w-40" /> },
       {
         accessorKey: "technician",

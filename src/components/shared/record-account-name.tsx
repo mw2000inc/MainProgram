@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { TruncatedCell } from "@/components/shared/truncated-cell"
+import { CustomerNameButton } from "@/components/shared/customer-details"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
@@ -38,8 +39,16 @@ export function RecordAccountNameCell({
   className?: string
 }) {
   const fallback = useAccountNameFallback()
-  if (name?.trim()) return <TruncatedCell value={name} className={className} />
-  const resolved = fallback(orderNo, customerId)
-  // Shown a shade lighter, so it reads as looked up rather than typed.
-  return <TruncatedCell value={resolved} className={cn(className, "text-muted-foreground")} />
+  const shown = name?.trim() || fallback(orderNo, customerId)
+  if (!shown) return <TruncatedCell value={undefined} className={className} />
+  // Clicking the name opens the Customer Details pop-up (the row's own click
+  // — opening its record — isn't triggered). A looked-up name is shown a
+  // shade lighter, so it reads as looked up rather than typed.
+  return (
+    <span className={cn("block max-w-37.5", className)}>
+      <CustomerNameButton target={{ customerId, orderNo, name: shown }} className={name?.trim() ? undefined : "text-muted-foreground"}>
+        {shown}
+      </CustomerNameButton>
+    </span>
+  )
 }

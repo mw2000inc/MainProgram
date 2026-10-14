@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Trash2 } from "lucide-react"
+import { CalendarX2, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
@@ -406,10 +407,16 @@ export function getFilterChangeFullColumns({
   canDelete,
   onDelete,
   onStatusChange,
+  onClearSchedule,
+  selection,
 }: {
   canDelete: boolean
   onDelete: (plan: FilterChangePlan) => void
   onStatusChange?: (plan: FilterChangePlan, status: string) => void
+  // "Clear Schedule" on a row that has a job (admins).
+  onClearSchedule?: (plan: FilterChangePlan) => void
+  // Row checkboxes for bulk actions (admins).
+  selection?: { selected: Set<string>; toggle: (id: string) => void; setMany: (ids: string[], on: boolean) => void }
 }): ColumnDef<FilterChangeRow, unknown>[] {
   const columns: ColumnDef<FilterChangeRow, unknown>[] = [
     {
@@ -420,7 +427,7 @@ export function getFilterChangeFullColumns({
     {
       accessorKey: "memberAccount",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <CustomerNameCell name={row.original.memberAccount} customerId={row.original.resolvedCustomerId} />,
+      cell: ({ row }) => <CustomerNameCell name={row.original.memberAccount} customerId={row.original.resolvedCustomerId} orderNo={row.original.orderNumber} />,
     },
     { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
@@ -465,6 +472,54 @@ export function getFilterChangeFullColumns({
       cell: ({ row }) => <StatusCell plan={row.original} onStatusChange={onStatusChange} />,
     },
   ]
+
+  if (selection) {
+    columns.unshift({
+      id: "select",
+      header: ({ table }) => {
+        const ids = table.getRowModel().rows.map((r) => r.original.id)
+        const all = ids.length > 0 && ids.every((id) => selection.selected.has(id))
+        const some = ids.some((id) => selection.selected.has(id))
+        return (
+          <Checkbox
+            checked={all ? true : some ? "indeterminate" : false}
+            onCheckedChange={() => selection.setMany(ids, !all)}
+            aria-label="Select all on this page"
+            data-testid="fc-select-all"
+          />
+        )
+      },
+      cell: ({ row }) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <Checkbox checked={selection.selected.has(row.original.id)} onCheckedChange={() => selection.toggle(row.original.id)} aria-label="Select row" data-testid="fc-select-row" />
+        </span>
+      ),
+    })
+  }
+
+  if (onClearSchedule) {
+    columns.push({
+      id: "clearSchedule",
+      header: "",
+      cell: ({ row }) =>
+        row.original.scheduleJobId ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Clear Schedule"
+            aria-label="Clear Schedule"
+            onClick={(e) => {
+              e.stopPropagation()
+              onClearSchedule(row.original)
+            }}
+            data-testid="fc-clear-schedule"
+          >
+            <CalendarX2 className="h-3.5 w-3.5" />
+          </Button>
+        ) : null,
+    })
+  }
 
   if (canDelete) {
     columns.push({

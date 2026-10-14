@@ -158,6 +158,47 @@ export async function syncJobFiltersToRecord(jobId: string, filterCodes: string)
   if (error) throw error
 }
 
+export type ClearScheduleResult = { cleared: number; noJob: number; completed: number; withStock: number }
+
+// "Clear Schedule": removes the schedule job of each given Filter Change /
+// Install / Repair / Collection record, so the record is unscheduled again —
+// the record itself is untouched; the database only clears its link
+// (schedule_job_id … on delete set null), and its job (technician, vehicle,
+// date) leaves the Schedule board and the technicians' agendas. A job that is
+// completed, or carries stock movements or recorded filters, is left alone and
+// counted, never deleted: that's finished work, not a schedule.
+export async function clearSchedulesForRecords(
+  table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections",
+  recordIds: string[]
+): Promise<ClearScheduleResult> {
+  const result: ClearScheduleResult = { cleared: 0, noJob: 0, completed: 0, withStock: 0 }
+  if (recordIds.length === 0) return result
+  const { data: records, error } = await supabase.from(table).select("id, schedule_job_id").in("id", recordIds)
+  if (error) throw error
+  const jobIds = [...new Set((records ?? []).map((r) => r.schedule_job_id as string | null).filter((id): id is string => !!id))]
+  result.noJob = (records ?? []).filter((r) => !r.schedule_job_id).length
+  if (jobIds.length === 0) return result
+  const [{ data: jobs, error: jobsError }, { data: moved }, { data: items }] = await Promise.all([
+    supabase.from("schedule_jobs").select("id, status").in("id", jobIds),
+    supabase.from("stock_movements").select("schedule_job_id").in("schedule_job_id", jobIds),
+    supabase.from("schedule_job_filter_items").select("schedule_job_id").in("schedule_job_id", jobIds),
+  ])
+  if (jobsError) throw jobsError
+  const stocked = new Set([...(moved ?? []), ...(items ?? [])].map((r) => r.schedule_job_id as string))
+  const removable: string[] = []
+  for (const job of jobs ?? []) {
+    if (job.status === "completed") result.completed++
+    else if (stocked.has(job.id)) result.withStock++
+    else removable.push(job.id)
+  }
+  if (removable.length > 0) {
+    const { data: deleted, error: deleteError } = await supabase.from("schedule_jobs").delete().in("id", removable).neq("status", "completed").select("id")
+    if (deleteError) throw deleteError
+    result.cleared = deleted?.length ?? 0
+  }
+  return result
+}
+
 export async function linkVisitToScheduleJob(
   table: "filter_change_plans" | "install_plans" | "repair_plans" | "collections",
   recordId: string,

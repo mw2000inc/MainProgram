@@ -1,4 +1,9 @@
 {
+  "clearScheduleCount": "일정 초기화 ({count})",
+  "clearSelection": "선택 해제 ({count})",
+  "clearScheduleTitle": "이 작업의 일정을 초기화하시겠습니까?",
+  "clearScheduleTitleMany": "{count}건 방문의 일정을 초기화하시겠습니까?",
+  "clearScheduleConfirm": "이 작업 일정을 초기화하시겠습니까? 일정 보기에서 작업이 제거되고 계획은 미예약 상태로 돌아갑니다. 계획 기록 자체는 유지됩니다. 완료되었거나 재고가 기록된 작업은 그대로 둡니다.",
   "previewAccount": "계정",
   "previewAddress": "주소",
   "previewPhone": "전화",

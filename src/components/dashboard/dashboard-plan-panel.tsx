@@ -40,6 +40,9 @@ interface DashboardPlanPanelProps<TData extends { id: string; status?: string }>
   // A line above the rows (and in the expanded view), e.g. the Daily
   // Report's "N awaiting approval".
   notice?: React.ReactNode
+  // More bulk actions in select mode, beside Delete (e.g. Clear Schedule);
+  // done() leaves select mode.
+  selectionActions?: (ids: string[], done: () => void) => React.ReactNode
   // Optional: different rows for the expanded (Maximize2) dialog than the
   // compact panel, e.g. the Inventory List's per-item totals across jobs.
   expandedData?: TData[]
@@ -149,6 +152,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   addLabel,
   headerActions,
   notice,
+  selectionActions,
   expandedData,
   expandedToolbar,
   onExpandedChange,
@@ -331,6 +335,7 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
   const selectionBar = selectMode && selected.size > 0 && (
     <div className={cn("flex items-center justify-between rounded-md border bg-muted/50 px-3 py-1.5 text-xs")}>
       <span>{t("selectedCount", { count: selected.size })}</span>
+      {selectionActions?.([...selected], exitSelectMode)}
       {canDelete && (
         <Button
           variant="ghost"

@@ -1,4 +1,9 @@
 {
+  "clearScheduleCount": "Clear Schedule ({count})",
+  "clearSelection": "Clear selection ({count})",
+  "clearScheduleTitle": "Clear this job's schedule?",
+  "clearScheduleTitleMany": "Clear the schedule of {count} visits?",
+  "clearScheduleConfirm": "Are you sure you want to clear this job schedule? This will remove the job from the Schedule view and return the plan to Unscheduled status. The plan record itself is kept. Completed jobs, or jobs with stock recorded, are left as they are.",
   "previewAccount": "Account",
   "previewAddress": "Address",
   "previewPhone": "Phone",

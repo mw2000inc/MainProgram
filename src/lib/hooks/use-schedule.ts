@@ -51,6 +51,25 @@ export function useUpdateScheduleJob() {
   })
 }
 
+// "Clear Schedule" for one or more records (clearSchedulesForRecords): their
+// jobs leave the Schedule board, the records stay, unscheduled. Refreshes the
+// jobs and every record list at once; other screens follow by realtime.
+export function useClearSchedules() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ table, recordIds }: { table: Parameters<typeof api.clearSchedulesForRecords>[0]; recordIds: string[] }) =>
+      api.clearSchedulesForRecords(table, recordIds),
+    onSuccess: (r) => {
+      invalidateJobsAndModules(qc)
+      const kept = r.completed + r.withStock
+      if (r.cleared) toast.success(`Schedule cleared for ${r.cleared} visit(s)${kept ? ` — ${kept} completed / stocked job(s) kept` : ""}.`)
+      else if (kept) toast.warning(`Nothing cleared — ${kept} job(s) already completed or with stock recorded are kept.`)
+      else toast.info("Those visits had no schedule to clear.")
+    },
+    onError: () => toast.error("Failed to clear the schedule"),
+  })
+}
+
 export function useDeleteScheduleJob() {
   const qc = useQueryClient()
   return useMutation({
