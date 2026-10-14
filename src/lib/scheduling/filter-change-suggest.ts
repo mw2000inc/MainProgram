@@ -1,7 +1,7 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { haversineKm, resolveViaCustomer, autoSuggestTechnicianRoster } from "./smart-schedule"
-import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
+import { syncFilterChangeTechniciansToCollections, syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
 
 // Extends the same nearest-technician heuristic smart-schedule.ts already
 // uses for the customer-dispatch-confirm path (installs/repairs/
@@ -211,12 +211,16 @@ export async function applyTechnicianAssignments(
       .from("filter_change_plans")
       .update({ serviceman: technician })
       .eq("id", planId)
-      .select("schedule_job_id, serviceman, serviceman_2")
+      .select("schedule_job_id, serviceman, serviceman_2, order_number, plan_date, status, acc_d")
       .maybeSingle()
     if (error) continue
     applied += 1
-    // Its open schedule job gets the same technician (crew rule, logins).
+    // Its open schedule job gets the same technician (logins too), and so does
+    // the open Collection on the same order and date, with its job.
     await syncRecordTechniciansToJob(admin, plan?.schedule_job_id, plan?.serviceman, plan?.serviceman_2).catch(() => undefined)
+    if (plan?.status === "Pending" && !plan.acc_d) {
+      await syncFilterChangeTechniciansToCollections(admin, plan.order_number, plan.plan_date, plan.serviceman, plan.serviceman_2).catch(() => undefined)
+    }
   }
   return { applied }
 }

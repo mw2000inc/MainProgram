@@ -184,8 +184,10 @@ export function CollectionsFormDialog({
       ? await updateCollection.mutateAsync({ id: entry.id, input: { ...input, ...collectedAttributionPatch(entry, { collectedBy, collectedAt }) } })
       : // A new manually-scheduled dispatch enters the admin approval queue —
         // see the dispatch_confirmation_workflow migration. serviceman starts
-        // unassigned — the admin picks one from the Pending Approvals dialog's
-        // own Technician dropdown before approving, same as every other module.
+        // as the technicians of the open Filter Change visit on the same order
+        // and date (useCreateCollection), else unassigned — the admin picks one
+        // from the Pending Approvals dialog's own Technician dropdown before
+        // approving, same as every other module.
         await createCollection.mutateAsync({ ...input, dispatchStatus: "Draft", serviceman: "" })
     // Approval first: a new, still-pending collection gets its draft job on
     // its Pre D, else its Plan D — with the order, account, the member's
@@ -204,6 +206,9 @@ export function CollectionsFormDialog({
         accountName: values.accountName,
         amount: Number(values.amount) || undefined,
         notes: null,
+        // Inherited from the same-day Filter Change → its draft job keeps them.
+        technician: saved.serviceman || undefined,
+        technician2: saved.serviceman2 || undefined,
       })
     }
     onSaved?.(saved)

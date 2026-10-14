@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase/client"
-import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
+import { syncFilterChangeTechniciansToCollections, syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
+import { collectionsKey } from "@/lib/hooks/use-collections"
 import * as api from "@/lib/api/filter-change-plans"
 import type { FilterChangePlan } from "@/lib/types"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -30,9 +31,11 @@ const DATE_FIELDS = new Set(["preD", "accD", "planDate"])
 export function useUpdateFilterChangePlan() {
   const qc = useQueryClient()
   return useMutation({
-    // A changed Serviceman goes to the record's open schedule job too (with the
-    // crew rule and logins — syncRecordTechniciansToJob); the database then
-    // writes the job's pair back to the record.
+    // A changed Serviceman goes to the record's open schedule job too (exactly
+    // the pair picked, with logins — syncRecordTechniciansToJob); the database
+    // then writes the job's pair back to the record. It also goes to the open
+    // Collection on the same order and date (same trip) and that Collection's
+    // job — syncFilterChangeTechniciansToCollections.
     mutationFn: async ({ id, input }: { id: string; input: Partial<Omit<FilterChangePlan, "id" | "createdAt">> }) => {
       const saved = await api.updateFilterChangePlan(id, input)
       if ("serviceman" in input || "serviceman2" in input) {
@@ -42,6 +45,16 @@ export function useUpdateFilterChangePlan() {
           }
         } catch {
           toast.error("Saved, but its schedule job's technician couldn't be updated")
+        }
+        if (saved.status === "Pending" && !saved.accD) {
+          try {
+            if (await syncFilterChangeTechniciansToCollections(supabase, saved.orderNumber, saved.planDate, saved.serviceman, saved.serviceman2)) {
+              qc.invalidateQueries({ queryKey: collectionsKey })
+              qc.invalidateQueries({ queryKey: scheduleJobsKey })
+            }
+          } catch {
+            toast.error("Saved, but the same-day Collection's technician couldn't be updated")
+          }
         }
       }
       return saved
@@ -110,6 +123,9 @@ export function useApplyTechnicianAssignments() {
     mutationFn: (assignments: { planId: string; technician: string }[]) => api.applyTechnicianAssignments(assignments),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: filterChangePlansKey })
+      // The apply also gives the same-day Collections (and their jobs) these technicians.
+      qc.invalidateQueries({ queryKey: collectionsKey })
+      qc.invalidateQueries({ queryKey: scheduleJobsKey })
       toast.success(`Assigned ${result.applied} plan(s)`)
     },
     onError: (error: Error) => toast.error(error.message),

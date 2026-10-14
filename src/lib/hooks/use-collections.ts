@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase/client"
-import { syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
+import { filterChangeTechniciansFor, syncRecordTechniciansToJob } from "@/lib/scheduling/technician-sync"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
 import * as api from "@/lib/api/collections"
 import type { CollectionPlan } from "@/lib/types"
@@ -16,7 +16,15 @@ export function useCollections() {
 export function useCreateCollection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<CollectionPlan, "id" | "createdAt">) => api.createCollection(input),
+    // No Serviceman picked → the technicians of the open Filter Change visit on
+    // the same order and date (same trip), when there is one.
+    mutationFn: async (input: Omit<CollectionPlan, "id" | "createdAt">) => {
+      if (!input.serviceman?.trim()) {
+        const pair = await filterChangeTechniciansFor(supabase, input.orderNo, input.collectionDate).catch(() => null)
+        if (pair) input = { ...input, serviceman: pair.primary, serviceman2: pair.secondary }
+      }
+      return api.createCollection(input)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: collectionsKey })
       toast.success("Collection plan added")
