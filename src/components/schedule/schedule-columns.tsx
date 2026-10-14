@@ -52,6 +52,22 @@ export const SCHEDULE_EXPORT_COLUMNS = [
   { header: "Remarks", key: "remarks" },
 ]
 
+// The printed Schedule sheet (the Schedule panel's Print): what a technician
+// needs on the day — who, where, which filters to bring, how much to
+// collect. The CSV / Excel export keeps SCHEDULE_EXPORT_COLUMNS above.
+export const SCHEDULE_PRINT_COLUMNS = [
+  { header: "Date", key: "scheduledDate", width: "8%" },
+  { header: "Job Type", key: "jobType", width: "8%" },
+  { header: "Technician", key: "technician", width: "11%" },
+  { header: "Vehicle", key: "vehicle", width: "6%" },
+  { header: "Order No", key: "orderNo", width: "7%" },
+  { header: "Customer Name", key: "customerName", width: "13%" },
+  { header: "Address", key: "address", width: "19%" },
+  { header: "Filter", key: "filter", width: "9%" },
+  { header: "Amount to Collect", key: "amountToCollect", width: "8%" },
+  { header: "Notes", key: "notes", width: "11%" },
+]
+
 // Combines the primary + optional second technician into one display string
 // ("Eubert and Jerson") — used everywhere a job's technician is shown, so a
 // two-technician job always reads the same way. `andWord` defaults to the

@@ -4,7 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { Sparkles } from "lucide-react"
+import { CheckCircle2, Sparkles } from "lucide-react"
 import {
   Dialog,
   DialogBody,
@@ -36,7 +36,8 @@ import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { findCustomerByOrderNumber, findExistingMemberMatch } from "@/lib/customer-lookup"
-import { getCpSystemFilterSkus } from "@/lib/filter-parts"
+import { cpSystemDueFilterCodes, getCpSystemFilterSkus } from "@/lib/filter-parts"
+import { Combobox } from "@/components/ui/combobox"
 import { dateFieldSchema } from "@/lib/form-schemas"
 import { normalizeTechnicianPair } from "@/lib/technicians"
 import { SecondTechnicianFormItem, TechnicianCombobox } from "@/components/shared/technician-combobox"
@@ -150,6 +151,34 @@ export function FilterChangeFormDialog({
     defaultValues: defaultValues(defaultDate, defaultOrderNumber, plan),
   })
   const servicemanValue = form.watch("serviceman")
+  // Order Number search: every Sale List order with its customer — type an
+  // order or a customer name. Picking one (or typing an exact order) fills the
+  // empty fields (fillFromOrder).
+  const orderOptions = React.useMemo(() => {
+    const byId = new Map(customers.map((c) => [c.id, c]))
+    return saleListEntries
+      .filter((e) => e.orderNumber.trim())
+      .map((e) => {
+        const c = e.customerId ? byId.get(e.customerId) : undefined
+        const name = c ? c.companyName || c.fullName : ""
+        return { value: name ? `${e.orderNumber.trim()} — ${name}` : e.orderNumber.trim() }
+      })
+  }, [saleListEntries, customers])
+  const orderNumberValue = form.watch("orderNumber")
+  const [autoFilledFor, setAutoFilledFor] = React.useState("")
+  // A typed order that exactly matches one fills in after a short pause.
+  React.useEffect(() => {
+    if (isEdit || !open) return
+    const order = (orderNumberValue ?? "").trim()
+    if (!order || order === autoFilledFor) return
+    if (!saleListEntries.some((e) => e.orderNumber.trim() === order)) return
+    const timer = setTimeout(() => handleOrderNumberBlur(order), 400)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderNumberValue, isEdit, open, saleListEntries])
+  React.useEffect(() => {
+    if (open) setAutoFilledFor("")
+  }, [open])
 
   React.useEffect(() => {
     if (!open) return
@@ -182,7 +211,20 @@ export function FilterChangeFormDialog({
   // nothing to safely fill anyway.
   function handleOrderNumberBlur(orderNumber: string) {
     if (isEdit) return
-    const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNumber)
+    const order = orderNumber.trim()
+    if (!order || order === autoFilledFor) return
+    const customer = findCustomerByOrderNumber(customers, saleListEntries, order)
+    const saleForOrder = saleListEntries.find((e) => e.orderNumber.trim() === order)
+    let anyFilled = false
+    // S/C and Product # straight from the order's Sale List entry.
+    if (saleForOrder?.sc?.trim() && !(form.getValues("sc") ?? "").trim()) {
+      form.setValue("sc", saleForOrder.sc.trim(), { shouldDirty: true })
+      anyFilled = true
+    }
+    if (saleForOrder?.productNo?.trim() && !(form.getValues("productNo") ?? "").trim()) {
+      form.setValue("productNo", saleForOrder.productNo.trim(), { shouldDirty: true })
+      anyFilled = true
+    }
     if (customer) {
       let filled = false
       const name = customer.companyName || customer.fullName
@@ -199,6 +241,7 @@ export function FilterChangeFormDialog({
         filled = true
       }
       if (filled) toast.success(tCommon("customerInfoFilled"))
+      anyFilled ||= filled
     }
 
     // CP System is linked per ORDER (sale_list_entries.cp_system_id), not per
@@ -210,15 +253,21 @@ export function FilterChangeFormDialog({
     // resolves to a real product SKU (see getCpSystemFilterSkus) — an
     // unlinked order, or one on a system with no catalog match yet, leaves
     // Filter exactly as untouched as it always was.
+    // The filters due on this visit's date (Pre D, else Plan D) in the order's
+    // CP cycle come first; when the date isn't set or nothing is due that
+    // month, every filter of the system (as before).
     if (!form.getValues("filterType").trim()) {
-      const saleEntry = saleListEntries.find((e) => e.orderNumber.trim() === orderNumber.trim())
-      const system = saleEntry?.cpSystemId ? cpSystems.find((s) => s.id === saleEntry.cpSystemId) : undefined
-      const skus = system ? getCpSystemFilterSkus(system, products) : []
+      const system = saleForOrder?.cpSystemId ? cpSystems.find((s) => s.id === saleForOrder.cpSystemId) : undefined
+      const visitDate = form.getValues("preD") || form.getValues("planDate")
+      const due = system ? cpSystemDueFilterCodes(system, saleForOrder?.cpStart, visitDate) : []
+      const skus = due.length > 0 ? due : system ? getCpSystemFilterSkus(system, products) : []
       if (system && skus.length > 0) {
         form.setValue("filterType", skus.join(", "))
         toast.success(t("filterSuggestedFromCpSystem", { systemCode: system.systemCode }))
+        anyFilled = true
       }
     }
+    if (anyFilled || customer || saleForOrder) setAutoFilledFor(order)
   }
 
   // Same add-only autofill as handleOrderNumberBlur above, keyed off Member
@@ -309,15 +358,30 @@ export function FilterChangeFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("orderNumber")}</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="001-0001"
-                        {...field}
-                        onBlur={(e) => {
-                          field.onBlur()
-                          handleOrderNumberBlur(e.target.value)
+                      <Combobox
+                        value={field.value}
+                        // A picked "001-0001 — Name" keeps just the order.
+                        onChange={(v) => field.onChange(v.split(" — ")[0])}
+                        onOptionSelect={(v) => {
+                          const order = v.split(" — ")[0].trim()
+                          field.onChange(order)
+                          handleOrderNumberBlur(order)
                         }}
+                        options={isEdit ? [] : orderOptions}
+                        maxResults={20}
+                        placeholder={t("orderSearchPlaceholder")}
+                        onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                          field.onBlur()
+                          handleOrderNumberBlur(e.target.value.split(" — ")[0])
+                        }}
+                        data-testid="fc-order-number"
                       />
                     </FormControl>
+                    {!isEdit && autoFilledFor && autoFilledFor === (field.value ?? "").trim() && (
+                      <p className="flex items-center gap-1 text-xs text-success" data-testid="fc-order-autofilled">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {t("orderAutoFilled")}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

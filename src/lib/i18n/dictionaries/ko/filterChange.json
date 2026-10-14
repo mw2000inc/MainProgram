@@ -1,4 +1,6 @@
 {
+  "orderSearchPlaceholder": "주문 번호 또는 고객 이름 — 예: 001-0001",
+  "orderAutoFilled": "주문의 고객 정보로 채웠습니다 — 필요하면 수정하세요.",
   "editTitle": "필터 교체 계획 수정",
   "addTitle": "필터 교체 계획 추가",
   "editDescription": "이 필터 교체 계획을 업데이트합니다.",

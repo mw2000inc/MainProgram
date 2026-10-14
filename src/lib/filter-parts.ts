@@ -51,3 +51,23 @@ export function getCpSystemFilterSkus(system: CpSystem, products: Product[]): st
   }
   return skus
 }
+
+// The filters a CP System has due on a visit date: whole months since the
+// order's CP Start, and every component whose interval divides it — the same
+// rule the database uses for generated visits (cp_system_due_filters,
+// 20261008000000). Codes are the part before " / ", each listed once.
+// Empty when nothing is due that month, or the date is on/before CP Start.
+export function cpSystemDueFilterCodes(system: CpSystem, cpStart: string | undefined, visitDate: string | undefined): string[] {
+  if (!cpStart || !visitDate || visitDate <= cpStart) return []
+  const [sy, sm, sd] = cpStart.split("-").map(Number)
+  const [vy, vm, vd] = visitDate.split("-").map(Number)
+  const elapsed = (vy - sy) * 12 + (vm - sm) - (vd < sd ? 1 : 0)
+  if (elapsed <= 0) return []
+  const due = new Map<string, number>()
+  for (const c of system.components) {
+    if (!c.intervalMonths || elapsed % c.intervalMonths !== 0) continue
+    const code = c.name.split(" / ")[0].trim()
+    if (code && (!due.has(code) || c.intervalMonths < due.get(code)!)) due.set(code, c.intervalMonths)
+  }
+  return [...due].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([code]) => code)
+}

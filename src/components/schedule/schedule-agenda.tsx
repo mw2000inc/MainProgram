@@ -45,7 +45,7 @@ import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { toast } from "sonner"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
-import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
+import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, SCHEDULE_PRINT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
 import { scheduleJobsKey, useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
@@ -53,7 +53,8 @@ import { useAuth } from "@/lib/auth/auth-context"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { printTable } from "@/lib/export/print"
-import { cn, formatDate, todayIso } from "@/lib/utils"
+import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
@@ -603,6 +604,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const { data: installPlans = [] } = useInstallPlans()
   const { data: repairPlans = [] } = useRepairPlans()
   const { data: collectionRecords = [] } = useCollections()
+  const { data: saleListEntries = [] } = useSaleListEntries()
   const previousTechnicians = usePreviousTechnicians()
   // A Collection job's payment details, read live from its linked collection.
   const collectionByJobId = React.useMemo(
@@ -867,13 +869,27 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   }
 
   function handlePrint() {
-    // A4 landscape; the text columns (customer, address, notes) get the room.
-    const widths: Record<string, string> = { scheduledDate: "8%", jobType: "8%", technician: "11%", vehicle: "6%", orderNo: "7%", customerName: "13%", address: "19%", status: "7%", notes: "12%", remarks: "9%" }
+    // A4 landscape (SCHEDULE_PRINT_COLUMNS). Filter: a Filter Change job's
+    // linked visit's Filter, else the job's own filters. Amount to Collect: a
+    // Collection job's linked collection amount, else its order's C/F (the
+    // full C/F every visit). "—" for any other job type.
+    const dash = "—"
+    const filterOf = (j: ScheduleJob) =>
+      j.jobType !== "filter_change" ? dash : formatFilterCodes(filterChangePlans.find((p) => p.scheduleJobId === j.id)?.filterType || j.filterCodes) || dash
+    const amountOf = (j: ScheduleJob) => {
+      if (j.jobType !== "collection") return dash
+      const linked = collectionRecords.find((c) => c.scheduleJobId === j.id)
+      if (linked) return formatCurrency(Number(linked.amount) || 0)
+      const cf = saleListEntries.find((e) => e.orderNumber.trim() === (j.orderNo ?? "").trim())?.cf
+      const value = Number(String(cf ?? "").replace(/[^0-9.]/g, ""))
+      return cf && !Number.isNaN(value) ? formatCurrency(value) : dash
+    }
     printTable({
       title: "Schedule",
       subtitle: multiDay ? rangeLabel : formatDate(date),
-      columns: SCHEDULE_EXPORT_COLUMNS.map((c) => ({ ...c, width: widths[c.key] })),
-      rows: exportRows.map((r) => ({ ...r, scheduledDate: formatDate(r.scheduledDate), status: tStatus(STATUS_LABEL_KEY[r.status]) })),
+      columns: SCHEDULE_PRINT_COLUMNS,
+      // exportRows follows todaysJobs one to one (its jobType is already a label).
+      rows: exportRows.map((r, i) => ({ ...r, scheduledDate: formatDate(r.scheduledDate), filter: filterOf(todaysJobs[i]), amountToCollect: amountOf(todaysJobs[i]) })),
       landscape: true,
     })
   }

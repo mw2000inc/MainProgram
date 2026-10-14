@@ -1,4 +1,6 @@
 {
+  "orderSearchPlaceholder": "Order No. or customer name — e.g. 001-0001",
+  "orderAutoFilled": "Customer details filled from the order — edit anything you need.",
   "editTitle": "Edit Filter Change Plan",
   "addTitle": "Add Filter Change Plan",
   "editDescription": "Update this filter change plan.",
