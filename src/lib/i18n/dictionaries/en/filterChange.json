@@ -1,4 +1,7 @@
 {
+  "dateTooFarInPast": "More than {months} months ago (before {date}) — check the year.",
+  "duplicatePendingWarning": "{order} already has {count} pending Filter Change(s) on {date}. Saving adds another one — check you're not entering the same visit twice.",
+  "saveAnyway": "Save anyway",
   "orderSearchPlaceholder": "Order No. or customer name — e.g. 001-0001",
   "orderAutoFilled": "Customer details filled from the order — edit anything you need.",
   "editTitle": "Edit Filter Change Plan",

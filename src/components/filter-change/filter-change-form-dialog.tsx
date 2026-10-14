@@ -47,11 +47,25 @@ import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
 import { statusForAccD } from "@/components/filter-change/filter-change-columns"
 import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { businessToday } from "@/lib/dispatch-lead-time"
+import { format, parseISO, subMonths } from "date-fns"
 
 // A factory, not a module-scope constant — validation messages need t(),
 // which only exists once useTranslation() has run inside the component (see
 // the login page's own schema factories for the original precedent).
-function createSchema(t: (key: string, params?: Record<string, string>) => string, tf: (key: string) => string) {
+// A Plan D / Pre D more than this many months before today is refused — a
+// mistyped year ("2025" for "2026") instead of a real visit. A date the record
+// already had is kept (editing an old record never trips it).
+const MAX_MONTHS_IN_PAST = 6
+
+function createSchema(
+  t: (key: string, params?: Record<string, string>) => string,
+  tf: (key: string) => string,
+  tooOld: (date: string) => string,
+  original?: { planDate?: string; preD?: string }
+) {
+  const earliest = format(subMonths(parseISO(businessToday()), MAX_MONTHS_IN_PAST), "yyyy-MM-dd")
   return z.object({
     orderNumber: z.string().min(1, t("requiredField", { field: tf("orderNumber") })),
     memberAccount: z.string().min(1, t("requiredField", { field: tf("memberAccount") })),
@@ -68,6 +82,11 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     serviceman: z.string().trim().optional(),
     serviceman2: z.string().trim().optional(),
     note: z.string().optional(),
+  }).superRefine((v, ctx) => {
+    for (const key of ["planDate", "preD"] as const) {
+      const value = (v[key] ?? "").trim()
+      if (value && value !== (original?.[key] ?? "") && value < earliest) ctx.addIssue({ code: "custom", path: [key], message: tooOld(earliest) })
+    }
   })
 }
 
@@ -145,12 +164,32 @@ export function FilterChangeFormDialog({
   const { t } = useTranslation("filterChange")
   const { t: tCommon } = useTranslation("common")
   const { t: tFields } = useTranslation("fields")
-  const schema = React.useMemo(() => createSchema(tCommon, tFields), [tCommon, tFields])
+  const schema = React.useMemo(
+    () =>
+      createSchema(tCommon, tFields, (earliest) => t("dateTooFarInPast", { months: "6", date: earliest }), plan ? { planDate: plan.planDate, preD: plan.preD } : undefined),
+    [tCommon, tFields, t, plan]
+  )
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaultValues(defaultDate, defaultOrderNumber, plan),
   })
   const servicemanValue = form.watch("serviceman")
+  // Duplicate guard: another PENDING Filter Change for the same Order No. on
+  // the same visit date (Pre D, else Plan D). The first save shows a warning
+  // and turns the button into "Save anyway"; changing the order or date
+  // clears it.
+  const { data: allPlans = [] } = useFilterChangePlans()
+  const [duplicateWarning, setDuplicateWarning] = React.useState<{ key: string; count: number; order: string; date: string } | null>(null)
+  const watchedOrder = form.watch("orderNumber")
+  const watchedPlanDate = form.watch("planDate")
+  const watchedPreD = form.watch("preD")
+  React.useEffect(() => {
+    const key = `${(watchedOrder ?? "").trim()}|${watchedPreD || watchedPlanDate}`
+    if (duplicateWarning && duplicateWarning.key !== key) setDuplicateWarning(null)
+  }, [watchedOrder, watchedPlanDate, watchedPreD, duplicateWarning])
+  React.useEffect(() => {
+    if (open) setDuplicateWarning(null)
+  }, [open])
   // Order Number search: every Sale List order with its customer — type an
   // order or a customer name. Picking one (or typing an exact order) fills the
   // empty fields (fillFromOrder).
@@ -294,6 +333,16 @@ export function FilterChangeFormDialog({
   }
 
   async function onSubmit(values: FormValues) {
+    const order = values.orderNumber.trim()
+    const visitDate = values.preD || values.planDate
+    const key = `${order}|${visitDate}`
+    const duplicates = allPlans.filter(
+      (p) => p.id !== plan?.id && p.status === "Pending" && p.orderNumber.trim() === order && (p.preD || p.planDate) === visitDate
+    )
+    if (duplicates.length > 0 && duplicateWarning?.key !== key) {
+      setDuplicateWarning({ key, count: duplicates.length, order, date: visitDate })
+      return
+    }
     const input = {
       ...values,
       contactNumber: values.contactNumber ?? "",
@@ -574,12 +623,17 @@ export function FilterChangeFormDialog({
               />
             </div>
             </DialogBody>
+            {duplicateWarning && (
+              <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" data-testid="fc-duplicate-warning">
+                {t("duplicatePendingWarning", { count: String(duplicateWarning.count), order: duplicateWarning.order, date: duplicateWarning.date })}
+              </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? tCommon("saving") : isEdit ? tCommon("saveChanges") : tCommon("add")}
+              <Button type="submit" disabled={pending} variant={duplicateWarning ? "destructive" : "default"} data-testid="fc-submit">
+                {pending ? tCommon("saving") : duplicateWarning ? t("saveAnyway") : isEdit ? tCommon("saveChanges") : tCommon("add")}
               </Button>
             </DialogFooter>
           </form>

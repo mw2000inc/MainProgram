@@ -397,6 +397,20 @@ export default function CustomersPage() {
                 {t("includeInactive", { count: String(inactiveCount) })}
               </label>
               <MonthYearFilter value={monthYear} onChange={setMonthYear} years={years} />
+              {/* The page header's Add Member isn't visible in full screen. */}
+              {inFullScreen && can("customers:add") && (
+                <Button
+                  size="sm"
+                  className="h-9 gap-1.5"
+                  onClick={() => {
+                    setEditing(undefined)
+                    setFormOpen(true)
+                  }}
+                  data-testid="member-fullscreen-add"
+                >
+                  <Plus className="h-4 w-4" /> {t("addMember")}
+                </Button>
+              )}
               <ExportButtons
                 title="Member List"
                 subtitle={`Generated ${formatDate(new Date().toISOString())}`}

@@ -372,7 +372,27 @@ export function DashboardPlanPanel<TData extends { id: string; status?: string }
       <DataTable
         columns={cols}
         data={isExpanded ? filteredExpandedData : filteredData}
-        toolbar={isExpanded ? expandedToolbar : undefined}
+        // Expanded, the card header (+ Add, Download) isn't on screen, so they
+        // join the table toolbar beside the search — always there in full view.
+        toolbar={
+          isExpanded ? (
+            <>
+              {expandedToolbar}
+              {canAdd && (
+                <Button size="sm" className="h-9 gap-1.5" onClick={onAdd} data-testid="panel-expanded-add">
+                  <Plus className="h-4 w-4" /> {resolvedAddLabel}
+                </Button>
+              )}
+              {exportColumns && (
+                <PanelExportMenu
+                  columns={exportColumns}
+                  rows={filteredExpandedData}
+                  fileName={exportFileName ?? title.toLowerCase().replace(/\s+/g, "-")}
+                />
+              )}
+            </>
+          ) : undefined
+        }
         emptyMessage={resolvedEmptyMessage}
         pageSize={pageSize}
         onRowClick={selectMode ? undefined : onRowClick}
