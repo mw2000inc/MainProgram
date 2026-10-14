@@ -12,6 +12,7 @@ import { pairPatchToFields } from "@/lib/technicians"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell } from "@/components/shared/truncated-cell"
+import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -127,7 +128,7 @@ export function getCollectionsColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.accountName} />,
+      cell: ({ row }) => <RecordAccountNameCell name={row.original.accountName} orderNo={row.original.orderNo} customerId={row.original.customerId} />,
     },
     {
       accessorKey: "amount",
@@ -215,7 +216,11 @@ export function getCollectionsDailyReportColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <span className="inline-block min-w-[150px]">{row.original.accountName}</span>,
+      cell: ({ row }) => (
+        <span className="inline-block min-w-[150px]">
+          <RecordAccountNameCell name={row.original.accountName} orderNo={row.original.orderNo} customerId={row.original.customerId} className="max-w-none" />
+        </span>
+      ),
     },
     {
       accessorKey: "amount",

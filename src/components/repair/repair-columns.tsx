@@ -6,6 +6,7 @@ import { PlanStatusSelect } from "@/components/shared/plan-status-select"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatTechnicians } from "@/components/schedule/schedule-columns"
 import type { RepairPlan } from "@/lib/types"
@@ -64,7 +65,7 @@ export function getRepairColumns({
     {
       accessorKey: "accountName",
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.accountName} className="font-medium" />,
+      cell: ({ row }) => <RecordAccountNameCell name={row.original.accountName} orderNo={row.original.orderNo} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
     { accessorKey: "unitInOut", header: () => <ColumnHeader tKey="unitInOut" ns="fields" /> },

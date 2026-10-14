@@ -15,6 +15,7 @@ import { getFilterPartOptions } from "@/lib/filter-parts"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { CustomerNameCell } from "@/components/shared/customer-name-cell"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
@@ -107,7 +108,7 @@ export function getFilterChangeColumns({
     {
       accessorKey: "memberAccount",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.memberAccount} />,
+      cell: ({ row }) => <RecordAccountNameCell name={row.original.memberAccount} orderNo={row.original.orderNumber} customerId={row.original.customerId} />,
     },
     {
       accessorKey: "filterType",
@@ -248,7 +249,11 @@ function dailyReportColumnDefs({
     memberAccount: {
       accessorKey: "memberAccount",
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
-      cell: ({ row }) => <span className="inline-block min-w-[140px]">{row.original.memberAccount}</span>,
+      cell: ({ row }) => (
+        <span className="inline-block min-w-[140px]">
+          <RecordAccountNameCell name={row.original.memberAccount} orderNo={row.original.orderNumber} customerId={row.original.customerId} className="max-w-none" />
+        </span>
+      ),
     },
     filterType: {
       accessorKey: "filterType",
@@ -362,7 +367,11 @@ export function getFilterChangeExpandedColumns(
       header: () => <ColumnHeader tKey="orderNumber" ns="fields" />,
       cell: ({ row }) => <span className="font-medium">{row.original.orderNumber}</span>,
     },
-    { accessorKey: "memberAccount", header: () => <ColumnHeader tKey="memberAccount" ns="fields" /> },
+    {
+      accessorKey: "memberAccount",
+      header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
+      cell: ({ row }) => <RecordAccountNameCell name={row.original.memberAccount} orderNo={row.original.orderNumber} customerId={row.original.customerId} className="max-w-none" />,
+    },
     editable?.filterType ?? { accessorKey: "filterType", header: () => <ColumnHeader tKey="filter" ns="fields" /> },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
     { accessorKey: "address", header: () => <ColumnHeader tKey="address" ns="fields" /> },

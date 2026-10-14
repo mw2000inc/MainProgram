@@ -10,6 +10,7 @@ import { pairPatchToFields } from "@/lib/technicians"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { TranslatableText } from "@/components/shared/translatable-text"
 import { TruncatedCell, TruncatedContainer } from "@/components/shared/truncated-cell"
+import { RecordAccountNameCell } from "@/components/shared/record-account-name"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { InstallPlan } from "@/lib/types"
@@ -60,7 +61,7 @@ export function getInstallColumns({
     {
       accessorKey: "name",
       header: () => <ColumnHeader tKey="name" ns="fields" />,
-      cell: ({ row }) => <TruncatedCell value={row.original.name} className="font-medium" />,
+      cell: ({ row }) => <RecordAccountNameCell name={row.original.name} orderNo={row.original.orderNo} className="font-medium" />,
     },
     { accessorKey: "orderNo", header: () => <ColumnHeader tKey="orderNo" ns="fields" /> },
     {
