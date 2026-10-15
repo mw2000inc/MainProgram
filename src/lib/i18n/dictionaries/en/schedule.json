@@ -47,6 +47,8 @@
   "filterChangeRequired": "Filter Change Required",
   "selectFilter": "Select filter...",
   "addFilter": "Add Filter",
+  "plannedFilterBadge": "Planned",
+  "plannedFiltersPrefilled": "This job's filters are filled in — they're deducted automatically when it's marked done. Add or raise only what was used beyond them.",
   "pendingInventoryNote": "Each filter creates its own inventory transaction, kept Pending until an admin approves it — actual stock isn't deducted yet.",
   "saving": "Saving...",
   "saveAndMarkDone": "Save & Mark Done",

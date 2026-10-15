@@ -116,6 +116,21 @@ export async function updateScheduleJob(id: string, input: Partial<Omit<Schedule
   return fromRow(data as ScheduleJobRow)
 }
 
+// Marking a job done from the agenda (admin or its technician): exactly
+// status + remarks and nothing else — the only two columns a technician may
+// change (restrict_schedule_job_technician_update). When it was completed is
+// kept by the audit trigger (updated_at); there's no completed_at column.
+export async function markScheduleJobDone(id: string, remarks: string): Promise<ScheduleJob> {
+  const { data, error } = await supabase
+    .from("schedule_jobs")
+    .update({ status: "completed", remarks: remarks.trim() || null })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  return fromRow(data as ScheduleJobRow)
+}
+
 // Links a Filter Change / install / repair / collection record to the job
 // just created for it from the Schedule's Unscheduled Visits — only while
 // it's still unlinked, so it never steals a record another job already has.

@@ -34,7 +34,7 @@ import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
-import { formatFilterCodes } from "@/lib/filter-codes"
+import { formatFilterCodes, parseFilterCodes } from "@/lib/filter-codes"
 import { CustomerNameButton } from "@/components/shared/customer-details"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
@@ -47,7 +47,7 @@ import { collectionsKey } from "@/lib/hooks/use-collections"
 import { toast } from "sonner"
 import { useDragHandle } from "@/components/dashboard/sortable-panel"
 import { JOB_TYPE_LABELS, SCHEDULE_EXPORT_COLUMNS, SCHEDULE_PRINT_COLUMNS, formatTechnicians, computeStopNumbers } from "@/components/schedule/schedule-columns"
-import { scheduleJobsKey, useCompleteScheduleJobs, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
+import { scheduleJobsKey, useCompleteScheduleJobs, useMarkScheduleJobDone, useScheduleJobs, useUpdateScheduleJob } from "@/lib/hooks/use-schedule"
 import { useCreateScheduleJobFilterItems } from "@/lib/hooks/use-schedule-job-filter-items"
 import { useProducts } from "@/lib/hooks/use-inventory"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -88,7 +88,8 @@ import { useUsers } from "@/lib/hooks/use-misc"
 import { VEHICLE_TYPES } from "@/lib/constants"
 import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
 
-type FilterItemDraft = { key: number; productId: string; quantity: string }
+// planned: filled in from the job's own filters (see MarkJobDoneDialog).
+type FilterItemDraft = { key: number; productId: string; quantity: string; planned?: boolean }
 let filterItemDraftKey = 0
 
 // Filters recorded here automatically create/update this job's Filter
@@ -98,14 +99,35 @@ let filterItemDraftKey = 0
 // technician can notice the same need during a repair or install visit.
 function MarkJobDoneDialog({
   job,
+  plannedCodes,
   onOpenChange,
 }: {
   job: ScheduleJob | undefined
+  // The job's filters ("021, 022, 023, 025") — its Filter Change record's
+  // Filter when it has one, else the job's own: what completion deducts.
+  plannedCodes?: string
   onOpenChange: (open: boolean) => void
 }) {
-  const updateJob = useUpdateScheduleJob()
+  const markDone = useMarkScheduleJobDone()
   const createFilterItems = useCreateScheduleJobFilterItems()
   const { data: products = [] } = useProducts()
+  // The planned filters as products, matched by SKU like the database does
+  // (the earliest added product per code); a code with no product is left out.
+  const plannedItems = React.useMemo(() => {
+    const bySku = new Map<string, string>()
+    for (const p of [...products].sort((a, b) => (a.dateAdded ?? "").localeCompare(b.dateAdded ?? ""))) {
+      const sku = (p.sku ?? "").trim()
+      if (sku && !bySku.has(sku)) bySku.set(sku, p.id)
+    }
+    return parseFilterCodes(plannedCodes)
+      .map((l) => ({ productId: bySku.get(l.code) ?? "", quantity: l.quantity }))
+      .filter((l) => l.productId)
+  }, [plannedCodes, products])
+  // A Filter Change job's planned filters are queued for deduction by the
+  // database when it completes (its record's trigger, or 20261105000000 for
+  // one without a record) — so only what's used beyond them is sent as extra
+  // filter items, never the same filters twice.
+  const plannedAutoDeducted = job?.jobType === "filter_change"
   const { t } = useTranslation("schedule")
   const { t: tCommon } = useTranslation("common")
   const [remarks, setRemarks] = React.useState(() => job?.remarks ?? "")
@@ -114,7 +136,18 @@ function MarkJobDoneDialog({
     { key: filterItemDraftKey++, productId: "", quantity: "1" },
   ])
 
-  const saving = updateJob.isPending || createFilterItems.isPending
+  const saving = markDone.isPending || createFilterItems.isPending
+
+  // Ticking "Filter Change Required" fills the rows with the job's filters
+  // (when nothing's been picked yet) — no adding them one by one.
+  function toggleFilterChangeRequired(checked: boolean) {
+    setFilterChangeRequired(checked)
+    if (!checked || plannedItems.length === 0) return
+    const untouched = filterItems.every((i) => !i.productId)
+    if (untouched) {
+      setFilterItems(plannedItems.map((p) => ({ key: filterItemDraftKey++, productId: p.productId, quantity: String(p.quantity), planned: true })))
+    }
+  }
 
   function updateItem(key: number, patch: Partial<FilterItemDraft>) {
     setFilterItems((items) => items.map((i) => (i.key === key ? { ...i, ...patch } : i)))
@@ -139,22 +172,22 @@ function MarkJobDoneDialog({
         {/* The job's own filters are deducted when it's completed (its Filter
             Change record's, or the job's own when it has none); the box
             below is for anything else found on the visit. */}
-        {job?.jobType === "filter_change" && job.filterCodes?.trim() && (
+        {job?.jobType === "filter_change" && plannedCodes?.trim() && (
           <p className="rounded-md bg-muted px-3 py-2 text-xs" data-testid="mark-done-planned-filters">
-            {t("plannedFilters", { filters: formatFilterCodes(job.filterCodes) })}
+            {t("plannedFilters", { filters: formatFilterCodes(plannedCodes) })}
           </p>
         )}
 
         <div className="space-y-3 rounded-md border p-3">
           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-            <Checkbox checked={filterChangeRequired} onCheckedChange={(v) => setFilterChangeRequired(v === true)} />
+            <Checkbox checked={filterChangeRequired} onCheckedChange={(v) => toggleFilterChangeRequired(v === true)} data-testid="mark-done-filter-required" />
             {t("filterChangeRequired")}
           </label>
           {filterChangeRequired && (
             <div className="space-y-2">
               {filterItems.map((item) => (
-                <div key={item.key} className="flex items-center gap-2">
-                  <Select value={item.productId} onValueChange={(v) => updateItem(item.key, { productId: v })}>
+                <div key={item.key} className="flex items-center gap-2" data-testid="mark-done-filter-row">
+                  <Select value={item.productId} onValueChange={(v) => updateItem(item.key, { productId: v, planned: false })}>
                     <SelectTrigger className="flex-1 min-w-0">
                       <SelectValue placeholder={t("selectFilter")} />
                     </SelectTrigger>
@@ -173,6 +206,11 @@ function MarkJobDoneDialog({
                     onChange={(e) => updateItem(item.key, { quantity: e.target.value })}
                     className="w-16 shrink-0"
                   />
+                  {item.planned && (
+                    <Badge variant="outline" className="shrink-0 text-[10px]">
+                      {t("plannedFilterBadge")}
+                    </Badge>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -194,6 +232,9 @@ function MarkJobDoneDialog({
               >
                 <Plus className="h-3.5 w-3.5" /> {t("addFilter")}
               </Button>
+              {plannedAutoDeducted && filterItems.some((i) => i.planned) && (
+                <p className="text-xs text-muted-foreground" data-testid="mark-done-planned-note">{t("plannedFiltersPrefilled")}</p>
+              )}
               <p className="text-xs text-muted-foreground">{t("pendingInventoryNote")}</p>
             </div>
           )}
@@ -207,15 +248,23 @@ function MarkJobDoneDialog({
             disabled={saving}
             onClick={async () => {
               if (!job) return
-              const items = filterChangeRequired
-                ? filterItems
-                    .filter((i) => i.productId && Number(i.quantity) > 0)
-                    .map((i) => ({ productId: i.productId, quantity: Number(i.quantity) }))
-                : []
+              // Per product: what was used, less what completion already
+              // deducts for a Filter Change job (its planned filters).
+              const used = new Map<string, number>()
+              if (filterChangeRequired) {
+                for (const i of filterItems) {
+                  const qty = Math.floor(Number(i.quantity))
+                  if (i.productId && qty > 0) used.set(i.productId, (used.get(i.productId) ?? 0) + qty)
+                }
+              }
+              const planned = new Map(plannedAutoDeducted ? plannedItems.map((p) => [p.productId, p.quantity] as const) : [])
+              const items = [...used]
+                .map(([productId, qty]) => ({ productId, quantity: qty - (planned.get(productId) ?? 0) }))
+                .filter((i) => i.quantity > 0)
               // A failure is shown by each mutation's own toast (with the
               // database's reason); the dialog stays open so nothing typed is lost.
               try {
-                await updateJob.mutateAsync({ id: job.id, input: { status: "completed", remarks } })
+                await markDone.mutateAsync({ id: job.id, remarks })
               } catch {
                 return
               }
@@ -2240,7 +2289,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           dropVisitEdits([visitToSchedule.key])
         }}
       />
-      <MarkJobDoneDialog key={markingDone?.id ?? "none"} job={markingDone} onOpenChange={(o) => !o && setMarkingDone(undefined)} />
+      <MarkJobDoneDialog
+        key={markingDone?.id ?? "none"}
+        job={markingDone}
+        plannedCodes={markingDone ? filterChangePlans.find((p) => p.scheduleJobId === markingDone.id)?.filterType || markingDone.filterCodes : undefined}
+        onOpenChange={(o) => !o && setMarkingDone(undefined)}
+      />
     </Card>
   )
 }

@@ -23,6 +23,27 @@ function invalidateJobsAndModules(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: collectionsKey })
 }
 
+// The agenda's "Mark job as done" (MarkJobDoneDialog). Completing queues the
+// job's filters as pending stock movements (database triggers), so the
+// Inventory movements list refreshes too — ["stockMovements"] is
+// use-inventory's stockMovementsKey (not imported: use-inventory imports
+// this file).
+export function useMarkScheduleJobDone() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, remarks }: { id: string; remarks: string }) => api.markScheduleJobDone(id, remarks),
+    onSuccess: () => {
+      invalidateJobsAndModules(qc)
+      qc.invalidateQueries({ queryKey: ["stockMovements"] })
+      toast.success("Job marked done")
+    },
+    onError: (error) => {
+      logDbError("schedule_jobs mark done", error)
+      toast.error("Failed to mark the job done", { description: describeDbError(error) })
+    },
+  })
+}
+
 export function useScheduleJobs() {
   return useQuery({ queryKey: scheduleJobsKey, queryFn: api.listScheduleJobs })
 }

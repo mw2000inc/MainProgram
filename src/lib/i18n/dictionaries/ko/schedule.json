@@ -47,6 +47,8 @@
   "filterChangeRequired": "필터 교체 필요",
   "selectFilter": "필터 선택...",
   "addFilter": "필터 추가",
+  "plannedFilterBadge": "예정",
+  "plannedFiltersPrefilled": "이 작업의 필터가 채워졌습니다 — 완료 처리 시 자동으로 차감됩니다. 추가로 사용한 것만 추가하거나 늘리세요.",
   "pendingInventoryNote": "각 필터는 자체 재고 거래를 생성하며, 관리자가 승인할 때까지 대기 상태로 유지됩니다 — 실제 재고는 아직 차감되지 않습니다.",
   "saving": "저장 중...",
   "saveAndMarkDone": "저장 및 완료 표시",
