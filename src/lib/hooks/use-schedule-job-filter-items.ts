@@ -4,6 +4,8 @@ import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { stockMovementsKey } from "@/lib/hooks/use-inventory"
 import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
+import { describeDbError, logDbError } from "@/lib/supabase/errors"
+import { toast } from "sonner"
 
 export function useScheduleJobFilterItems(scheduleJobId: string | undefined) {
   return useQuery({
@@ -30,6 +32,10 @@ export function useCreateScheduleJobFilterItems() {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: scheduleJobsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
+    },
+    onError: (error) => {
+      logDbError("schedule_job_filter_items insert", error)
+      toast.error("Job marked done, but its filters couldn't be recorded", { description: describeDbError(error) })
     },
   })
 }

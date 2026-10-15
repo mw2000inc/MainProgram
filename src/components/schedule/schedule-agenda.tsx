@@ -212,9 +212,19 @@ function MarkJobDoneDialog({
                     .filter((i) => i.productId && Number(i.quantity) > 0)
                     .map((i) => ({ productId: i.productId, quantity: Number(i.quantity) }))
                 : []
-              await updateJob.mutateAsync({ id: job.id, input: { status: "completed", remarks } })
+              // A failure is shown by each mutation's own toast (with the
+              // database's reason); the dialog stays open so nothing typed is lost.
+              try {
+                await updateJob.mutateAsync({ id: job.id, input: { status: "completed", remarks } })
+              } catch {
+                return
+              }
               if (items.length > 0) {
-                await createFilterItems.mutateAsync({ scheduleJobId: job.id, items })
+                try {
+                  await createFilterItems.mutateAsync({ scheduleJobId: job.id, items })
+                } catch {
+                  return
+                }
               }
               onOpenChange(false)
             }}

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import * as api from "@/lib/api/schedule"
 import type { ScheduleJob } from "@/lib/types"
 import { toast } from "sonner"
+import { describeDbError, logDbError } from "@/lib/supabase/errors"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { repairPlansKey } from "@/lib/hooks/use-repair-plans"
@@ -47,7 +48,12 @@ export function useUpdateScheduleJob() {
       invalidateJobsAndModules(qc)
       toast.success("Job updated")
     },
-    onError: () => toast.error("Failed to update job"),
+    // The database's own reason (a permission rule, a trigger's message, a
+    // constraint) — on screen and, in full, in the console.
+    onError: (error) => {
+      logDbError("schedule_jobs update", error)
+      toast.error("Failed to update job", { description: describeDbError(error) })
+    },
   })
 }
 
@@ -87,7 +93,10 @@ export function useDeleteScheduleJob() {
 export function usePreviewTechnicianSuggestionsForJobs() {
   return useMutation({
     mutationFn: (jobIds: string[]) => api.previewTechnicianSuggestionsForJobs(jobIds),
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      logDbError("schedule_jobs complete", error)
+      toast.error(describeDbError(error))
+    },
   })
 }
 

@@ -26,6 +26,36 @@ export function authErrorMessage(error: { message: string; status?: number }): s
 // preserves the original error as `.cause` (so `.code`/`.details`/`.hint`
 // are still inspectable in devtools) while giving callers a real,
 // displayable `.message`.
+// A readable cause for a failed database call — a PostgREST error object
+// ({ code, message, details, hint }), one wrapped by wrapSupabaseError
+// (.cause), or any Error. Permission (RLS), foreign-key and duplicate errors
+// get plain wording; a trigger's own "raise exception" text (P0001) is shown
+// as written, since that's already the reason in words.
+export function describeDbError(error: unknown): string {
+  const e = (error ?? {}) as { code?: string; message?: string; details?: string; hint?: string; cause?: unknown }
+  const db = (e.cause && typeof e.cause === "object" ? e.cause : e) as { code?: string; message?: string; details?: string; hint?: string }
+  const message = db.message || e.message || "Unknown error"
+  switch (db.code) {
+    case "42501":
+      return `Permission denied — your account isn't allowed to make this change (${message})`
+    case "23503":
+      return `It refers to a record that doesn't exist (${db.details || message})`
+    case "23505":
+      return `That already exists (${db.details || message})`
+    case "PGRST116":
+      return "The record wasn't found, or your account can't see it"
+    default:
+      return [message, db.details, db.hint].filter(Boolean).join(" — ")
+  }
+}
+
+// Logs a failed database call with everything Supabase returned (code,
+// details, hint) for the browser console, under a short label.
+export function logDbError(label: string, error: unknown): void {
+  const e = (error ?? {}) as { cause?: unknown }
+  console.error(`[${label}]`, e.cause && typeof e.cause === "object" ? e.cause : error)
+}
+
 export function wrapSupabaseError(error: { code?: string; message: string }): Error {
   return new Error(error.message, { cause: error })
 }
