@@ -31,7 +31,7 @@ import { getCustomerColumns, type CustomerRow } from "@/components/customers/cus
 import type { SaleListRow } from "@/components/sale-list/sale-list-columns"
 import { useCustomers, useDeleteCustomer, useMarkCustomersSeen } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { buildRelatedOrderNumbersByCustomerId } from "@/lib/customer-lookup"
+import { buildRelatedOrderNumbersByCustomerId, normalizeAccountNumber } from "@/lib/customer-lookup"
 import { useSettings } from "@/lib/hooks/use-misc"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -85,6 +85,7 @@ export default function CustomersPage() {
   const [fullScreen, setFullScreen] = React.useState(false)
   const [fullScreenRows, setFullScreenRows] = React.useState<CustomerRow[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [fullScreenQuery, setFullScreenQuery] = React.useState("")
   // Not active members (see memberToneById) are left out of the list, map,
   // search and export unless this is on — nothing is moved or changed, so a
   // member shows again by itself the moment one of their orders is ACTIVE or
@@ -168,8 +169,18 @@ export default function CustomersPage() {
     [memberToneById]
   )
 
+  // A search that is exactly a member's Account# (case, spaces and dashes
+  // ignored) always shows that member — even when the status, inactive or
+  // month/year filters would hide them.
+  const exactAccountIds = React.useMemo(() => {
+    const queries = [searchQuery, fullScreenQuery].map(normalizeAccountNumber).filter(Boolean)
+    if (!queries.length) return new Set<string>()
+    return new Set(rows.filter((c) => queries.includes(normalizeAccountNumber(c.memberAccountNumber))).map((c) => c.id))
+  }, [rows, searchQuery, fullScreenQuery])
+
   const scopedRows = React.useMemo(() => {
     return rows.filter((c) => {
+      if (exactAccountIds.has(c.id)) return true
       if (
         !includeInactive &&
         statusFilter !== "notActive" &&
@@ -187,7 +198,7 @@ export default function CustomersPage() {
       if (monthYear.year !== "all" && created.getFullYear() !== Number(monthYear.year)) return false
       return true
     })
-  }, [rows, statusFilter, monthYear, memberToneById, flaggedIds, includeInactive, openedMemberId])
+  }, [rows, statusFilter, monthYear, memberToneById, flaggedIds, includeInactive, openedMemberId, exactAccountIds])
 
   const selection = useSplitViewSelection(filteredRows.length ? filteredRows : scopedRows)
   // Current copy of the selected member, not the one filteredRows may still
@@ -330,7 +341,7 @@ export default function CustomersPage() {
           // in the same order on the page card and in full screen.
           inlineToolbar
           onFilteredRowsChange={inFullScreen ? setFullScreenRows : setFilteredRows}
-          onSearchChange={inFullScreen ? undefined : setSearchQuery}
+          onSearchChange={inFullScreen ? setFullScreenQuery : setSearchQuery}
           emptyMessage={t("noMembersFound")}
           onRowClick={(row) => {
             setFullScreen(false)

@@ -29,7 +29,7 @@ import {
 import { useCreateCustomer, useCustomers, useUpdateCustomer } from "@/lib/hooks/use-customers"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { newMemberDefaults } from "@/lib/customer-defaults"
-import { findExistingMemberMatch, type MemberMatch } from "@/lib/customer-lookup"
+import { findExistingMemberMatch, normalizeAccountNumber, type MemberMatch } from "@/lib/customer-lookup"
 import type { Customer } from "@/lib/types"
 
 // Same normalization on both sides of every comparison below (trim +
@@ -40,9 +40,8 @@ import type { Customer } from "@/lib/types"
 // index (customers_member_account_number_unique_idx) excludes '' the same
 // way, since at least one legitimate customer row has no account number
 // assigned yet.
-function normalizeAccountNumber(value: string): string {
-  return value.trim().toLowerCase()
-}
+// (normalizeAccountNumber lives in customer-lookup.ts, shared with the
+// existing-member match; it also ignores spaces and dashes.)
 
 function createSchema(
   t: (key: string) => string,
@@ -53,7 +52,10 @@ function createSchema(
   // submit-time safety net behind the Member Account# field's own onBlur
   // check below, so a duplicate can never get through some path that
   // skips blur (e.g. pasting then hitting Enter to submit immediately).
-  existingAccountNumbers: Set<string>
+  existingAccountNumbers: Set<string>,
+  // The edited member's own Account# (normalized) — keeping it is never a
+  // duplicate, whatever the cached list holds.
+  ownAccountNumber: string
 ) {
   return z
     .object({
@@ -80,7 +82,7 @@ function createSchema(
     })
     .superRefine((values, ctx) => {
       const normalized = normalizeAccountNumber(values.memberAccountNumber)
-      if (normalized && existingAccountNumbers.has(normalized)) {
+      if (normalized && normalized !== ownAccountNumber && existingAccountNumbers.has(normalized)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["memberAccountNumber"],
@@ -174,9 +176,10 @@ export function CustomerFormDialog({
     return set
   }, [customers, effectiveTarget?.id])
 
+  const ownAccountNumber = normalizeAccountNumber(effectiveTarget?.memberAccountNumber)
   const schema = React.useMemo(
-    () => createSchema(t, tCommon, tFields, existingAccountNumbers),
-    [t, tCommon, tFields, existingAccountNumbers]
+    () => createSchema(t, tCommon, tFields, existingAccountNumbers, ownAccountNumber),
+    [t, tCommon, tFields, existingAccountNumbers, ownAccountNumber]
   )
 
   const form = useForm<FormValues>({
@@ -263,7 +266,9 @@ export function CustomerFormDialog({
     // is still `text not null` at the database level (no migration needed,
     // same reasoning as this form's own `email` field) — "" satisfies NOT
     // NULL without being NULL.
-    const input = { ...values, contactNumber: values.contactNumber ?? "" }
+    // Account# stored trimmed (a stray space made it look like a different
+    // number to the database's exact unique index).
+    const input = { ...values, memberAccountNumber: values.memberAccountNumber.trim(), contactNumber: values.contactNumber ?? "" }
     if (effectiveTarget) {
       await updateCustomer.mutateAsync({ id: effectiveTarget.id, input })
     } else {

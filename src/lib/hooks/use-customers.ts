@@ -33,7 +33,12 @@ export function useCreateCustomer() {
     // Member Account#/order number) the same way useUpdateCustomer already
     // does below, instead of always showing the same generic text
     // regardless of why it actually failed.
-    onError: (error: Error) => toast.error(error.message || "Failed to add customer"),
+    // A rejected save (e.g. an Account# another admin just used) reloads the
+    // members, so the form's own duplicate check sees the latest list.
+    onError: (error: Error) => {
+      qc.invalidateQueries({ queryKey: customersKey })
+      toast.error(error.message || "Failed to add customer")
+    },
   })
 }
 
@@ -48,7 +53,10 @@ export function useUpdateCustomer() {
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
       toast.success("Customer updated successfully")
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to update customer"),
+    onError: (error: Error) => {
+      qc.invalidateQueries({ queryKey: customersKey })
+      toast.error(error.message || "Failed to update customer")
+    },
   })
 }
 

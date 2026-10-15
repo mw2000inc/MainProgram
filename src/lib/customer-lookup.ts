@@ -93,6 +93,14 @@ function phoneNumbersMatch(a: string, b: string): boolean {
   return da.slice(-PHONE_MATCH_TAIL_LENGTH) === db.slice(-PHONE_MATCH_TAIL_LENGTH)
 }
 
+// A Member Account# for comparing, not storing: case, spaces and dashes are
+// ignored, so "0007-000-0000-0555", " 0007-000-0000-0555 " and
+// "0007 000 0000 0555" are the same account. Blank stays blank (never a
+// duplicate — the unique index excludes '' too).
+export function normalizeAccountNumber(value: string | null | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[\s\-–—]+/g, "")
+}
+
 export type MemberMatchField = "memberAccountNumber" | "contactNumber" | "name"
 
 export interface MemberMatch {
@@ -117,9 +125,9 @@ export function findExistingMemberMatch(
 ): MemberMatch | undefined {
   const candidates = customers.filter((c) => !c.isSystem && c.id !== excludeId)
 
-  const accountNumber = (values.memberAccountNumber ?? "").trim().toLowerCase()
+  const accountNumber = normalizeAccountNumber(values.memberAccountNumber)
   if (accountNumber) {
-    const byAccount = candidates.find((c) => c.memberAccountNumber.trim().toLowerCase() === accountNumber)
+    const byAccount = candidates.find((c) => normalizeAccountNumber(c.memberAccountNumber) === accountNumber)
     if (byAccount) return { customer: byAccount, matchedOn: "memberAccountNumber" }
   }
 
