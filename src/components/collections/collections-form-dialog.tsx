@@ -176,6 +176,8 @@ export function CollectionsFormDialog({
   // or Plan D changes, unless the admin has since picked someone else.
   const inheritedRef = React.useRef<{ primary: string; secondary: string } | null>(null)
   const [inheritedFrom, setInheritedFrom] = React.useState("")
+  // Same for Pre D: the date last copied from a Filter Change visit.
+  const inheritedPreDRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     if (!open) return
@@ -183,6 +185,7 @@ export function CollectionsFormDialog({
     setAutoFilledFor("")
     inheritedRef.current = null
     setInheritedFrom("")
+    inheritedPreDRef.current = null
     // Same lookup the blur handler runs below — opening this dialog already
     // pointed at a real order fills it in immediately, without needing the
     // admin to click into and back out of the field.
@@ -278,6 +281,35 @@ export function CollectionsFormDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderNoValue, collectionDateValue, filterChangePlans, isEdit, open])
+  // Pre D: the same open Filter Change visit's Pre D (its moved-to visit
+  // date), so the Collection goes on that trip too. Filled while Pre D is
+  // empty or still holds a date copied here — a date the admin typed is kept;
+  // changing the order or Plan D follows the new visit (or clears a copied
+  // date when there's none).
+  React.useEffect(() => {
+    if (isEdit || !open) return
+    const order = (orderNoValue ?? "").trim()
+    const visit =
+      order && collectionDateValue
+        ? filterChangePlans.find((p) => p.orderNumber.trim() === order && p.planDate === collectionDateValue && p.status === "Pending" && !p.accD)
+        : undefined
+    const current = form.getValues("preD") ?? ""
+    const last = inheritedPreDRef.current
+    if (current && current !== last) return
+    const next = visit?.preD ?? ""
+    if (next === current) {
+      inheritedPreDRef.current = next || null
+      return
+    }
+    if (next || last) {
+      form.setValue("preD", next, { shouldDirty: true, shouldValidate: true })
+      inheritedPreDRef.current = next || null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderNoValue, collectionDateValue, filterChangePlans, isEdit, open])
+  const preDValue = form.watch("preD")
+  const showPreDHint = !isEdit && !!preDValue && preDValue === inheritedPreDRef.current
+
   const servicemanValue = form.watch("serviceman")
   const serviceman2Value = form.watch("serviceman2")
   const currentPair = normalizeTechnicianPair(servicemanValue ?? "", serviceman2Value ?? "")
@@ -490,8 +522,13 @@ export function CollectionsFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("preD")}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...field} data-testid="collection-pre-d" />
                     </FormControl>
+                    {showPreDHint && (
+                      <p className="flex items-center gap-1 text-xs text-success" data-testid="collection-pre-d-inherited">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {t("preDFromFilterChange")}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

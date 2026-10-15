@@ -8,6 +8,7 @@
   "orderSearchPlaceholder": "주문 번호 또는 고객 이름 — 예: 001-0001",
   "orderAutoFilled": "주문 정보로 채웠습니다 — 필요하면 수정하세요.",
   "techniciansFromFilterChange": "이 날짜의 같은 주문 필터 교체 방문과 같은 기술자입니다.",
+  "preDFromFilterChange": "이 주문의 필터 교체 방문과 같은 Pre D입니다.",
   "customerOrBusinessName": "고객 또는 업체명",
   "pageDescription": "월별로 정리된 전체 수금 목록입니다.",
   "searchPlaceholder": "주문 번호, 계정으로 검색...",

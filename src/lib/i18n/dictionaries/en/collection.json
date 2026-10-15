@@ -8,6 +8,7 @@
   "orderSearchPlaceholder": "Order No. or customer name — e.g. 001-0001",
   "orderAutoFilled": "Details filled from the order — edit anything you need.",
   "techniciansFromFilterChange": "Same technicians as this order's Filter Change visit on this date.",
+  "preDFromFilterChange": "Same Pre D as this order's Filter Change visit.",
   "customerOrBusinessName": "Customer or business name",
   "pageDescription": "Full list of payment collections, grouped by month.",
   "searchPlaceholder": "Search by order number, account...",
