@@ -24,6 +24,10 @@ export interface ReleaseSlipJob {
   technician: string
   technician2: string
   movements: ReleaseSlipMovement[]
+  // Set on the slip page, not by the database: the money to collect on this
+  // visit ("To Collect: ₱8,500.00 (Cash)" — see release-slip-collect.ts),
+  // printed in the job's first Notes cell.
+  jobNote?: string
 }
 
 export interface ReleaseSlipData {

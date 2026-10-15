@@ -16,6 +16,9 @@ import { fetchReleaseSlip } from "@/lib/api/release-slip"
 import { listProducts } from "@/lib/api/inventory"
 import { productsKey } from "@/lib/hooks/use-inventory"
 import { loadManualItems, manualSlipJob, saveManualItems, type ManualSlipItem } from "@/lib/release-slip-manual"
+import { collectionNoteFor } from "@/lib/release-slip-collect"
+import { useCollections } from "@/lib/hooks/use-collections"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -77,11 +80,18 @@ function ReleaseSlipContent() {
     queryFn: () => fetchReleaseSlip(date, technicianId, includePending),
     enabled: !!user,
   })
-  // Pending jobs print with blank OUT lines.
-  const jobs = React.useMemo(
-    () => (data?.jobs ?? []).map((j) => (j.status === "completed" ? j : { ...j, movements: [] })),
-    [data]
-  )
+  // The amount to collect on each visit, for the Notes column. Collections are
+  // readable by technicians; the Sale List (the C/F fallback) only by admins.
+  const { data: collections = [] } = useCollections()
+  const { data: saleListEntries = [] } = useSaleListEntries()
+  // Pending jobs print with blank OUT lines (their collection note still shows).
+  const jobs = React.useMemo(() => {
+    const list = data?.jobs ?? []
+    return list.map((j) => ({
+      ...(j.status === "completed" ? j : { ...j, movements: [] }),
+      jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
+    }))
+  }, [data, date, collections, saleListEntries])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)

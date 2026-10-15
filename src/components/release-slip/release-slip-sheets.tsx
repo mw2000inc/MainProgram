@@ -189,6 +189,11 @@ export function ReleaseSlipSheets({
                   <tbody key={bi} className="slip-job" data-testid="slip-job">
                     {Array.from({ length: b.lines }, (_, li) => {
                       const m = b.movements[li]
+                      // The job's collection note leads its first Notes cell
+                      // (not repeated on a "(cont.)" block), before that
+                      // line's own item note.
+                      const jobNote = li === 0 && !b.continued ? b.job.jobNote : undefined
+                      const note = [jobNote, m?.note].filter(Boolean).join(" · ")
                       return (
                         <tr key={li}>
                           {li === 0 && (
@@ -211,8 +216,8 @@ export function ReleaseSlipSheets({
                           <td className="slip-num">{m && m.qtyOut ? `${qty(m.qtyOut)}${m.status === "pending" ? "*" : ""}` : ""}</td>
                           <td>{m && m.qtyIn ? itemName(m) : ""}</td>
                           <td className="slip-num">{m && m.qtyIn ? `${qty(m.qtyIn)}${m.status === "pending" ? "*" : ""}` : ""}</td>
-                          <td className="slip-note" title={m?.note}>
-                            {m?.note ?? ""}
+                          <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={note || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
+                            {note}
                           </td>
                         </tr>
                       )
@@ -279,6 +284,7 @@ export const RELEASE_SLIP_CSS = `
 .slip-box { text-align: center; font-weight: 700; }
 .slip-num { text-align: right; }
 .slip-table td.slip-note { font-size: 7pt; }
+.slip-table td.slip-note-job { white-space: normal; line-height: 1.05; font-weight: 600; text-overflow: clip; word-break: break-word; }
 .slip-foot { font-size: 7.5pt; text-align: right; }
 .slip-bottom { display: flex; gap: 6mm; align-items: flex-start; margin-top: 2mm; }
 .slip-summary { flex: 0 0 92mm; }
