@@ -45,7 +45,7 @@ import { normalizeTechnicianPair } from "@/lib/technicians"
 import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 import { useCreateInstallPlan, useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useCreateCustomer, useCustomers } from "@/lib/hooks/use-customers"
-import { useCreateSaleListEntry, useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useCreateSaleListEntry, useSaleListEntries, useUpdateSaleListEntry } from "@/lib/hooks/use-sale-list"
 import { findCustomerByOrderNumber, findExistingMemberMatch, type MemberMatchField } from "@/lib/customer-lookup"
 import { newMemberDefaults } from "@/lib/customer-defaults"
 import { dateFieldSchema, moneySchema } from "@/lib/form-schemas"
@@ -198,6 +198,7 @@ export function InstallFormDialog({
   const updatePlan = useUpdateInstallPlan()
   const createCustomer = useCreateCustomer()
   const createSaleListEntry = useCreateSaleListEntry()
+  const updateSaleListEntry = useUpdateSaleListEntry()
   const ensureVisitDraftJob = useVisitDraftJob()
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
@@ -345,6 +346,72 @@ export function InstallFormDialog({
       notes: [values.name, values.model].filter(Boolean).join(" — "),
     })
 
+  // One form, three records: an installation's order also gets its Member and
+  // its Sale List entry, so Repair / Filter Change / Collection forms for the
+  // order fill in from them later (findCustomerByOrderNumber). Add-only —
+  // nothing already there is overwritten:
+  // - Member: the order's own (via its Sale List entry or the member's order
+  //   field), else an existing member matching the Account# / phone / name
+  //   (findExistingMemberMatch, the same check as the live autofill — a typed
+  //   existing Account# must link, not hit the unique-constraint error),
+  //   else a new member from this form. Fields with no source here (contract
+  //   no., S/C, C/F, C/T, CP Y1/Y2…) stay blank for the admin to fill in;
+  //   contract start/end get the Add Member form's one-year default
+  //   (customer-defaults.ts) since they can't be blank.
+  // - Sale List: a new entry for the order (Product # = the unit Model,
+  //   installed date, the member) when the order has none; an existing entry
+  //   only gets a missing Product # / member / installed date filled in. An
+  //   installation without an Order No. gets no Sale List entry.
+  async function ensureMemberAndSaleEntry(values: FormValues, orderNo: string) {
+    const order = orderNo.trim()
+    const sale = order ? saleListEntries.find((e) => e.orderNumber.trim() === order) : undefined
+    let customerId = order ? findCustomerByOrderNumber(customers, saleListEntries, order)?.id : undefined
+    if (!customerId) {
+      const existingMatch = findExistingMemberMatch(customers, {
+        memberAccountNumber: values.memberAccountNumber,
+        contactNumber: values.contactNumber,
+        fullName: values.name,
+        companyName: values.name,
+      })
+      if (existingMatch) customerId = existingMatch.customer.id
+      else if (values.name.trim()) {
+        customerId = (
+          await createCustomer.mutateAsync({
+            ...newMemberDefaults(),
+            fullName: values.name,
+            address: values.address ?? "",
+            contactNumber: values.contactNumber ?? "",
+            dispenserType: values.model,
+            installedDate: values.installedDate || undefined,
+            memberAccountNumber: values.memberAccountNumber || "",
+            email: values.email ?? "",
+          })
+        ).id
+      }
+    }
+    if (!order) return
+    const model = values.model.trim()
+    if (!sale) {
+      await createSaleListEntry.mutateAsync({
+        orderNumber: order,
+        customerId,
+        installedDate: values.installedDate || undefined,
+        productNo: model,
+        sc: "",
+        cf: "",
+        ct: "",
+        cpY1Y2: "",
+        status: "ACTIVE",
+      })
+      return
+    }
+    const patch: { productNo?: string; customerId?: string; installedDate?: string } = {}
+    if (!sale.productNo.trim() && model) patch.productNo = model
+    if (!sale.customerId && customerId) patch.customerId = customerId
+    if (!sale.installedDate && values.installedDate) patch.installedDate = values.installedDate
+    if (Object.keys(patch).length) await updateSaleListEntry.mutateAsync({ id: sale.id, input: patch })
+  }
+
   async function onSubmit(values: FormValues) {
     // No longer required (see the schema's own comment) but install_plans.
     // order_no is still NOT NULL at the database level — "" satisfies that
@@ -373,6 +440,8 @@ export function InstallFormDialog({
       await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
       // A plan without a job that now has a date gets its draft too.
       await ensureDraftJob(plan.id, plan.scheduleJobId, values)
+      // An order added (or still missing its Member / Sale List entry) on edit.
+      await ensureMemberAndSaleEntry(values, orderNo)
     } else {
       // A new manually-scheduled dispatch enters the admin approval queue —
       // see the dispatch_confirmation_workflow migration. serviceman (from
@@ -383,64 +452,7 @@ export function InstallFormDialog({
       const created = await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
       await ensureDraftJob(created.id, undefined, values)
 
-      // This order has no existing customer/sale-list-entry match — one
-      // form, three records: also create the Member and Sale List entry,
-      // instead of leaving the admin to do those as separate steps. Fields
-      // with no source in this form (contract number, email, assigned
-      // technician, S/C, C/F, C/T, CP Y1/Y2) are left blank/defaulted per
-      // the explicit decision on this — never fabricated, admin fills them
-      // in later via Edit. Contract start/end are the one exception: those
-      // two are NOT NULL columns with no blank option at the database
-      // level, so they get the exact same "one year from today" default
-      // the Add Member form has always silently used for a brand-new
-      // member missing this info (see customer-defaults.ts).
-      if (!findCustomerByOrderNumber(customers, saleListEntries, orderNo)) {
-        // The order number alone doesn't resolve to an existing customer,
-        // but this can still be a genuinely existing member getting a NEW
-        // install logged under an order this app has no Sale List record
-        // of yet (or none at all, now that Order No. isn't required) —
-        // check the same multi-signal match handleCustomerLookupBlur
-        // already used for live autofill (exact Member Account# match
-        // first, then phone, then exact name) before assuming this is a
-        // brand-new customer. Skipping this check is exactly what caused a
-        // real bug: entering an EXISTING member's own Account# here hit
-        // createCustomer's unique-constraint violation ("This Member
-        // Account# already exists") instead of just linking to that
-        // customer — the blur handler already knew about the match, but
-        // nothing at submit time re-checked it before trying to create a
-        // duplicate.
-        const existingMatch = findExistingMemberMatch(customers, {
-          memberAccountNumber: values.memberAccountNumber,
-          contactNumber: values.contactNumber,
-          fullName: values.name,
-          companyName: values.name,
-        })
-        const customerId = existingMatch
-          ? existingMatch.customer.id
-          : (
-              await createCustomer.mutateAsync({
-                ...newMemberDefaults(),
-                fullName: values.name,
-                address: values.address ?? "",
-                contactNumber: values.contactNumber ?? "",
-                dispenserType: values.model,
-                installedDate: values.installedDate || undefined,
-                memberAccountNumber: values.memberAccountNumber || "",
-                email: values.email ?? "",
-              })
-            ).id
-        await createSaleListEntry.mutateAsync({
-          orderNumber: orderNo,
-          customerId,
-          installedDate: values.installedDate || undefined,
-          productNo: "",
-          sc: "",
-          cf: "",
-          ct: "",
-          cpY1Y2: "",
-          status: "ACTIVE",
-        })
-      }
+      await ensureMemberAndSaleEntry(values, orderNo)
     }
     onOpenChange(false)
   }
@@ -623,7 +635,7 @@ export function InstallFormDialog({
                         value={field.value}
                         onChange={field.onChange}
                         options={MODEL_OPTIONS}
-                        placeholder={t("selectField", { field: tFields("model") })}
+                        placeholder={tCommon("selectField", { field: tFields("model") })}
                       />
                     </FormControl>
                     <FormMessage />
