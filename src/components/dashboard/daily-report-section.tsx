@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Droplets, HardHat, Wrench, Banknote, Rows3, LayoutGrid, Package, PackageCheck, ClipboardCheck, CheckCheck } from "lucide-react"
+import { Droplets, HardHat, Wrench, Banknote, Package, PackageCheck, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementPanel } from "@/components/announcements/announcement-panel"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
@@ -54,7 +54,6 @@ import {
   COLLECTIONS_EXPORT_COLUMNS,
 } from "@/components/collections/collections-columns"
 import { CollectionsFormDialog } from "@/components/collections/collections-form-dialog"
-import { DispatchApprovalQueue, useDispatchApprovalCount } from "@/components/dashboard/dispatch-approval-queue"
 import { StockMovementApprovalQueue } from "@/components/dashboard/stock-movement-approval-queue"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import {
@@ -65,7 +64,6 @@ import {
   INVENTORY_LIST_EXPORT_COLUMNS,
 } from "@/components/inventory/inventory-list-columns"
 import { StockMovementFormDialog } from "@/components/inventory/stock-movement-form-dialog"
-import { DailyReportExportMenu } from "@/components/dashboard/daily-report-export-menu"
 import { useFilterChangePlans, useDeleteFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
 import { useInstallPlans, useDeleteInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
 import { useRepairPlans, useDeleteRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
@@ -474,14 +472,9 @@ export function DailyReportSection() {
   // can never toggle this at all (see canArrange) — lands there directly,
   // not on Stacked.
   const savedLayoutMode = myLayout?.layoutMode ?? "grid"
-  const [localLayoutMode, setLocalLayoutMode] = React.useState<"stacked" | "grid" | null>(null)
-  const layoutMode = localLayoutMode ?? savedLayoutMode
-
-  function handleLayoutModeChange(mode: "stacked" | "grid") {
-    if (mode === layoutMode) return
-    setLocalLayoutMode(mode)
-    saveLayout.mutate({ layoutMode: mode })
-  }
+  // (The Stacked / Grid toggle was removed from the header; the saved mode
+  // still applies.)
+  const layoutMode = savedLayoutMode
 
   const isGrid = layoutMode === "grid"
   // A user's first save (a resize or reorder) creates their layout row, whose
@@ -591,18 +584,6 @@ export function DailyReportSection() {
   // regardless (see isPanelEnabled above).
   const { data: stockMovements = [], isPending: pInventory } = useStockMovementRows()
 
-  // Admin-only Pending Dispatch Approval queue (see the
-  // dispatch_confirmation_workflow migration) — useDispatchApprovalCount
-  // reads off the exact same row-building logic (useDispatchApprovalRows,
-  // in dispatch-approval-queue.tsx) that the dialog's own items/
-  // rescheduleRequests derive from, so this button's badge can never drift
-  // from what the dialog actually shows once opened. Previously computed
-  // as a second, independent Draft-only tally directly from the four plan
-  // queries below — that silently undercounted the moment a Reschedule
-  // Requested item existed (the dialog's own "Reschedule Requests" section
-  // counts those too, this badge didn't).
-  const [dispatchQueueOpen, setDispatchQueueOpen] = React.useState(false)
-  const dispatchApprovalCount = useDispatchApprovalCount()
 
   // The stock movement review queue (StockMovementApprovalQueue) — opened
   // from the Inventory List panel (Review, or a row's Map item), which is
@@ -1219,60 +1200,14 @@ export function DailyReportSection() {
 
   return (
     <div className="space-y-6">
-      {/* Always rendered now (previously admin-only) so a technician still has
-          a way to change the report date — the Layout toggle and Pending
-          Dispatch Approval stay admin-only inside it. Date sits immediately
-          before Approval; ml-auto on it (only when there's admin content to
-          its left to push away from) pulls both over to the right edge
-          together, matching the "next to Pending Dispatch Approval" request. */}
+      {/* The report date, on the right. (The Layout toggle, Download Report and
+          Pending Dispatch Approval buttons were removed from this bar at the
+          admin's request, 2026-10-16; a saved Stacked/Grid layout still
+          applies.) */}
       <div className="flex items-center gap-2 flex-wrap">
+        <DailyReportDateButton value={reportDate} onChange={setReportDate} className="ml-auto" />
         {isAdmin && (
           <>
-            <span className="text-sm font-medium text-muted-foreground">{tCommon("layout")}:</span>
-            <div className="inline-flex rounded-lg border p-0.5">
-              <Button
-                type="button"
-                size="sm"
-                variant={layoutMode === "stacked" ? "default" : "ghost"}
-                className="gap-1.5"
-                onClick={() => handleLayoutModeChange("stacked")}
-              >
-                <Rows3 className="h-3.5 w-3.5" /> {tCommon("stacked")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={isGrid ? "default" : "ghost"}
-                className="gap-1.5"
-                onClick={() => handleLayoutModeChange("grid")}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> {tCommon("grid")}
-              </Button>
-            </div>
-          </>
-        )}
-        <DailyReportDateButton value={reportDate} onChange={setReportDate} className={isAdmin ? "ml-auto" : undefined} />
-        <DailyReportExportMenu
-          reportDate={reportDate}
-          filterChanges={dayFilterChangePlans}
-          installs={dayInstallPlans}
-          repairs={dayRepairPlans}
-          collections={dayCollectionPlans}
-          stockMovements={dayStockMovements}
-        />
-        {isAdmin && (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant={dispatchApprovalCount > 0 ? "default" : "outline"}
-              className="gap-1.5"
-              onClick={() => setDispatchQueueOpen(true)}
-            >
-              <ClipboardCheck className="h-3.5 w-3.5" />
-              {tDispatch("title")}{dispatchApprovalCount > 0 ? ` (${dispatchApprovalCount})` : ""}
-            </Button>
-            <DispatchApprovalQueue open={dispatchQueueOpen} onOpenChange={setDispatchQueueOpen} />
             <StockMovementApprovalQueue open={inventoryQueueOpen} onOpenChange={setInventoryQueueOpen} />
             <ConfirmDialog
               open={approveViewOpen}
