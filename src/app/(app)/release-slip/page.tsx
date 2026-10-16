@@ -4,13 +4,22 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { Plus, Printer, ReceiptText, X } from "lucide-react"
+import { Download, Plus, Printer, ReceiptText, RotateCcw, X } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
-import { ReleaseSlipSheets, RELEASE_SLIP_CSS, type SlipSignatures } from "@/components/release-slip/release-slip-sheets"
+import {
+  applySlipEdits,
+  blankSlipJob,
+  ReleaseSlipSheets,
+  RELEASE_SLIP_CSS,
+  type SlipEdits,
+  type SlipJobEdit,
+  type SlipSignatures,
+} from "@/components/release-slip/release-slip-sheets"
 import { AddSlipItemDialog } from "@/components/release-slip/add-slip-item-dialog"
 import { fetchReleaseSlip } from "@/lib/api/release-slip"
 import { listProducts } from "@/lib/api/inventory"
@@ -39,6 +48,17 @@ function validDate(value: string | null): string | undefined {
 
 // Printing shows only the slip: the sheets are also rendered into a portal on
 // <body> (print-only), and everything else on the page is hidden for print.
+// Prints with a temporary page title — the file name the browser suggests
+// for "Save as PDF".
+function printAs(title: string) {
+  const previous = document.title
+  document.title = title
+  window.print()
+  document.title = previous
+}
+
+const DEFAULT_SIGNATURES: SlipSignatures = { checkedBy: "Jerson", notedBy: "Jan", approvedBy: "Malou" }
+
 const PRINT_CSS = `
 .release-slip-print { display: none; }
 @media print {
@@ -73,7 +93,50 @@ function ReleaseSlipContent() {
   const [pickedTechnician, setPickedTechnician] = React.useState<string>(ALL_TECHNICIANS)
   const allMode = isAdmin && pickedTechnician === ALL_TECHNICIANS
   const technicianId = isAdmin ? (allMode ? undefined : pickedTechnician) : user?.id
-  const [signatures, setSignatures] = React.useState<SlipSignatures>({ checkedBy: "Jerson", notedBy: "Jan", approvedBy: "Malou" })
+  const [signatures, setSignatures] = React.useState<SlipSignatures>(DEFAULT_SIGNATURES)
+  // An admin's on-screen edits (see applySlipEdits): per slip, then per job —
+  // for this date / technician / pending choice only; changing any of them,
+  // or "Reset Edits", starts again from the database values.
+  const editsKey = `${date}|${technicianId ?? "all"}|${includePending}`
+  // added: the blank order rows added per slip ("+ Add Order No."), by id.
+  const [editState, setEditState] = React.useState<{ key: string; edits: Record<string, SlipEdits>; added: Record<string, string[]> }>({
+    key: editsKey,
+    edits: {},
+    added: {},
+  })
+  if (editState.key !== editsKey) setEditState({ key: editsKey, edits: {}, added: {} })
+  const edits = editState.edits
+  const added = editState.added
+  const hasEdits = Object.keys(edits).length > 0 || Object.values(added).some((ids) => ids.length > 0)
+  const addOrderRow = (slipKey: string) =>
+    setEditState((s) => ({ ...s, added: { ...s.added, [slipKey]: [...(s.added[slipKey] ?? []), `added-${Date.now()}`] } }))
+  const removeOrderRow = (slipKey: string) => (jobId: string) =>
+    setEditState((s) => {
+      const slipEdits = { ...(s.edits[slipKey] ?? {}) }
+      delete slipEdits[jobId]
+      return { ...s, edits: { ...s.edits, [slipKey]: slipEdits }, added: { ...s.added, [slipKey]: (s.added[slipKey] ?? []).filter((id) => id !== jobId) } }
+    })
+  const editSlip = (slipKey: string) => (jobId: string, patch: SlipJobEdit) =>
+    setEditState((s) => {
+      const slip = s.edits[slipKey] ?? {}
+      const prev = slip[jobId] ?? {}
+      const lines = { ...(prev.lines ?? {}) }
+      for (const [i, le] of Object.entries(patch.lines ?? {})) lines[Number(i)] = { ...(lines[Number(i)] ?? {}), ...le }
+      const next: SlipJobEdit = { ...prev, ...patch, lines }
+      return { ...s, edits: { ...s.edits, [slipKey]: { ...slip, [jobId]: next } } }
+    })
+  function resetEdits() {
+    setEditState({ key: editsKey, edits: {}, added: {} })
+    setSignatures(DEFAULT_SIGNATURES)
+  }
+  // "Download PDF": the browser's print dialog with the slip's own file name —
+  // choose "Save as PDF". The same print copy as Print, so edits are in it
+  // and no editing outlines or buttons are.
+  function downloadPdf() {
+    const who = allMode ? "all" : technicianName.trim().replace(/\s+/g, "-") || "slip"
+    toast.info(t("releaseSlipPdfHint"))
+    printAs(`release-slip-${date}-${who}`)
+  }
 
   const { data, isPending, error } = useQuery({
     queryKey: ["releaseSlip", date, technicianId ?? null, includePending],
@@ -169,7 +232,7 @@ function ReleaseSlipContent() {
     }).sort((a, b) => a.name.localeCompare(b.name))
     if (unassigned.length) list.push({ key: "unassigned", name: t("releaseSlipUnassigned"), jobs: unassigned })
     return list
-  })()
+  })().map((slip) => ({ ...slip, jobs: applySlipEdits([...slip.jobs, ...(added[slip.key] ?? []).map(blankSlipJob)], edits[slip.key]) }))
 
   const ready = !!data && !isPending
   return (
@@ -214,10 +277,30 @@ function ReleaseSlipContent() {
           >
             <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAdd")}
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => window.print()} disabled={!ready} data-testid="slip-print">
-            <Printer className="h-3.5 w-3.5" /> {t("print")}
-          </Button>
         </div>
+      </div>
+
+      {/* The slip's actions: one bar above the preview. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2" data-testid="slip-toolbar">
+        <Button size="sm" className="gap-1.5" onClick={downloadPdf} disabled={!ready || slips.length === 0} data-testid="slip-download-pdf">
+          <Download className="h-3.5 w-3.5" /> {t("releaseSlipDownloadPdf")}
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.print()} disabled={!ready || slips.length === 0} data-testid="slip-print">
+          <Printer className="h-3.5 w-3.5" /> {t("releaseSlipPrint")}
+        </Button>
+        {isAdmin && (
+          <>
+            {!allMode && (
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => addOrderRow(slips[0]?.key ?? technicianId ?? "self")} disabled={!ready} data-testid="slip-add-order">
+                <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAddOrder")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={resetEdits} disabled={!hasEdits} data-testid="slip-reset-edits">
+              <RotateCcw className="h-3.5 w-3.5" /> {t("releaseSlipResetEdits")}
+            </Button>
+            <span className="text-xs text-muted-foreground">{hasEdits ? t("releaseSlipEdited") : t("releaseSlipEditHint")}</span>
+          </>
+        )}
       </div>
 
       {error ? (
@@ -269,11 +352,26 @@ function ReleaseSlipContent() {
                 {slips.map((slip) => (
                   <div key={slip.key} className="flex flex-col gap-2" data-testid="slip-technician-block">
                     {allMode && (
-                      <p className="text-sm font-semibold" data-testid="slip-technician-name">
-                        {slip.name} · {t("releaseSlipCount", { count: String(slip.jobs.filter((j) => j.jobId !== "manual").length) })}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold" data-testid="slip-technician-name">
+                          {slip.name} · {t("releaseSlipCount", { count: String(slip.jobs.filter((j) => j.jobId !== "manual" && !j.added).length) })}
+                        </p>
+                        {isAdmin && (
+                          <Button size="sm" variant="ghost" className="h-7 gap-1 px-2" onClick={() => addOrderRow(slip.key)} data-testid="slip-add-order">
+                            <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAddOrder")}
+                          </Button>
+                        )}
+                      </div>
                     )}
-                    <ReleaseSlipSheets date={date} technicianName={slip.name} jobs={slip.jobs} signatures={signatures} onSignaturesChange={setSignatures} />
+                    <ReleaseSlipSheets
+                      date={date}
+                      technicianName={slip.name}
+                      jobs={slip.jobs}
+                      signatures={signatures}
+                      onSignaturesChange={setSignatures}
+                      onEdit={isAdmin ? editSlip(slip.key) : undefined}
+                      onRemoveJob={isAdmin ? removeOrderRow(slip.key) : undefined}
+                    />
                   </div>
                 ))}
               </div>

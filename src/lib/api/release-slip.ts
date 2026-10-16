@@ -13,6 +13,10 @@ export interface ReleaseSlipMovement {
   // left out of the Summary totals.
   note?: string
   errand?: boolean
+  // Admin edits on the slip page (applySlipEdits): the IN column's item when
+  // it differs from the OUT one, and a line kept even while it's empty.
+  inSku?: string
+  edited?: boolean
 }
 
 export interface ReleaseSlipJob {
@@ -28,6 +32,9 @@ export interface ReleaseSlipJob {
   // visit ("To Collect: ₱8,500.00 (Cash)" — see release-slip-collect.ts),
   // printed in the job's first Notes cell.
   jobNote?: string
+  // A blank order row an admin added on the slip page ("+ Add Order No."):
+  // its Order No. and type boxes are editable too. Never saved.
+  added?: boolean
 }
 
 export interface ReleaseSlipData {

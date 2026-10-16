@@ -5,24 +5,29 @@ import type { ReleaseSlipJob, ReleaseSlipMovement } from "@/lib/api/release-slip
 import { formatDate } from "@/lib/utils"
 
 // The printed Release Slip, laid out like the paper form: A4 portrait, black
-// on white whatever the app theme, 4 jobs per page. Labels stay in English,
-// like the app's other printed forms.
+// on white whatever the app theme, up to 12 jobs per page. Labels stay in
+// English, like the app's other printed forms.
 //
-// Every job block has at least LINES_PER_JOB item lines (blank ones are left
-// for handwriting). A page holds up to 4 jobs and LINES_PER_PAGE item lines;
-// a job with more items gets a taller block and the jobs after it move to the
-// next page; a job longer than a whole page continues on the next page
-// "(cont.)". The Summary and the signature lines go on the last page, or on a
-// page of their own when they don't fit under the last jobs.
+// Every job block has at least LINES_PER_JOB item lines (a blank one is left
+// for handwriting). A page holds up to JOBS_PER_PAGE jobs and LINES_PER_PAGE
+// item lines; a job with more items gets a taller block and the jobs after it
+// move to the next page; a job longer than a whole page continues on the next
+// page "(cont.)". The Summary and the signature lines go on the last page, or
+// on a page of their own when they don't fit under the last jobs.
 
-export const LINES_PER_JOB = 8
-const JOBS_PER_PAGE = 4
-const LINES_PER_PAGE = JOBS_PER_PAGE * LINES_PER_JOB
+export const LINES_PER_JOB = 3
+const JOBS_PER_PAGE = 12
+// Item lines on a page without the Summary (header and table head take the rest).
+const LINES_PER_PAGE = 44
 // Room on one page for item lines + the Summary block, in line heights.
 const PAGE_CAPACITY = 46
-const MIN_SUMMARY_ROWS = 10
+const MIN_SUMMARY_ROWS = 4
+// The signature column beside the Summary is about this many lines tall, so
+// the bottom block never takes less.
+const SIGNATURE_LINES = 9
 
-type Block = { job: ReleaseSlipJob; movements: ReleaseSlipMovement[]; lines: number; continued: boolean }
+// offset: the position of the block's first line among the job's lines.
+type Block = { job: ReleaseSlipJob; movements: ReleaseSlipMovement[]; lines: number; continued: boolean; offset: number }
 type Page = { blocks: Block[]; summary: boolean }
 
 // The block of rows added by hand on the slip page (no type box ticked).
@@ -38,33 +43,147 @@ export function typeBox(jobType: string): "F" | "R" | "S" | "O" | null {
 
 const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, ""))
 const itemName = (m: ReleaseSlipMovement) => m.sku || m.label
+const inItemName = (m: ReleaseSlipMovement) => m.inSku ?? itemName(m)
+// The lines a job prints: anything with a quantity or a note, plus lines an
+// admin has edited (kept even while blank, so line numbers stay put).
+const slipItems = (job: ReleaseSlipJob) => job.movements.filter((m) => m.qtyOut || m.qtyIn || m.note || m.edited)
 
 export function buildSummary(jobs: ReleaseSlipJob[]) {
   const map = new Map<string, { sku: string; out: number; in: number; pending: boolean }>()
+  const add = (key: string, out: number, inQty: number, pending: boolean) => {
+    if (!key) return
+    const row = map.get(key) ?? { sku: key, out: 0, in: 0, pending: false }
+    row.out += out
+    row.in += inQty
+    if (pending) row.pending = true
+    map.set(key, row)
+  }
   for (const j of jobs)
     for (const m of j.movements) {
-      if (m.errand || !(m.qtyOut || m.qtyIn)) continue
-      const key = itemName(m)
-      const row = map.get(key) ?? { sku: key, out: 0, in: 0, pending: false }
-      row.out += m.qtyOut
-      row.in += m.qtyIn
-      if (m.status === "pending") row.pending = true
-      map.set(key, row)
+      if (m.errand) continue
+      if (m.qtyOut) add(itemName(m), m.qtyOut, 0, m.status === "pending")
+      if (m.qtyIn) add(inItemName(m), 0, m.qtyIn, m.status === "pending")
     }
   return [...map.values()].sort((a, b) => a.sku.localeCompare(b.sku))
+}
+
+// Admin edits typed on the slip page — on top of the database values, never
+// saved; "Reset Edits" drops them. Keyed by job id (per slip); a line by its
+// position in the job's printed lines (a blank line past the last item adds
+// a new one). Quantities are kept as typed and read as numbers.
+export type SlipLineEdit = { outSku?: string; outQty?: string; inSku?: string; inQty?: string; note?: string }
+export type SlipJobEdit = { orderNo?: string; jobType?: string; accountName?: string; jobNote?: string; lines?: Record<number, SlipLineEdit> }
+
+// The job type each box stands for, when an admin ticks one on an added row.
+const BOX_JOB_TYPE = { F: "filter_change", R: "repair", S: "installation", O: "collection" } as const
+
+// A blank order row for "+ Add Order No." (no box ticked until one is clicked).
+export function blankSlipJob(jobId: string): ReleaseSlipJob {
+  return { jobId, orderNo: "", accountName: "", jobType: MANUAL_JOB_TYPE, status: "completed", technician: "", technician2: "", movements: [], added: true }
+}
+export type SlipEdits = Record<string, SlipJobEdit>
+
+const toQty = (text: string) => {
+  const n = Number(text.replace(/[^0-9.]/g, ""))
+  return Number.isFinite(n) ? n : 0
+}
+
+export function applySlipEdits(jobs: ReleaseSlipJob[], edits: SlipEdits | undefined): ReleaseSlipJob[] {
+  if (!edits || !Object.keys(edits).length) return jobs
+  return jobs.map((job) => {
+    const e = edits[job.jobId]
+    if (!e) return job
+    const items = [...slipItems(job)]
+    const lineEdits = e.lines ?? {}
+    const last = Math.max(-1, ...Object.keys(lineEdits).map(Number))
+    for (let i = 0; i <= last; i++) {
+      const le = lineEdits[i]
+      if (!le) continue
+      const base = items[i] ?? { sku: "", label: "", qtyOut: 0, qtyIn: 0, status: "manual" }
+      const outSku = (le.outSku ?? (base.qtyOut ? itemName(base) : "")).trim()
+      const inSku = (le.inSku ?? (base.qtyIn ? inItemName(base) : "")).trim()
+      const outQty = le.outQty !== undefined ? toQty(le.outQty) : base.qtyOut
+      const inQty = le.inQty !== undefined ? toQty(le.inQty) : base.qtyIn
+      const sku = outSku || inSku
+      while (items.length < i) items.push({ sku: "", label: "", qtyOut: 0, qtyIn: 0, status: "manual", edited: true })
+      items[i] = {
+        ...base,
+        sku,
+        label: sku,
+        qtyOut: outSku ? outQty || 0 : 0,
+        qtyIn: inSku ? inQty || 0 : 0,
+        inSku: inSku && inSku !== sku ? inSku : undefined,
+        note: le.note ?? base.note,
+        edited: true,
+      }
+    }
+    return {
+      ...job,
+      orderNo: e.orderNo ?? job.orderNo,
+      jobType: e.jobType ?? job.jobType,
+      accountName: e.accountName ?? job.accountName,
+      jobNote: e.jobNote ?? job.jobNote,
+      movements: items,
+    }
+  })
+}
+
+// One editable cell on the admin's on-screen copy: typed straight into the
+// slip (contentEditable), saved when it loses focus (Enter too, except in a
+// multi-line cell). Remounted when its value changes, so "Reset Edits" puts
+// the original text back. Plain text everywhere else, the print copy included.
+function Editable({
+  value,
+  onCommit,
+  multiline,
+  label,
+}: {
+  value: string
+  onCommit?: (next: string) => void
+  multiline?: boolean
+  label: string
+}) {
+  if (!onCommit) return <>{value}</>
+  return (
+    <span
+      key={value}
+      className={multiline ? "slip-edit slip-edit-block" : "slip-edit"}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label={label}
+      data-testid="slip-edit"
+      onBlur={(e) => {
+        const next = (e.currentTarget.textContent ?? "").replace(/\s+/g, " ").trim()
+        if (next !== value) onCommit(next)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !multiline) {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+        if (e.key === "Escape") {
+          e.currentTarget.textContent = value
+          e.currentTarget.blur()
+        }
+      }}
+    >
+      {value}
+    </span>
+  )
 }
 
 export function paginate(jobs: ReleaseSlipJob[], summaryRows: number): Page[] {
   // Split a job longer than a whole page into page-sized chunks.
   const blocks: Block[] = []
   for (const job of jobs) {
-    const items = job.movements.filter((m) => m.qtyOut || m.qtyIn || m.note)
+    const items = slipItems(job)
     if (items.length <= LINES_PER_PAGE) {
-      blocks.push({ job, movements: items, lines: Math.max(LINES_PER_JOB, items.length), continued: false })
+      blocks.push({ job, movements: items, lines: Math.max(LINES_PER_JOB, items.length), continued: false, offset: 0 })
     } else {
       for (let i = 0; i < items.length; i += LINES_PER_PAGE) {
         const chunk = items.slice(i, i + LINES_PER_PAGE)
-        blocks.push({ job, movements: chunk, lines: Math.max(LINES_PER_JOB, chunk.length), continued: i > 0 })
+        blocks.push({ job, movements: chunk, lines: Math.max(LINES_PER_JOB, chunk.length), continued: i > 0, offset: i })
       }
     }
   }
@@ -82,7 +201,7 @@ export function paginate(jobs: ReleaseSlipJob[], summaryRows: number): Page[] {
   }
   if (current.length || pages.length === 0) pages.push({ blocks: current, summary: false })
   // Summary block: title + header + its rows.
-  const summaryLines = 2 + Math.max(MIN_SUMMARY_ROWS, summaryRows)
+  const summaryLines = Math.max(SIGNATURE_LINES, 2 + Math.max(MIN_SUMMARY_ROWS, summaryRows))
   const last = pages[pages.length - 1]
   const lastLines = last.blocks.reduce((sum, b) => sum + b.lines, 0)
   if (lastLines + summaryLines <= PAGE_CAPACITY) last.summary = true
@@ -102,6 +221,8 @@ export function ReleaseSlipSheets({
   jobs,
   signatures,
   onSignaturesChange,
+  onEdit,
+  onRemoveJob,
 }: {
   date: string
   technicianName: string
@@ -110,6 +231,12 @@ export function ReleaseSlipSheets({
   // Given on the on-screen copy: the three names are editable boxes there.
   // The print copy shows them as plain text.
   onSignaturesChange?: (next: SlipSignatures) => void
+  // Given on an admin's on-screen copy: Accnt. Name, SKU, Qty and Notes are
+  // typed straight into the slip (see applySlipEdits). The print copy never
+  // gets it, so nothing editable shows on paper or in the PDF.
+  onEdit?: (jobId: string, patch: SlipJobEdit) => void
+  // Removes an added order row (its × on the admin's on-screen copy).
+  onRemoveJob?: (jobId: string) => void
 }) {
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
   const pages = React.useMemo(() => paginate(jobs, summary.length), [jobs, summary.length])
@@ -185,6 +312,10 @@ export function ReleaseSlipSheets({
               </thead>
               {page.blocks.map((b, bi) => {
                 const box = typeBox(b.job.jobType)
+                const job = b.job
+                const editLine = onEdit
+                  ? (line: number, field: keyof SlipLineEdit) => (next: string) => onEdit(job.jobId, { lines: { [line]: { [field]: next } } })
+                  : undefined
                 return (
                   <tbody key={bi} className="slip-job" data-testid="slip-job">
                     {Array.from({ length: b.lines }, (_, li) => {
@@ -194,30 +325,87 @@ export function ReleaseSlipSheets({
                       // line's own item note.
                       const jobNote = li === 0 && !b.continued ? b.job.jobNote : undefined
                       const note = [jobNote, m?.note].filter(Boolean).join(" · ")
+                      const line = b.offset + li
+                      const star = m?.status === "pending" ? "*" : ""
                       return (
                         <tr key={li}>
                           {li === 0 && (
                             <>
-                              <td rowSpan={b.lines} className="slip-cell-top slip-order">
-                                {b.job.orderNo}
+                              <td rowSpan={b.lines} className="slip-cell-top slip-order" data-testid={job.added ? "slip-added-job" : undefined}>
+                                {job.added && onEdit && !b.continued ? (
+                                  <>
+                                    <Editable value={job.orderNo} label="Order No." onCommit={(next) => onEdit(job.jobId, { orderNo: next })} />
+                                    {onRemoveJob && (
+                                      <button type="button" className="slip-remove" onClick={() => onRemoveJob(job.jobId)} aria-label="Remove this order row" data-testid="slip-remove-job">
+                                        ×
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  job.orderNo
+                                )}
                                 {b.continued && <div className="slip-cont">(cont.)</div>}
                               </td>
                               <td rowSpan={b.lines} className="slip-cell-top">
-                                {b.job.accountName}
+                                <Editable
+                                  value={b.job.accountName}
+                                  multiline
+                                  label="Accnt. Name"
+                                  onCommit={onEdit && !b.continued ? (next) => onEdit(job.jobId, { accountName: next }) : undefined}
+                                />
                               </td>
                               {(["F", "R", "S", "O"] as const).map((k) => (
                                 <td key={k} rowSpan={b.lines} className="slip-cell-top slip-box">
-                                  {box === k ? "✓" : ""}
+                                  {job.added && onEdit && !b.continued ? (
+                                    // An added row's type: click a box to tick it (again to clear).
+                                    <button
+                                      type="button"
+                                      className="slip-box-pick"
+                                      aria-label={`Type ${k}`}
+                                      aria-pressed={box === k}
+                                      data-testid={`slip-box-${k}`}
+                                      onClick={() => onEdit(job.jobId, { jobType: box === k ? MANUAL_JOB_TYPE : BOX_JOB_TYPE[k] })}
+                                    >
+                                      {box === k ? "✓" : ""}
+                                    </button>
+                                  ) : box === k ? (
+                                    "✓"
+                                  ) : (
+                                    ""
+                                  )}
                                 </td>
                               ))}
                             </>
                           )}
-                          <td>{m && m.qtyOut ? itemName(m) : ""}</td>
-                          <td className="slip-num">{m && m.qtyOut ? `${qty(m.qtyOut)}${m.status === "pending" ? "*" : ""}` : ""}</td>
-                          <td>{m && m.qtyIn ? itemName(m) : ""}</td>
-                          <td className="slip-num">{m && m.qtyIn ? `${qty(m.qtyIn)}${m.status === "pending" ? "*" : ""}` : ""}</td>
+                          <td>
+                            <Editable value={m && m.qtyOut ? itemName(m) : ""} label="OUT SKU" onCommit={editLine?.(line, "outSku")} />
+                          </td>
+                          <td className="slip-num">
+                            <Editable value={m && m.qtyOut ? qty(m.qtyOut) : ""} label="OUT Qty" onCommit={editLine?.(line, "outQty")} />
+                            {m && m.qtyOut ? star : ""}
+                          </td>
+                          <td>
+                            <Editable value={m && m.qtyIn ? inItemName(m) : ""} label="IN SKU" onCommit={editLine?.(line, "inSku")} />
+                          </td>
+                          <td className="slip-num">
+                            <Editable value={m && m.qtyIn ? qty(m.qtyIn) : ""} label="IN Qty" onCommit={editLine?.(line, "inQty")} />
+                            {m && m.qtyIn ? star : ""}
+                          </td>
                           <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={note || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
-                            {note}
+                            <Editable
+                              value={note}
+                              label="Notes"
+                              onCommit={
+                                onEdit
+                                  ? (next) =>
+                                      // The first line holds the job's collection note: an edit
+                                      // there replaces it (and that line's own note).
+                                      jobNote !== undefined
+                                        ? onEdit(job.jobId, { jobNote: next, lines: { [line]: { note: "" } } })
+                                        : onEdit(job.jobId, { lines: { [line]: { note: next } } })
+                                  : undefined
+                              }
+                            />
                           </td>
                         </tr>
                       )
@@ -275,7 +463,7 @@ export const RELEASE_SLIP_CSS = `
 .slip-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; font-size: 9pt; }
 .slip-title { font-size: 12pt; font-weight: 700; letter-spacing: 0.04em; }
 .slip-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #000; }
-.slip-table th, .slip-table td { border: 0.3mm solid #000; height: 5.6mm; padding: 0 1.2mm; font-size: 8.5pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.slip-table th, .slip-table td { border: 0.3mm solid #000; height: 5.2mm; padding: 0 1.2mm; font-size: 8.5pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .slip-table th { font-weight: 600; text-align: center; height: 5mm; }
 .slip-job tr:first-child td { border-top-width: 0.6mm; }
 .slip-cell-top { vertical-align: top; padding-top: 1mm !important; white-space: normal !important; word-break: break-word; }
@@ -289,9 +477,18 @@ export const RELEASE_SLIP_CSS = `
 .slip-bottom { display: flex; gap: 6mm; align-items: flex-start; margin-top: 2mm; }
 .slip-summary { flex: 0 0 92mm; }
 .slip-summary-title { font-weight: 600; margin-bottom: 1mm; }
-.slip-signs { flex: 1; display: flex; flex-direction: column; gap: 9mm; padding-top: 8mm; }
+.slip-signs { flex: 1; display: flex; flex-direction: column; gap: 7mm; padding-top: 4mm; }
 .slip-sign { display: flex; align-items: flex-end; gap: 3mm; }
 .slip-sign-label { flex: 0 0 26mm; }
 .slip-sign-value { flex: 1; border: 0; border-bottom: 0.3mm solid #000; min-height: 5mm; font: inherit; color: #000; background: transparent; padding: 0 1mm; }
 .slip-sign-input:focus { outline: 1px dashed #888; }
+.slip-edit { display: inline-block; min-width: 100%; min-height: 1em; outline: none; cursor: text; }
+.slip-edit-block { display: block; }
+.slip-edit:hover { box-shadow: inset 0 0 0 1px #9ca3af; }
+.slip-edit:focus { box-shadow: inset 0 0 0 1px #2563eb; background: #eff6ff; white-space: normal; }
+.slip-num .slip-edit { min-width: 0; width: calc(100% - 1.2ch); text-align: right; }
+.slip-box-pick { all: unset; display: block; width: 100%; min-height: 4mm; cursor: pointer; text-align: center; font-weight: 700; }
+.slip-box-pick:hover { box-shadow: inset 0 0 0 1px #9ca3af; }
+.slip-remove { all: unset; cursor: pointer; float: right; font-weight: 400; padding: 0 0.5mm; line-height: 1; }
+.slip-remove:hover { color: #b91c1c !important; }
 `
