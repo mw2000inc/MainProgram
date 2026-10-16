@@ -96,5 +96,9 @@
   "refreshData": "데이터 새로고침",
   "refreshDone": "페이지가 업데이트되었습니다",
   "refreshFailed": "새로고침하지 못했습니다 — 연결을 확인하고 다시 시도하세요.",
-  "comboboxMoreMatches": "{count}개 더 있음 — 계속 입력하여 좁히세요"
+  "comboboxMoreMatches": "{count}개 더 있음 — 계속 입력하여 좁히세요",
+  "contactCall": "전화",
+  "contactText": "문자",
+  "contactDirections": "현재 위치에서 길찾기",
+  "contactPhoneOptions": "{number}에 전화 또는 문자"
 }

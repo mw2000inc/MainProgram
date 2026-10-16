@@ -5,7 +5,7 @@ import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, MapPin, Pencil, Phone, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -35,6 +35,7 @@ import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedu
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { formatFilterCodes, parseFilterCodes } from "@/lib/filter-codes"
+import { DirectionsLink, PhoneActions } from "@/components/shared/contact-actions"
 import { CustomerNameButton } from "@/components/shared/customer-details"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { scheduleDayJobs } from "@/lib/scheduling/schedule-day-jobs"
@@ -513,9 +514,10 @@ function JobSourceBadge({ source, t }: { source: ScheduleJobSource; t: (key: str
 // How far ahead the full-screen view looks by default.
 const FULL_SCREEN_DAYS_AHEAD = 30
 
-// Who and where: the job's Account Name, Address (with a Maps link) and
-// Contact Number (tap to call). Lines without a value are left out.
-function JobDetailLines({ details, job }: { details: JobDetails; job?: Pick<ScheduleJob, "customerId" | "orderNo"> }) {
+// Who and where: the job's Account Name, Address (tap for directions from
+// where you are — the job's map point when it has one) and Contact Number (tap
+// for Call / Text). Lines without a value are left out.
+function JobDetailLines({ details, job }: { details: JobDetails; job?: Pick<ScheduleJob, "customerId" | "orderNo" | "latitude" | "longitude"> }) {
   const { accountName, address, contactNumber } = details
   if (!accountName && !address && !contactNumber) return null
   return (
@@ -531,29 +533,21 @@ function JobDetailLines({ details, job }: { details: JobDetails; job?: Pick<Sche
           )}
         </p>
       )}
+      {/* py-1.5 gives each line a finger-sized tap area on a phone. */}
       {address && (
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-start gap-1 text-muted-foreground wrap-break-word hover:text-foreground hover:underline"
-          data-testid="schedule-job-address"
-        >
-          <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>{address}</span>
-        </a>
+        <div data-testid="schedule-job-address">
+          <DirectionsLink
+            address={address}
+            latitude={job?.latitude}
+            longitude={job?.longitude}
+            className="flex py-1.5 text-muted-foreground wrap-break-word sm:py-0"
+          />
+        </div>
       )}
       {contactNumber && (
-        <a
-          href={`tel:${contactNumber.replace(/[^\d+]/g, "")}`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
-          data-testid="schedule-job-contact"
-        >
-          <Phone className="h-3 w-3 shrink-0" />
-          <span>{contactNumber}</span>
-        </a>
+        <div data-testid="schedule-job-contact">
+          <PhoneActions value={contactNumber} className="py-1.5 text-muted-foreground sm:py-0" />
+        </div>
       )}
     </div>
   )

@@ -96,5 +96,9 @@
   "refreshData": "Refresh data",
   "refreshDone": "Page updated",
   "refreshFailed": "Couldn't refresh — check your connection and try again.",
-  "comboboxMoreMatches": "{count} more — keep typing to narrow the list"
+  "comboboxMoreMatches": "{count} more — keep typing to narrow the list",
+  "contactCall": "Call",
+  "contactText": "Text",
+  "contactDirections": "Directions from your location",
+  "contactPhoneOptions": "Call or text {number}"
 }

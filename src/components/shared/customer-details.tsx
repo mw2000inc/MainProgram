@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ExternalLink, MapPin, Phone, UserRound } from "lucide-react"
+import { ExternalLink, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DirectionsLink, PhoneActions } from "@/components/shared/contact-actions"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { useCpSystems } from "@/lib/hooks/use-cp-systems"
@@ -128,9 +129,7 @@ function CustomerDetailsBody({ target }: { target: CustomerDetailsTarget }) {
               label={tFields("address")}
               value={
                 address ? (
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1 hover:underline">
-                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {address}
-                  </a>
+                  <DirectionsLink address={address} latitude={c?.latitude} longitude={c?.longitude} iconClassName="h-3.5 w-3.5" />
                 ) : undefined
               }
             />
@@ -138,9 +137,7 @@ function CustomerDetailsBody({ target }: { target: CustomerDetailsTarget }) {
               label={tFields("contactNumber")}
               value={
                 contact ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Phone className="h-3.5 w-3.5 shrink-0" /> {contact}
-                  </span>
+                  <PhoneActions value={contact} iconClassName="h-3.5 w-3.5" />
                 ) : undefined
               }
             />
