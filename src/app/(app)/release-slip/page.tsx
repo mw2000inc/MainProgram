@@ -28,6 +28,8 @@ import { loadManualItems, manualSlipJob, saveManualItems, type ManualSlipItem } 
 import { collectionNoteFor } from "@/lib/release-slip-collect"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
+import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { repairPartLines } from "@/lib/release-slip-repair-parts"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -147,14 +149,23 @@ function ReleaseSlipContent() {
   // readable by technicians; the Sale List (the C/F fallback) only by admins.
   const { data: collections = [] } = useCollections()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  // Repair records — a repair's Part No fills its lines when it has no stock
+  // movements (repairPartLines). Readable by technicians too.
+  const { data: repairPlans = [] } = useRepairPlans()
   // Pending jobs print with blank OUT lines (their collection note still shows).
   const jobs = React.useMemo(() => {
     const list = data?.jobs ?? []
-    return list.map((j) => ({
-      ...(j.status === "completed" ? j : { ...j, movements: [] }),
-      jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
-    }))
-  }, [data, date, collections, saleListEntries])
+    return list.map((j) => {
+      const shown = j.status === "completed" ? j : { ...j, movements: [] }
+      // A completed Repair with no stock movements: its Part No as lines.
+      const parts = j.status === "completed" ? repairPartLines(j, repairPlans) : undefined
+      return {
+        ...shown,
+        ...(parts ? { movements: parts } : {}),
+        jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
+      }
+    })
+  }, [data, date, collections, saleListEntries, repairPlans])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)
