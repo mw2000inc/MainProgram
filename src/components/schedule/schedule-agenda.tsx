@@ -5,7 +5,7 @@ import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, CalendarRange, CheckCheck, ChevronLeft, ChevronRight, History, LayoutGrid, Loader2, Pencil, Plus, ArrowRight, Printer, Rows3, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, CheckCheck, ChevronLeft, ChevronRight, History, Loader2, Pencil, Plus, ArrowRight, Printer, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -64,16 +64,12 @@ import { InlineTechnicianPairCell } from "@/components/shared/technician-combobo
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
 import { ScheduleHistoryDialog } from "@/components/schedule/schedule-history-dialog"
 import { VisitDispatchReview, type VisitDraft } from "@/components/schedule/visit-dispatch-review"
-import { SaturdayRedistributeDialog } from "@/components/schedule/saturday-redistribute-dialog"
-import { SaturdayCoverageDialog } from "@/components/schedule/saturday-coverage-dialog"
 import { updateScheduleJob } from "@/lib/api/schedule"
 import { createJobsFromVisits } from "@/lib/scheduling/create-jobs-from-visits"
 import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import {
   autoJobDate,
   isSaturday,
-  isWeekend,
-  saturdaysInRange,
 } from "@/lib/schedule-timeframe"
 import { formatScheduleRange, ScheduleDateRangePicker } from "@/components/schedule/schedule-date-range-picker"
 import { JobApprovalReview, type JobApprovalEdit } from "@/components/schedule/job-approval-review"
@@ -297,7 +293,6 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
 
 type StatusFilter = "all" | "pending" | "completed"
 type ViewMode = "grid" | "table"
-const VIEW_MODE_KEY = "schedule-fullscreen-view"
 const CARD_STATUS_KEY = "schedule-card-status"
 const TABLE_COLUMN_LABEL = {
   date: "tableDate",
@@ -597,28 +592,14 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       // ignore — the choice just won't be remembered
     }
   }
-  // Grid (cards) or Table — remembered per browser; storage can be blocked,
-  // in which case it just starts on Grid every time.
-  const [viewMode, setViewModeState] = React.useState<ViewMode>(() => {
-    try {
-      return typeof window !== "undefined" && window.localStorage.getItem(VIEW_MODE_KEY) === "table" ? "table" : "grid"
-    } catch {
-      return "grid"
-    }
-  })
-  const setViewMode = (mode: ViewMode) => {
-    setViewModeState(mode)
-    try {
-      window.localStorage.setItem(VIEW_MODE_KEY, mode)
-    } catch {
-      // ignore — the choice just won't be remembered
-    }
-  }
+  // The full-screen view is Table view only (admin, 2026-10-16 — the Grid /
+  // Table toggle was removed).
+  const viewMode = "table" as ViewMode
   // The Daily Report's own date — the card shows that one day only, like
-  // every other panel on the report. The full-screen view looks ahead
-  // instead: it opens on that date through 30 days later (fullRange), which
-  // the admin can move a month at a time or pick on the calendar; closing it
-  // goes back to the one day. Everything listed (jobs, unscheduled visits,
+  // every other panel on the report, and the full-screen view opens on that
+  // same day (admin, 2026-10-16 — it used to open on the next 30 days). A
+  // wider span can still be picked there (calendar, month arrows, "Next 30
+  // days"); closing it goes back to the one day. Everything listed (jobs, unscheduled visits,
   // Saturdays, export, history) follows `range`; the single-day actions
   // (Generate Drafts, Approve All, overdue count) stay on the report date.
   const [fullRange, setFullRange] = React.useState<{ start: string; end: string } | null>(null)
@@ -627,7 +608,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const monthAhead = (from: string) => ({ start: from, end: format(addDays(parseISO(from), FULL_SCREEN_DAYS_AHEAD), "yyyy-MM-dd") })
   const shiftFullRange = (months: number) =>
     setFullRange((r) => {
-      const cur = r ?? monthAhead(date)
+      const cur = r ?? dayRange
       const iso = (d: string) => format(addMonths(parseISO(d), months), "yyyy-MM-dd")
       return { start: iso(cur.start), end: iso(cur.end) }
     })
@@ -1663,20 +1644,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
       </section>
     )
 
-  // Saturday coverage: Saturday is never auto-assigned (technician
-  // availability changes each Saturday). Its jobs wait, Unassigned, until an
-  // admin ticks who's working ("Assign Saturday Coverage"); a Saturday's
-  // queue can instead be cancelled and spread over Mon–Wed by area.
-  const saturdays = React.useMemo(() => saturdaysInRange(range), [range])
-  const singleSaturday = range.start === range.end && isSaturday(range.start) ? range.start : undefined
-  const [redistributeOpen, setRedistributeOpen] = React.useState(false)
-  const [coverageSaturday, setCoverageSaturday] = React.useState<string | undefined>(undefined)
-  // A Saturday's open jobs and the unscheduled visits that would go on it.
-  const saturdayJobsOn = (saturday: string) => allDayJobs.filter((j) => isOpenStatus(j.status) && j.scheduledDate === saturday)
-  const saturdayVisitsOn = (saturday: string) => unscheduledVisits.filter((v) => visitDispatchDate(v) === saturday)
+  // A Saturday job still waiting for a technician (Saturday is never
+  // auto-assigned). The Saturday coverage box and its Assign coverage /
+  // redistribute dialogs were removed from this view (admin, 2026-10-16).
   const needsTechnician = (job: ScheduleJob) => isSaturday(job.scheduledDate) && isOpenStatus(job.status) && !isAssignedTechnician(job.technician)
-  const awaitingSaturday = allDayJobs.filter((j) => isSaturday(j.scheduledDate) && (j.status === "pending_approval" || needsTechnician(j)))
-  const saturdayQueueJobs = allDayJobs.filter((j) => isOpenStatus(j.status))
 
   // The report day's drafts: "Approve All for <date>" approves exactly these,
   // or ask the automation for more. (Saturday drafts are left to "Assign
@@ -1721,63 +1692,11 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     if (approved) toast.success(t("draftsApproved", { count: approved }))
     if (failed.length) toast.error(t("bulkFailed", { count: failed.length, details: failed.slice(0, 3).join("; ") }))
   }
-  // Generate Drafts: the visits the generator would draft for this day, dated
-  // the same automatic way (Monday to Friday only — autoJobDate): dated this
-  // day, the weekend's for a Monday, and (on today) the open visits of the
-  // last 3 days — shown in the review with the automatic assignment, nothing
-  // saved until Approve or Save Drafts. With none: "There are no schedules on
-  // this day"; on a Saturday or Sunday: "Automatic scheduling runs Monday to
-  // Friday only". Both offer Schedule Job (Saturday work is added by hand).
+  // The "no schedules" notice (its Generate Drafts button was removed from the
+  // toolbar on 2026-10-16; the notice stays for the dialog that renders it).
   const [noSchedules, setNoSchedules] = React.useState<null | "none" | "weekend">(null)
-  const openGenerateReview = () => {
-    if (isWeekend(date)) {
-      setNoSchedules("weekend")
-      return
-    }
-    const today = businessToday()
-    const start = format(addDays(parseISO(date), -3), "yyyy-MM-dd")
-    const pool = buildUnscheduledVisits({ filterChangePlans, installPlans, repairPlans, collections: collectionRecords, customers }, { start, end: date })
-    // Same scope as the daily generator: Filter Changes and Collections only
-    // (Installations and Repairs are scheduled by hand).
-    const targets = pool.filter((v) => (v.jobType === "filter_change" || v.jobType === "collection") && autoJobDate(v.date, today) === date)
-    if (targets.length === 0) setNoSchedules("none")
-    else openVisitReview("generate", targets)
-  }
-  const saturdayBanner = () =>
-    !isAdmin || saturdays.length === 0 ? null : (
-      <div data-testid="saturday-banner" className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
-        <p className="font-medium text-warning">{t("saturdayBannerTitle")}</p>
-        <p className="mt-0.5 text-muted-foreground">
-          {awaitingSaturday.length > 0 ? t("saturdayBannerAwaiting", { count: awaitingSaturday.length }) : t("saturdayBannerNone")}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {saturdays.map((saturday) => {
-            const count = saturdayJobsOn(saturday).length + saturdayVisitsOn(saturday).length
-            return (
-              <Button
-                key={saturday}
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                onClick={() => setCoverageSaturday(saturday)}
-                data-testid="saturday-coverage-open"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                {saturdays.length > 1 ? t("coverageOpenFor", { date: formatDate(saturday), count }) : t("coverageOpen", { count })}
-              </Button>
-            )
-          })}
-          {singleSaturday && (
-            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => setRedistributeOpen(true)} data-testid="saturday-redistribute-open">
-              <CalendarRange className="h-3.5 w-3.5" /> {t("redistributeOpen")}
-            </Button>
-          )}
-        </div>
-      </div>
-    )
-
   const fullScreenJobs = () => (
     <>
-      {saturdayBanner()}
       {scheduledJobsBody()}
       {unscheduledSection()}
     </>
@@ -1837,7 +1756,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           {multiDay ? t("noJobsInTimeframe") : t("noJobsScheduled")}
         </p>
       )}
-      {!isPending && !expanded && saturdayBanner()}
       {!isPending && overdueCount > 0 && !expanded && (
         <Link
           href={OVERDUE_SCHEDULE_HREF}
@@ -1930,27 +1848,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           {t("draftsApproveDay", { date: formatDate(date, "MMM d"), count: draftJobs.length })}
         </Button>
       )}
-      {isAdmin && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5 @xs/card-header:flex-1 @sm/card-header:flex-none"
-          disabled={!!dispatching}
-          onClick={openGenerateReview}
-          title={t("draftsGenerateHint")}
-          data-testid="drafts-generate"
-        >
-          <CalendarClock className="h-3.5 w-3.5" />
-          {t("draftsGenerate")}
-        </Button>
-      )}
-      {isAdmin && (
-        <Link href="/schedule" className="@xs/card-header:flex-1 @sm/card-header:flex-none">
-          <Button size="sm" variant="outline" className="w-full gap-1.5">
-            {t("fullSchedule")} <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
-      )}
+      {/* Generate Drafts and Full Schedule were removed from this toolbar at
+          the admin's request (2026-10-16); the Schedule page is still in the
+          sidebar. */}
       <div className="flex items-center gap-1">
         <PanelExportMenu columns={SCHEDULE_EXPORT_COLUMNS} rows={exportRows} fileName="schedule" />
         <Button variant="ghost" size="icon" className="h-7 w-7" title={t("print")} onClick={handlePrint}>
@@ -1959,8 +1859,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         <FullScreenToggleButton
           isFullScreen={expanded}
           onToggle={() => {
-            if (!expanded) setFullRange(monthAhead(date))
-            else setFullRange(null)
+            setFullRange(null)
             setExpanded(!expanded)
           }}
         />
@@ -2066,23 +1965,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 >
                   {t("next30Days")}
                 </Button>
-              </div>
-              <div role="group" aria-label={t("viewMode")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-view-mode">
-                {(["grid", "table"] as ViewMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={viewMode === mode}
-                    onClick={() => setViewMode(mode)}
-                    className={cn(
-                      "inline-flex h-7 items-center gap-1 rounded px-2.5 text-xs font-medium transition-colors",
-                      viewMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    {mode === "grid" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Rows3 className="h-3.5 w-3.5" />}
-                    {t(mode === "grid" ? "gridView" : "tableView")}
-                  </button>
-                ))}
               </div>
               <div role="group" aria-label={t("statusFilter")} className="inline-flex rounded-md border p-0.5" data-testid="schedule-status-filter">
                 {(["all", "pending", "completed"] as StatusFilter[]).map((value) => (
@@ -2224,29 +2106,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         defaultDate={date}
         job={editingJob}
       />
-      {isAdmin && coverageSaturday && (
-        <SaturdayCoverageDialog
-          key={coverageSaturday}
-          open={!!coverageSaturday}
-          onOpenChange={(o) => !o && setCoverageSaturday(undefined)}
-          saturday={coverageSaturday}
-          jobs={saturdayJobsOn(coverageSaturday)}
-          visits={saturdayVisitsOn(coverageSaturday)}
-          accounts={technicianAccounts}
-          addressOfJob={(job) => job.secondaryAddress || (job.customerId ? customerById.get(job.customerId)?.address : undefined)}
-        />
-      )}
-      {isAdmin && singleSaturday && (
-        <SaturdayRedistributeDialog
-          key={redistributeOpen ? "open" : "closed"}
-          open={redistributeOpen}
-          onOpenChange={setRedistributeOpen}
-          saturday={singleSaturday}
-          jobs={saturdayQueueJobs}
-          visits={unscheduledVisits}
-          addressOfJob={(job) => job.secondaryAddress || (job.customerId ? customerById.get(job.customerId)?.address : undefined)}
-        />
-      )}
       {isAdmin && (
         <JobApprovalReview
           open={jobReviewOpen}
