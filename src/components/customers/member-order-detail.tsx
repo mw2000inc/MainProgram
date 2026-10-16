@@ -3,7 +3,8 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ClipboardCheck, Droplets, Banknote, Wrench, HardHat, Pencil } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { ClipboardCheck, Droplets, Banknote, Wrench, HardHat, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/data-table/data-table"
@@ -32,10 +33,12 @@ import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/rep
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
 import { useDeleteSaleListEntries, useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
-import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useDeleteFilterChangePlans, useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { useCollections, useDeleteCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { useDeleteRepairPlans, useRepairPlans } from "@/lib/hooks/use-repair-plans"
+import { useDeleteInstallPlans, useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { scheduleJobsKey } from "@/lib/hooks/use-schedule"
+import { clearSchedulesForRecords } from "@/lib/api/schedule"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { resolveCustomerForPlan } from "@/lib/customer-lookup"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -45,31 +48,61 @@ import type { CollectionPlan, Customer, FilterChangePlan, InstallPlan, RepairPla
 
 // Trailing pencil column that opens the record's own Edit dialog in place —
 // sits alongside whatever inline cells the table already has (for the fields
-// they don't cover, and Plan D, which is deliberately not inline-editable).
-// stopPropagation for the same reason every inline cell has it: it must
-// never double as a row click.
-function withEditColumn<T>(columns: ColumnDef<T, unknown>[], label: string, onEdit: (row: T) => void): ColumnDef<T, unknown>[] {
+// they don't cover, and Plan D, which is deliberately not inline-editable) —
+// and, given onDelete, a red trash button beside it (asks first, see the
+// history ConfirmDialog below). stopPropagation for the same reason every
+// inline cell has it: neither may double as a row click.
+function withEditColumn<T>(
+  columns: ColumnDef<T, unknown>[],
+  label: string,
+  onEdit: (row: T) => void,
+  onDelete?: { label: string; run: (row: T) => void }
+): ColumnDef<T, unknown>[] {
   return [
     ...columns,
     {
       id: "edit",
       header: "",
       cell: ({ row }) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-label={label}
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit(row.original)
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={label}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(row.original)
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-danger hover:bg-danger/10 hover:text-danger"
+              aria-label={onDelete.label}
+              data-testid="history-delete"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete.run(row.original)
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ]
 }
+
+// A history row waiting for the delete confirmation: which table it's in.
+type HistoryDelete =
+  | { kind: "filter_change_plans"; id: string; label: string }
+  | { kind: "collections"; id: string; label: string }
+  | { kind: "repair_plans"; id: string; label: string }
+  | { kind: "install_plans"; id: string; label: string }
 
 // The FULL order detail view — same rich content as /sale-list/[id] (core
 // order fields plus Related Filter Changes/Collections/Repairs, each with its
@@ -151,6 +184,46 @@ export function MemberOrderDetail({
   const [editingCollection, setEditingCollection] = React.useState<CollectionPlan | undefined>(undefined)
   const [editingRepair, setEditingRepair] = React.useState<RepairPlan | undefined>(undefined)
   const [editingInstall, setEditingInstall] = React.useState<InstallPlan | undefined>(undefined)
+  // Delete from the history tables (admin): the record, plus its schedule job
+  // when that job isn't completed and has no stock recorded — the same
+  // clean-up as deleting from the Daily Report (clearSchedulesForRecords).
+  // Stock movements already recorded for it stay in Inventory (their link is
+  // cleared by the database), so stock history is never lost. Each delete
+  // hook refreshes its own list, so these tables and their counts update.
+  const [historyDelete, setHistoryDelete] = React.useState<HistoryDelete | null>(null)
+  const [historyDeleting, setHistoryDeleting] = React.useState(false)
+  const qc = useQueryClient()
+  const { mutateAsync: deleteFilterChangePlans } = useDeleteFilterChangePlans()
+  const { mutateAsync: deleteCollections } = useDeleteCollections()
+  const { mutateAsync: deleteRepairPlans } = useDeleteRepairPlans()
+  const { mutateAsync: deleteInstallPlans } = useDeleteInstallPlans()
+  async function confirmHistoryDelete() {
+    if (!historyDelete) return
+    setHistoryDeleting(true)
+    try {
+      await clearSchedulesForRecords(historyDelete.kind, [historyDelete.id])
+      const remove = {
+        filter_change_plans: deleteFilterChangePlans,
+        collections: deleteCollections,
+        repair_plans: deleteRepairPlans,
+        install_plans: deleteInstallPlans,
+      }[historyDelete.kind]
+      await remove([historyDelete.id])
+      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      setHistoryDelete(null)
+    } catch {
+      // The delete hook shows the failure; the dialog stays open to retry.
+    } finally {
+      setHistoryDeleting(false)
+    }
+  }
+  const askDelete = React.useCallback(
+    (kind: HistoryDelete["kind"], label: string) => ({
+      label: tCommon("delete"),
+      run: (row: { id: string }) => setHistoryDelete({ kind, id: row.id, label } as HistoryDelete),
+    }),
+    [tCommon]
+  )
 
   const narrowColumns = React.useMemo(() => getSaleListOrderNumberColumn(), [])
   // The compact Filter Changes card on this page shows exactly 5 fields,
@@ -183,12 +256,12 @@ export function MemberOrderDetail({
   // don't cover.
   const filterChangeColumns = React.useMemo(() => {
     const columns = getFilterChangeDailyReportColumns(filterChangeColumnParams)
-    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingFilterChange) : columns
-  }, [filterChangeColumnParams, isAdmin, tCommon])
+    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingFilterChange, askDelete("filter_change_plans", t("historyFilterChange"))) : columns
+  }, [filterChangeColumnParams, isAdmin, tCommon, askDelete, t])
   const filterChangeExpandedColumns = React.useMemo(() => {
     const columns = getFilterChangeExpandedColumns(filterChangeColumnParams)
-    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingFilterChange) : columns
-  }, [filterChangeColumnParams, isAdmin, tCommon])
+    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingFilterChange, askDelete("filter_change_plans", t("historyFilterChange"))) : columns
+  }, [filterChangeColumnParams, isAdmin, tCommon, askDelete, t])
   // Non-admins keep the plain base column set exactly as before; only an
   // admin switches to the Daily Report variant, the one that carries the
   // inline cells.
@@ -201,21 +274,22 @@ export function MemberOrderDetail({
               onFieldChange: (record, patch) => updateCollection({ id: record.id, input: patch }),
             }),
             tCommon("edit"),
-            setEditingCollection
+            setEditingCollection,
+            askDelete("collections", t("historyCollection"))
           )
         : getCollectionsColumns(),
-    [isAdmin, updateCollection, tCommon]
+    [isAdmin, updateCollection, tCommon, askDelete, t]
   )
   const repairColumns = React.useMemo(() => {
     const columns = getRepairColumns()
-    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingRepair) : columns
-  }, [isAdmin, tCommon])
+    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingRepair, askDelete("repair_plans", t("historyRepair"))) : columns
+  }, [isAdmin, tCommon, askDelete, t])
   // Same plain read-only-columns + Edit-pencil shape as Repairs above — no
   // inline field editing here either.
   const installColumns = React.useMemo(() => {
     const columns = getInstallColumns({})
-    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingInstall) : columns
-  }, [isAdmin, tCommon])
+    return isAdmin ? withEditColumn(columns, tCommon("edit"), setEditingInstall, askDelete("install_plans", t("historyInstallation"))) : columns
+  }, [isAdmin, tCommon, askDelete, t])
 
   const orderFilterChanges = React.useMemo(
     () => filterChangePlans.filter((p) => p.orderNumber === entry.orderNumber),
@@ -418,6 +492,15 @@ export function MemberOrderDetail({
 
       <SaleListFormDialog open={formOpen} onOpenChange={setFormOpen} entry={entry} defaultCustomerId={customer.id} />
 
+      <ConfirmDialog
+        open={!!historyDelete}
+        onOpenChange={(o) => !o && !historyDeleting && setHistoryDelete(null)}
+        title={t("deleteHistoryTitle", { record: historyDelete?.label ?? "" })}
+        description={t("deleteHistoryDescription", { record: (historyDelete?.label ?? "").toLowerCase() })}
+        confirmLabel={tCommon("delete")}
+        loading={historyDeleting}
+        onConfirm={confirmHistoryDelete}
+      />
       <ConfirmDialog
         open={deleting}
         onOpenChange={setDeleting}

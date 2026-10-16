@@ -117,5 +117,11 @@
   "orderQrUnavailable": "No member linked to this order, so there's no QR code yet.",
   "toneNew": "New",
   "markSeen": "Mark as seen",
-  "markAllSeen": "Mark all as seen ({count})"
+  "markAllSeen": "Mark all as seen ({count})",
+  "historyFilterChange": "Filter Change",
+  "historyCollection": "Collection",
+  "historyRepair": "Repair",
+  "historyInstallation": "Installation",
+  "deleteHistoryTitle": "Delete this {record} record?",
+  "deleteHistoryDescription": "Are you sure you want to delete this {record} record? This action cannot be undone. Its schedule job is removed too unless it's completed or has stock recorded; stock movements already recorded stay in Inventory."
 }
