@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import type { ColumnDef, SortingFn } from "@tanstack/react-table"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PlanStatusSelect } from "@/components/shared/plan-status-select"
@@ -65,6 +66,7 @@ export function getRepairColumns({
   return [
     {
       accessorKey: "accountName",
+      ...nameSort<RepairPlan>((r) => r.accountName),
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
       cell: ({ row }) => <RecordAccountNameCell name={row.original.accountName} orderNo={row.original.orderNo} className="font-medium" />,
     },

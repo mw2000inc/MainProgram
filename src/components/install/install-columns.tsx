@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import type { ColumnDef, SortingFn } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { PlanStatusBadge } from "@/components/shared/status-badge"
@@ -61,6 +62,7 @@ export function getInstallColumns({
   return [
     {
       accessorKey: "name",
+      ...nameSort<InstallPlan>((r) => r.name),
       header: () => <ColumnHeader tKey="name" ns="fields" />,
       cell: ({ row }) => <RecordAccountNameCell name={row.original.name} orderNo={row.original.orderNo} className="font-medium" />,
     },

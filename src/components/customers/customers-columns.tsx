@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import Link from "next/link"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
@@ -114,7 +115,9 @@ export function getCustomerColumns({
       // Plain text, not a Link: the row itself is now clickable (opens the
       // split-view detail panel) — "View Profile" in the row menu below is
       // the direct link to the full page.
+      // Sortable A–Z / Z–A by the name shown (see nameSort).
       id: "accountName",
+      ...nameSort<CustomerRow>((r) => r.companyName || r.fullName),
       header: () => <ColumnHeader tKey="accountName" ns="fields" />,
       meta: { headerClassName: "w-[220px] max-w-[220px] truncate", cellClassName: "w-[220px] max-w-[220px]" },
       cell: ({ row }) => (
@@ -123,6 +126,7 @@ export function getCustomerColumns({
     },
     {
       accessorKey: "fullName",
+      ...nameSort<CustomerRow>((r) => r.fullName),
       header: () => <ColumnHeader tKey="contactPerson" ns="member" />,
       meta: { headerClassName: "w-[160px] max-w-[160px] truncate", cellClassName: "w-[160px] max-w-[160px]" },
       cell: ({ row }) => <TruncatedCell value={row.original.fullName} />,

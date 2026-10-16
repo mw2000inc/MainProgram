@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Pencil, QrCode, StickyNote, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -242,6 +243,7 @@ export function getSaleListColumns({
     },
     {
       accessorKey: "accountLabel",
+      ...nameSort<SaleListRow>((r) => r.accountLabel),
       header: () => <ColumnHeader tKey="account" ns="fields" />,
       cell: ({ row }) => <TruncatedCell value={row.original.accountLabel} />,
       meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] max-w-[180px] truncate" },
@@ -342,6 +344,7 @@ export function getSaleListSummaryColumns({
     },
     {
       accessorKey: "accountLabel",
+      ...nameSort<SaleListRow>((r) => r.accountLabel),
       header: () => <ColumnHeader tKey="account" ns="fields" />,
       cell: ({ row }) => row.original.accountLabel || "—",
     },

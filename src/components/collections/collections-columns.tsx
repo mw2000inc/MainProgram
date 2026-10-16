@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -128,6 +129,7 @@ export function getCollectionsColumns({
     },
     {
       accessorKey: "accountName",
+      ...nameSort<CollectionPlan>((r) => r.accountName),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <RecordAccountNameCell name={row.original.accountName} orderNo={row.original.orderNo} customerId={row.original.customerId} />,
     },
@@ -216,6 +218,7 @@ export function getCollectionsDailyReportColumns({
     },
     {
       accessorKey: "accountName",
+      ...nameSort<CollectionPlan>((r) => r.accountName),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => (
         <span className="inline-block min-w-[150px]">
@@ -334,6 +337,7 @@ export function getCollectionsFullColumns({
     },
     {
       accessorKey: "accountName",
+      ...nameSort<CollectionRow>((r) => r.accountName),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <CustomerNameCell name={row.original.accountName} customerId={row.original.resolvedCustomerId} orderNo={row.original.orderNo} />,
     },

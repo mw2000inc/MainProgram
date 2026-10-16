@@ -1,5 +1,6 @@
 "use client"
 
+import { nameSort } from "@/components/data-table/name-sort"
 import * as React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { CalendarX2, Trash2 } from "lucide-react"
@@ -108,6 +109,7 @@ export function getFilterChangeColumns({
     },
     {
       accessorKey: "memberAccount",
+      ...nameSort<FilterChangePlan>((r) => r.memberAccount),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <RecordAccountNameCell name={row.original.memberAccount} orderNo={row.original.orderNumber} customerId={row.original.customerId} />,
     },
@@ -249,6 +251,7 @@ function dailyReportColumnDefs({
     },
     memberAccount: {
       accessorKey: "memberAccount",
+      ...nameSort<FilterChangePlan>((r) => r.memberAccount),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => (
         <span className="inline-block min-w-[140px]">
@@ -370,6 +373,7 @@ export function getFilterChangeExpandedColumns(
     },
     {
       accessorKey: "memberAccount",
+      ...nameSort<FilterChangePlan>((r) => r.memberAccount),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <RecordAccountNameCell name={row.original.memberAccount} orderNo={row.original.orderNumber} customerId={row.original.customerId} className="max-w-none" />,
     },
@@ -426,6 +430,7 @@ export function getFilterChangeFullColumns({
     },
     {
       accessorKey: "memberAccount",
+      ...nameSort<FilterChangeRow>((r) => r.memberAccount),
       header: () => <ColumnHeader tKey="memberAccount" ns="fields" />,
       cell: ({ row }) => <CustomerNameCell name={row.original.memberAccount} customerId={row.original.resolvedCustomerId} orderNo={row.original.orderNumber} />,
     },
