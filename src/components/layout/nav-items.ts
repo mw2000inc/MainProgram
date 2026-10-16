@@ -1,5 +1,4 @@
 import {
-  ClipboardList,
   ClipboardCheck,
   HardHat,
   Wrench,
@@ -9,8 +8,10 @@ import {
   CalendarClock,
   UserCog,
   Settings,
-  Banknote,
+  Table2,
+  PhilippinePeso,
   Layers,
+  HandHeart,
   History,
   Hammer,
   ReceiptText,
@@ -51,14 +52,17 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Daily Report", key: "dailyReport", icon: ClipboardList, group: 1, technicianVisible: true },
+  { href: "/", label: "Daily Report", key: "dailyReport", icon: Table2, group: 1, technicianVisible: true },
+  // The MW CP launcher page: cards for CP System, Member, Sale List, Filter
+  // Change and Collection (like AppSheet's "MW CP" view).
+  { href: "/mw-cp", label: "MW CP", key: "mwCp", icon: HandHeart, group: 2 },
   { href: "/release-slip", label: "Release Slip", key: "releaseSlip", icon: ReceiptText, group: 1, technicianVisible: true },
   { href: "/schedule", label: "Schedule", key: "schedule", icon: CalendarClock, group: 1 },
   { href: "/install", label: "Install", key: "install", icon: HardHat, group: 1 },
   { href: "/filter-change", label: "Filter Change", key: "filterChange", icon: Droplets, group: 1 },
   { href: "/repair-plan", label: "Repair Plan", key: "repairPlan", icon: Wrench, group: 1 },
 
-  { href: "/collection-plan", label: "Collection Plan", key: "collectionPlan", icon: Banknote, group: 2 },
+  { href: "/collection-plan", label: "Collection Plan", key: "collectionPlan", icon: PhilippinePeso, group: 2 },
   { href: "/inventory", label: "Inventory", key: "inventory", icon: Package, group: 2 },
   { href: "/customers", label: "Member", key: "member", icon: Users, group: 2 },
   { href: "/sale-list", label: "Sale List", key: "saleList", icon: ClipboardCheck, group: 2 },
@@ -74,4 +78,45 @@ export function isTechnicianAllowedPath(pathname: string): boolean {
   return NAV_ITEMS.some(
     (item) => item.technicianVisible && (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href))
   )
+}
+
+// =========================================================================
+// The sidebar's layout, matching AppSheet's left rail: Inventory, MW CP,
+// Install, Repair, Daily Report, then Schedule and Release Slip; admin pages
+// at the bottom. MW CP opens its own page of cards (MW_CP_CARDS) — its five
+// pages aren't listed in the rail, and MW CP stays highlighted while one of
+// them is open. Same routes as NAV_ITEMS (looked up by href, so permissions
+// stay exactly the same) — this only arranges them and, where AppSheet uses a
+// different name, gives the label key to show.
+// =========================================================================
+export type NavLink = { href: string; labelKey?: string; activeFor?: string[] }
+
+// The MW CP page's cards, in AppSheet's order. CP System is this program's
+// own CP System page.
+export const MW_CP_CARDS: NavLink[] = [
+  { href: "/cp-system", labelKey: "navCpSystem" },
+  { href: "/customers" },
+  { href: "/sale-list" },
+  { href: "/filter-change" },
+  { href: "/collection-plan", labelKey: "navCollection" },
+]
+
+export const NAV_LAYOUT: NavLink[] = [
+  { href: "/inventory" },
+  { href: "/mw-cp", activeFor: MW_CP_CARDS.map((c) => c.href) },
+  { href: "/install" },
+  { href: "/repair-plan", labelKey: "navRepair" },
+  { href: "/" },
+  { href: "/schedule" },
+  { href: "/release-slip" },
+]
+
+// Admin pages, pinned to the bottom of the rail.
+export const NAV_BOTTOM_HREFS = ["/users", "/activity", "/technician-activity", "/settings"]
+
+// Reached from the MW CP page instead of the rail (still in the search palette).
+export const NAV_SIDEBAR_HIDDEN_HREFS = MW_CP_CARDS.map((c) => c.href)
+
+export function navItemFor(href: string): NavItem | undefined {
+  return NAV_ITEMS.find((i) => i.href === href)
 }

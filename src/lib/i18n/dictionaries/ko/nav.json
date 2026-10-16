@@ -20,5 +20,10 @@
   "pages": "페이지",
   "products": "제품",
   "dailyReportDescription": "공지사항, 오늘의 일정, 기술자 일정을 한 화면에서 확인하세요.",
-  "releaseSlip": "출고증"
+  "releaseSlip": "출고증",
+  "mwCp": "MW CP",
+  "navCpSystem": "CP 시스템",
+  "navCollection": "수금",
+  "navRepair": "수리",
+  "mwCpDescription": "CP 시스템, 회원, 판매, 필터 교체 및 수금."
 }

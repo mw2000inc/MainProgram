@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/auth/auth-context"
 
 export type SidebarMode = "automatic" | "icon-only" | "with-names"
 
-const DEFAULT_MODE: SidebarMode = "automatic"
+// Icon-only rail by default on desktop (the AppSheet-style left strip); each
+// person can still pick Automatic or With names in their profile menu.
+const DEFAULT_MODE: SidebarMode = "icon-only"
 
 function storageKey(userId: string): string {
   // Namespaced per user id so two different people logging into the same

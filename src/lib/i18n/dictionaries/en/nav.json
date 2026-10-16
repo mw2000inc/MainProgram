@@ -20,5 +20,10 @@
   "pages": "Pages",
   "products": "Products",
   "dailyReportDescription": "Announcements, today's plans, and the technician schedule in one view.",
-  "releaseSlip": "Release Slip"
+  "releaseSlip": "Release Slip",
+  "mwCp": "MW CP",
+  "navCpSystem": "CP System",
+  "navCollection": "Collection",
+  "navRepair": "Repair",
+  "mwCpDescription": "CP System, members, sales, filter changes and collections."
 }
