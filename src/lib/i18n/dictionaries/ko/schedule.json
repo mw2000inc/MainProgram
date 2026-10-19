@@ -336,6 +336,9 @@
   "releaseSlipEditHint": "인쇄 전에 거래처명, SKU, 수량, 비고 칸을 클릭해 수정할 수 있습니다. 수정 내용은 저장되지 않습니다.",
   "releaseSlipEdited": "화면에서 수정됨 — 보이는 그대로 인쇄/다운로드됩니다. 기록에는 저장되지 않습니다.",
   "releaseSlipPdfHint": "프린터로 “PDF로 저장”을 선택하면 전표를 다운로드할 수 있습니다.",
+  "releaseSlipAutoHint": "전표에 입력하면 수정한 행이 자동으로 일일 보고서에 완료로 저장됩니다.",
+  "releaseSlipAutoSaving": "일일 보고서에 저장 중…",
+  "releaseSlipAutoSaved": "일일 보고서에 완료로 저장됨 · {time}",
   "releaseSlipDescription": "그날 작업의 출고 및 반납 품목을 인쇄할 수 있는 전표입니다.",
   "releaseSlipPickTechnician": "기술자 선택",
   "releaseSlipPickTechnicianHint": "출고증을 볼 기술자를 선택하세요.",
@@ -398,5 +401,13 @@
   "calendarDraftsShort": "초안 {count}",
   "calendarJobsCount": "작업 {count}건",
   "calendarScheduleOn": "{date}에 작업 일정 추가",
-  "calendarNoJobs": "이 날에는 작업이 없습니다."
+  "calendarNoJobs": "이 날에는 작업이 없습니다.",
+  "releaseSlipSave": "일일 보고서에 저장",
+  "releaseSlipSaveTitle": "이 전표를 일일 보고서에 저장할까요?",
+  "releaseSlipSaveDescription": "{count}개 행이 {date}에 {name}의 완료된 방문으로 저장되고, 품목은 관리자 승인을 위해 재고에 대기됩니다. 여기서 추가한 행은 열린 방문이 없으면 새 기록이 됩니다.",
+  "releaseSlipSaved": "저장됨: 완료 {completed}건, 신규 {created}건, 승인 대기 품목 {movements}개.",
+  "releaseSlipSaveSkipped": "{count}건 저장 안 됨 — {details}",
+  "releaseSlipSaveNoType": "먼저 F, R, S 또는 O를 선택하세요: {orders}",
+  "releaseSlipSaveNothing": "이 전표에 새로 저장할 내용이 없습니다.",
+  "releaseSlipSaveAllHint": "저장하려면 기술자 한 명을 선택하세요."
 }

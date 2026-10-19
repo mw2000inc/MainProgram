@@ -1,9 +1,11 @@
 import type { ReleaseSlipJob } from "@/lib/api/release-slip"
 import { MANUAL_JOB_TYPE } from "@/components/release-slip/release-slip-sheets"
 
-// Extra parts and errand notes added by hand to a day's Release Slip. They
-// are kept in this browser only (per date and technician) — nothing is
-// written to the database and no stock is moved; the slip is a paper record.
+// Extra parts and errand notes added by hand to a day's Release Slip. The
+// list itself is kept in this browser (per date and technician); each row
+// with an item is also queued in Inventory as a pending movement
+// (/api/release-slip/manual-item — movementId below), so it shows in the
+// Inventory List for an admin to approve. No stock moves until then.
 
 export type ManualSlipCategory = "part" | "errand"
 
@@ -14,6 +16,8 @@ export interface ManualSlipItem {
   direction: "out" | "in"
   qty: number
   note: string
+  // Its pending Inventory movement, once queued.
+  movementId?: string
 }
 
 const storageKey = (date: string, technicianId: string) => `release-slip-manual:${date}:${technicianId}`

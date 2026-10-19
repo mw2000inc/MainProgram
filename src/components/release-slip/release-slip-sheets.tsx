@@ -27,7 +27,17 @@ const MIN_SUMMARY_ROWS = 4
 const SIGNATURE_LINES = 9
 
 // offset: the position of the block's first line among the job's lines.
-type Block = { job: ReleaseSlipJob; movements: ReleaseSlipMovement[]; lines: number; continued: boolean; offset: number }
+// itemLines: the job's own item lines; collections: same-order collection
+// jobs shown in this block, one line each after the item lines.
+type Block = {
+  job: ReleaseSlipJob
+  movements: ReleaseSlipMovement[]
+  lines: number
+  itemLines: number
+  continued: boolean
+  offset: number
+  collections: ReleaseSlipJob[]
+}
 type Page = { blocks: Block[]; summary: boolean }
 
 // The block of rows added by hand on the slip page (no type box ticked).
@@ -173,17 +183,46 @@ function Editable({
   )
 }
 
-export function paginate(jobs: ReleaseSlipJob[], summaryRows: number): Page[] {
+// A collection on the same order as another job of the slip (a Filter
+// Change and its payment, say) is shown in that job's block — its O box
+// ticked and the collection on a line of its own — instead of a second block.
+// Only a collection with no items of its own, and never an added row.
+function mergeCollections(jobs: ReleaseSlipJob[]) {
+  const into = new Map<string, ReleaseSlipJob[]>()
+  const merged = new Set<string>()
+  for (const c of jobs) {
+    const order = c.orderNo.trim()
+    if (c.jobType !== "collection" || c.added || !order || slipItems(c).length) continue
+    const host = jobs.find((j) => j !== c && !j.added && j.jobType !== "collection" && j.jobType !== MANUAL_JOB_TYPE && j.orderNo.trim() === order)
+    if (!host) continue
+    into.set(host.jobId, [...(into.get(host.jobId) ?? []), c])
+    merged.add(c.jobId)
+  }
+  return { into, merged }
+}
+
+// minLines: a job's line count raised with "+ Add line" (on-screen copy).
+export function paginate(jobs: ReleaseSlipJob[], summaryRows: number, minLines: Record<string, number> = {}): Page[] {
+  const { into, merged } = mergeCollections(jobs)
   // Split a job longer than a whole page into page-sized chunks.
   const blocks: Block[] = []
   for (const job of jobs) {
+    if (merged.has(job.jobId)) continue
     const items = slipItems(job)
-    if (items.length <= LINES_PER_PAGE) {
-      blocks.push({ job, movements: items, lines: Math.max(LINES_PER_JOB, items.length), continued: false, offset: 0 })
+    const collections = into.get(job.jobId) ?? []
+    const itemLines = Math.max(collections.length ? LINES_PER_JOB - 1 : LINES_PER_JOB, items.length, minLines[job.jobId] ?? 0)
+    if (itemLines + collections.length <= LINES_PER_PAGE) {
+      blocks.push({ job, movements: items, itemLines, lines: itemLines + collections.length, continued: false, offset: 0, collections })
     } else {
       for (let i = 0; i < items.length; i += LINES_PER_PAGE) {
         const chunk = items.slice(i, i + LINES_PER_PAGE)
-        blocks.push({ job, movements: chunk, lines: Math.max(LINES_PER_JOB, chunk.length), continued: i > 0, offset: i })
+        const n = Math.max(LINES_PER_JOB, chunk.length)
+        blocks.push({ job, movements: chunk, itemLines: n, lines: n, continued: i > 0, offset: i, collections: [] })
+      }
+      const tail = blocks[blocks.length - 1]
+      if (collections.length && tail.lines + collections.length <= LINES_PER_PAGE) {
+        tail.collections = collections
+        tail.lines += collections.length
       }
     }
   }
@@ -239,7 +278,9 @@ export function ReleaseSlipSheets({
   onRemoveJob?: (jobId: string) => void
 }) {
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
-  const pages = React.useMemo(() => paginate(jobs, summary.length), [jobs, summary.length])
+  // Lines added with "+ Add line" (on-screen copy only; a filled one prints).
+  const [minLines, setMinLines] = React.useState<Record<string, number>>({})
+  const pages = React.useMemo(() => paginate(jobs, summary.length, onEdit ? minLines : {}), [jobs, summary.length, minLines, onEdit])
   const anyPending = jobs.some((j) => j.movements.some((m) => m.status === "pending"))
   const summaryRows = [...summary, ...Array.from({ length: Math.max(0, MIN_SUMMARY_ROWS - summary.length) }, () => null)]
 
@@ -312,6 +353,7 @@ export function ReleaseSlipSheets({
               </thead>
               {page.blocks.map((b, bi) => {
                 const box = typeBox(b.job.jobType)
+                const boxes = new Set([box, ...b.collections.map((c) => typeBox(c.jobType))])
                 const job = b.job
                 const editLine = onEdit
                   ? (line: number, field: keyof SlipLineEdit) => (next: string) => onEdit(job.jobId, { lines: { [line]: { [field]: next } } })
@@ -319,6 +361,23 @@ export function ReleaseSlipSheets({
                 return (
                   <tbody key={bi} className="slip-job" data-testid="slip-job">
                     {Array.from({ length: b.lines }, (_, li) => {
+                      const collection = li >= b.itemLines ? b.collections[li - b.itemLines] : undefined
+                      if (collection) {
+                        return (
+                          <tr key={li} className="slip-collect-line" data-testid="slip-collect-line">
+                            <td colSpan={4} className="slip-collect-label">
+                              Collection
+                            </td>
+                            <td className="slip-note slip-note-job" title={collection.jobNote || undefined}>
+                              <Editable
+                                value={collection.jobNote ?? ""}
+                                label="Collection notes"
+                                onCommit={onEdit ? (next) => onEdit(collection.jobId, { jobNote: next }) : undefined}
+                              />
+                            </td>
+                          </tr>
+                        )
+                      }
                       const m = b.movements[li]
                       // The job's collection note leads its first Notes cell
                       // (not repeated on a "(cont.)" block), before that
@@ -345,6 +404,16 @@ export function ReleaseSlipSheets({
                                   job.orderNo
                                 )}
                                 {b.continued && <div className="slip-cont">(cont.)</div>}
+                                {onEdit && (
+                                  <button
+                                    type="button"
+                                    className="slip-add-line"
+                                    onClick={() => setMinLines((s) => ({ ...s, [job.jobId]: b.offset + b.itemLines + 1 }))}
+                                    data-testid="slip-add-line"
+                                  >
+                                    + Add line
+                                  </button>
+                                )}
                               </td>
                               <td rowSpan={b.lines} className="slip-cell-top">
                                 <Editable
@@ -368,7 +437,7 @@ export function ReleaseSlipSheets({
                                     >
                                       {box === k ? "✓" : ""}
                                     </button>
-                                  ) : box === k ? (
+                                  ) : boxes.has(k) ? (
                                     "✓"
                                   ) : (
                                     ""
@@ -491,4 +560,8 @@ export const RELEASE_SLIP_CSS = `
 .slip-box-pick:hover { box-shadow: inset 0 0 0 1px #9ca3af; }
 .slip-remove { all: unset; cursor: pointer; float: right; font-weight: 400; padding: 0 0.5mm; line-height: 1; }
 .slip-remove:hover { color: #b91c1c !important; }
+.slip-table td.slip-collect-label { text-align: center; font-weight: 700; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; background: #f3f4f6; }
+.slip-collect-line td { border-top-style: dashed; }
+.slip-add-line { all: unset; display: block; margin-top: 1mm; font-size: 7pt; font-weight: 400; cursor: pointer; color: #2563eb !important; }
+.slip-add-line:hover { text-decoration: underline; }
 `

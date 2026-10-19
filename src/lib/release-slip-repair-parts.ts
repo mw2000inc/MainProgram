@@ -1,4 +1,4 @@
-import type { RepairPlan } from "@/lib/types"
+import type { InstallPlan, RepairPlan, SaleListEntry } from "@/lib/types"
 import type { ReleaseSlipJob, ReleaseSlipMovement } from "@/lib/api/release-slip"
 
 // A Repair job's lines on the Release Slip from its record's Part No, when
@@ -20,4 +20,24 @@ export function repairPartLines(job: Pick<ReleaseSlipJob, "jobId" | "jobType" | 
   }
   if (counts.size === 0) return undefined
   return [...counts].map(([sku, qty]) => ({ sku, label: sku, qtyOut: qty, qtyIn: 0, status: "recorded" }))
+}
+
+// An Installation job's line on the Release Slip when it has no stock
+// movement yet: its unit, OUT 1 — the installation's Model, else the order's
+// Product # on the Sale List. The SKU is the code before " / " ("106 /
+// MW) Oasis-S2 (Black)" → 106), which is how Inventory numbers its products.
+// Shown as recorded (no "*"); saving the slip queues it in Inventory.
+export function installUnitLines(
+  job: Pick<ReleaseSlipJob, "jobId" | "jobType" | "orderNo" | "movements">,
+  installPlans: Pick<InstallPlan, "scheduleJobId" | "model">[],
+  saleListEntries: Pick<SaleListEntry, "orderNumber" | "productNo">[]
+): ReleaseSlipMovement[] | undefined {
+  if (job.jobType !== "installation" || job.movements.length > 0) return undefined
+  const order = (job.orderNo ?? "").trim()
+  const unit =
+    (installPlans.find((p) => p.scheduleJobId === job.jobId)?.model ?? "").trim() ||
+    (order ? (saleListEntries.find((e) => e.orderNumber.trim() === order)?.productNo ?? "").trim() : "")
+  const sku = unit.split(" / ")[0].trim()
+  if (!sku) return undefined
+  return [{ sku, label: unit, qtyOut: 1, qtyIn: 0, status: "recorded" }]
 }

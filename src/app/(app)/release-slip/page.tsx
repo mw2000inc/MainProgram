@@ -3,8 +3,9 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { Download, Plus, Printer, ReceiptText, RotateCcw, X } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { Download, Loader2, Plus, Printer, ReceiptText, RotateCcw, Save, X } from "lucide-react"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -29,7 +30,8 @@ import { collectionNoteFor } from "@/lib/release-slip-collect"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { repairPartLines } from "@/lib/release-slip-repair-parts"
+import { installUnitLines, repairPartLines } from "@/lib/release-slip-repair-parts"
+import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -59,6 +61,18 @@ function printAs(title: string) {
   document.title = previous
 }
 
+type SlipSaveRowInput = {
+  jobId?: string
+  orderNo: string
+  accountName: string
+  jobType: "filter_change" | "repair" | "installation" | "collection"
+  items: { sku: string; qtyOut: number; qtyIn: number }[]
+}
+
+function formatSlipDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 const DEFAULT_SIGNATURES: SlipSignatures = { checkedBy: "Jerson", notedBy: "Jan", approvedBy: "Malou" }
 
 const PRINT_CSS = `
@@ -78,6 +92,9 @@ function ReleaseSlipContent() {
   const { t: tNav } = useTranslation("nav")
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
+  // Who may edit the slip and save it to the Daily Report: admins, and a
+  // technician on their own slip (the save route checks it again).
+  const canEdit = isAdmin || user?.role === "technician"
   const searchParams = useSearchParams()
   const date = validDate(searchParams.get("date")) ?? businessToday()
   const setDate = (next: string) => {
@@ -152,20 +169,26 @@ function ReleaseSlipContent() {
   // Repair records — a repair's Part No fills its lines when it has no stock
   // movements (repairPartLines). Readable by technicians too.
   const { data: repairPlans = [] } = useRepairPlans()
-  // Pending jobs print with blank OUT lines (their collection note still shows).
+  // Installation records — an installation with no stock movement shows its
+  // unit (Model, else the order's Product #) with the code as SKU.
+  const { data: installPlans = [] } = useInstallPlans()
+  // Each job with its items and the money to collect on the visit.
   const jobs = React.useMemo(() => {
     const list = data?.jobs ?? []
     return list.map((j) => {
-      const shown = j.status === "completed" ? j : { ...j, movements: [] }
-      // A completed Repair with no stock movements: its Part No as lines.
-      const parts = j.status === "completed" ? repairPartLines(j, repairPlans) : undefined
+      // Pending jobs ("Include pending jobs") show what's already queued for
+      // them too — an installation's unit, a filter change's filters (marked
+      // * while awaiting approval) — instead of blank lines. A Repair with no
+      // stock movements: its Part No as lines; an Installation with none: its
+      // unit (installUnitLines).
+      const parts = repairPartLines(j, repairPlans) ?? installUnitLines(j, installPlans, saleListEntries)
       return {
-        ...shown,
+        ...j,
         ...(parts ? { movements: parts } : {}),
         jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
       }
     })
-  }, [data, date, collections, saleListEntries, repairPlans])
+  }, [data, date, collections, saleListEntries, repairPlans, installPlans])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)
@@ -245,6 +268,188 @@ function ReleaseSlipContent() {
     return list
   })().map((slip) => ({ ...slip, jobs: applySlipEdits([...slip.jobs, ...(added[slip.key] ?? []).map(blankSlipJob)], edits[slip.key]) }))
 
+  // "Save to Daily Report": the slip's rows → completed visits on this date
+  // for this technician, their items queued in Inventory (pending). Sent:
+  // rows added here, jobs edited here, and jobs not completed yet. A row
+  // added without an F / R / S / O box is held back (named in a message).
+  const qc = useQueryClient()
+  const [pendingSave, setPendingSave] = React.useState<{ rows: SlipSaveRowInput[] } | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  // The rows to send. "all" (the button): rows added or edited here plus
+  // every job not completed yet. "edited" (auto-save): only rows added or
+  // edited here. sourceIds: the slip job ids sent (added rows' local ids).
+  function buildRows(mode: "all" | "edited") {
+    const slip = slips[0]
+    const rows: SlipSaveRowInput[] = []
+    const noType: string[] = []
+    const sourceIds: string[] = []
+    if (!slip || allMode) return { rows, noType, sourceIds, slipKey: "" }
+    const slipEdits = edits[slip.key] ?? {}
+    const original = new Map((data?.jobs ?? []).map((j) => [j.jobId, j]))
+    for (const job of slip.jobs) {
+      if (job.jobId === "manual") continue
+      const orig = original.get(job.jobId)
+      const touched = job.added || !!slipEdits[job.jobId]
+      const include = touched || (mode === "all" && (orig ? orig.status !== "completed" : false))
+      if (!include) continue
+      if (job.added && !job.orderNo.trim()) continue
+      if (!["filter_change", "repair", "installation", "collection"].includes(job.jobType)) {
+        noType.push(job.orderNo || "—")
+        continue
+      }
+      const items = job.movements.flatMap((m) => {
+        if (m.errand) return []
+        const out = { sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.inSku ? 0 : m.qtyIn || 0 }
+        const back = m.inSku && m.qtyIn ? [{ sku: m.inSku.trim(), qtyOut: 0, qtyIn: m.qtyIn }] : []
+        return [...(out.sku && (out.qtyOut || out.qtyIn) ? [out] : []), ...back]
+      })
+      rows.push({ jobId: job.added ? undefined : job.jobId, orderNo: job.orderNo, accountName: job.accountName, jobType: job.jobType as SlipSaveRowInput["jobType"], items })
+      sourceIds.push(job.jobId)
+    }
+    return { rows, noType, sourceIds, slipKey: slip.key }
+  }
+  async function postSave(rows: SlipSaveRowInput[]) {
+    const res = await fetch("/api/release-slip/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, technicianUserId: technicianId, rows }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || "Save failed")
+    if (body.skipped?.length) {
+      toast.error(t("releaseSlipSaveSkipped", { count: String(body.skipped.length), details: body.skipped.map((s: { orderNo: string; reason: string }) => `${s.orderNo}: ${s.reason}`).join("; ") }))
+    }
+    for (const key of [["releaseSlip"], ["scheduleJobs"], ["filterChangePlans"], ["installPlans"], ["repairPlans"], ["collections"], ["stockMovements"]]) {
+      qc.invalidateQueries({ queryKey: key })
+    }
+    return body as { completed: number; alreadyCompleted: number; created: number; movements: number }
+  }
+  function startSave() {
+    const { rows, noType } = buildRows("all")
+    if (noType.length) toast.warning(t("releaseSlipSaveNoType", { orders: noType.join(", ") }))
+    if (rows.length === 0) {
+      if (!noType.length) toast.info(t("releaseSlipSaveNothing"))
+      return
+    }
+    setPendingSave({ rows })
+  }
+
+  // "Add Item / Task" rows → Inventory: each one with an item is queued as a
+  // pending movement (and taken back out if removed while still pending), so
+  // it shows in the Inventory List for an admin to approve.
+  async function queueManualItem(item: ManualSlipItem): Promise<string | undefined> {
+    if (!item.item.trim() || !(item.qty > 0) || !technicianId) return undefined
+    const res = await fetch("/api/release-slip/manual-item", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, technicianUserId: technicianId, item }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || "Couldn't add it to the Inventory List")
+    return body.id as string
+  }
+  async function addManualItem(item: ManualSlipItem) {
+    let movementId: string | undefined
+    try {
+      movementId = await queueManualItem(item)
+      if (movementId) qc.invalidateQueries({ queryKey: ["stockMovements"] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't add it to the Inventory List")
+    }
+    setManualItems([...manual.items, { ...item, movementId }])
+  }
+  async function removeManualItem(item: ManualSlipItem) {
+    if (item.movementId) {
+      const res = await fetch(`/api/release-slip/manual-item?id=${encodeURIComponent(item.movementId)}`, { method: "DELETE" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body.error || "Couldn't remove it from the Inventory List")
+        return
+      }
+      qc.invalidateQueries({ queryKey: ["stockMovements"] })
+    }
+    setManualItems(manual.items.filter((x) => x.id !== item.id))
+  }
+  // Rows added before this (kept only in the browser) are queued once.
+  const syncedManualKey = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    if (!canEdit || allMode || !technicianId || !manualKey || manual.key !== manualKey) return
+    if (syncedManualKey.current === manualKey) return
+    syncedManualKey.current = manualKey
+    const missing = manual.items.filter((i) => !i.movementId && i.item.trim() && i.qty > 0)
+    if (missing.length === 0) return
+    ;(async () => {
+      const ids = new Map<string, string>()
+      for (const i of missing) {
+        try {
+          const id = await queueManualItem(i)
+          if (id) ids.set(i.id, id)
+        } catch {
+          // left unqueued; tried again next time the slip opens
+        }
+      }
+      if (ids.size) {
+        const current = loadManualItems(date, technicianId)
+        saveManualItems(date, technicianId, current.map((i) => (ids.has(i.id) ? { ...i, movementId: ids.get(i.id) } : i)))
+        setManual({ key: manualKey, items: loadManualItems(date, technicianId) })
+        qc.invalidateQueries({ queryKey: ["stockMovements"] })
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manual, manualKey, canEdit, allMode, technicianId])
+
+  // Auto-save: a row edited or added here is saved to the Daily Report as a
+  // completed visit (and the technician's schedule) a moment after the last
+  // edit — once an added row has its Order No. and type box. The saved rows'
+  // edits are then dropped so the slip shows what the database now holds;
+  // anything edited again while saving stays and saves on the next round.
+  const [autoStatus, setAutoStatus] = React.useState<{ state: "idle" | "saving" | "saved"; at?: string }>({ state: "idle" })
+  const autoRunning = React.useRef(false)
+  React.useEffect(() => {
+    if (!canEdit || allMode || !technicianId || saving) return
+    const { rows, sourceIds, slipKey } = buildRows("edited")
+    if (rows.length === 0) return
+    // The edits being saved — anything changed after this stays for next time.
+    const snapshot = editState
+    const timer = window.setTimeout(async () => {
+      if (autoRunning.current) return
+      autoRunning.current = true
+      setAutoStatus({ state: "saving" })
+      try {
+        await postSave(rows)
+        setEditState((s) => {
+          if (s.key !== snapshot.key) return s
+          const slipEdits = { ...(s.edits[slipKey] ?? {}) }
+          for (const id of sourceIds) if (slipEdits[id] === snapshot.edits[slipKey]?.[id]) delete slipEdits[id]
+          const added = (s.added[slipKey] ?? []).filter((id) => !(sourceIds.includes(id) && s.edits[slipKey]?.[id] === snapshot.edits[slipKey]?.[id]))
+          return { ...s, edits: { ...s.edits, [slipKey]: slipEdits }, added: { ...s.added, [slipKey]: added } }
+        })
+        setAutoStatus({ state: "saved", at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) })
+      } catch (e) {
+        setAutoStatus({ state: "idle" })
+        toast.error(e instanceof Error ? e.message : "Save failed")
+      } finally {
+        autoRunning.current = false
+      }
+    }, 1500)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editState, canEdit, allMode, technicianId, saving, data])
+  async function confirmSave() {
+    if (!pendingSave) return
+    setSaving(true)
+    try {
+      const body = await postSave(pendingSave.rows)
+      toast.success(t("releaseSlipSaved", { completed: String(body.completed + body.alreadyCompleted), created: String(body.created), movements: String(body.movements) }))
+      setPendingSave(null)
+      resetEdits()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const ready = !!data && !isPending
   return (
     <div className="space-y-4">
@@ -299,8 +504,18 @@ function ReleaseSlipContent() {
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.print()} disabled={!ready || slips.length === 0} data-testid="slip-print">
           <Printer className="h-3.5 w-3.5" /> {t("releaseSlipPrint")}
         </Button>
-        {isAdmin && (
+        {canEdit && (
           <>
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={startSave}
+              disabled={!ready || allMode || saving}
+              title={allMode ? t("releaseSlipSaveAllHint") : undefined}
+              data-testid="slip-save"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} {t("releaseSlipSave")}
+            </Button>
             {!allMode && (
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => addOrderRow(slips[0]?.key ?? technicianId ?? "self")} disabled={!ready} data-testid="slip-add-order">
                 <Plus className="h-3.5 w-3.5" /> {t("releaseSlipAddOrder")}
@@ -309,7 +524,15 @@ function ReleaseSlipContent() {
             <Button size="sm" variant="outline" className="gap-1.5" onClick={resetEdits} disabled={!hasEdits} data-testid="slip-reset-edits">
               <RotateCcw className="h-3.5 w-3.5" /> {t("releaseSlipResetEdits")}
             </Button>
-            <span className="text-xs text-muted-foreground">{hasEdits ? t("releaseSlipEdited") : t("releaseSlipEditHint")}</span>
+            <span className="text-xs text-muted-foreground" data-testid="slip-autosave-status">
+              {autoStatus.state === "saving"
+                ? t("releaseSlipAutoSaving")
+                : autoStatus.state === "saved"
+                  ? t("releaseSlipAutoSaved", { time: autoStatus.at ?? "" })
+                  : allMode
+                    ? t("releaseSlipSaveAllHint")
+                    : t("releaseSlipAutoHint")}
+            </span>
           </>
         )}
       </div>
@@ -345,7 +568,7 @@ function ReleaseSlipContent() {
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 shrink-0"
-                      onClick={() => setManualItems(manual.items.filter((x) => x.id !== i.id))}
+                      onClick={() => removeManualItem(i)}
                       aria-label={t("releaseSlipManualRemove")}
                       data-testid="slip-manual-remove"
                     >
@@ -380,8 +603,8 @@ function ReleaseSlipContent() {
                       jobs={slip.jobs}
                       signatures={signatures}
                       onSignaturesChange={setSignatures}
-                      onEdit={isAdmin ? editSlip(slip.key) : undefined}
-                      onRemoveJob={isAdmin ? removeOrderRow(slip.key) : undefined}
+                      onEdit={canEdit ? editSlip(slip.key) : undefined}
+                      onRemoveJob={canEdit ? removeOrderRow(slip.key) : undefined}
                     />
                   </div>
                 ))}
@@ -401,7 +624,17 @@ function ReleaseSlipContent() {
             )}
         </>
       )}
-      <AddSlipItemDialog open={addOpen} onOpenChange={setAddOpen} productOptions={productOptions} noteSuggestions={noteSuggestions} onAdd={(item) => setManualItems([...manual.items, item])} />
+      <ConfirmDialog
+        open={!!pendingSave}
+        onOpenChange={(o) => !o && !saving && setPendingSave(null)}
+        title={t("releaseSlipSaveTitle")}
+        description={pendingSave ? t("releaseSlipSaveDescription", { count: String(pendingSave.rows.length), date: formatSlipDate(date), name: technicianName || "—" }) : ""}
+        confirmLabel={t("releaseSlipSave")}
+        destructive={false}
+        loading={saving}
+        onConfirm={confirmSave}
+      />
+      <AddSlipItemDialog open={addOpen} onOpenChange={setAddOpen} productOptions={productOptions} noteSuggestions={noteSuggestions} onAdd={addManualItem} />
     </div>
   )
 }

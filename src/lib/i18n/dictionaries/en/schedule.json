@@ -336,6 +336,9 @@
   "releaseSlipEditHint": "Click any Accnt. Name, SKU, Qty or Notes cell to change it before printing, or add an order row. Edits aren't saved.",
   "releaseSlipEdited": "Edited on screen — printed and downloaded as shown. Not saved to the records.",
   "releaseSlipPdfHint": "Choose “Save as PDF” as the printer to download the slip.",
+  "releaseSlipAutoHint": "Type on the slip — each edited row is saved to the Daily Report as completed automatically.",
+  "releaseSlipAutoSaving": "Saving to the Daily Report…",
+  "releaseSlipAutoSaved": "Saved to the Daily Report as completed · {time}",
   "releaseSlipDescription": "A printable slip of the items taken out and returned for the day's jobs.",
   "releaseSlipPickTechnician": "Choose a technician",
   "releaseSlipPickTechnicianHint": "Choose a technician to see their release slip.",
@@ -398,5 +401,13 @@
   "calendarDraftsShort": "{count} draft",
   "calendarJobsCount": "{count} job(s)",
   "calendarScheduleOn": "Schedule Job on {date}",
-  "calendarNoJobs": "No jobs on this day."
+  "calendarNoJobs": "No jobs on this day.",
+  "releaseSlipSave": "Save to Daily Report",
+  "releaseSlipSaveTitle": "Save this slip to the Daily Report?",
+  "releaseSlipSaveDescription": "{count} row(s) will be saved as completed visits on {date} for {name}, and their items queued in Inventory for an admin to approve. Rows added here become new records if the order has no open visit.",
+  "releaseSlipSaved": "Saved: {completed} completed, {created} new, {movements} item(s) queued for approval.",
+  "releaseSlipSaveSkipped": "{count} not saved — {details}",
+  "releaseSlipSaveNoType": "Tick F, R, S or O first for: {orders}",
+  "releaseSlipSaveNothing": "Nothing new to save on this slip.",
+  "releaseSlipSaveAllHint": "Pick one technician to save their slip."
 }
