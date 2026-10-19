@@ -314,20 +314,13 @@ export async function updateStockMovement(id: string, input: MovementEditInput):
   return resultingProductStock(movement.productId, movement)
 }
 
-// A pending or rejected movement is deleted at once (it never touched stock).
-// An APPROVED one is only marked for deletion (pending_action 'delete'): it
-// keeps counting in stock until an admin approves the deletion, which then
-// deletes it and a DB trigger gives its quantity back. Returns which happened.
+// Delete removes the movement at once, whatever its status: a pending or
+// rejected one never touched stock; an approved one has its quantity given
+// back by a DB trigger (reverse_stock_movement). (An earlier "delete request"
+// left on a row — pending_action 'delete' — still shows Delete pending and is
+// removed by Approve or by deleting it again.) Returns "deleted" — kept as a
+// result so callers don't change if requests come back.
 export async function deleteStockMovement(id: string): Promise<"deleted" | "requested"> {
-  const current = await movementState(id)
-  if (current.status === "approved") {
-    const { error } = await supabase
-      .from("stock_movements")
-      .update({ pending_action: "delete", pending_values: null, pending_requested_by: await currentUserId(), pending_requested_at: new Date().toISOString() })
-      .eq("id", id)
-    if (error) throw error
-    return "requested"
-  }
   const { error } = await supabase.from("stock_movements").delete().eq("id", id)
   if (error) throw error
   return "deleted"

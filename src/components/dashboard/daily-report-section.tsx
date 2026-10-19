@@ -1192,12 +1192,12 @@ export function DailyReportSection() {
         columns={inventoryListExpandedColumns}
         columnsForWidth={inventoryColumnsForWidth}
         data={dayStockMovementRows}
-        // A row's trash deletes every movement it combines; not on the
-        // expanded view's per-item totals (that would remove many at once).
+        // A row's trash deletes every movement it combines — on the full-screen
+        // view too, where a row is an item's total for the day (the confirm
+        // says how many entries it combines before anything is removed).
         canDelete={isAdmin}
         onDeleteSelected={deleteMovements}
         rowDeleteIds={(row) => row.mergedIds ?? [row.id]}
-        rowDeleteInExpanded={false}
         rowDeleteNote={tInventory("deleteApprovedNote")}
         expandedData={reviewAllPending ? allPendingRows : dayStockItemTotals}
         expandedColumns={reviewAllPending ? reviewColumns : undefined}

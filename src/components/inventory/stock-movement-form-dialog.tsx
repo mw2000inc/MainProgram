@@ -336,22 +336,26 @@ function AddMovementForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t("direction")}</FormLabel>
-                {/* Fixed by the button that opened the form (defaultDirection):
-                    "+ Add In/Out" and the In Stock panel only add stock, the
-                    Out Stock panel only takes it out — so only that one option
-                    is offered, and the field is locked to it. */}
-                <Select value={field.value} onValueChange={field.onChange} disabled>
+                {/* Starts on the direction of the button that opened the form
+                    (defaultDirection); the admin can switch it — Stock In to
+                    add a product to stock, Stock Out to take it out. Switching
+                    also sets that direction's usual reason (still changeable). */}
+                <Select
+                  value={field.value}
+                  onValueChange={(next) => {
+                    const direction = next as "in" | "out"
+                    field.onChange(direction)
+                    form.setValue("reason", defaultReasonFor(direction))
+                  }}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full" data-testid="movement-direction">
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {field.value === "in" ? (
-                      <SelectItem value="in">{t("stockIn")}</SelectItem>
-                    ) : (
-                      <SelectItem value="out">{t("stockOut")}</SelectItem>
-                    )}
+                    <SelectItem value="in">{t("stockIn")}</SelectItem>
+                    <SelectItem value="out">{t("stockOut")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
