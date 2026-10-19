@@ -83,6 +83,27 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Google sign-in only when it's switched on for this Supabase project
+  // (Authentication > Providers > Google). While it's off, Supabase answers
+  // the Google redirect with a raw "Unsupported provider: provider is not
+  // enabled" page, so the button is hidden until the project says it's on.
+  const [googleEnabled, setGoogleEnabled] = React.useState(false)
+  React.useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) return
+    let cancelled = false
+    fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings: { external?: Record<string, boolean> } | null) => {
+        if (!cancelled) setGoogleEnabled(!!settings?.external?.google)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const signInForm = useForm<z.infer<typeof signInSchema>>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: "", password: "" },
@@ -286,18 +307,22 @@ export default function LoginPage() {
                   {t("signIn")}
                 </Button>
               </form>
-              <div className="relative py-1">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">{t("or")}</span>
-                </div>
-              </div>
-              <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleSignIn}>
-                <GoogleIcon className="h-4 w-4" />
-                {t("signInWithGoogle")}
-              </Button>
+              {googleEnabled && (
+                <>
+                  <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">{t("or")}</span>
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleSignIn} data-testid="google-sign-in">
+                    <GoogleIcon className="h-4 w-4" />
+                    {t("signInWithGoogle")}
+                  </Button>
+                </>
+              )}
               </>
             ) : (
               <form onSubmit={signUpForm.handleSubmit(onSignUp)} className="space-y-4">

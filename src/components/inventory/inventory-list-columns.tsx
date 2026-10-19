@@ -123,17 +123,36 @@ function EditButtonCell({
   )
 }
 
-// A row's quantity is (almost) always entirely on one side — quantityAdded
-// XOR quantityRemoved — for every write path in this app (manual entries,
-// the sale-item trigger, the filter-change deduction). Falls back to
-// showing both if a row genuinely has both set, rather than silently
-// dropping one.
-function movementTypeAndQty(row: StockMovementRow): { type: "add" | "deduct" | "addDeduct"; qty: number } {
-  if (row.quantityAdded > 0 && row.quantityRemoved > 0) {
-    return { type: "addDeduct", qty: row.quantityAdded - row.quantityRemoved }
-  }
-  if (row.quantityRemoved > 0) return { type: "deduct", qty: row.quantityRemoved }
-  return { type: "add", qty: row.quantityAdded }
+// A row's quantity counts every pool it moves: Brand New (quantityAdded /
+// quantityRemoved) plus 2nd Hand (Ready), 2nd Hand (Repair) and Demo — those
+// three are stored signed (negative = taken out; see AddMovementForm). A row
+// is (almost) always entirely on one side; it falls back to showing both
+// if a row genuinely has both, rather than silently dropping one.
+type QtyRow = Pick<StockMovementRow, "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity">
+const conditionNet = (row: QtyRow) => (row.secondHandReadyQuantity || 0) + (row.secondHandRepairQuantity || 0) + (row.demoQuantity || 0)
+function movementTypeAndQty(row: QtyRow): { type: "add" | "deduct" | "addDeduct"; qty: number } {
+  const extra = conditionNet(row)
+  const added = (row.quantityAdded || 0) + Math.max(extra, 0)
+  const removed = (row.quantityRemoved || 0) + Math.max(-extra, 0)
+  if (added > 0 && removed > 0) return { type: "addDeduct", qty: added - removed }
+  if (removed > 0) return { type: "deduct", qty: removed }
+  return { type: "add", qty: added }
+}
+const directionOf = (row: QtyRow) => (movementTypeAndQty(row).type === "deduct" ? "out" : "in")
+
+// Which pools a row moves, when it isn't only Brand New ("2nd Hand (Ready) 5").
+function ConditionNote({ row }: { row: QtyRow }) {
+  const { t } = useTranslation("inventory")
+  const parts = (
+    [
+      [t("brandNew"), (row.quantityAdded || 0) - (row.quantityRemoved || 0)],
+      [t("secondHandReady"), row.secondHandReadyQuantity || 0],
+      [t("secondHandRepair"), row.secondHandRepairQuantity || 0],
+      [t("demo"), row.demoQuantity || 0],
+    ] as const
+  ).filter(([, n]) => n !== 0)
+  if (!conditionNet(row) || parts.length === 0) return null
+  return <span className="block text-xs font-normal text-muted-foreground" data-testid="inventory-condition">{parts.map(([label, n]) => `${label} ${Math.abs(n)}`).join(" · ")}</span>
 }
 
 const TYPE_KEYS = { add: "typeAdd", deduct: "typeDeduct", addDeduct: "typeAddDeduct" } as const
@@ -163,7 +182,12 @@ function QtyCell({ row }: { row: StockMovementRow }) {
         <span className="text-muted-foreground line-through">{shown}</span> → <span className="text-warning">{next}</span>
       </span>
     )
-  return <span className="font-medium">{shown}</span>
+  return (
+    <span className="font-medium">
+      {shown}
+      <ConditionNote row={row} />
+    </span>
+  )
 }
 
 // The Daily Report panel's full column set — shown directly in the compact
@@ -330,7 +354,7 @@ export function groupInventoryListRows(rows: StockMovementRow[]): StockMovementR
       out.push(r)
       continue
     }
-    const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
+    const direction = directionOf(r)
     // A requested edit/delete is never combined with another movement.
     if (r.changeRequest) {
       out.push(r)
@@ -346,6 +370,9 @@ export function groupInventoryListRows(rows: StockMovementRow[]): StockMovementR
     }
     existing.quantityAdded += r.quantityAdded
     existing.quantityRemoved += r.quantityRemoved
+    existing.secondHandReadyQuantity = (existing.secondHandReadyQuantity || 0) + (r.secondHandReadyQuantity || 0)
+    existing.secondHandRepairQuantity = (existing.secondHandRepairQuantity || 0) + (r.secondHandRepairQuantity || 0)
+    existing.demoQuantity = (existing.demoQuantity || 0) + (r.demoQuantity || 0)
     existing.mergedIds = [...(existing.mergedIds ?? [existing.id]), r.id]
     if (r.createdAt > existing.createdAt) existing.createdAt = r.createdAt
   }
@@ -366,7 +393,7 @@ export function aggregateInventoryRowsByItem(rows: StockMovementRow[]): StockMov
     return parts.length > 0 ? parts.join(", ") : undefined
   }
   for (const r of rows) {
-    const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
+    const direction = directionOf(r)
     const key = [r.productId || `label:${r.itemLabel}`, direction, r.status, r.changeRequest ? `req:${r.id}` : ""].join("|")
     const existing = byKey.get(key)
     if (!existing) {
@@ -377,6 +404,9 @@ export function aggregateInventoryRowsByItem(rows: StockMovementRow[]): StockMov
     }
     existing.quantityAdded += r.quantityAdded
     existing.quantityRemoved += r.quantityRemoved
+    existing.secondHandReadyQuantity = (existing.secondHandReadyQuantity || 0) + (r.secondHandReadyQuantity || 0)
+    existing.secondHandRepairQuantity = (existing.secondHandRepairQuantity || 0) + (r.secondHandRepairQuantity || 0)
+    existing.demoQuantity = (existing.demoQuantity || 0) + (r.demoQuantity || 0)
     existing.mergedIds = [...(existing.mergedIds ?? [existing.id]), ...(r.mergedIds ?? [r.id])]
     existing.relatedJobOrderNo = joinDistinct(existing.relatedJobOrderNo, r.relatedJobOrderNo)
     existing.reason = (joinDistinct(existing.reason, r.reason) ?? existing.reason) as StockMovementRow["reason"]
