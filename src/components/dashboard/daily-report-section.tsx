@@ -30,6 +30,7 @@ import { panelLinkJobs, scheduleDayJobs } from "@/lib/scheduling/schedule-day-jo
 import { ClearScheduleDialog } from "@/components/shared/clear-schedule-dialog"
 import { clearSchedulesForRecords } from "@/lib/api/schedule"
 import { deleteStockMovement } from "@/lib/api/inventory"
+import { isAwaitingStockApproval } from "@/lib/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { stockMovementsKey, productsKey } from "@/lib/hooks/use-inventory"
 import { RecordDetailDialog, type DetailField } from "@/components/shared/record-detail-dialog"
@@ -270,6 +271,13 @@ function RepairInOutCell({ repair, parts }: { repair: RepairPlan; parts: RepairP
           <span className="max-w-40 truncate text-xs">{repair.model}</span>
         </span>
       )}
+      {parts.length === 0 &&
+        [...new Set((repair.partNo ?? "").split(/[,;/\n]+/).map((c) => c.trim()).filter(Boolean))].map((code) => (
+          <span key={`partno-${code}`} className="flex items-center gap-1" data-testid="repair-partno-out">
+            <StatusBadge tone="danger" label={t("badgePartOut")} />
+            <span className="text-xs">{code}</span>
+          </span>
+        ))}
       {parts.map((p) => {
         const label = p.productSku || p.productName
         return (
@@ -391,10 +399,12 @@ export function DailyReportSection() {
   )
   const deleteMovements = React.useCallback(
     async (ids: string[]) => {
-      for (const id of ids) await deleteStockMovement(id)
+      let requested = 0
+      for (const id of ids) if ((await deleteStockMovement(id)) === "requested") requested++
       qcDelete.invalidateQueries({ queryKey: stockMovementsKey })
       qcDelete.invalidateQueries({ queryKey: productsKey })
-      toast.success(tInventory("movementsDeleted", { count: String(ids.length) }))
+      if (requested) toast.success(`${requested} approved item(s) marked for deletion — approve it in the Inventory List to update the stock total`)
+      if (ids.length - requested) toast.success(tInventory("movementsDeleted", { count: String(ids.length - requested) }))
     },
     [qcDelete, tInventory]
   )
@@ -879,13 +889,46 @@ export function DailyReportSection() {
   // (both inventory:edit-gated) do let an admin create or fix a pending
   // movement straight from here; see getInventoryListExpandedColumns and
   // the inventory panel's own canAdd/onAdd below.
-  // Only movements dated the report day — a movement dated another day shows
-  // on that day's report even if it was approved today.
-  const dayStockMovements = React.useMemo(
-    () =>
-      stockMovements.filter((m) => m.date === reportDate),
-    [stockMovements, reportDate]
-  )
+  // Only the report day's own work: a movement tied to a schedule job —
+  // directly, or through its Filter Change / Installation / Repair record (a
+  // repair's parts too) — shows on THAT job's day only, whatever its own date.
+  // A visit scheduled Oct 15 but marked done on Oct 16 (Acc D Oct 16) lists
+  // its filters under Oct 15 with the visit, not under Oct 16. A movement
+  // with no job (a record completed on its own page, an item added by hand)
+  // shows on its own date, or with its record when that record is on this
+  // report.
+  const dayStockMovements = React.useMemo(() => {
+    const jobIds = new Set(reportDayJobs.keys())
+    const knownJobs = new Set(scheduleJobs.map((j) => j.id))
+    const fcIds = new Set(dayFilterChangePlans.map((p) => p.id))
+    const installIds = new Set(dayInstallPlans.map((p) => p.id))
+    const repairIds = new Set(dayRepairPlans.map((p) => p.id))
+    const partIds = new Set(repairParts.filter((p) => repairIds.has(p.repairPlanId)).map((p) => p.id))
+    const fcJob = new Map(filterChangePlans.map((p) => [p.id, p.scheduleJobId]))
+    const installJob = new Map(installPlans.map((p) => [p.id, p.scheduleJobId]))
+    const repairJob = new Map(repairPlans.map((p) => [p.id, p.scheduleJobId]))
+    const partRepair = new Map(repairParts.map((p) => [p.id, p.repairPlanId]))
+    const jobOf = (m: (typeof stockMovements)[number]) => {
+      const id =
+        m.relatedScheduleJobId ||
+        (m.filterChangePlanId && fcJob.get(m.filterChangePlanId)) ||
+        (m.installPlanId && installJob.get(m.installPlanId)) ||
+        (m.repairPlanId && repairJob.get(m.repairPlanId)) ||
+        (m.repairPlanPartId && repairJob.get(partRepair.get(m.repairPlanPartId) ?? ""))
+      return id && knownJobs.has(id) ? id : undefined
+    }
+    return stockMovements.filter((m) => {
+      const job = jobOf(m)
+      if (job) return jobIds.has(job)
+      return (
+        m.date === reportDate ||
+        (!!m.filterChangePlanId && fcIds.has(m.filterChangePlanId)) ||
+        (!!m.installPlanId && installIds.has(m.installPlanId)) ||
+        (!!m.repairPlanId && repairIds.has(m.repairPlanId)) ||
+        (!!m.repairPlanPartId && partIds.has(m.repairPlanPartId))
+      )
+    })
+  }, [stockMovements, reportDate, reportDayJobs, scheduleJobs, filterChangePlans, installPlans, repairPlans, dayFilterChangePlans, dayInstallPlans, dayRepairPlans, repairParts])
   // One row per item per job (see groupInventoryListRows); the expanded
   // modal instead totals each item across all jobs (aggregateInventoryRowsByItem).
   const dayStockMovementRows = React.useMemo(() => groupInventoryListRows(dayStockMovements), [dayStockMovements])
@@ -894,7 +937,7 @@ export function DailyReportSection() {
   // list), not every pending item app-wide like the header button — items
   // still to be mapped to a stock item are skipped, as there.
   const [approveViewOpen, setApproveViewOpen] = React.useState(false)
-  const viewPending = React.useMemo(() => dayStockMovements.filter((m) => m.status === "pending"), [dayStockMovements])
+  const viewPending = React.useMemo(() => dayStockMovements.filter(isAwaitingStockApproval), [dayStockMovements])
   const viewApprovable = React.useMemo(() => viewPending.filter((m) => !!m.productId), [viewPending])
 
   // Approve all dates: every pending movement across all jobs and days, not
@@ -909,7 +952,7 @@ export function DailyReportSection() {
     setReviewDate(reportDate)
     setReviewAllPending(false)
   }
-  const allPending = React.useMemo(() => stockMovements.filter((m) => m.status === "pending"), [stockMovements])
+  const allPending = React.useMemo(() => stockMovements.filter(isAwaitingStockApproval), [stockMovements])
   const approvablePending = React.useMemo(() => allPending.filter((m) => !!m.productId), [allPending])
   const approvableJobCount = React.useMemo(
     () => new Set(approvablePending.map((m) => m.filterChangePlanId ?? m.installPlanId ?? m.scheduleJobId ?? m.referenceNumber)).size,

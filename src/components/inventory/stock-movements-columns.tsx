@@ -23,8 +23,9 @@ export type { StockMovementRow }
 // 'rejected' (see the stock_movement_rejection migration) is the third
 // real status, handled explicitly rather than falling into the "else"
 // branch with approved — those two need very different tones.
-function ApprovalStatusBadge({ status }: { status: StockMovementRow["status"] }) {
+function ApprovalStatusBadge({ status, change }: { status: StockMovementRow["status"]; change?: StockMovementRow["changeRequest"] }) {
   const { t } = useTranslation("status")
+  if (change) return <StatusBadge tone="warning" label={change.action === "delete" ? "Delete pending" : "Edit pending"} />
   if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
   if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
   return <StatusBadge tone="success" label={t("approved")} />
@@ -208,7 +209,7 @@ export function getStockMovementsColumns({
       // is only ever meaningfully "Pending" for a row auto-generated from a
       // completed job's recorded filter items, awaiting an admin's approval
       // before it actually affects stock.
-      cell: ({ row }) => <ApprovalStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <ApprovalStatusBadge status={row.original.status} change={row.original.changeRequest} />,
     },
   ]
 

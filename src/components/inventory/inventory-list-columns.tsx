@@ -9,6 +9,7 @@ import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDate, formatDateTime } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
+import { isAwaitingStockApproval } from "@/lib/types"
 
 // Otherwise a pure history/view — no add/delete/approve affordances anywhere
 // on it (see the Daily Report panel wiring, which passes neither canAdd nor
@@ -21,8 +22,11 @@ import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 // migration) are the three real statuses this app has (see
 // ApprovalStatusBadge on the In & Out page) — matches that badge's tones
 // exactly so a movement reads the same way in both places.
-export function InventoryStatusBadge({ status }: { status: StockMovementRow["status"] }) {
+// A requested edit/delete of an approved movement shows as "Edit pending" /
+// "Delete pending" until it's approved or rejected.
+export function InventoryStatusBadge({ status, change }: { status: StockMovementRow["status"]; change?: StockMovementRow["changeRequest"] }) {
   const { t } = useTranslation("status")
+  if (change) return <StatusBadge tone="warning" label={change.action === "delete" ? "Delete pending" : "Edit pending"} />
   if (status === "pending") return <StatusBadge tone="warning" label={t("pending")} />
   if (status === "rejected") return <StatusBadge tone="danger" label={t("rejected")} />
   return <StatusBadge tone="success" label={t("approved")} />
@@ -63,7 +67,7 @@ export function ApprovalActionsCell({
 }) {
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
-  if (movement.status !== "pending") return null
+  if (!isAwaitingStockApproval(movement)) return null
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation()
     fn()
@@ -140,9 +144,26 @@ function TypeCell({ row }: { row: StockMovementRow }) {
   return <span className={type === "deduct" ? "text-danger" : "text-success"}>{t(TYPE_KEYS[type])}</span>
 }
 
+// The new quantity a requested edit would give (shown "-1 → -3").
+function requestedQty(row: StockMovementRow): string | undefined {
+  const v = row.changeRequest?.action === "edit" ? row.changeRequest.values : undefined
+  if (!v) return undefined
+  const { type, qty } = movementTypeAndQty({ ...row, quantityAdded: v.quantityAdded ?? row.quantityAdded, quantityRemoved: v.quantityRemoved ?? row.quantityRemoved })
+  return type === "deduct" ? `-${qty}` : `+${qty}`
+}
+
 function QtyCell({ row }: { row: StockMovementRow }) {
   const { type, qty } = movementTypeAndQty(row)
-  return <span className="font-medium">{type === "deduct" ? `-${qty}` : `+${qty}`}</span>
+  const shown = type === "deduct" ? `-${qty}` : `+${qty}`
+  const next = requestedQty(row)
+  if (row.changeRequest?.action === "delete") return <span className="font-medium line-through">{shown}</span>
+  if (next !== undefined && next !== shown)
+    return (
+      <span className="font-medium whitespace-nowrap">
+        <span className="text-muted-foreground line-through">{shown}</span> → <span className="text-warning">{next}</span>
+      </span>
+    )
+  return <span className="font-medium">{shown}</span>
 }
 
 // The Daily Report panel's full column set — shown directly in the compact
@@ -170,7 +191,7 @@ export function inventoryListDensityForWidth(width: number): InventoryListDensit
 
 function CompactItemCell({ row }: { row: StockMovementRow }) {
   const { t } = useTranslation("inventory")
-  const { type, qty } = movementTypeAndQty(row)
+  const { type } = movementTypeAndQty(row)
   return (
     <div className="min-w-0 max-w-[16rem]">
       <div className="truncate font-medium" title={row.productName}>
@@ -178,9 +199,9 @@ function CompactItemCell({ row }: { row: StockMovementRow }) {
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
         <span className={type === "deduct" ? "text-danger" : "text-success"}>{t(TYPE_KEYS[type])}</span>
-        <span className="font-medium text-foreground">{type === "deduct" ? `-${qty}` : `+${qty}`}</span>
+        <QtyCell row={row} />
         <span>· {row.reason}</span>
-        <InventoryStatusBadge status={row.status} />
+        <InventoryStatusBadge status={row.status} change={row.changeRequest} />
       </div>
     </div>
   )
@@ -258,7 +279,7 @@ export function getInventoryListExpandedColumns({
     {
       accessorKey: "status",
       header: () => <ColumnHeader tKey="status" ns="fields" />,
-      cell: ({ row }) => <InventoryStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <InventoryStatusBadge status={row.original.status} change={row.original.changeRequest} />,
     },
     ...(density === "medium" ? [] : [
     { accessorKey: "userName", header: () => <ColumnHeader tKey="createdBy" ns="inventory" /> } as ColumnDef<StockMovementRow, unknown>,
@@ -310,6 +331,11 @@ export function groupInventoryListRows(rows: StockMovementRow[]): StockMovementR
       continue
     }
     const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
+    // A requested edit/delete is never combined with another movement.
+    if (r.changeRequest) {
+      out.push(r)
+      continue
+    }
     const key = [job, r.productId || r.itemLabel, direction, r.reason, r.status].join("|")
     const existing = byKey.get(key)
     if (!existing) {
@@ -341,7 +367,7 @@ export function aggregateInventoryRowsByItem(rows: StockMovementRow[]): StockMov
   }
   for (const r of rows) {
     const direction = r.quantityAdded > 0 && r.quantityRemoved === 0 ? "in" : "out"
-    const key = [r.productId || `label:${r.itemLabel}`, direction, r.status].join("|")
+    const key = [r.productId || `label:${r.itemLabel}`, direction, r.status, r.changeRequest ? `req:${r.id}` : ""].join("|")
     const existing = byKey.get(key)
     if (!existing) {
       const copy = { ...r, mergedIds: r.mergedIds ?? [r.id] }

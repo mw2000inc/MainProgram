@@ -445,7 +445,11 @@ function EditMovementForm({
         secondHandReadyQuantity: values.secondHandReadyQuantity,
         secondHandRepairQuantity: values.secondHandRepairQuantity,
         demoQuantity: values.demoQuantity,
-        reason: values.reason,
+        // An automated reason (Filter Change, Repair, …) shows as "Adjustment"
+        // in the select (see editDefaultValues); unless the admin actually
+        // picked a reason, keep the original — a quantity fix must not turn a
+        // Filter Change item into an Adjustment.
+        reason: form.formState.dirtyFields.reason ? values.reason : (movement.reason as typeof values.reason),
       },
     })
     onOpenChange(false)

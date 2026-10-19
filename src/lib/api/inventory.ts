@@ -148,6 +148,59 @@ type StockMovementRow = {
   approved_by: string | null
   rejected_at: string | null
   rejected_by: string | null
+  pending_action?: "edit" | "delete" | null
+  pending_values?: Record<string, number | string> | null
+  pending_requested_by?: string | null
+  pending_requested_at?: string | null
+}
+
+type MovementEditInput = Pick<
+  StockMovement,
+  "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
+>
+
+const editColumns = (input: MovementEditInput) => ({
+  quantity_added: input.quantityAdded,
+  quantity_removed: input.quantityRemoved,
+  second_hand_ready_quantity: input.secondHandReadyQuantity,
+  second_hand_repair_quantity: input.secondHandRepairQuantity,
+  demo_quantity: input.demoQuantity,
+  reason: input.reason,
+})
+
+function changeRequestFromRow(row: StockMovementRow): StockMovement["changeRequest"] {
+  if (row.pending_action !== "edit" && row.pending_action !== "delete") return undefined
+  const v = row.pending_values ?? {}
+  const num = (k: string) => (v[k] === undefined || v[k] === null ? undefined : Number(v[k]))
+  return {
+    action: row.pending_action,
+    values:
+      row.pending_action === "edit"
+        ? {
+            quantityAdded: num("quantity_added"),
+            quantityRemoved: num("quantity_removed"),
+            secondHandReadyQuantity: num("second_hand_ready_quantity"),
+            secondHandRepairQuantity: num("second_hand_repair_quantity"),
+            demoQuantity: num("demo_quantity"),
+            reason: (v.reason as StockMovement["reason"]) ?? undefined,
+          }
+        : undefined,
+    requestedBy: row.pending_requested_by ?? undefined,
+    requestedAt: row.pending_requested_at ?? undefined,
+  }
+}
+
+const clearedRequest = { pending_action: null, pending_values: null, pending_requested_by: null, pending_requested_at: null }
+
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser()
+  return data.user?.id ?? null
+}
+
+async function movementState(id: string) {
+  const { data, error } = await supabase.from("stock_movements").select("*").eq("id", id).single()
+  if (error) throw error
+  return data as StockMovementRow
 }
 
 function movementFromRow(row: StockMovementRow): StockMovement {
@@ -175,6 +228,7 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     approvedBy: row.approved_by ?? undefined,
     rejectedAt: row.rejected_at ?? undefined,
     rejectedBy: row.rejected_by ?? undefined,
+    changeRequest: changeRequestFromRow(row),
   }
 }
 
@@ -237,25 +291,21 @@ export async function addStockMovement(input: Omit<StockMovement, "id" | "create
 }
 
 // The product itself is never changed here (see stock-movement-form-dialog) — only
-// quantity/reason/2nd-hand fields. A DB trigger reverses the old quantity delta and
-// applies the new one so products.stock_quantity stays in sync with the edit.
-export async function updateStockMovement(
-  id: string,
-  input: Pick<
-    StockMovement,
-    "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
-  >
-): Promise<StockMovementResult> {
+// quantity/reason/2nd-hand fields. A pending movement is changed directly (it
+// hasn't touched stock). An APPROVED one isn't changed yet: the new values are
+// stored as an edit request (pending_action 'edit') and stock stays as it is
+// until an admin approves it — approveStockMovement then writes them, and a
+// DB trigger corrects products.stock_quantity by the difference.
+export async function updateStockMovement(id: string, input: MovementEditInput): Promise<StockMovementResult> {
+  const current = await movementState(id)
+  const asRequest = current.status === "approved"
   const { data, error } = await supabase
     .from("stock_movements")
-    .update({
-      quantity_added: input.quantityAdded,
-      quantity_removed: input.quantityRemoved,
-      second_hand_ready_quantity: input.secondHandReadyQuantity,
-      second_hand_repair_quantity: input.secondHandRepairQuantity,
-      demo_quantity: input.demoQuantity,
-      reason: input.reason,
-    })
+    .update(
+      asRequest
+        ? { pending_action: "edit", pending_values: editColumns(input), pending_requested_by: await currentUserId(), pending_requested_at: new Date().toISOString() }
+        : editColumns(input)
+    )
     .eq("id", id)
     .select()
     .single()
@@ -264,11 +314,23 @@ export async function updateStockMovement(
   return resultingProductStock(movement.productId, movement)
 }
 
-export async function deleteStockMovement(id: string): Promise<void> {
-  // A DB trigger reverses this movement's effect on products.stock_quantity —
-  // a no-op for a still-pending row, since a pending one was never applied.
+// A pending or rejected movement is deleted at once (it never touched stock).
+// An APPROVED one is only marked for deletion (pending_action 'delete'): it
+// keeps counting in stock until an admin approves the deletion, which then
+// deletes it and a DB trigger gives its quantity back. Returns which happened.
+export async function deleteStockMovement(id: string): Promise<"deleted" | "requested"> {
+  const current = await movementState(id)
+  if (current.status === "approved") {
+    const { error } = await supabase
+      .from("stock_movements")
+      .update({ pending_action: "delete", pending_values: null, pending_requested_by: await currentUserId(), pending_requested_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) throw error
+    return "requested"
+  }
   const { error } = await supabase.from("stock_movements").delete().eq("id", id)
   if (error) throw error
+  return "deleted"
 }
 
 // Admin-only (see stock_movements_update_admin RLS) — transitions a pending
@@ -287,6 +349,33 @@ export async function approveStockMovement(
   approvedBy: string,
   adjust?: { productId?: string; quantityRemoved?: number; quantityAdded?: number }
 ): Promise<StockMovementResult> {
+  // A requested edit/delete of an approved movement: apply it now.
+  const current = await movementState(id)
+  if (current.pending_action === "delete") {
+    const before = movementFromRow(current)
+    const { error } = await supabase.from("stock_movements").delete().eq("id", id)
+    if (error) throw error
+    return resultingProductStock(before.productId, before)
+  }
+  if (current.pending_action === "edit") {
+    const v = current.pending_values ?? {}
+    const { data, error } = await supabase
+      .from("stock_movements")
+      .update({
+        ...v,
+        ...(adjust?.quantityRemoved !== undefined ? { quantity_removed: adjust.quantityRemoved } : {}),
+        ...(adjust?.quantityAdded !== undefined ? { quantity_added: adjust.quantityAdded } : {}),
+        ...clearedRequest,
+        approved_at: new Date().toISOString(),
+        approved_by: approvedBy,
+      })
+      .eq("id", id)
+      .select()
+      .single()
+    if (error) throw error
+    const movement = movementFromRow(data as StockMovementRow)
+    return resultingProductStock(movement.productId, movement)
+  }
   const { data, error } = await supabase
     .from("stock_movements")
     .update({
@@ -317,6 +406,14 @@ export async function approveStockMovement(
 // id, same real server-verified pattern as approveStockMovement's
 // approvedBy.
 export async function rejectStockMovement(id: string, rejectedBy: string): Promise<StockMovement> {
+  // Rejecting a requested edit/delete drops the request; the movement stays
+  // approved exactly as it was.
+  const current = await movementState(id)
+  if (current.pending_action) {
+    const { data, error } = await supabase.from("stock_movements").update(clearedRequest).eq("id", id).select().single()
+    if (error) throw error
+    return movementFromRow(data as StockMovementRow)
+  }
   const { data, error } = await supabase
     .from("stock_movements")
     .update({ status: "rejected", rejected_at: new Date().toISOString(), rejected_by: rejectedBy })

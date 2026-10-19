@@ -296,6 +296,10 @@ export function useUpdateStockMovement() {
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["notifications"] })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
+      if (result.movement.changeRequest) {
+        toast.success("Change sent for approval — the stock total changes once it's approved in the Inventory List")
+        return
+      }
       toast.success("Stock movement updated")
       warnIfLowStock(result)
     },
@@ -315,6 +319,10 @@ export function useUpdateStockMovements() {
       return results
     },
     onSuccess: (results) => {
+      if (results.some((r) => r.movement.changeRequest)) {
+        toast.success(`${results.length} change(s) sent for approval — the stock total changes once approved in the Inventory List`)
+        return
+      }
       toast.success(`Updated ${results.length} stock movement(s)`)
       const last = results.at(-1)
       if (last) warnIfLowStock(last)
@@ -417,11 +425,11 @@ export function useDeleteStockMovement() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.deleteStockMovement(id),
-    onSuccess: () => {
+    onSuccess: (outcome) => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
       qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
-      toast.success("Stock movement deleted")
+      toast.success(outcome === "requested" ? "Deletion sent for approval — the stock total changes once it's approved in the Inventory List" : "Stock movement deleted")
     },
     onError: (error: Error) => toast.error(error.message || "Failed to delete stock movement"),
   })

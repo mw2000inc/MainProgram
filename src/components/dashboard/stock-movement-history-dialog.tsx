@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ApprovalActionsCell, InventoryStatusBadge } from "@/components/inventory/inventory-list-columns"
+import { isAwaitingStockApproval } from "@/lib/types"
 import { useAuth } from "@/lib/auth/auth-context"
 import {
   useApproveStockMovements,
@@ -201,7 +202,7 @@ function JobInventoryHistory({
     if (!q) return history
     return history.filter((m) => [m.productName, m.sku, m.reason, m.userName, m.approvedByName, m.rejectedByName].some((v) => (v ?? "").toLowerCase().includes(q)))
   }, [history, search])
-  const pending = history.filter((m) => m.status === "pending")
+  const pending = history.filter(isAwaitingStockApproval)
   // Only mapped items can be approved (an approved movement needs a product).
   const approvable = pending.filter((m) => !!m.productId)
   const busy = approve.isPending || reject.isPending
@@ -291,7 +292,7 @@ function JobMovementCard({
         <div className="min-w-0 space-y-0.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{m.productName}</span>
-            <InventoryStatusBadge status={m.status} />
+            <InventoryStatusBadge status={m.status} change={m.changeRequest} />
           </div>
           <p className="text-xs text-muted-foreground">
             {t("skuLabel", { sku: m.productId ? m.sku : t("notMappedYet") })} · {m.reason}

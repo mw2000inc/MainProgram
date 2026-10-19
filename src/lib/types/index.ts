@@ -284,6 +284,26 @@ export interface StockMovement {
   approvedBy?: string
   rejectedAt?: string
   rejectedBy?: string
+  // An edit or delete of this (approved) movement waiting for approval —
+  // stock still reflects the movement as it is until then (see the
+  // stock_movement_change_approval migration).
+  changeRequest?: StockMovementChangeRequest
+}
+
+export interface StockMovementChangeRequest {
+  action: "edit" | "delete"
+  // For an edit: the new values.
+  values?: Partial<
+    Pick<StockMovement, "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason">
+  >
+  requestedBy?: string
+  requestedAt?: string
+}
+
+// Waiting for an admin's approval: a new pending movement, or a requested
+// edit/delete of an approved one.
+export function isAwaitingStockApproval(m: Pick<StockMovement, "status" | "changeRequest">): boolean {
+  return m.status === "pending" || !!m.changeRequest
 }
 
 export type NotificationType =
