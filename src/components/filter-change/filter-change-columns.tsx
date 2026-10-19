@@ -22,6 +22,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { formatDate } from "@/lib/utils"
 import type { FilterChangePlan } from "@/lib/types"
+import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { TechnicianStack } from "@/components/shared/technician-stack"
 
 // The linked customer's own "SK001-####" order_number, never rendered as a
@@ -236,11 +237,20 @@ function AccDCell({
 // daily-report-section.tsx) falls every editable cell back to plain
 // read-only text — same on/off convention onStatusChange already uses on
 // this file's other column sets.
+// S/C or Product # (the customer's unit) of a visit: the record's own, else
+// its order's Sale List entry (many records were made without them).
+function OrderFieldCell({ plan, field }: { plan: FilterChangePlan; field: "sc" | "productNo" }) {
+  const { data: saleListEntries = [] } = useSaleListEntries()
+  const own = (plan[field] ?? "").trim()
+  const value = own || (saleListEntries.find((e) => e.orderNumber.trim() === plan.orderNumber.trim())?.[field] ?? "").trim()
+  return <span className="inline-block min-w-[110px]">{value ? <TruncatedCell value={value} /> : "—"}</span>
+}
+
 function dailyReportColumnDefs({
   onStatusChange,
   onFieldChange,
 }: FilterChangeDailyReportColumnParams): Record<
-  "orderNumber" | "memberAccount" | "filterType" | "contactNumber" | "address" | "planDate" | "preD" | "accD" | "serviceman" | "status",
+  "orderNumber" | "memberAccount" | "filterType" | "contactNumber" | "address" | "planDate" | "preD" | "accD" | "serviceman" | "status" | "sc" | "productNo",
   ColumnDef<FilterChangePlan, unknown>
 > {
   return {
@@ -267,6 +277,16 @@ function dailyReportColumnDefs({
         if (!onFieldChange) return <span>{plan.filterType}</span>
         return <FilterCell plan={plan} onFieldChange={onFieldChange} />
       },
+    },
+    sc: {
+      accessorKey: "sc",
+      header: () => <ColumnHeader tKey="sc" ns="fields" />,
+      cell: ({ row }) => <OrderFieldCell plan={row.original} field="sc" />,
+    },
+    productNo: {
+      accessorKey: "productNo",
+      header: () => <ColumnHeader tKey="productNo" ns="fields" />,
+      cell: ({ row }) => <OrderFieldCell plan={row.original} field="productNo" />,
     },
     contactNumber: {
       accessorKey: "contactNumber",
@@ -352,7 +372,7 @@ export function getFilterChangeDailyReportExpandedColumns(
   params: FilterChangeDailyReportColumnParams = {}
 ): ColumnDef<FilterChangePlan, unknown>[] {
   const c = dailyReportColumnDefs(params)
-  return [c.orderNumber, c.filterType, c.planDate, c.preD, c.accD, c.memberAccount, c.contactNumber, c.address, c.serviceman, c.status]
+  return [c.orderNumber, c.filterType, c.planDate, c.preD, c.accD, c.memberAccount, c.sc, c.productNo, c.contactNumber, c.address, c.serviceman, c.status]
 }
 
 // Full AppSheet-parity column set, shown only in the panel's expanded view.

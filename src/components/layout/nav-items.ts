@@ -1,6 +1,6 @@
 import {
   ClipboardCheck,
-  HardHat,
+  ClipboardList,
   Wrench,
   Droplets,
   Users,
@@ -58,7 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/mw-cp", label: "MW CP", key: "mwCp", icon: HandHeart, group: 2 },
   { href: "/release-slip", label: "Release Slip", key: "releaseSlip", icon: ReceiptText, group: 1, technicianVisible: true },
   { href: "/schedule", label: "Schedule", key: "schedule", icon: CalendarClock, group: 1 },
-  { href: "/install", label: "Install", key: "install", icon: HardHat, group: 1 },
+  { href: "/install", label: "Install", key: "install", icon: ClipboardList, group: 1 },
   { href: "/filter-change", label: "Filter Change", key: "filterChange", icon: Droplets, group: 1 },
   { href: "/repair-plan", label: "Repair Plan", key: "repairPlan", icon: Wrench, group: 1 },
 

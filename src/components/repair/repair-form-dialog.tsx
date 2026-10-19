@@ -155,7 +155,8 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Repa
     th2: "",
     partNo: "",
     amt: "0",
-    unitInOut: "In",
+    // Out by default (admin, 2026-10-16); still changeable on the form.
+    unitInOut: "Out",
     sc: "",
     contactNumber: "",
     inOut: "",

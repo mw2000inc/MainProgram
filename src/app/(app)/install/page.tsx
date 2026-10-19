@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { HardHat, Plus } from "lucide-react"
+import { ClipboardList, HardHat, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -201,7 +201,7 @@ function InstallPageContent() {
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <HardHat className="h-6 w-6 text-primary" /> {tNav("install")}
+            <ClipboardList className="h-6 w-6 text-primary" /> {tNav("install")}
           </h1>
           <p className="text-sm text-muted-foreground">{t("pageDescription")}</p>
         </div>

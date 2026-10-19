@@ -73,7 +73,6 @@ export function getInstallColumns({
       cell: ({ row }) => <TruncatedCell value={row.original.address} />,
     },
     { accessorKey: "contactNumber", header: () => <ColumnHeader tKey="contactNumber" ns="fields" /> },
-    { accessorKey: "inOut", header: () => <ColumnHeader tKey="inOrOut" ns="fields" /> },
     {
       accessorKey: "model",
       header: () => <ColumnHeader tKey="model" ns="fields" />,
@@ -91,7 +90,8 @@ export function getInstallColumns({
     },
     {
       accessorKey: "preInstalledDate",
-      header: () => <ColumnHeader tKey="preInstalledDate" ns="fields" />,
+      // Shown as "Pre D", like every other module's visit date.
+      header: () => <ColumnHeader tKey="preD" ns="fields" />,
       cell: ({ row }) => (row.original.preInstalledDate ? formatDate(row.original.preInstalledDate) : "—"),
     },
     {
@@ -368,12 +368,11 @@ export const INSTALL_EXPORT_COLUMNS = [
   { header: "Order No", key: "orderNo" },
   { header: "Address", key: "address" },
   { header: "Contact #", key: "contactNumber" },
-  { header: "In or Out", key: "inOut" },
   { header: "Model", key: "model" },
   { header: "Unit Price", key: "unitPrice" },
   { header: "C/P Price", key: "cpPrice" },
   { header: "Delivery & Installation Fee", key: "deliveryInstallationFee" },
-  { header: "Pre Installed Date", key: "preInstalledDate" },
+  { header: "Pre D", key: "preInstalledDate" },
   { header: "Installed Date", key: "installedDate" },
   { header: "Note", key: "note" },
   { header: "Model(dp)", key: "modelDp" },

@@ -91,7 +91,9 @@ function createSchema(t: (key: string, params?: Record<string, string>) => strin
     // string here satisfies that constraint fine; nothing downstream
     // assumes a non-blank value.
     orderNo: z.string().optional(),
-    inOut: z.string().min(1),
+    // Not on the form any more: a new installation is OUT; an edited one keeps
+    // what it has (blank → OUT on save).
+    inOut: z.string(),
     // AppSheet's own SalesSchedule form fields — genuinely new, not tracked
     // anywhere else on this record before (20260923000000 migration).
     paymentMode: z.string().optional(),
@@ -164,7 +166,9 @@ function defaultValues(defaultDate: string, defaultOrderNo?: string, plan?: Inst
     note: "",
     modelDp: "",
     orderNo: defaultOrderNo ?? "",
-    inOut: "IN",
+    // OUT by default (admin, 2026-10-16) — an installation's unit leaves
+    // stock; its Inventory movement is always OUT (queue_install_inventory).
+    inOut: "OUT",
     paymentMode: "",
     receiptNo: "",
     salesPerson: "",
@@ -429,6 +433,8 @@ export function InstallFormDialog({
       contactNumber: values.contactNumber ?? "",
       notifyEmail: values.email ?? "",
       memberAccountNumber: (values.memberAccountNumber ?? "").trim(),
+      // No In/Out on the form: OUT unless the record already has one.
+      inOut: values.inOut || "OUT",
       // No second technician without a real first, and never the same person twice.
       serviceman: normalizeTechnicianPair(values.serviceman, values.serviceman2).primary,
       serviceman2: normalizeTechnicianPair(values.serviceman, values.serviceman2).secondary,
@@ -438,8 +444,11 @@ export function InstallFormDialog({
     }
     if (isEdit) {
       await updatePlan.mutateAsync({ id: plan.id, input: { ...input, ...collectedAttributionPatch(plan, { collectedBy, collectedAt }) } })
-      // A plan without a job that now has a date gets its draft too.
-      await ensureDraftJob(plan.id, plan.scheduleJobId, values)
+      // A plan without a job that now has a date gets its draft too — unless
+      // it has an Installed Date: the database then completes it and makes
+      // its completed job itself (20261101000000), and a draft on top made a
+      // second job and a duplicate record.
+      if (!values.installedDate) await ensureDraftJob(plan.id, plan.scheduleJobId, values)
       // An order added (or still missing its Member / Sale List entry) on edit.
       await ensureMemberAndSaleEntry(values, orderNo)
     } else {
@@ -450,7 +459,9 @@ export function InstallFormDialog({
       // Pending Approvals dialog's own Technician dropdown, same as every
       // other module, this just no longer forces that field blank.
       const created = await createPlan.mutateAsync({ ...input, status: "Pending", dispatchStatus: "Draft" })
-      await ensureDraftJob(created.id, undefined, values)
+      // Already installed (Installed Date given): completed by the database
+      // with its own job — no draft (see the edit branch above).
+      if (!values.installedDate) await ensureDraftJob(created.id, undefined, values)
 
       await ensureMemberAndSaleEntry(values, orderNo)
     }
@@ -592,37 +603,6 @@ export function InstallFormDialog({
               />
               <FormField
                 control={form.control}
-                name="inOut"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tFields("inOrOut")}</FormLabel>
-                    {/* Segmented IN/OUT toggle instead of a Select — only two
-                        mutually exclusive options, so a pair of joined
-                        buttons reads faster than opening a dropdown. */}
-                    <div className="flex w-fit">
-                      <Button
-                        type="button"
-                        variant={field.value === "IN" ? "default" : "outline"}
-                        className="rounded-r-none"
-                        onClick={() => field.onChange("IN")}
-                      >
-                        IN
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={field.value === "OUT" ? "default" : "outline"}
-                        className="-ml-px rounded-l-none"
-                        onClick={() => field.onChange("OUT")}
-                      >
-                        OUT
-                      </Button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="model"
                 render={({ field }) => (
                   <FormItem>
@@ -724,7 +704,7 @@ export function InstallFormDialog({
                 name="preInstalledDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{tFields("preInstalledDate")}</FormLabel>
+                    <FormLabel>{tFields("preD")}</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -740,9 +720,7 @@ export function InstallFormDialog({
                     <FormLabel>{tFields("installedDate")}</FormLabel>
                     <FormControl>
                       {/* Entering (or changing) an Installed Date means the unit
-                          went out, so In or Out switches to OUT — only when the
-                          date is changed here, never on opening a saved plan;
-                          IN can still be picked again by hand afterwards. */}
+                          went out, so In or Out is set to OUT. */}
                       <Input
                         type="date"
                         {...field}
