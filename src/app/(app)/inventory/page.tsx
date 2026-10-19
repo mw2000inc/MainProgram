@@ -182,15 +182,23 @@ function InventoryContent() {
     [products]
   )
 
+  // Default order: by SKU, smallest first (011, 012, 013 …), so the list
+  // always opens at 011; no SKU last. A column header click still re-sorts.
   const scopedRows = React.useMemo(() => {
-    return rows.filter((r) => {
-      if (categoryFilter !== "all" && r.category !== categoryFilter) return false
-      if (statusFilter !== "all" && r.stockStatus !== statusFilter) return false
-      const d = parseISO(r.dateAdded)
-      if (monthYear.month !== "all" && d.getMonth() !== Number(monthYear.month)) return false
-      if (monthYear.year !== "all" && d.getFullYear() !== Number(monthYear.year)) return false
-      return true
-    })
+    return rows
+      .filter((r) => {
+        if (categoryFilter !== "all" && r.category !== categoryFilter) return false
+        if (statusFilter !== "all" && r.stockStatus !== statusFilter) return false
+        const d = parseISO(r.dateAdded)
+        if (monthYear.month !== "all" && d.getMonth() !== Number(monthYear.month)) return false
+        if (monthYear.year !== "all" && d.getFullYear() !== Number(monthYear.year)) return false
+        return true
+      })
+      .sort((a, b) => {
+        const sa = (a.sku ?? "").trim(), sb = (b.sku ?? "").trim()
+        if (!sa || !sb) return sa ? -1 : sb ? 1 : 0
+        return sa.localeCompare(sb, undefined, { numeric: true })
+      })
   }, [rows, categoryFilter, statusFilter, monthYear])
 
   const canEdit = can("inventory:edit")

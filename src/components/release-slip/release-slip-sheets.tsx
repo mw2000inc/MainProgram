@@ -277,11 +277,24 @@ export function ReleaseSlipSheets({
   // Removes an added order row (its × on the admin's on-screen copy).
   onRemoveJob?: (jobId: string) => void
 }) {
+  // Errands done together: the technician's partner on any of these jobs is
+  // named with them ("Jerson Capellan & Jeric Salirio") in the header and on
+  // the Technician signature line.
+  const crewName = React.useMemo(() => {
+    const own = technicianName.trim()
+    if (!own) return technicianName
+    const names = [own]
+    for (const j of jobs)
+      for (const n of [j.technician, j.technician2]) {
+        const name = (n ?? "").trim()
+        if (name && !names.some((x) => x.toLowerCase() === name.toLowerCase())) names.push(name)
+      }
+    return names.join(" & ")
+  }, [technicianName, jobs])
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
   // Lines added with "+ Add line" (on-screen copy only; a filled one prints).
   const [minLines, setMinLines] = React.useState<Record<string, number>>({})
   const pages = React.useMemo(() => paginate(jobs, summary.length, onEdit ? minLines : {}), [jobs, summary.length, minLines, onEdit])
-  const anyPending = jobs.some((j) => j.movements.some((m) => m.status === "pending"))
   const summaryRows = [...summary, ...Array.from({ length: Math.max(0, MIN_SUMMARY_ROWS - summary.length) }, () => null)]
 
   const signature = (label: string, key: keyof SlipSignatures | null, value: string) => (
@@ -311,7 +324,7 @@ export function ReleaseSlipSheets({
               DATE: <b>{formatDate(date)}</b>
             </span>
             <span>
-              Technician: <b>{technicianName || "—"}</b>
+              Technician: <b>{crewName || "—"}</b>
             </span>
             <span>
               Page {pi + 1} of {pages.length}
@@ -385,7 +398,6 @@ export function ReleaseSlipSheets({
                       const jobNote = li === 0 && !b.continued ? b.job.jobNote : undefined
                       const note = [jobNote, m?.note].filter(Boolean).join(" · ")
                       const line = b.offset + li
-                      const star = m?.status === "pending" ? "*" : ""
                       return (
                         <tr key={li}>
                           {li === 0 && (
@@ -451,14 +463,12 @@ export function ReleaseSlipSheets({
                           </td>
                           <td className="slip-num">
                             <Editable value={m && m.qtyOut ? qty(m.qtyOut) : ""} label="OUT Qty" onCommit={editLine?.(line, "outQty")} />
-                            {m && m.qtyOut ? star : ""}
                           </td>
                           <td>
                             <Editable value={m && m.qtyIn ? inItemName(m) : ""} label="IN SKU" onCommit={editLine?.(line, "inSku")} />
                           </td>
                           <td className="slip-num">
                             <Editable value={m && m.qtyIn ? qty(m.qtyIn) : ""} label="IN Qty" onCommit={editLine?.(line, "inQty")} />
-                            {m && m.qtyIn ? star : ""}
                           </td>
                           <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={note || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
                             <Editable
@@ -484,7 +494,6 @@ export function ReleaseSlipSheets({
               })}
             </table>
           )}
-          {anyPending && page.blocks.length > 0 && <div className="slip-foot">* awaiting inventory approval</div>}
           {page.summary && (
             <div className="slip-bottom">
               <div className="slip-summary">
@@ -502,16 +511,16 @@ export function ReleaseSlipSheets({
                     {summaryRows.map((r, i) => (
                       <tr key={i}>
                         <td>{r?.sku ?? ""}</td>
-                        <td className="slip-num">{r && r.out ? `${qty(r.out)}${r.pending ? "*" : ""}` : ""}</td>
+                        <td className="slip-num">{r && r.out ? qty(r.out) : ""}</td>
                         <td className="slip-num">{r && r.in ? qty(r.in) : ""}</td>
-                        <td className="slip-num">{r ? `${qty(r.out - r.in)}${r.pending ? "*" : ""}` : ""}</td>
+                        <td className="slip-num">{r ? qty(r.out - r.in) : ""}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="slip-signs">
-                {signature("Technician:", null, technicianName)}
+                {signature("Technician:", null, crewName)}
                 {signature("Checked By:", "checkedBy", signatures.checkedBy)}
                 {signature("Noted By:", "notedBy", signatures.notedBy)}
                 {signature("Approved By:", "approvedBy", signatures.approvedBy)}

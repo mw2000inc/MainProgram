@@ -32,6 +32,7 @@ import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
 import { installUnitLines, repairPartLines } from "@/lib/release-slip-repair-parts"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
@@ -172,9 +173,28 @@ function ReleaseSlipContent() {
   // Installation records — an installation with no stock movement shows its
   // unit (Model, else the order's Product #) with the code as SKU.
   const { data: installPlans = [] } = useInstallPlans()
+  const { data: filterChangePlans = [] } = useFilterChangePlans()
+  // Jobs whose record was cancelled (e.g. from the Daily Report) leave the
+  // slip — the database also cancels the job itself (see the
+  // 20261115000000 migration); this covers records cancelled before that.
+  const cancelledJobIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const r of [...filterChangePlans, ...repairPlans, ...installPlans, ...collections] as { scheduleJobId?: string; status?: string }[])
+      if (r.scheduleJobId && r.status === "Cancelled") ids.add(r.scheduleJobId)
+    return ids
+  }, [filterChangePlans, repairPlans, installPlans, collections])
+  // Collections set back to Pending (not collected) leave the slip as done
+  // visits — the database also puts their job back to pending
+  // (20261117000000); "Include pending jobs" still lists them to collect.
+  const uncollectedJobIds = React.useMemo(
+    () => new Set(collections.filter((c) => c.scheduleJobId && c.status === "Pending").map((c) => c.scheduleJobId as string)),
+    [collections]
+  )
   // Each job with its items and the money to collect on the visit.
   const jobs = React.useMemo(() => {
-    const list = data?.jobs ?? []
+    const list = (data?.jobs ?? []).filter(
+      (j) => !cancelledJobIds.has(j.jobId) && !(j.jobType === "collection" && j.status === "completed" && uncollectedJobIds.has(j.jobId))
+    )
     return list.map((j) => {
       // Pending jobs ("Include pending jobs") show what's already queued for
       // them too — an installation's unit, a filter change's filters (marked
@@ -188,7 +208,7 @@ function ReleaseSlipContent() {
         jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
       }
     })
-  }, [data, date, collections, saleListEntries, repairPlans, installPlans])
+  }, [data, date, collections, saleListEntries, repairPlans, installPlans, cancelledJobIds, uncollectedJobIds])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)

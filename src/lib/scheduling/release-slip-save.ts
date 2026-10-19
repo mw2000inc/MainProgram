@@ -166,13 +166,57 @@ export async function saveReleaseSlip(
               ? { status: "Collected", collected: true, collected_by: actorUserId, collected_at: new Date().toISOString(), acc_d: record.acc_d ?? date }
               : jobType === "installation"
                 ? { status: "Completed", installed_date: record.installed_date ?? date }
-                : { status: "Completed", acc_d: record.acc_d ?? date }
+                : jobType === "filter_change"
+                  ? // A Filter Change is dated its Pre D (20261118000000).
+                    { status: "Completed", acc_d: record.pre_d ?? record.acc_d ?? date }
+                  : { status: "Completed", acc_d: record.acc_d ?? date }
           const { error } = await db.from(table).update({ ...accountPatch, ...patch }).eq("id", record.id as string)
           if (error) throw error
         }
         // No record, or the record was already done: complete the job itself.
         await db.from("schedule_jobs").update({ status: "completed" }).eq("id", job.id).eq("status", "pending")
         result.completed += 1
+      }
+
+      // ---- 2b. Repair: the parts on the slip become the record's Part No, so
+      // the admin sees them on the Repair side (Part No, PART OUT badges). The
+      // Part No queue (queue_repair_part_no_inventory, 20261113000000) then
+      // queues them — counted below as already queued, so nothing doubles.
+      // The repair's own replacement unit (its 'Repair Unit' line) isn't a
+      // part. A slip with no OUT parts leaves Part No as it is.
+      if (record && jobType === "repair") {
+        const { data: units } = await db
+          .from("stock_movements")
+          .select("product_id, item_label, quantity_removed")
+          .eq("repair_plan_id", record.id as string)
+          .eq("reason", "Repair Unit")
+          .neq("status", "rejected")
+        const unitLeft = new Map<string, number>()
+        for (const u of (units ?? []) as { product_id: string | null; item_label: string | null; quantity_removed: number }[]) {
+          const code = (u.item_label ?? "").split(" / ")[0].trim()
+          const key = u.product_id ?? `label:${code}`
+          unitLeft.set(key, (unitLeft.get(key) ?? 0) + (u.quantity_removed || 0))
+        }
+        const codes: string[] = []
+        for (const item of row.items) {
+          const sku = item.sku.trim()
+          let qty = Math.max(0, Math.floor(item.qtyOut || 0))
+          if (!sku || !qty) continue
+          const key = productBySku.get(sku) ?? `label:${sku}`
+          const unit = unitLeft.get(key) ?? 0
+          const skip = Math.min(unit, qty)
+          unitLeft.set(key, unit - skip)
+          qty -= skip
+          for (let i = 0; i < qty; i++) codes.push(sku)
+        }
+        const current = String(record.part_no ?? "")
+          .split(/[,;/\n]+/)
+          .map((c) => c.trim())
+          .filter(Boolean)
+        if (codes.length && [...codes].sort().join(",") !== [...current].sort().join(",")) {
+          const { error } = await db.from("repair_plans").update({ part_no: codes.join(", ") }).eq("id", record.id as string)
+          if (error) throw error
+        }
       }
 
       // ---- 3. items not queued yet
@@ -220,11 +264,16 @@ export async function saveReleaseSlip(
             item_label: w.productId ? null : w.sku,
             quantity_removed: removed,
             quantity_added: added,
-            reason: REASON[jobType],
+            // A part brought back on a repair is a Return.
+            reason: jobType === "repair" && added ? "Return" : REASON[jobType],
             user_id: actorUserId,
             reference_number: order || job.order_no || job.id,
             schedule_job_id: job.id,
-            ...(record && link ? { [link]: record.id } : {}),
+            // Not linked to the repair record itself: the Part No queue clears
+            // every pending 'Repair' line linked to the repair whenever it's
+            // edited, which would silently drop these. The job link is enough
+            // for the Release Slip and the Daily Report.
+            ...(record && link && jobType !== "repair" ? { [link]: record.id } : {}),
             status: "pending",
           })
         }
