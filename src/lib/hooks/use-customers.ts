@@ -12,7 +12,9 @@ export function useCustomers() {
 export function useCustomer(id: string | undefined) {
   return useQuery({
     queryKey: [...customersKey, id],
-    queryFn: () => api.getCustomer(id as string),
+    // null, not undefined, when the row isn't there or not readable (a
+    // technician's RLS) — React Query rejects undefined query data.
+    queryFn: async () => (await api.getCustomer(id as string)) ?? null,
     enabled: !!id,
   })
 }

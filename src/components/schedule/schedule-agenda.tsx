@@ -58,7 +58,7 @@ import { printTable } from "@/lib/export/print"
 import { cn, formatCurrency, formatDate, todayIso } from "@/lib/utils"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { assignmentAccounts, crewForVehicle, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
+import { assignmentAccounts, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds, crewFillForVehicle } from "@/lib/technicians"
 import { InlineComboboxCell, InlineDateCell, InlineTextAreaCell, InlineTextCell } from "@/components/shared/inline-edit-cell"
 import { InlineTechnicianPairCell } from "@/components/shared/technician-combobox"
 import { JobInventoryCell } from "@/components/schedule/job-inventory-cell"
@@ -1135,7 +1135,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     setSelected((old) => {
       const allSelected = ids.length > 0 && ids.every((id) => old.has(id))
       const next = new Set(old)
-      for (const id of ids) allSelected ? next.delete(id) : next.add(id)
+      for (const id of ids) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
       return next
     })
   }
