@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import type { ReleaseSlipJob, ReleaseSlipMovement } from "@/lib/api/release-slip"
 import { formatDate } from "@/lib/utils"
 
@@ -202,6 +203,197 @@ function mergeCollections(jobs: ReleaseSlipJob[]) {
 }
 
 // minLines: a job's line count raised with "+ Add line" (on-screen copy).
+// A SKU cell on the on-screen copy: click it to see every SKU (code + name),
+// type to narrow the list or to enter any code, pick one with a click or
+// Enter. Saved like Editable (on pick, Enter or leaving the cell); Escape
+// puts the old value back. The list opens in a layer over the page so the
+// table's cells don't clip it. Plain text on the print copy.
+export type SlipSkuOption = { sku: string; name: string }
+
+function SkuCell({
+  value,
+  onCommit,
+  options,
+  label,
+}: {
+  value: string
+  onCommit?: (next: string) => void
+  options?: SlipSkuOption[]
+  label: string
+}) {
+  if (!onCommit) return <>{value}</>
+  if (!options?.length) return <Editable value={value} onCommit={onCommit} label={label} />
+  return <SkuPicker key={value} value={value} onCommit={onCommit} options={options} label={label} />
+}
+
+function SkuPicker({ value, onCommit, options, label }: { value: string; onCommit: (next: string) => void; options: SlipSkuOption[]; label: string }) {
+  const [text, setText] = React.useState(value)
+  const [open, setOpen] = React.useState(false)
+  const [active, setActive] = React.useState(0)
+  const [rect, setRect] = React.useState<DOMRect | null>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  // True from a press on the list until shortly after it ends.
+  const pressingMenu = React.useRef(false)
+  const textRef = React.useRef(text)
+  React.useEffect(() => {
+    textRef.current = text
+  }, [text])
+  const query = text.trim().toLowerCase()
+  // Everything until the admin/technician types something different from
+  // the cell's value; then SKUs starting with it first, then name matches.
+  const shown = React.useMemo(() => {
+    if (!query || query === value.trim().toLowerCase()) return options
+    const starts = options.filter((o) => o.sku.toLowerCase().startsWith(query))
+    const rest = options.filter((o) => !o.sku.toLowerCase().startsWith(query) && (o.sku.toLowerCase().includes(query) || o.name.toLowerCase().includes(query)))
+    return [...starts, ...rest]
+  }, [options, query, value])
+
+  const show = () => {
+    if (inputRef.current) setRect(inputRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+  // The list follows its cell when the page scrolls or resizes — on a phone
+  // the keyboard opening scrolls the page right as the list opens. Scrolling
+  // inside the list itself is ignored.
+  React.useEffect(() => {
+    if (!open) return
+    const follow = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest(".slip-sku-menu")) return
+      if (inputRef.current) setRect(inputRef.current.getBoundingClientRect())
+    }
+    window.addEventListener("scroll", follow, true)
+    window.addEventListener("resize", follow)
+    return () => {
+      window.removeEventListener("scroll", follow, true)
+      window.removeEventListener("resize", follow)
+    }
+  }, [open])
+  // Kept inside the screen: never past the right edge (a narrow phone, a
+  // cell near the right), and above the cell when there's no room below.
+  const menuStyle = (r: DOMRect): React.CSSProperties => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const maxWidth = Math.min(360, vw - 16)
+    const minWidth = Math.min(Math.max(r.width, 260), maxWidth)
+    const left = Math.max(8, Math.min(r.left, vw - maxWidth - 8))
+    const below = vh - r.bottom - 8
+    const above = r.top - 8
+    const up = below < 180 && above > below
+    return up
+      ? { bottom: vh - r.top + 2, left, minWidth, maxWidth, maxHeight: Math.min(260, above) }
+      : { top: r.bottom + 2, left, minWidth, maxWidth, maxHeight: Math.min(260, Math.max(below, 120)) }
+  }
+  const commit = (next: string) => {
+    const clean = next.replace(/\s+/g, " ").trim()
+    pressingMenu.current = false
+    setOpen(false)
+    setText(clean)
+    if (clean !== value) onCommit(clean)
+  }
+  const pick = (sku: string) => {
+    commit(sku)
+    inputRef.current?.blur()
+  }
+  // While open: a press on the list is remembered (so the cell's blur
+  // doesn't close it mid-tap); a press anywhere else saves what's typed and
+  // closes it — including after a swipe on the list moved focus away.
+  const commitRef = React.useRef(commit)
+  React.useEffect(() => {
+    commitRef.current = commit
+  })
+  React.useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      const target = e.target instanceof Element ? e.target : null
+      if (target?.closest(".slip-sku-menu")) {
+        pressingMenu.current = true
+        return
+      }
+      if (target && target === inputRef.current) return
+      if (pressingMenu.current || document.activeElement !== inputRef.current) commitRef.current(textRef.current)
+    }
+    document.addEventListener("pointerdown", onDown, true)
+    return () => document.removeEventListener("pointerdown", onDown, true)
+  }, [open])
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        className="slip-edit slip-sku-input"
+        value={text}
+        aria-label={label}
+        data-testid="slip-sku-input"
+        autoComplete="off"
+        onFocus={show}
+        onClick={show}
+        onChange={(e) => {
+          setText(e.target.value)
+          setActive(0)
+          show()
+        }}
+        // Leaving the cell saves the typed text — but not while the list is
+        // being touched (a phone moves focus off the cell before the tap
+        // on an option lands); touching elsewhere closes it (see below).
+        onBlur={() => {
+          if (!pressingMenu.current) commit(text)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault()
+            show()
+            setActive((a) => Math.min(a + 1, shown.length - 1))
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault()
+            setActive((a) => Math.max(a - 1, 0))
+          } else if (e.key === "Enter") {
+            e.preventDefault()
+            const typedOther = query && query !== value.trim().toLowerCase()
+            commit(open && typedOther && shown[active] ? shown[active].sku : text)
+            e.currentTarget.blur()
+          } else if (e.key === "Escape") {
+            setText(value)
+            setOpen(false)
+            e.currentTarget.blur()
+          }
+        }}
+      />
+      {open &&
+        rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <ul
+            className="slip-sku-menu"
+            role="listbox"
+            aria-label={label}
+            data-testid="slip-sku-menu"
+            style={menuStyle(rect)}
+          >
+            {shown.length === 0 ? (
+              <li className="slip-sku-empty">No SKU matches — press Enter to keep “{text.trim()}”</li>
+            ) : (
+              shown.map((o, i) => (
+                <li
+                  key={o.sku}
+                  role="option"
+                  aria-selected={i === active}
+                  className={i === active ? "slip-sku-option is-active" : "slip-sku-option"}
+                  // A tap or click picks (a swipe to scroll the list doesn't).
+                  onClick={() => pick(o.sku)}
+                  onMouseEnter={() => setActive(i)}
+                >
+                  <b>{o.sku}</b>
+                  <span>{o.name}</span>
+                </li>
+              ))
+            )}
+          </ul>,
+          document.body
+        )}
+    </>
+  )
+}
+
 export function paginate(jobs: ReleaseSlipJob[], summaryRows: number, minLines: Record<string, number> = {}): Page[] {
   const { into, merged } = mergeCollections(jobs)
   // Split a job longer than a whole page into page-sized chunks.
@@ -262,6 +454,7 @@ export function ReleaseSlipSheets({
   onSignaturesChange,
   onEdit,
   onRemoveJob,
+  skuOptions,
 }: {
   date: string
   technicianName: string
@@ -276,6 +469,8 @@ export function ReleaseSlipSheets({
   onEdit?: (jobId: string, patch: SlipJobEdit) => void
   // Removes an added order row (its × on the admin's on-screen copy).
   onRemoveJob?: (jobId: string) => void
+  // Every SKU, for the on-screen SKU cells' pick list (SkuCell).
+  skuOptions?: SlipSkuOption[]
 }) {
   // Errands done together: the technician's partner on any of these jobs is
   // named with them ("Jerson Capellan & Jeric Salirio") in the header and on
@@ -459,13 +654,13 @@ export function ReleaseSlipSheets({
                             </>
                           )}
                           <td>
-                            <Editable value={m && m.qtyOut ? itemName(m) : ""} label="OUT SKU" onCommit={editLine?.(line, "outSku")} />
+                            <SkuCell value={m && m.qtyOut ? itemName(m) : ""} label="OUT SKU" options={skuOptions} onCommit={editLine?.(line, "outSku")} />
                           </td>
                           <td className="slip-num">
                             <Editable value={m && m.qtyOut ? qty(m.qtyOut) : ""} label="OUT Qty" onCommit={editLine?.(line, "outQty")} />
                           </td>
                           <td>
-                            <Editable value={m && m.qtyIn ? inItemName(m) : ""} label="IN SKU" onCommit={editLine?.(line, "inSku")} />
+                            <SkuCell value={m && m.qtyIn ? inItemName(m) : ""} label="IN SKU" options={skuOptions} onCommit={editLine?.(line, "inSku")} />
                           </td>
                           <td className="slip-num">
                             <Editable value={m && m.qtyIn ? qty(m.qtyIn) : ""} label="IN Qty" onCommit={editLine?.(line, "inQty")} />
@@ -569,6 +764,15 @@ export const RELEASE_SLIP_CSS = `
 .slip-box-pick:hover { box-shadow: inset 0 0 0 1px #9ca3af; }
 .slip-remove { all: unset; cursor: pointer; float: right; font-weight: 400; padding: 0 0.5mm; line-height: 1; }
 .slip-remove:hover { color: #b91c1c !important; }
+.slip-sku-input { all: unset; display: block; width: 100%; min-height: 1em; cursor: text; font: inherit; color: #000; box-sizing: border-box; }
+.slip-sku-input:hover { box-shadow: inset 0 0 0 1px #9ca3af; }
+.slip-sku-input:focus { box-shadow: inset 0 0 0 1px #2563eb; background: #eff6ff; }
+.slip-sku-menu { position: fixed; z-index: 1000; width: max-content; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; overflow-y: auto; margin: 0; padding: 4px 0; list-style: none; background: #fff; color: #111; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); font: 12px/1.3 Arial, Helvetica, sans-serif; }
+.slip-sku-option { display: flex; gap: 8px; padding: 6px 10px; min-height: 28px; align-items: center; cursor: pointer; white-space: nowrap; }
+.slip-sku-option b { min-width: 44px; }
+.slip-sku-option span { color: #4b5563; overflow: hidden; text-overflow: ellipsis; }
+.slip-sku-option.is-active { background: #eff6ff; }
+.slip-sku-empty { padding: 6px 10px; color: #6b7280; }
 .slip-table td.slip-collect-label { text-align: center; font-weight: 700; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; background: #f3f4f6; }
 .slip-collect-line td { border-top-style: dashed; }
 .slip-add-line { all: unset; display: block; margin-top: 1mm; font-size: 7pt; font-weight: 400; cursor: pointer; color: #2563eb !important; }

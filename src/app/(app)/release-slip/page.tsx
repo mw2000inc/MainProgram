@@ -16,6 +16,7 @@ import {
   applySlipEdits,
   blankSlipJob,
   ReleaseSlipSheets,
+  type SlipSkuOption,
   RELEASE_SLIP_CSS,
   type SlipEdits,
   type SlipJobEdit,
@@ -227,10 +228,24 @@ function ReleaseSlipContent() {
   const [addOpen, setAddOpen] = React.useState(false)
   // Technicians can't read the product list; they type the item instead.
   const { data: products = [] } = useQuery({ queryKey: productsKey, queryFn: listProducts, enabled: isAdmin })
-  const productOptions = React.useMemo(
-    () => [...new Set(products.map((p) => (p.sku || p.name).trim()).filter(Boolean))].sort().map((value) => ({ value })),
-    [products]
-  )
+  // Every SKU (code + name) for the slip's SKU cells — served by
+  // /api/release-slip/skus so technicians get it too.
+  const { data: skuOptions = [] } = useQuery({
+    queryKey: ["releaseSlipSkus"],
+    queryFn: async (): Promise<SlipSkuOption[]> => {
+      const res = await fetch("/api/release-slip/skus")
+      if (!res.ok) return []
+      return ((await res.json()).skus ?? []) as SlipSkuOption[]
+    },
+    enabled: !!user && canEdit,
+    staleTime: 5 * 60_000,
+  })
+  const productOptions = React.useMemo(() => {
+    const fromProducts = [...new Set(products.map((p) => (p.sku || p.name).trim()).filter(Boolean))].sort()
+    // A technician has no product list: the SKU list instead.
+    const values = fromProducts.length ? fromProducts : skuOptions.map((o) => o.sku)
+    return values.map((value) => ({ value }))
+  }, [products, skuOptions])
   // For pre-filling a manual row's note: the technician's whole day (pending
   // jobs too — same query as "Include pending jobs"), so a SKU on one of their
   // jobs suggests that job's order and account; otherwise the product itself.
@@ -625,6 +640,7 @@ function ReleaseSlipContent() {
                       onSignaturesChange={setSignatures}
                       onEdit={canEdit ? editSlip(slip.key) : undefined}
                       onRemoveJob={canEdit ? removeOrderRow(slip.key) : undefined}
+                      skuOptions={canEdit ? skuOptions : undefined}
                     />
                   </div>
                 ))}
