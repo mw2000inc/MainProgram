@@ -434,7 +434,10 @@ export function CollectionsFormDialog({
                   <FormItem>
                     <FormLabel>{tFields("amount")}</FormLabel>
                     <FormControl>
-                      <CurrencyInput {...field} />
+                      {/* Locked once collected: the amount stays the one the
+                          admin set on the plan (the database enforces it too —
+                          lock_collection_amount, 20261116000000). */}
+                      <CurrencyInput {...field} disabled={!!entry && (entry.status === "Collected" || !!entry.collected)} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -1,9 +1,10 @@
-import { todayIso } from "@/lib/utils"
-
-// The completion date (Filter Change / Repair Acc D, Install Installed Date)
-// to send with a change made from a job's Status dropdown:
-//   - marked Completed with no date yet -> today's local date (a date already
-//     entered is never overwritten; it stays editable afterwards)
+// The completion date (Filter Change / Repair / Collection Acc D, Install
+// Installed Date) to send with a change made from a Status dropdown:
+//   - marked Completed (from not completed) -> `day`: the day of the event —
+//     the Daily Report date being viewed, or the record's own Pre D on a full
+//     page — never the calendar day the button was clicked. With no `day`,
+//     nothing is sent and the database fills Pre D / the job's date
+//     (completion_date_from_pre_d, 20261116000000).
 //   - taken from Completed back to Pending / Cancelled -> "" (cleared), which
 //     also retracts the job's still-pending Inventory Approvals entries — the
 //     database's queue triggers react to the cleared date
@@ -12,9 +13,11 @@ import { todayIso } from "@/lib/utils"
 export function completionDateFor(
   status: string,
   previousStatus: string,
-  currentDate: string | undefined
+  currentDate: string | undefined,
+  day?: string
 ): string | undefined {
-  if (status === "Completed") return currentDate ? undefined : todayIso()
-  if (previousStatus === "Completed" && currentDate) return ""
+  const done = (s: string) => s === "Completed" || s === "Collected"
+  if (done(status)) return done(previousStatus) ? undefined : day || undefined
+  if (done(previousStatus) && currentDate) return ""
   return undefined
 }

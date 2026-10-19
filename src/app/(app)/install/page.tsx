@@ -19,6 +19,8 @@ import {
   type InstallOrderGroup,
 } from "@/components/install/install-columns"
 import { useDeleteInstallPlans, useInstallPlans } from "@/lib/hooks/use-install-plans"
+import { useStockMovementRows } from "@/lib/hooks/use-inventory"
+import { installSlipParts, installSlipPartsText } from "@/lib/install-slip-parts"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -47,6 +49,9 @@ function InstallPageContent() {
   // name/phone match against an existing customer.
   const { data: customers = [] } = useCustomers()
   const { data: saleListEntries = [] } = useSaleListEntries()
+  // Parts added for an install on the Release Slip (its "Part No"). Empty for
+  // a technician (stock movements are admin-only).
+  const { data: stockMovements = [] } = useStockMovementRows()
 
   // Deep link from e.g. the Daily Report's Installation Plan panel
   // (?id=<planId>) — drills all the way in to that specific record's own
@@ -319,6 +324,7 @@ function InstallPageContent() {
                   />
                   <DetailField label={tFields("inOrOut")} value={selected.inOut} />
                   <DetailField label={tFields("model")} value={selected.model} />
+                  <DetailField label={tFields("partNo")} value={installSlipPartsText(installSlipParts(selected, stockMovements)) || undefined} />
                   <DetailField label={tFields("modelDp")} value={selected.modelDp} />
                   <DetailField label={tFields("unitPrice")} value={formatCurrency(selected.unitPrice)} />
                   <DetailField label={tFields("cpPrice")} value={formatCurrency(selected.cpPrice)} />

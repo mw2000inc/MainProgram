@@ -53,20 +53,23 @@ export async function completeScheduleJobs(
     .update({ status: "completed", updated_by: actorId })
     .in("id", jobIds)
     .eq("status", "pending")
-    .select("id, job_type, order_no, filter_codes")
+    .select("id, job_type, order_no, filter_codes, scheduled_date")
   if (error) throw error
-  const done = (updated ?? []) as { id: string; job_type: string; order_no: string | null; filter_codes: string | null }[]
+  const done = (updated ?? []) as { id: string; job_type: string; order_no: string | null; filter_codes: string | null; scheduled_date: string | null }[]
+  // A record completed here is dated its job's own day (the Daily Report day
+  // it's on), not the day the batch ran.
+  const jobDay = new Map(done.map((j) => [j.id, j.scheduled_date || today]))
   result.completed = done.length
   const ids = done.map((j) => j.id)
   if (ids.length === 0) return result
 
   const completeLinked = async (table: string, dateColumn: string) => {
-    const { data: rows } = await admin.from(table).select(`id, ${dateColumn}, status`).in("schedule_job_id", ids)
+    const { data: rows } = await admin.from(table).select(`id, ${dateColumn}, status, schedule_job_id`).in("schedule_job_id", ids)
     const targets = ((rows ?? []) as unknown as Record<string, string | null>[]).filter((r) => r.status !== "Cancelled")
     for (const r of targets) {
       await admin
         .from(table)
-        .update({ status: "Completed", updated_by: actorId, ...(r[dateColumn] ? {} : { [dateColumn]: today }) })
+        .update({ status: "Completed", updated_by: actorId, ...(r[dateColumn] ? {} : { [dateColumn]: jobDay.get(r.schedule_job_id as string) ?? today }) })
         .eq("id", r.id as string)
     }
     return targets.length
@@ -79,10 +82,10 @@ export async function completeScheduleJobs(
   if (collectionJobIds.length > 0) {
     const { data: rows } = await admin
       .from("collections")
-      .select("id, status, collected_by, collected_at, acc_d")
+      .select("id, status, collected_by, collected_at, acc_d, schedule_job_id")
       .in("schedule_job_id", collectionJobIds)
     const nowIso = new Date().toISOString()
-    for (const r of (rows ?? []) as { id: string; status: string; collected_by: string | null; collected_at: string | null; acc_d: string | null }[]) {
+    for (const r of (rows ?? []) as { id: string; status: string; collected_by: string | null; collected_at: string | null; acc_d: string | null; schedule_job_id: string }[]) {
       if (r.status === "Cancelled") continue
       await admin
         .from("collections")
@@ -92,7 +95,7 @@ export async function completeScheduleJobs(
           collected: true,
           collected_by: r.collected_by ?? actorId,
           collected_at: r.collected_at ?? nowIso,
-          ...(r.acc_d ? {} : { acc_d: today }),
+          ...(r.acc_d ? {} : { acc_d: jobDay.get(r.schedule_job_id) ?? today }),
         })
         .eq("id", r.id)
       result.collections += 1

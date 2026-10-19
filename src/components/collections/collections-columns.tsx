@@ -206,9 +206,13 @@ export type CollectionDailyReportPatch = Partial<Pick<CollectionPlan, "preD" | "
 export function getCollectionsDailyReportColumns({
   onStatusChange,
   onFieldChange,
+  amountEditable = true,
 }: {
   onStatusChange?: (entry: CollectionPlan, status: string) => void
   onFieldChange?: (entry: CollectionPlan, patch: CollectionDailyReportPatch) => void
+  // false: Amount shows as plain text (the Daily Report — the amount is the
+  // one the admin set on the plan and doesn't change on completion).
+  amountEditable?: boolean
 } = {}): ColumnDef<CollectionPlan, unknown>[] {
   return [
     {
@@ -231,7 +235,7 @@ export function getCollectionsDailyReportColumns({
       header: () => <ColumnHeader tKey="amount" ns="fields" />,
       cell: ({ row }) => {
         const entry = row.original
-        if (!onFieldChange) return <span className="inline-block min-w-[90px]">{formatCurrency(entry.amount)}</span>
+        if (!onFieldChange || !amountEditable) return <span className="inline-block min-w-[90px]">{formatCurrency(entry.amount)}</span>
         return <InlineCurrencyCell value={entry.amount} onCommit={(next) => onFieldChange(entry, { amount: next })} />
       },
     },

@@ -273,7 +273,8 @@ function FilterChangePageContent() {
           : undefined,
         onStatusChange: isAdmin
           ? (p, status) => {
-              const accD = completionDateFor(status, p.status, p.accD)
+              // Act D = the visit's own day (Pre D, else Plan D), not the day clicked.
+              const accD = completionDateFor(status, p.status, p.accD, p.preD || p.planDate)
               updatePlan({ id: p.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
             }
           : undefined,

@@ -47,6 +47,7 @@ import {
 } from "@/components/filter-change/filter-change-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
+import { installSlipParts, installSlipPartsText, type InstallSlipPart } from "@/lib/install-slip-parts"
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
@@ -78,7 +79,7 @@ import { resolveSectionConfigs, DEFAULT_SECTION_LABELS } from "@/lib/daily-repor
 import { useAuth } from "@/lib/auth/auth-context"
 import { useReportDetailPanelOpen } from "@/lib/sidebar-collapse-context"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import type { CollectionPlan, DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, PanelSize, RepairPlan, RepairPlanPart } from "@/lib/types"
+import type { CollectionPlan, DailyReportSectionKey, DispatchFields, DispatchStatus, FilterChangePlan, InstallPlan, PanelSize, RepairPlan, RepairPlanPart } from "@/lib/types"
 import { completionDateFor } from "@/lib/completion-date"
 import { toast } from "sonner"
 
@@ -250,6 +251,60 @@ function withRepairInOutColumn(columns: ColumnDef<RepairPlan, unknown>[], partsB
     cell: ({ row }) => <RepairInOutCell repair={row.original} parts={partsByRepair.get(row.original.id) ?? []} />,
   }
   return [columns[0], column, ...columns.slice(1)]
+}
+
+// The Installation panel's "Part No" column: parts added for the install on
+// the Release Slip (installSlipParts), as PART OUT / PART IN badges — the
+// same look as a repair's Part No. * = awaiting inventory approval.
+function withInstallPartsColumn(columns: ColumnDef<InstallPlan, unknown>[], partsFor: (plan: InstallPlan) => InstallSlipPart[]): ColumnDef<InstallPlan, unknown>[] {
+  const column: ColumnDef<InstallPlan, unknown> = {
+    id: "__installParts",
+    header: () => <InstallPartsHeader />,
+    cell: ({ row }) => <InstallPartsCell parts={partsFor(row.original)} />,
+  }
+  // Right after Installed Date (else at the end, when that column is hidden).
+  const at = columns.findIndex((c) => (c as { accessorKey?: string }).accessorKey === "installedDate")
+  return at >= 0 ? [...columns.slice(0, at + 1), column, ...columns.slice(at + 1)] : [...columns, column]
+}
+
+function InstallPartsHeader() {
+  const { t } = useTranslation("fields")
+  return <>{t("partNo")}</>
+}
+
+function InstallPartsCell({ parts }: { parts: InstallSlipPart[] }) {
+  const { t } = useTranslation("repair")
+  if (parts.length === 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <div className="flex min-w-32 max-w-80 flex-wrap items-center gap-1 py-0.5" data-testid="install-parts">
+      {parts.flatMap((p) => [
+        ...(p.out
+          ? [
+              <span key={`${p.sku}-out`} className="flex items-center gap-1">
+                <StatusBadge tone="danger" label={t("badgePartOut")} />
+                <span className="text-xs">
+                  {p.sku}
+                  {p.out !== 1 ? ` ×${p.out}` : ""}
+                  {p.pending ? "*" : ""}
+                </span>
+              </span>,
+            ]
+          : []),
+        ...(p.in
+          ? [
+              <span key={`${p.sku}-in`} className="flex items-center gap-1">
+                <StatusBadge tone="success" label={t("badgePartIn")} />
+                <span className="text-xs">
+                  {p.sku}
+                  {p.in !== 1 ? ` ×${p.in}` : ""}
+                  {p.pending ? "*" : ""}
+                </span>
+              </span>,
+            ]
+          : []),
+      ])}
+    </div>
+  )
 }
 
 function RepairInOutHeader() {
@@ -653,7 +708,9 @@ export function DailyReportSection() {
       onStatusChange: isAdmin
         ? (plan: FilterChangePlan, status: string) => {
             if (!allowCompletion(plan, status === "Completed")) return
-            const accD = completionDateFor(status, plan.status, plan.accD)
+            // Act D = the visit's Pre D (else the Daily Report date), not the
+            // day clicked — the database enforces Pre D too (20261118000000).
+            const accD = completionDateFor(status, plan.status, plan.accD, plan.preD || reportDate)
             updateFilterChangePlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
           }
         : undefined,
@@ -665,11 +722,12 @@ export function DailyReportSection() {
       onFieldChange: isAdmin
         ? (plan: FilterChangePlan, patch: FilterChangeDailyReportPatch) => {
             if (!allowCompletion(plan, !!patch.accD || patch.status === "Completed")) return
-            updateFilterChangePlan.mutate({ id: plan.id, input: patch })
+            const accD = patch.status && patch.accD === undefined ? completionDateFor(patch.status, plan.status, plan.accD, patch.preD || plan.preD || reportDate) : undefined
+            updateFilterChangePlan.mutate({ id: plan.id, input: { ...patch, ...(accD !== undefined ? { accD } : {}) } })
           }
         : undefined,
     }),
-    [isAdmin, updateFilterChangePlan, allowCompletion]
+    [isAdmin, updateFilterChangePlan, allowCompletion, reportDate]
   )
   // The full 10-column set (getFilterChangeDailyReportExpandedColumns),
   // used for BOTH the compact panel and the Maximize2 dialog now — see the
@@ -691,7 +749,7 @@ export function DailyReportSection() {
             onStatusChange: isAdmin
               ? (plan, status) => {
                   if (!allowCompletion(plan, status === "Completed")) return
-                  const installedDate = completionDateFor(status, plan.status, plan.installedDate)
+                  const installedDate = completionDateFor(status, plan.status, plan.installedDate, reportDate)
                   updateInstallPlan.mutate({ id: plan.id, input: { status, ...(installedDate !== undefined ? { installedDate } : {}) } })
                 }
               : undefined,
@@ -701,7 +759,7 @@ export function DailyReportSection() {
         ),
         isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateInstallPlan, allowCompletion, isAwaiting]
+    [visibleFieldsFor, isAdmin, updateInstallPlan, allowCompletion, isAwaiting, reportDate]
   )
   const repairColumns = React.useMemo(
     () =>
@@ -711,7 +769,7 @@ export function DailyReportSection() {
             onStatusChange: isAdmin
               ? (plan, status) => {
                   if (!allowCompletion(plan, status === "Completed")) return
-                  const accD = completionDateFor(status, plan.status, plan.accD)
+                  const accD = completionDateFor(status, plan.status, plan.accD, reportDate)
                   updateRepairPlan.mutate({ id: plan.id, input: { status, ...(accD !== undefined ? { accD } : {}) } })
                 }
               : undefined,
@@ -720,8 +778,10 @@ export function DailyReportSection() {
         ),
         isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateRepairPlan, allowCompletion, isAwaiting]
+    [visibleFieldsFor, isAdmin, updateRepairPlan, allowCompletion, isAwaiting, reportDate]
   )
+  const installPartsFor = React.useCallback((plan: InstallPlan) => installSlipParts(plan, stockMovements), [stockMovements])
+  const installColumnsWithParts = React.useMemo(() => withInstallPartsColumn(installColumns, installPartsFor), [installColumns, installPartsFor])
   const repairColumnsWithInOut = React.useMemo(() => withRepairInOutColumn(repairColumns, partsByRepair), [repairColumns, partsByRepair]
   )
   const collectionsColumns = React.useMemo(
@@ -732,7 +792,14 @@ export function DailyReportSection() {
             onStatusChange: isAdmin
               ? (entry, status) => {
                   if (!allowCompletion(entry, status === "Collected" || status === "Completed")) return
-                  updateCollection.mutate({ id: entry.id, input: { status } })
+                  // Act D = the Daily Report date being viewed; the amount is
+                  // never part of a completion (it stays as the admin set it).
+                  const accD = completionDateFor(status, entry.status, entry.accD, reportDate)
+                  // Back to Pending = not collected: the collected mark and
+                  // Acc D are cleared too (the database does the same —
+                  // reset_uncollected_collection), so it leaves the slip.
+                  const uncollect = status === "Pending" ? { collected: false, accD: "" } : {}
+                  updateCollection.mutate({ id: entry.id, input: { status, ...(accD !== undefined ? { accD } : {}), ...uncollect } })
                 }
               : undefined,
             // C/T/Pre D/Acc D/Amount/Note/Serviceman edited straight from
@@ -744,12 +811,14 @@ export function DailyReportSection() {
                   updateCollection.mutate({ id: entry.id, input: patch })
                 }
               : undefined,
+            // The amount is set on the plan by the admin; not editable here.
+            amountEditable: false,
           }),
           visibleFieldsFor("collection")
         ),
         isAwaiting
       ),
-    [visibleFieldsFor, isAdmin, updateCollection, allowCompletion, isAwaiting]
+    [visibleFieldsFor, isAdmin, updateCollection, allowCompletion, isAwaiting, reportDate]
   )
   // Not one of the six admin-configurable sections (see the PanelId comment
   // above), so no visibleFieldsFor entry exists for it — always the full
@@ -1028,7 +1097,7 @@ export function DailyReportSection() {
       <DashboardPlanPanel
         title={labelFor("installation")}
         icon={HardHat}
-        columns={installColumns}
+        columns={installColumnsWithParts}
         data={dayInstallPlans}
         notice={<AwaitingApprovalNotice count={awaitingCount(dayInstallPlans)} total={dayInstallPlans.length} />}
         loading={pInstall}
@@ -1370,6 +1439,7 @@ export function DailyReportSection() {
             { label: tf("contactNumber"), value: p.contactNumber },
             { label: tf("address"), value: p.address },
             { label: tf("model"), value: p.model },
+            { label: tf("partNo"), value: installSlipPartsText(installSlipParts(p, stockMovements)) || undefined },
             { label: tf("inOrOut"), value: p.inOut },
             { label: tf("inputDate"), value: d(p.inputDate) },
             { label: tf("preInstalledDate"), value: d(p.preInstalledDate) },
