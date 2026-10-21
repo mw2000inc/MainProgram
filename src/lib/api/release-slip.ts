@@ -17,6 +17,9 @@ export interface ReleaseSlipMovement {
   // it differs from the OUT one, and a line kept even while it's empty.
   inSku?: string
   edited?: boolean
+  // What the item is for ("Parts", "Filter", …), picked on the slip and saved
+  // with it (stock_movements.purpose, 20261119000000).
+  purpose?: string
 }
 
 export interface ReleaseSlipJob {
@@ -52,7 +55,7 @@ type Raw = {
     status: string
     technician: string
     technician_2: string
-    movements: { sku: string; label: string; qty_out: number; qty_in: number; status: string }[]
+    movements: { sku: string; label: string; qty_out: number; qty_in: number; status: string; purpose?: string }[]
   }[]
 }
 
@@ -77,7 +80,7 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
       status: j.status,
       technician: j.technician,
       technician2: j.technician_2,
-      movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status })),
+      movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined })),
     })),
   }
 }

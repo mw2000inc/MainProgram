@@ -167,7 +167,12 @@ export function buildSummary(jobs: ReleaseSlipJob[]) {
 // saved; "Reset Edits" drops them. Keyed by job id (per slip); a line by its
 // position in the job's printed lines (a blank line past the last item adds
 // a new one). Quantities are kept as typed and read as numbers.
-export type SlipLineEdit = { outSku?: string; outQty?: string; inSku?: string; inQty?: string; note?: string }
+export type SlipLineEdit = { outSku?: string; outQty?: string; inSku?: string; inQty?: string; note?: string; purpose?: string }
+
+// What a slip item is for — picked per line on the on-screen copy (the "For"
+// box in Notes), saved with the item and shown in the Daily Report's
+// Inventory List with who added it. Printed in the Notes column.
+export const SLIP_PURPOSES = ["Parts", "Filter", "Unit", "Return", "Errand", "Other"] as const
 export type SlipJobEdit = { orderNo?: string; jobType?: string; accountName?: string; jobNote?: string; lines?: Record<number, SlipLineEdit> }
 
 // The job type each box stands for, when an admin ticks one on an added row.
@@ -210,6 +215,7 @@ export function applySlipEdits(jobs: ReleaseSlipJob[], edits: SlipEdits | undefi
         qtyIn: inSku ? inQty || 0 : 0,
         inSku: inSku && inSku !== sku ? inSku : undefined,
         note: le.note ?? base.note,
+        purpose: le.purpose ?? base.purpose,
         edited: true,
       }
     }
@@ -691,7 +697,11 @@ export function ReleaseSlipSheets({
                       // line's own item note.
                       const jobNote = li === 0 && !b.continued ? b.job.jobNote : undefined
                       const note = [jobNote, m?.note].filter(Boolean).join(" · ")
+                      const hasItem = !!m && !!(m.qtyOut || m.qtyIn)
+                      // The "For" box: on an editable line with an item (on-screen copy).
                       const line = b.offset + li
+                      const purposeEditable = !!onEdit && lineEditable(line) && hasItem
+                      const purposeText = hasItem ? (m?.purpose ?? "") : ""
                       return (
                         <tr key={li}>
                           {li === 0 && (
@@ -770,7 +780,25 @@ export function ReleaseSlipSheets({
                           <td className="slip-num">
                             <Editable value={m && m.qtyIn ? qty(m.qtyIn) : ""} label="IN Qty" onCommit={editLine?.(line, "inQty")} />
                           </td>
-                          <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={note || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
+                          <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={[purposeText, note].filter(Boolean).join(" · ") || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
+                            {purposeEditable ? (
+                              <select
+                                className="slip-purpose"
+                                value={purposeText}
+                                aria-label="For"
+                                data-testid="slip-purpose"
+                                onChange={(e) => onEdit!(job.jobId, { lines: { [jobLine(line)]: { purpose: e.target.value } } })}
+                              >
+                                <option value="">For…</option>
+                                {SLIP_PURPOSES.map((p) => (
+                                  <option key={p} value={p}>
+                                    {p}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : purposeText ? (
+                              <b className="slip-purpose-text">{purposeText}</b>
+                            ) : null}
                             <Editable
                               value={note}
                               label="Notes"
@@ -805,6 +833,7 @@ export function ReleaseSlipSheets({
                       <th>Out</th>
                       <th>In</th>
                       <th>Total Out</th>
+                      <th>Total In</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -813,7 +842,9 @@ export function ReleaseSlipSheets({
                         <td>{r?.sku ?? ""}</td>
                         <td className="slip-num">{r && r.out ? qty(r.out) : ""}</td>
                         <td className="slip-num">{r && r.in ? qty(r.in) : ""}</td>
-                        <td className="slip-num">{r ? qty(r.out - r.in) : ""}</td>
+                        {/* The net per SKU on its own side: more went out → Total Out, more came back → Total In. */}
+                        <td className="slip-num">{r && r.out > r.in ? qty(r.out - r.in) : ""}</td>
+                        <td className="slip-num">{r && r.in > r.out ? qty(r.in - r.out) : ""}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -878,6 +909,8 @@ export const RELEASE_SLIP_CSS = `
 .slip-sku-option span { color: #4b5563; overflow: hidden; text-overflow: ellipsis; }
 .slip-sku-option.is-active { background: #eff6ff; }
 .slip-sku-empty { padding: 6px 10px; color: #6b7280; }
+.slip-purpose { font: inherit; font-size: 7pt; height: 4.2mm; padding: 0 1mm; margin-right: 1mm; border: 1px solid #cbd5e1; border-radius: 3px; background: #fff; color: #000; vertical-align: middle; float: left; }
+.slip-purpose-text { font-weight: 700; margin-right: 1mm; float: left; }
 .slip-table td.slip-collect-label { text-align: center; font-weight: 700; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; background: #f3f4f6; }
 .slip-collect-line td { border-top-style: dashed; }
 .slip-add-line { all: unset; display: block; margin-top: 1mm; font-size: 7pt; font-weight: 400; cursor: pointer; color: #2563eb !important; }

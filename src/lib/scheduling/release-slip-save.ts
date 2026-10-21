@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // A technician saves only their own slip; checked by the API route.
 
 export type SlipSaveJobType = "filter_change" | "repair" | "installation" | "collection"
-export type SlipSaveItem = { sku: string; qtyOut: number; qtyIn: number }
+export type SlipSaveItem = { sku: string; qtyOut: number; qtyIn: number; purpose?: string }
 export type SlipSaveRow = {
   jobId?: string
   orderNo: string
@@ -260,6 +260,13 @@ export async function saveReleaseSlip(
         w.in += Math.max(0, Math.floor(item.qtyIn || 0))
         wanted.set(key, w)
       }
+      // What each item is for, as picked on the slip (first one per code).
+      const purposeByCode = new Map<string, string>()
+      for (const item of row.items) {
+        const code = item.sku.trim()
+        const p = (item.purpose ?? "").trim()
+        if (code && p && !purposeByCode.has(code)) purposeByCode.set(code, p)
+      }
       const inserts: Record<string, unknown>[] = []
       for (const [key, w] of wanted) {
         const have = queued.get(key) ?? { out: 0, in: 0 }
@@ -281,6 +288,7 @@ export async function saveReleaseSlip(
             user_id: actorUserId,
             reference_number: order || job.order_no || job.id,
             schedule_job_id: job.id,
+            ...(purposeByCode.get(w.sku) ? { purpose: purposeByCode.get(w.sku) } : {}),
             // Not linked to the repair record itself: the Part No queue clears
             // every pending 'Repair' line linked to the repair whenever it's
             // edited, which would silently drop these. The job link is enough
@@ -315,13 +323,13 @@ export async function saveReleaseSlip(
       }
       const { data: shownMoves } = await db
         .from("stock_movements")
-        .select("id, item_label, quantity_added, quantity_removed, status, created_at, products(sku)")
+        .select("id, item_label, quantity_added, quantity_removed, status, created_at, purpose, products(sku)")
         .or(visible.join(","))
         .neq("status", "rejected")
         .order("created_at", { ascending: false })
       // Matched by the code the slip shows (the product's SKU, else the
       // typed label), the same text the row's items carry.
-      type Move = { id: string; item_label: string | null; quantity_added: number; quantity_removed: number; status: string; products: { sku: string | null } | null }
+      type Move = { id: string; item_label: string | null; quantity_added: number; quantity_removed: number; status: string; purpose: string | null; products: { sku: string | null } | null }
       const shownCode = (m: Move) => ((m.products?.sku ?? "").trim() || (m.item_label ?? "").trim())
       const wantedByCode = new Map<string, { out: number; in: number }>()
       for (const item of row.items) {
@@ -337,6 +345,14 @@ export async function saveReleaseSlip(
         const key = shownCode(m)
         if (!key) continue
         byKey.set(key, [...(byKey.get(key) ?? []), m])
+      }
+      // A "For" picked (or changed) on the slip is written to the items it names.
+      for (const [code, p] of purposeByCode) {
+        const ids = (byKey.get(code) ?? []).filter((m) => (m.purpose ?? "") !== p).map((m) => m.id)
+        if (ids.length) {
+          const { error } = await db.from("stock_movements").update({ purpose: p }).in("id", ids)
+          if (error) throw error
+        }
       }
       for (const [key, moves] of byKey) {
         const w = wantedByCode.get(key) ?? { out: 0, in: 0 }
