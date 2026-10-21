@@ -238,7 +238,24 @@ export async function saveReleaseSlip(
           .split(/[,;/\n]+/)
           .map((c) => c.trim())
           .filter(Boolean)
-        if (codes.length && [...codes].sort().join(",") !== [...current].sort().join(",")) {
+        // Every part removed on the slip: its Part No is cleared too, else it
+        // comes back — the Part No queue rebuilds it, and a repair with no
+        // items shows its Part No as lines (repairPartLines), which the next
+        // save queues again. Only when the slip was showing the Part No: its
+        // queued lines, or no items at all. A repair whose items come from
+        // somewhere else (a parts list) keeps its Part No.
+        let shownPartNo = false
+        if (!codes.length && current.length) {
+          const { data: items } = await db
+            .from("stock_movements")
+            .select("repair_plan_id, repair_plan_part_id, reason")
+            .or(`schedule_job_id.eq.${job.id},repair_plan_id.eq.${record.id as string}`)
+            .neq("status", "rejected")
+            .neq("reason", "Repair Unit")
+          const list = (items ?? []) as { repair_plan_id: string | null; repair_plan_part_id: string | null; reason: string }[]
+          shownPartNo = !list.length || list.some((m) => m.repair_plan_id === record.id && !m.repair_plan_part_id && m.reason === "Repair")
+        }
+        if ((codes.length || shownPartNo) && [...codes].sort().join(",") !== [...current].sort().join(",")) {
           // The note lists what this changed: codes added and removed.
           const count = (list: string[]) => list.reduce((m, c) => m.set(c, (m.get(c) ?? 0) + 1), new Map<string, number>())
           const before = count(current), after = count(codes)

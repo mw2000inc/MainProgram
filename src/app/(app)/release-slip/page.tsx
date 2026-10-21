@@ -140,7 +140,7 @@ function ReleaseSlipContent() {
       delete slipEdits[jobId]
       return { ...s, edits: { ...s.edits, [slipKey]: slipEdits }, added: { ...s.added, [slipKey]: (s.added[slipKey] ?? []).filter((id) => id !== jobId) } }
     })
-  const editSlip = (slipKey: string) => (jobId: string, patch: SlipJobEdit) =>
+  const applyEdit = (slipKey: string, jobId: string, patch: SlipJobEdit) =>
     setEditState((s) => {
       const slip = s.edits[slipKey] ?? {}
       const prev = slip[jobId] ?? {}
@@ -149,6 +149,27 @@ function ReleaseSlipContent() {
       const next: SlipJobEdit = { ...prev, ...patch, lines }
       return { ...s, edits: { ...s.edits, [slipKey]: { ...slip, [jobId]: next } } }
     })
+  // An Order No. typed on an added row fills its Accnt. Name with that
+  // order's customer — unless a name was typed there, or the Order No.
+  // changed again before the name came back.
+  const editStateRef = React.useRef(editState)
+  React.useEffect(() => {
+    editStateRef.current = editState
+  }, [editState])
+  const editSlip = (slipKey: string) => (jobId: string, patch: SlipJobEdit) => {
+    applyEdit(slipKey, jobId, patch)
+    const order = patch.orderNo?.trim()
+    if (!order) return
+    fetch(`/api/release-slip/order-name?order=${encodeURIComponent(order)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { name?: string } | null) => {
+        const name = body?.name?.trim()
+        const now = editStateRef.current.edits[slipKey]?.[jobId]
+        if (!name || !now || now.orderNo?.trim() !== order || (now.accountName ?? "").trim()) return
+        applyEdit(slipKey, jobId, { accountName: name })
+      })
+      .catch(() => {})
+  }
   function resetEdits() {
     setEditState({ key: editsKey, edits: {}, added: {} })
     setSignatures(DEFAULT_SIGNATURES)
