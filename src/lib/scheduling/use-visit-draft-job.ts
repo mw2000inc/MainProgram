@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { linkVisitToScheduleJob } from "@/lib/api/schedule"
+import { linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -17,7 +17,7 @@ import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technician
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
-import { assignmentAccounts, crewOfTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
+import { assignmentAccounts, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { formatDate } from "@/lib/utils"
 
 type DraftOptions = {
@@ -40,6 +40,11 @@ type DraftOptions = {
   // A Filter Change's filters (its Filter field) — what the technician brings
   // and what's deducted on completion.
   filterCodes?: string
+  // Saved by an admin from the Daily Report: the job is approved at once (no
+  // Pending Schedule Approval step) — a new one right after it's created, and
+  // a record's existing draft when the record is edited there. Only with a
+  // technician; without one it stays a draft.
+  approve?: boolean
 }
 
 const VISIT_KEYS = { install_plans: installPlansKey, repair_plans: repairPlansKey, collections: collectionsKey, filter_change_plans: filterChangePlansKey } as const
@@ -67,8 +72,30 @@ export function useVisitDraftJob() {
   const { data: jobs = [] } = useScheduleJobs()
   const previous = usePreviousTechnicians()
 
+  // The same switch the Schedule's Approve makes ('pending_approval' →
+  // 'pending'), so the database confirms the record and writes its Pre D just
+  // as it does on any approval.
+  const approveJob = async (jobId: string, table: DraftOptions["table"]) => {
+    await updateScheduleJob(jobId, { status: "pending" })
+    qc.invalidateQueries({ queryKey: VISIT_KEYS[table] })
+    qc.invalidateQueries({ queryKey: scheduleJobsKey })
+  }
+
   return async function ensureVisitDraftJob(o: DraftOptions) {
-    if (!o.date || o.existingJobId) return
+    if (o.existingJobId) {
+      // Edited from the Daily Report: a draft still waiting is approved now.
+      const existing = jobs.find((j) => j.id === o.existingJobId)
+      if (o.approve && existing?.status === "pending_approval" && isAssignedTechnician(existing.technician)) {
+        try {
+          await approveJob(existing.id, o.table)
+          toast.success(t("visitJobApproved", { type: t(o.jobType), date: formatDate(existing.scheduledDate) }))
+        } catch (error) {
+          toast.error(t("visitDraftFailed", { message: error instanceof Error ? error.message : String(error) }))
+        }
+      }
+      return
+    }
+    if (!o.date) return
     // Today (or any later date) is drafted on that date — a same-day entry
     // waits under today in Pending Schedule Approval and reaches today's
     // Daily Report once approved. An already-past date is drafted for today.
@@ -137,6 +164,12 @@ export function useVisitDraftJob() {
         filterCodes: o.filterCodes?.trim() || undefined,
       })
       await linkVisitToScheduleJob(o.table, o.recordId, job.id)
+      if (o.approve && isAssignedTechnician(pair.primary)) {
+        // Saved from the Daily Report: approved straight away.
+        await approveJob(job.id, o.table)
+        toast.success(t("visitJobApproved", { type: t(o.jobType), date: formatDate(date) }))
+        return
+      }
       // At once in Pending Schedule Approval and the record's own table.
       qc.invalidateQueries({ queryKey: VISIT_KEYS[o.table] })
       qc.invalidateQueries({ queryKey: scheduleJobsKey })

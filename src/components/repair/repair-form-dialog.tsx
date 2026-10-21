@@ -179,7 +179,11 @@ export function RepairFormDialog({
   defaultDate,
   defaultOrderNo,
   plan,
+  autoApprove,
 }: {
+  // Opened from the Daily Report by an admin: the visit's job is approved at
+  // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
+  autoApprove?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -390,6 +394,7 @@ export function RepairFormDialog({
   const ensureVisitDraftJob = useVisitDraftJob()
   const ensureDraftJob = (recordId: string, existingJobId: string | undefined, values: FormValues) =>
     ensureVisitDraftJob({
+      approve: autoApprove,
       table: "repair_plans",
       jobType: "repair",
       recordId,

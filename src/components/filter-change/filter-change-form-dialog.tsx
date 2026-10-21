@@ -134,7 +134,11 @@ export function FilterChangeFormDialog({
   defaultOrderNumber,
   plan,
   onSaved,
+  autoApprove,
 }: {
+  // Opened from the Daily Report by an admin: the visit's job is approved at
+  // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
+  autoApprove?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -368,8 +372,10 @@ export function FilterChangeFormDialog({
     // straight away — on its Pre D, else its Plan D (today included) — with
     // the order, member, address, technician(s) and filters, waiting in
     // Schedule › Pending Schedule Approval under that date (useVisitDraftJob).
-    if (!isEdit && saved.status === "Pending") {
+    // Edited from the Daily Report (autoApprove): its waiting draft is approved.
+    if ((!isEdit || (autoApprove && saved.scheduleJobId)) && saved.status === "Pending") {
       await ensureVisitDraftJob({
+        approve: autoApprove,
         table: "filter_change_plans",
         jobType: "filter_change",
         recordId: saved.id,

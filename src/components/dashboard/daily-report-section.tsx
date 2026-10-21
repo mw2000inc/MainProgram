@@ -1372,9 +1372,9 @@ export function DailyReportSection() {
         </SortableContext>
       </DndContext>
 
-      <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} />
-      <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} />
-      <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} />
+      <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
+      <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
+      <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
       {(() => {
         if (!detail) return null
         const tf = tFieldsDetail
@@ -1490,16 +1490,17 @@ export function DailyReportSection() {
           onOpenChange={(open) => !open && setEditing(null)}
           defaultDate={reportDate}
           plan={filterChangePlans.find((x) => x.id === editing.id)}
+          autoApprove={isAdmin}
         />
       )}
       {editing?.kind === "install" && (
-        <InstallFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={installPlans.find((x) => x.id === editing.id)} />
+        <InstallFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={installPlans.find((x) => x.id === editing.id)} autoApprove={isAdmin} />
       )}
       {editing?.kind === "repair" && (
-        <RepairFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={repairPlans.find((x) => x.id === editing.id)} />
+        <RepairFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} plan={repairPlans.find((x) => x.id === editing.id)} autoApprove={isAdmin} />
       )}
       {editing?.kind === "collection" && (
-        <CollectionsFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} entry={collectionPlans.find((x) => x.id === editing.id)} />
+        <CollectionsFormDialog open onOpenChange={(open) => !open && setEditing(null)} defaultDate={reportDate} entry={collectionPlans.find((x) => x.id === editing.id)} autoApprove={isAdmin} />
       )}
       <ClearScheduleDialog
         table="filter_change_plans"
@@ -1507,7 +1508,7 @@ export function DailyReportSection() {
         onOpenChange={(open) => !open && setClearingFcIds([])}
         onDone={() => clearDoneRef.current?.()}
       />
-      <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} />
+      <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
       <StockMovementFormDialog
         open={inventoryFormOpen || !!editingStockMovement}
         onOpenChange={(o) => {

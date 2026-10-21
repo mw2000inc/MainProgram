@@ -139,7 +139,11 @@ export function CollectionsFormDialog({
   defaultOrderNo,
   entry,
   onSaved,
+  autoApprove,
 }: {
+  // Opened from the Daily Report by an admin: the visit's job is approved at
+  // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
+  autoApprove?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -338,8 +342,10 @@ export function CollectionsFormDialog({
     // Pending Schedule Approval under that date. The admin picks the
     // technician there; approving puts it on that day's Collection Plan and
     // the technician's agenda (useVisitDraftJob).
-    if (!isEdit && saved.status === "Pending" && !saved.collected) {
+    // Edited from the Daily Report (autoApprove): its waiting draft is approved.
+    if ((!isEdit || (autoApprove && saved.scheduleJobId)) && saved.status === "Pending" && !saved.collected) {
       await ensureVisitDraftJob({
+        approve: autoApprove,
         table: "collections",
         jobType: "collection",
         recordId: saved.id,

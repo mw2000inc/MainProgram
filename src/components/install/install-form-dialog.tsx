@@ -186,7 +186,11 @@ export function InstallFormDialog({
   defaultDate,
   defaultOrderNo,
   plan,
+  autoApprove,
 }: {
+  // Opened from the Daily Report by an admin: the visit's job is approved at
+  // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
+  autoApprove?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -338,6 +342,7 @@ export function InstallFormDialog({
   // (see useVisitDraftJob) — on the Pre Installed Date, else the Installed Date.
   const ensureDraftJob = (planId: string, existingJobId: string | undefined, values: FormValues) =>
     ensureVisitDraftJob({
+      approve: autoApprove,
       table: "install_plans",
       jobType: "installation",
       recordId: planId,
