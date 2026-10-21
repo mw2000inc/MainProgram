@@ -152,6 +152,7 @@ type StockMovementRow = {
   pending_values?: Record<string, number | string> | null
   pending_requested_by?: string | null
   pending_requested_at?: string | null
+  purpose?: string | null
 }
 
 type MovementEditInput = Pick<
@@ -229,6 +230,7 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     rejectedAt: row.rejected_at ?? undefined,
     rejectedBy: row.rejected_by ?? undefined,
     changeRequest: changeRequestFromRow(row),
+    purpose: row.purpose ?? undefined,
   }
 }
 

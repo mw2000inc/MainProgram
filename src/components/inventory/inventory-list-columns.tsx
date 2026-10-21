@@ -44,6 +44,7 @@ function ReasonCell({ row }: { row: StockMovementRow }) {
     <span className="inline-flex items-center gap-1.5">
       {row.reason}
       {row.source === "Manual" && <StatusBadge tone="neutral" label={t("manualEntry")} />}
+      {row.purpose && <StatusBadge tone="secondary" label={`For: ${row.purpose}`} />}
     </span>
   )
 }
@@ -225,6 +226,10 @@ function CompactItemCell({ row }: { row: StockMovementRow }) {
         <span className={type === "deduct" ? "text-danger" : "text-success"}>{t(TYPE_KEYS[type])}</span>
         <QtyCell row={row} />
         <span>· {row.reason}</span>
+        {row.purpose && <span>· For: {row.purpose}</span>}
+        {/* Who added it — the full view has a Created By column; here it's
+            folded in so a technician's slip entry is easy to spot. */}
+        {row.userName && <span>· by {row.userName}</span>}
         <InventoryStatusBadge status={row.status} change={row.changeRequest} />
       </div>
     </div>

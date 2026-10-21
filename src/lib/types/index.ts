@@ -288,6 +288,8 @@ export interface StockMovement {
   // stock still reflects the movement as it is until then (see the
   // stock_movement_change_approval migration).
   changeRequest?: StockMovementChangeRequest
+  // What it's for, picked on the Release Slip ("Parts", "Filter", …).
+  purpose?: string
 }
 
 export interface StockMovementChangeRequest {
