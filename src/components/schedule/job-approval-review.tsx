@@ -77,9 +77,28 @@ export function JobApprovalReview({
     update(job, { primary: pair.primary, secondary: pair.secondary })
   }
   // A vehicle with a fixed crew (the Liteace) brings its two technicians.
+  // The technician's other jobs that day in this batch take the same vehicle:
+  // those with none yet, and those still on the vehicle this job had (so a
+  // change follows through); a job set to a different vehicle on purpose
+  // keeps it.
   const setVehicle = (job: ScheduleJob, vehicle: string) => {
-    const crew = crewFillForVehicle(vehicle, (edits[job.id] ?? initial(job)).primary)
-    update(job, { vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary } : {}) })
+    const current = edits[job.id] ?? initial(job)
+    const crew = crewFillForVehicle(vehicle, current.primary)
+    const primary = (crew?.primary ?? current.primary).trim().toLowerCase()
+    const previous = current.vehicle.trim().toLowerCase()
+    setEdits((e) => {
+      const next = { ...e, [job.id]: { ...current, vehicle, ...(crew ? { primary: crew.primary, secondary: crew.secondary } : {}) } }
+      if (!isAssignedTechnician(primary)) return next
+      for (const other of jobs) {
+        if (other.id === job.id || other.scheduledDate !== job.scheduledDate) continue
+        const o = e[other.id] ?? initial(other)
+        if (o.primary.trim().toLowerCase() !== primary) continue
+        const theirs = o.vehicle.trim().toLowerCase()
+        if (theirs && theirs !== previous) continue
+        next[other.id] = { ...o, vehicle }
+      }
+      return next
+    })
   }
   const toggle = (id: string) =>
     setIncluded((s) => {

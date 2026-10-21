@@ -5,7 +5,7 @@ import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, CheckCheck, ChevronLeft, ChevronRight, History, Loader2, Pencil, Plus, ArrowRight, Printer, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, History, Loader2, Pencil, Plus, ArrowRight, Printer, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -1387,6 +1387,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   const [visitReview, setVisitReview] = React.useState<{ mode: "bulk" | "dispatch" | "generate"; visits: UnscheduledVisit[]; proposals: Record<string, VisitDraft> } | null>(null)
   const openVisitReview = (mode: "bulk" | "dispatch" | "generate", targets: UnscheduledVisit[]) => {
     if (targets.length === 0 || dispatching) return
+    setVisitReview({ mode, visits: targets, proposals: visitProposals(mode, targets) })
+  }
+  const visitProposals = (mode: "bulk" | "dispatch" | "generate", targets: UnscheduledVisit[]): Record<string, VisitDraft> => {
     const assigner = mode !== "bulk" ? createDispatchAssigner({ jobs, customers, accounts: assignmentAccounts(users), previous: previousTechnicians }) : undefined
     const proposals: Record<string, VisitDraft> = {}
     for (const v of targets) {
@@ -1416,7 +1419,20 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         technicianChosen,
       }
     }
-    setVisitReview({ mode, visits: targets, proposals })
+    return proposals
+  }
+  // "Approve" on one ticked (edited) visit: its job is created and approved
+  // straight away with the row's edits — date, technicians, vehicle, details
+  // — no batch needed. With no technician yet, it opens the review for just
+  // that visit instead (a job is never approved without one).
+  const approveVisit = async (v: UnscheduledVisit) => {
+    if (dispatching) return
+    const draft = visitProposals("bulk", [v])[v.key]
+    if (!isAssignedTechnician(draft.primary)) {
+      openVisitReview("bulk", [v])
+      return
+    }
+    await createFromReview([{ visit: v, draft: { ...draft, technicianChosen: true } }])
   }
   const createFromReview = async (items: { visit: UnscheduledVisit; draft: VisitDraft }[], keepDraft = false) => {
     const byKey = new Map(items.map((i) => [i.visit.key, i]))
@@ -1609,7 +1625,22 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                         (edit.detail ?? v.detail) || "—"
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">{createJobButton(v)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {editing ? (
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          disabled={!!dispatching}
+                          onClick={() => approveVisit(v)}
+                          title={t("approveVisitHint")}
+                          data-testid="unscheduled-approve-one"
+                        >
+                          <Check className="h-3.5 w-3.5" /> {t("approveVisit")}
+                        </Button>
+                      ) : (
+                        createJobButton(v)
+                      )}
+                    </td>
                   </tr>
                   )
                 })}
