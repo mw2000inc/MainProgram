@@ -361,7 +361,7 @@ export function MemberOrderDetail({
             // Opens the standalone order page (its own URL, for linking/printing)
             // without losing this in-place view.
             onToggleExpand={() => router.push(`/sale-list/${entry.id}`)}
-            headerAside={<OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} />}
+            headerAside={<OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} productNo={entry.productNo} />}
             onClose={onClose}
             extra={
               <>

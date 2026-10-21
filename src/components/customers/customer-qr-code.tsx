@@ -5,6 +5,7 @@ import { QRCodeCanvas } from "qrcode.react"
 import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { downloadQrCardPng, extractProductName } from "@/components/customers/qr-card"
 
 // The one place that knows what a member's QR actually encodes — every scan
 // entry point (the printable-card dialog, and the inline profile QR) reads
@@ -62,10 +63,11 @@ export function orderScanCustomerId(
 // One order's QR, shown on its detail views (the Member page's order detail,
 // the Sale List detail panel and the full order page): the per-order scan
 // link (getScanUrl with ?order=), so scanning opens that member's public page
-// on this order. The order number is printed under it, with a PNG download
-// for printing. An order with no resolvable member (or no order number) shows
+// on this order. The order number is printed under it; Download saves the
+// same printable card as the member's QR card (qr-card.ts): the QR with
+// "Order #", the order number and the product name. An order with no resolvable member (or no order number) shows
 // a short note instead of a QR that would open nothing.
-export function OrderQrCode({ customerId, orderNumber }: { customerId?: string; orderNumber: string }) {
+export function OrderQrCode({ customerId, orderNumber, productNo }: { customerId?: string; orderNumber: string; productNo?: string }) {
   const { t } = useTranslation("member")
   const order = (orderNumber ?? "").trim()
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
@@ -85,13 +87,16 @@ export function OrderQrCode({ customerId, orderNumber }: { customerId?: string; 
     )
   }
 
-  function download() {
+  async function download() {
     const dataUrl = canvasRef.current?.toDataURL("image/png")
     if (!dataUrl) return
-    const a = document.createElement("a")
-    a.href = dataUrl
-    a.download = `${order.replace(/[^\w-]+/g, "_")}-qr.png`
-    a.click()
+    await downloadQrCardPng({
+      qrDataUrl: dataUrl,
+      label: "Order #",
+      value: order,
+      productName: productNo?.trim() ? extractProductName(productNo) : undefined,
+      fileName: `${order.replace(/[^\w-]+/g, "_")}-qr-card.png`,
+    })
   }
 
   return (

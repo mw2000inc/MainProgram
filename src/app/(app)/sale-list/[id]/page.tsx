@@ -135,7 +135,7 @@ export default function SaleListOrderDetailPage() {
             </p>
           </div>
           <div className="self-end sm:self-center" data-testid="order-page-qr">
-            <OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} />
+            <OrderQrCode customerId={orderScanCustomerId(entry, customers)} orderNumber={entry.orderNumber} productNo={entry.productNo} />
           </div>
         </CardContent>
       </Card>

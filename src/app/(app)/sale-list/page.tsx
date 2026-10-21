@@ -241,7 +241,7 @@ export default function SaleListPage() {
               // Changes/Collections/Repairs) instead of a generic fullscreen
               // field dump, since that richer page already exists.
               onToggleExpand={() => router.push(`/sale-list/${selected.id}`)}
-              headerAside={<OrderQrCode customerId={orderScanCustomerId(selected, customers)} orderNumber={selected.orderNumber} />}
+              headerAside={<OrderQrCode customerId={orderScanCustomerId(selected, customers)} orderNumber={selected.orderNumber} productNo={selected.productNo} />}
               onClose={selection.close}
               extra={
                 <>
