@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // A technician saves only their own slip; checked by the API route.
 
 export type SlipSaveJobType = "filter_change" | "repair" | "installation" | "collection"
-export type SlipSaveItem = { sku: string; qtyOut: number; qtyIn: number; purpose?: string }
+export type SlipSaveItem = { sku: string; qtyOut: number; qtyIn: number; purpose?: string; slipType?: string }
 export type SlipSaveRow = {
   jobId?: string
   orderNo: string
@@ -81,6 +81,10 @@ export async function saveReleaseSlip(
   const { date, technicianUserId, actorUserId } = input
 
   const { data: tech } = await db.from("profiles").select("id, name").eq("id", technicianUserId).maybeSingle()
+  // Who typed it — named in the repair's note (5. below).
+  const { data: actor } = await db.from("profiles").select("name").eq("id", actorUserId).maybeSingle()
+  const actorName = (actor as { name?: string } | null)?.name?.trim() || "Someone"
+  const slipDay = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
   if (!tech) throw new Error("Technician not found")
 
   // Products by SKU (the earliest added, like every other queue).
@@ -190,6 +194,15 @@ export async function saveReleaseSlip(
         result.completed += 1
       }
 
+      // What this save changed on a repair's parts, for its note (5. below).
+      const noteAdded = new Map<string, number>()
+      const noteRemoved = new Map<string, number>()
+      const noteReturned = new Map<string, number>()
+      let partNoChanged = false
+      const bump = (map: Map<string, number>, code: string, n: number) => {
+        if (code && n > 0) map.set(code, (map.get(code) ?? 0) + n)
+      }
+
       // ---- 2b. Repair: the parts on the slip become the record's Part No, so
       // the admin sees them on the Repair side (Part No, PART OUT badges). The
       // Part No queue (queue_repair_part_no_inventory, 20261113000000) then
@@ -226,8 +239,30 @@ export async function saveReleaseSlip(
           .map((c) => c.trim())
           .filter(Boolean)
         if (codes.length && [...codes].sort().join(",") !== [...current].sort().join(",")) {
+          // The note lists what this changed: codes added and removed.
+          const count = (list: string[]) => list.reduce((m, c) => m.set(c, (m.get(c) ?? 0) + 1), new Map<string, number>())
+          const before = count(current), after = count(codes)
+          for (const c of new Set([...before.keys(), ...after.keys()])) {
+            const d = (after.get(c) ?? 0) - (before.get(c) ?? 0)
+            if (d > 0) bump(noteAdded, c, d)
+            if (d < 0) bump(noteRemoved, c, -d)
+          }
+          partNoChanged = true
           const { error } = await db.from("repair_plans").update({ part_no: codes.join(", ") }).eq("id", record.id as string)
           if (error) throw error
+          // The database queued those parts itself (no signed-in user on this
+          // server-side save, so they'd read "System (Auto)"): credit them to
+          // whoever typed them on the slip, so the Inventory List's Created By
+          // names the same person as the repair's note.
+          const { error: whoError } = await db
+            .from("stock_movements")
+            .update({ user_id: actorUserId })
+            .eq("repair_plan_id", record.id as string)
+            .is("repair_plan_part_id", null)
+            .eq("reason", "Repair")
+            .eq("status", "pending")
+            .is("user_id", null)
+          if (whoError) throw whoError
         }
       }
 
@@ -262,10 +297,15 @@ export async function saveReleaseSlip(
       }
       // What each item is for, as picked on the slip (first one per code).
       const purposeByCode = new Map<string, string>()
+      // The type box ticked on its line (F / R / S / O), first one per code;
+      // "" = the job's own type.
+      const typeByCode = new Map<string, string>()
       for (const item of row.items) {
         const code = item.sku.trim()
         const p = (item.purpose ?? "").trim()
         if (code && p && !purposeByCode.has(code)) purposeByCode.set(code, p)
+        const t = (item.slipType ?? "").trim()
+        if (code && !typeByCode.has(code) && ["F", "R", "S", "O", ""].includes(t)) typeByCode.set(code, t)
       }
       const inserts: Record<string, unknown>[] = []
       for (const [key, w] of wanted) {
@@ -289,6 +329,7 @@ export async function saveReleaseSlip(
             reference_number: order || job.order_no || job.id,
             schedule_job_id: job.id,
             ...(purposeByCode.get(w.sku) ? { purpose: purposeByCode.get(w.sku) } : {}),
+            ...(typeByCode.get(w.sku) ? { slip_type: typeByCode.get(w.sku) } : {}),
             // Not linked to the repair record itself: the Part No queue clears
             // every pending 'Repair' line linked to the repair whenever it's
             // edited, which would silently drop these. The job link is enough
@@ -296,6 +337,13 @@ export async function saveReleaseSlip(
             ...(record && link && jobType !== "repair" ? { [link]: record.id } : {}),
             status: "pending",
           })
+        }
+      }
+      if (record && jobType === "repair") {
+        for (const ins of inserts) {
+          const code = String(ins.item_label ?? [...productBySku].find(([, id]) => id === ins.product_id)?.[0] ?? "")
+          if (Number(ins.quantity_added) > 0) bump(noteReturned, code, Number(ins.quantity_added))
+          else if (!partNoChanged) bump(noteAdded, code, Number(ins.quantity_removed) || 0)
         }
       }
       if (inserts.length) {
@@ -323,13 +371,13 @@ export async function saveReleaseSlip(
       }
       const { data: shownMoves } = await db
         .from("stock_movements")
-        .select("id, item_label, quantity_added, quantity_removed, status, created_at, purpose, products(sku)")
+        .select("id, item_label, quantity_added, quantity_removed, status, created_at, purpose, slip_type, products(sku)")
         .or(visible.join(","))
         .neq("status", "rejected")
         .order("created_at", { ascending: false })
       // Matched by the code the slip shows (the product's SKU, else the
       // typed label), the same text the row's items carry.
-      type Move = { id: string; item_label: string | null; quantity_added: number; quantity_removed: number; status: string; purpose: string | null; products: { sku: string | null } | null }
+      type Move = { id: string; item_label: string | null; quantity_added: number; quantity_removed: number; status: string; purpose: string | null; slip_type: string | null; products: { sku: string | null } | null }
       const shownCode = (m: Move) => ((m.products?.sku ?? "").trim() || (m.item_label ?? "").trim())
       const wantedByCode = new Map<string, { out: number; in: number }>()
       for (const item of row.items) {
@@ -354,6 +402,14 @@ export async function saveReleaseSlip(
           if (error) throw error
         }
       }
+      // …and the type box ticked on its line (cleared back to the job's own).
+      for (const [code, t] of typeByCode) {
+        const ids = (byKey.get(code) ?? []).filter((m) => (m.slip_type ?? "") !== t).map((m) => m.id)
+        if (ids.length) {
+          const { error } = await db.from("stock_movements").update({ slip_type: t || null }).in("id", ids)
+          if (error) throw error
+        }
+      }
       for (const [key, moves] of byKey) {
         const w = wantedByCode.get(key) ?? { out: 0, in: 0 }
         for (const side of ["quantity_removed", "quantity_added"] as const) {
@@ -371,10 +427,30 @@ export async function saveReleaseSlip(
               const { error } = await db.from("stock_movements").update({ [side]: Math.max(0, qty - excess) }).eq("id", m.id)
               if (error) throw error
             }
+            if (record && jobType === "repair" && !partNoChanged) bump(noteRemoved, key, Math.min(qty, excess))
             excess -= Math.min(qty, excess)
             result.removed += 1
           }
         }
+      }
+
+      // ---- 5. Repair: a line in its Note saying who changed which parts on
+      // the slip, so the admin sees it on the Repair side — "Oct 21, 2026 ·
+      // Jason Pabalan (Release Slip): + 014 ×1 (Parts), 012 ×1 · − 013 ×1 ·
+      // ↩ 105 ×1". Added below what the note already says; nothing when the
+      // save changed none of its parts.
+      if (record && jobType === "repair" && (noteAdded.size || noteRemoved.size || noteReturned.size)) {
+        const fmt = (map: Map<string, number>) =>
+          [...map].map(([c, n]) => `${c} ×${n}${purposeByCode.get(c) ? ` (${purposeByCode.get(c)})` : ""}`).join(", ")
+        const parts = [
+          noteAdded.size ? `+ ${fmt(noteAdded)}` : "",
+          noteRemoved.size ? `− ${fmt(noteRemoved)}` : "",
+          noteReturned.size ? `↩ ${fmt(noteReturned)}` : "",
+        ].filter(Boolean)
+        const line = `${slipDay} · ${actorName} (Release Slip): ${parts.join(" · ")}`
+        const prev = String(record.note ?? "").trim()
+        const { error } = await db.from("repair_plans").update({ note: prev ? `${prev}\n${line}` : line }).eq("id", record.id as string)
+        if (error) throw error
       }
     } catch (e) {
       result.skipped.push({ orderNo: order || "(blank)", reason: e instanceof Error ? e.message : "failed" })

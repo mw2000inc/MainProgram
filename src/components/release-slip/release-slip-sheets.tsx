@@ -81,25 +81,37 @@ export function combineSameAccount(jobs: ReleaseSlipJob[]): SlipJob[] {
     if (done.has(k!)) continue
     done.add(k!)
     // Summed per code: OUT and IN separately, a code with both on one line.
+    // Keyed by code AND the line's type box, so items ticked R stay apart
+    // from the job's own (F) ones; grouped by type, the job's own type first.
+    const keyOf2 = (code: string, type?: string) => `${type ?? ""}|${code}`
     const outs = new Map<string, { qty: number; pending: boolean }>()
     const ins = new Map<string, { qty: number; pending: boolean }>()
     for (const g of group)
       for (const m of slipItems(g)) {
         const pending = m.status === "pending"
         if (m.qtyOut) {
-          const e = outs.get(itemName(m)) ?? { qty: 0, pending: false }
-          outs.set(itemName(m), { qty: e.qty + m.qtyOut, pending: e.pending || pending })
+          const k = keyOf2(itemName(m), m.slipType)
+          const e = outs.get(k) ?? { qty: 0, pending: false }
+          outs.set(k, { qty: e.qty + m.qtyOut, pending: e.pending || pending })
         }
         if (m.qtyIn) {
-          const e = ins.get(inItemName(m)) ?? { qty: 0, pending: false }
-          ins.set(inItemName(m), { qty: e.qty + m.qtyIn, pending: e.pending || pending })
+          const k = keyOf2(inItemName(m), m.slipType)
+          const e = ins.get(k) ?? { qty: 0, pending: false }
+          ins.set(k, { qty: e.qty + m.qtyIn, pending: e.pending || pending })
         }
       }
-    const codes = [...new Set([...outs.keys(), ...ins.keys()])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    const summedItems: ReleaseSlipMovement[] = codes.map((code) => {
-      const o = outs.get(code)
-      const i = ins.get(code)
-      return { sku: code, label: code, qtyOut: o?.qty ?? 0, qtyIn: i?.qty ?? 0, status: o?.pending || i?.pending ? "pending" : "recorded" }
+    const keys = [...new Set([...outs.keys(), ...ins.keys()])].sort((a, b) => {
+      const [ta, ca] = [a.slice(0, a.indexOf("|")), a.slice(a.indexOf("|") + 1)]
+      const [tb, cb] = [b.slice(0, b.indexOf("|")), b.slice(b.indexOf("|") + 1)]
+      if (ta !== tb) return ta === "" ? -1 : tb === "" ? 1 : ta.localeCompare(tb)
+      return ca.localeCompare(cb, undefined, { numeric: true })
+    })
+    const summedItems: ReleaseSlipMovement[] = keys.map((k) => {
+      const o = outs.get(k)
+      const i = ins.get(k)
+      const type = k.slice(0, k.indexOf("|"))
+      const code = k.slice(k.indexOf("|") + 1)
+      return { sku: code, label: code, qtyOut: o?.qty ?? 0, qtyIn: i?.qty ?? 0, status: o?.pending || i?.pending ? "pending" : "recorded", slipType: type || undefined }
     })
     const first = group[0]
     // The first order's lines typed here but not finished (a code without a
@@ -167,7 +179,7 @@ export function buildSummary(jobs: ReleaseSlipJob[]) {
 // saved; "Reset Edits" drops them. Keyed by job id (per slip); a line by its
 // position in the job's printed lines (a blank line past the last item adds
 // a new one). Quantities are kept as typed and read as numbers.
-export type SlipLineEdit = { outSku?: string; outQty?: string; inSku?: string; inQty?: string; note?: string; purpose?: string }
+export type SlipLineEdit = { outSku?: string; outQty?: string; inSku?: string; inQty?: string; note?: string; purpose?: string; lineType?: string }
 
 // What a slip item is for — picked per line on the on-screen copy (the "For"
 // box in Notes), saved with the item and shown in the Daily Report's
@@ -216,6 +228,7 @@ export function applySlipEdits(jobs: ReleaseSlipJob[], edits: SlipEdits | undefi
         inSku: inSku && inSku !== sku ? inSku : undefined,
         note: le.note ?? base.note,
         purpose: le.purpose ?? base.purpose,
+        slipType: le.lineType !== undefined ? le.lineType || undefined : base.slipType,
         edited: true,
       }
     }
@@ -658,7 +671,6 @@ export function ReleaseSlipSheets({
               </thead>
               {page.blocks.map((b, bi) => {
                 const box = typeBox(b.job.jobType)
-                const boxes = new Set([box, ...b.collections.map((c) => typeBox(c.jobType))])
                 const job = b.job
                 // A combined block: its summed lines are read-only; a line
                 // typed after them is saved to the first order.
@@ -671,13 +683,29 @@ export function ReleaseSlipSheets({
                   ? (line: number, field: keyof SlipLineEdit) =>
                       lineEditable(line) ? (next: string) => onEdit(job.jobId, { lines: { [jobLine(line)]: { [field]: next } } }) : undefined
                   : undefined
+                // Each line's type box (F / R / S / O): its own when one was
+                // ticked on it, else the job's; a line with no item follows
+                // the line above. A new group (another type) starts with a
+                // ✓ and a thicker line above it.
+                const lineTypes: (string | null)[] = []
+                for (let i = 0; i < b.itemLines; i++) {
+                  const mm = b.movements[i]
+                  const prev = i > 0 ? lineTypes[i - 1] : box
+                  lineTypes.push(mm?.slipType || (mm && (mm.qtyOut || mm.qtyIn) ? box : prev))
+                }
+                const groupStart = (i: number) => i === 0 || lineTypes[i] !== lineTypes[i - 1]
                 return (
                   <tbody key={bi} className="slip-job" data-testid="slip-job">
                     {Array.from({ length: b.lines }, (_, li) => {
                       const collection = li >= b.itemLines ? b.collections[li - b.itemLines] : undefined
                       if (collection) {
                         return (
-                          <tr key={li} className="slip-collect-line" data-testid="slip-collect-line">
+                          <tr key={li} className="slip-collect-line slip-group-start" data-testid="slip-collect-line">
+                            {(["F", "R", "S", "O"] as const).map((k) => (
+                              <td key={k} className="slip-box">
+                                {k === typeBox(collection.jobType) ? "✓" : ""}
+                              </td>
+                            ))}
                             <td colSpan={4} className="slip-collect-label">
                               Collection
                             </td>
@@ -702,8 +730,10 @@ export function ReleaseSlipSheets({
                       const line = b.offset + li
                       const purposeEditable = !!onEdit && lineEditable(line) && hasItem
                       const purposeText = hasItem ? (m?.purpose ?? "") : ""
+                      const lineType = lineTypes[li] ?? null
+                      const startsGroup = groupStart(li)
                       return (
-                        <tr key={li}>
+                        <tr key={li} className={li > 0 && startsGroup ? "slip-group-start" : undefined} data-line-type={lineType ?? undefined}>
                           {li === 0 && (
                             <>
                               <td rowSpan={b.lines} className="slip-cell-top slip-order" data-testid={job.added ? "slip-added-job" : undefined}>
@@ -745,29 +775,52 @@ export function ReleaseSlipSheets({
                                   onCommit={onEdit && !b.continued && !combined ? (next) => onEdit(job.jobId, { accountName: next }) : undefined}
                                 />
                               </td>
-                              {(["F", "R", "S", "O"] as const).map((k) => (
-                                <td key={k} rowSpan={b.lines} className="slip-cell-top slip-box">
-                                  {job.added && onEdit && !b.continued ? (
-                                    // An added row's type: click a box to tick it (again to clear).
-                                    <button
-                                      type="button"
-                                      className="slip-box-pick"
-                                      aria-label={`Type ${k}`}
-                                      aria-pressed={box === k}
-                                      data-testid={`slip-box-${k}`}
-                                      onClick={() => onEdit(job.jobId, { jobType: box === k ? MANUAL_JOB_TYPE : BOX_JOB_TYPE[k] })}
-                                    >
-                                      {box === k ? "✓" : ""}
-                                    </button>
-                                  ) : boxes.has(k) ? (
-                                    "✓"
-                                  ) : (
-                                    ""
-                                  )}
-                                </td>
-                              ))}
                             </>
                           )}
+                          {/* … and give every line its own (see lineTypes). */}
+                          {(["F", "R", "S", "O"] as const).map((k) => {
+                            // An added row's first line: its order's type (click to tick, again to clear).
+                            if (li === 0 && job.added && onEdit && !b.continued) {
+                              return (
+                                <td key={k} className="slip-box">
+                                  <button
+                                    type="button"
+                                    className="slip-box-pick"
+                                    aria-label={`Type ${k}`}
+                                    aria-pressed={box === k}
+                                    data-testid={`slip-box-${k}`}
+                                    onClick={() => onEdit(job.jobId, { jobType: box === k ? MANUAL_JOB_TYPE : BOX_JOB_TYPE[k] })}
+                                  >
+                                    {box === k ? "✓" : ""}
+                                  </button>
+                                </td>
+                              )
+                            }
+                            const on = lineType === k
+                            const mark = on && startsGroup ? "✓" : ""
+                            if (onEdit && lineEditable(line)) {
+                              // On screen: tick this line's type (again to go back to the order's).
+                              return (
+                                <td key={k} className="slip-box">
+                                  <button
+                                    type="button"
+                                    className={on && !startsGroup ? "slip-box-pick slip-box-faint" : "slip-box-pick"}
+                                    aria-label={`Line type ${k}`}
+                                    aria-pressed={on}
+                                    data-testid={`slip-line-box-${k}`}
+                                    onClick={() => onEdit(job.jobId, { lines: { [jobLine(line)]: { lineType: m?.slipType === k ? "" : k } } })}
+                                  >
+                                    {on ? "✓" : ""}
+                                  </button>
+                                </td>
+                              )
+                            }
+                            return (
+                              <td key={k} className="slip-box">
+                                {mark}
+                              </td>
+                            )
+                          })}
                           <td>
                             <SkuCell value={m && m.qtyOut ? itemName(m) : ""} label="OUT SKU" options={skuOptions} onCommit={editLine?.(line, "outSku")} />
                           </td>
@@ -910,6 +963,8 @@ export const RELEASE_SLIP_CSS = `
 .slip-sku-option.is-active { background: #eff6ff; }
 .slip-sku-empty { padding: 6px 10px; color: #6b7280; }
 .slip-purpose { font: inherit; font-size: 7pt; height: 4.2mm; padding: 0 1mm; margin-right: 1mm; border: 1px solid #cbd5e1; border-radius: 3px; background: #fff; color: #000; vertical-align: middle; float: left; }
+.slip-table tr.slip-group-start td { border-top-width: 0.6mm; }
+.slip-box-faint { opacity: 0.35; }
 .slip-purpose-text { font-weight: 700; margin-right: 1mm; float: left; }
 .slip-table td.slip-collect-label { text-align: center; font-weight: 700; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; background: #f3f4f6; }
 .slip-collect-line td { border-top-style: dashed; }

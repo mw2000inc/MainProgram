@@ -290,6 +290,8 @@ export interface StockMovement {
   changeRequest?: StockMovementChangeRequest
   // What it's for, picked on the Release Slip ("Parts", "Filter", …).
   purpose?: string
+  // The job type box ticked for it on the Release Slip ('F' | 'R' | 'S' | 'O').
+  slipType?: string
 }
 
 export interface StockMovementChangeRequest {

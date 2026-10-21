@@ -337,8 +337,8 @@ function ReleaseSlipContent() {
       }
       const items = job.movements.flatMap((m) => {
         if (m.errand) return []
-        const out = { sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.inSku ? 0 : m.qtyIn || 0, purpose: m.purpose }
-        const back = m.inSku && m.qtyIn ? [{ sku: m.inSku.trim(), qtyOut: 0, qtyIn: m.qtyIn, purpose: m.purpose }] : []
+        const out = { sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.inSku ? 0 : m.qtyIn || 0, purpose: m.purpose, slipType: m.slipType }
+        const back = m.inSku && m.qtyIn ? [{ sku: m.inSku.trim(), qtyOut: 0, qtyIn: m.qtyIn, purpose: m.purpose, slipType: m.slipType }] : []
         return [...(out.sku && (out.qtyOut || out.qtyIn) ? [out] : []), ...back]
       })
       rows.push({ jobId: job.added ? undefined : job.jobId, orderNo: job.orderNo, accountName: job.accountName, jobType: job.jobType as SlipSaveRowInput["jobType"], items })

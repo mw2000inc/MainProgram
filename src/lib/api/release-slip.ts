@@ -20,6 +20,9 @@ export interface ReleaseSlipMovement {
   // What the item is for ("Parts", "Filter", …), picked on the slip and saved
   // with it (stock_movements.purpose, 20261119000000).
   purpose?: string
+  // The job type box ticked for this item on the slip ('F' | 'R' | 'S' | 'O');
+  // unset = the job's own type (stock_movements.slip_type, 20261120000000).
+  slipType?: string
 }
 
 export interface ReleaseSlipJob {
@@ -55,7 +58,7 @@ type Raw = {
     status: string
     technician: string
     technician_2: string
-    movements: { sku: string; label: string; qty_out: number; qty_in: number; status: string; purpose?: string }[]
+    movements: { sku: string; label: string; qty_out: number; qty_in: number; status: string; purpose?: string; slip_type?: string }[]
   }[]
 }
 
@@ -80,7 +83,7 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
       status: j.status,
       technician: j.technician,
       technician2: j.technician_2,
-      movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined })),
+      movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined, slipType: m.slip_type || undefined })),
     })),
   }
 }
