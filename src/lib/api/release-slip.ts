@@ -46,6 +46,9 @@ export interface ReleaseSlipJob {
 export interface ReleaseSlipData {
   technicianName: string
   jobs: ReleaseSlipJob[]
+  // Orders removed from the slip (its ×; schedule_jobs.slip_hidden) — left
+  // out of jobs, listed so they can be restored.
+  hiddenJobs: { jobId: string; orderNo: string }[]
 }
 
 type Raw = {
@@ -73,9 +76,18 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
   })
   if (error) throw wrapSupabaseError(error)
   const raw = data as Raw
+  // Orders removed from the slip. Before the 20261122000000 migration the
+  // column doesn't exist: nothing is hidden.
+  const ids = (raw.jobs ?? []).map((j) => j.job_id)
+  const hidden = new Set<string>()
+  if (ids.length) {
+    const { data: rows, error: hiddenError } = await supabase.from("schedule_jobs").select("id").in("id", ids).eq("slip_hidden", true)
+    if (!hiddenError) for (const r of (rows ?? []) as { id: string }[]) hidden.add(r.id)
+  }
   return {
     technicianName: raw.technician_name ?? "",
-    jobs: (raw.jobs ?? []).map((j) => ({
+    hiddenJobs: (raw.jobs ?? []).filter((j) => hidden.has(j.job_id)).map((j) => ({ jobId: j.job_id, orderNo: j.order_no })),
+    jobs: (raw.jobs ?? []).filter((j) => !hidden.has(j.job_id)).map((j) => ({
       jobId: j.job_id,
       orderNo: j.order_no,
       accountName: j.account_name,

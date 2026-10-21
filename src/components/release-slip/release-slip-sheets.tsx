@@ -39,6 +39,8 @@ const SIGNATURE_LINES = 9
 type SlipJob = ReleaseSlipJob & {
   orderNos?: string[]
   combinedIds?: string[]
+  // Each combined order with its job (for its × on the slip).
+  combinedOrders?: { jobId: string; orderNo: string }[]
   summedLines?: number
   editOffset?: number
   lineMap?: Record<number, number>
@@ -129,6 +131,7 @@ export function combineSameAccount(jobs: ReleaseSlipJob[]): SlipJob[] {
       movements,
       orderNos: [...new Set(group.map((g) => g.orderNo.trim()).filter(Boolean))],
       combinedIds: group.map((g) => g.jobId),
+      combinedOrders: group.map((g) => ({ jobId: g.jobId, orderNo: g.orderNo.trim() })),
       summedLines: summedItems.length,
       editOffset: firstItems.length,
       lineMap,
@@ -560,6 +563,7 @@ export function ReleaseSlipSheets({
   onSignaturesChange,
   onEdit,
   onRemoveJob,
+  onRemoveOrder,
   skuOptions,
   combine = true,
 }: {
@@ -576,6 +580,9 @@ export function ReleaseSlipSheets({
   onEdit?: (jobId: string, patch: SlipJobEdit) => void
   // Removes an added order row (its × on the admin's on-screen copy).
   onRemoveJob?: (jobId: string) => void
+  // Removes an order from the slip (its × beside the Order No. on the
+  // on-screen copy): every job of that order shown in the block.
+  onRemoveOrder?: (jobIds: string[], orderNo: string) => void
   // Every SKU, for the on-screen SKU cells' pick list (SkuCell).
   skuOptions?: SlipSkuOption[]
   // Same-account orders shown as one block (combineSameAccount).
@@ -602,6 +609,17 @@ export function ReleaseSlipSheets({
   const pages = React.useMemo(() => paginate(shownJobs, summary.length, onEdit ? minLines : {}), [shownJobs, summary.length, minLines, onEdit])
   const summaryRows = [...summary, ...Array.from({ length: Math.max(0, MIN_SUMMARY_ROWS - summary.length) }, () => null)]
 
+  // An order's × (on-screen copy, not on a continued block): removes it and
+  // the same-order collection shown with it.
+  const removeOrderButton = (b: Block, orderNo: string, jobIds: string[]) => {
+    if (!onRemoveOrder || b.continued || !jobIds.length) return null
+    const ids = [...jobIds, ...b.collections.filter((c) => c.orderNo.trim() === orderNo).map((c) => c.jobId)]
+    return (
+      <button type="button" className="slip-remove" onClick={() => onRemoveOrder(ids, orderNo)} aria-label={`Remove ${orderNo} from this slip`} title="Remove from this slip" data-testid="slip-remove-order">
+        ×
+      </button>
+    )
+  }
   const signature = (label: string, key: keyof SlipSignatures | null, value: string) => (
     <div className="slip-sign">
       <span className="slip-sign-label">{label}</span>
@@ -746,10 +764,14 @@ export function ReleaseSlipSheets({
                                   job.orderNos.map((o) => (
                                     <div key={o} data-testid="slip-combined-order">
                                       {o}
+                                      {removeOrderButton(b, o, (job.combinedOrders ?? []).filter((c) => c.orderNo === o).map((c) => c.jobId))}
                                     </div>
                                   ))
                                 ) : (
-                                  job.orderNo
+                                  <>
+                                    {job.orderNo}
+                                    {removeOrderButton(b, job.orderNo.trim(), [job.jobId])}
+                                  </>
                                 )}
                                 {b.continued && <div className="slip-cont">(cont.)</div>}
                                 {onEdit && (

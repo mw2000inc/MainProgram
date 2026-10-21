@@ -333,6 +333,47 @@ function ReleaseSlipContent() {
   // added without an F / R / S / O box is held back (named in a message).
   const qc = useQueryClient()
   const [pendingSave, setPendingSave] = React.useState<{ rows: SlipSaveRowInput[] } | null>(null)
+  // An order's × on the slip: asked first, then taken off the slip with its
+  // pending items (see /api/release-slip/remove-order); Restore puts it back.
+  const [pendingRemove, setPendingRemove] = React.useState<{ jobIds: string[]; orderNo: string } | null>(null)
+  const [removing, setRemoving] = React.useState(false)
+  async function setOrderRemoved(jobIds: string[], restore: boolean) {
+    const res = await fetch("/api/release-slip/remove-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobIds, restore }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || "Couldn't remove the order")
+    // Its unsaved edits go with it.
+    setEditState((s) => {
+      const next = { ...s.edits }
+      for (const key of Object.keys(next)) {
+        const slip = { ...next[key] }
+        for (const id of jobIds) delete slip[id]
+        next[key] = slip
+      }
+      return { ...s, edits: next }
+    })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["releaseSlip"] }),
+      qc.invalidateQueries({ queryKey: ["stockMovements"] }),
+      qc.invalidateQueries({ queryKey: ["repairPlans"] }),
+    ])
+  }
+  async function confirmRemove() {
+    if (!pendingRemove) return
+    setRemoving(true)
+    try {
+      await setOrderRemoved(pendingRemove.jobIds, false)
+      toast.success(t("releaseSlipRemovedOrder", { order: pendingRemove.orderNo }))
+      setPendingRemove(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't remove the order")
+    } finally {
+      setRemoving(false)
+    }
+  }
   const [saving, setSaving] = React.useState(false)
   // The rows to send. "all" (the button): rows added or edited here plus
   // every job not completed yet. "edited" (auto-save): only rows added or
@@ -613,6 +654,24 @@ function ReleaseSlipContent() {
               ? t("releaseSlipCountAll", { count: String(jobs.length), slips: String(slips.length) })
               : t("releaseSlipCount", { count: String(jobs.length) })}
           </p>
+          {canEdit && (data?.hiddenJobs.length ?? 0) > 0 && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" data-testid="slip-removed-orders">
+              {t("releaseSlipRemovedList")}
+              {data!.hiddenJobs.map((h) => (
+                <span key={h.jobId} className="inline-flex items-center gap-1">
+                  <span className="font-medium text-foreground">{h.orderNo || "—"}</span>
+                  <button
+                    type="button"
+                    className="text-primary underline-offset-2 hover:underline"
+                    onClick={() => setOrderRemoved([h.jobId], true).catch((e) => toast.error(e instanceof Error ? e.message : "Couldn't restore the order"))}
+                    data-testid="slip-restore-order"
+                  >
+                    {t("releaseSlipRestoreOrder")}
+                  </button>
+                </span>
+              ))}
+            </p>
+          )}
           {allMode && slips.length === 0 && <p className="text-sm text-muted-foreground">{t("releaseSlipNoJobsDay")}</p>}
           {!allMode && manual.items.length > 0 && (
             <div className="space-y-1.5 rounded-md border p-3" data-testid="slip-manual-list">
@@ -668,6 +727,7 @@ function ReleaseSlipContent() {
                       onSignaturesChange={setSignatures}
                       onEdit={canEdit ? editSlip(slip.key) : undefined}
                       onRemoveJob={canEdit ? removeOrderRow(slip.key) : undefined}
+                      onRemoveOrder={canEdit ? (jobIds, orderNo) => setPendingRemove({ jobIds, orderNo }) : undefined}
                       skuOptions={canEdit ? skuOptions : undefined}
                       combine={combineAccounts}
                     />
@@ -698,6 +758,15 @@ function ReleaseSlipContent() {
         destructive={false}
         loading={saving}
         onConfirm={confirmSave}
+      />
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onOpenChange={(o) => !o && !removing && setPendingRemove(null)}
+        title={t("releaseSlipRemoveOrderTitle", { order: pendingRemove?.orderNo || "—" })}
+        description={t("releaseSlipRemoveOrderDescription", { order: pendingRemove?.orderNo || "—" })}
+        confirmLabel={t("releaseSlipRemoveOrderConfirm")}
+        loading={removing}
+        onConfirm={confirmRemove}
       />
       <AddSlipItemDialog open={addOpen} onOpenChange={setAddOpen} productOptions={productOptions} noteSuggestions={noteSuggestions} onAdd={addManualItem} />
     </div>
