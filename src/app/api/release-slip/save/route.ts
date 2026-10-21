@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   if (rows.length === 0) return NextResponse.json({ error: "Nothing to save" }, { status: 400 })
 
   try {
-    const result = await saveReleaseSlip(createAdminClient(), { date: body.date, technicianUserId, actorUserId: caller.id, rows })
+    const result = await saveReleaseSlip(createAdminClient(), { date: body.date, technicianUserId, actorUserId: caller.id, rows, canChangeApproved: isAdmin })
     return NextResponse.json(result)
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 500 })

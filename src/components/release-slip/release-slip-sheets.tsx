@@ -30,8 +30,22 @@ const SIGNATURE_LINES = 9
 // offset: the position of the block's first line among the job's lines.
 // itemLines: the job's own item lines; collections: same-order collection
 // jobs shown in this block, one line each after the item lines.
+// A slip job as shown — possibly several same-account orders combined into
+// one block (combineSameAccount): orderNos lists them, combinedIds their
+// jobs. Its first summedLines lines are the summed items (read-only); after
+// them come the first order's lines still being typed (no quantity yet),
+// lineMap giving each one's line in that order; a line past all of them goes
+// to the first order's line editOffset + n.
+type SlipJob = ReleaseSlipJob & {
+  orderNos?: string[]
+  combinedIds?: string[]
+  summedLines?: number
+  editOffset?: number
+  lineMap?: Record<number, number>
+}
+
 type Block = {
-  job: ReleaseSlipJob
+  job: SlipJob
   movements: ReleaseSlipMovement[]
   lines: number
   itemLines: number
@@ -40,6 +54,77 @@ type Block = {
   collections: ReleaseSlipJob[]
 }
 type Page = { blocks: Block[]; summary: boolean }
+
+// Same account, same job type → one block: both order numbers in the Order
+// No box and each SKU's quantity added up ("012" 1 + 1 = 2). Never an added
+// row, a hand-typed block or a collection (those join their visit's block —
+// mergeCollections). The block sits where the first of them was.
+export function combineSameAccount(jobs: ReleaseSlipJob[]): SlipJob[] {
+  const keyOf = (j: ReleaseSlipJob) =>
+    j.added || j.jobType === MANUAL_JOB_TYPE || j.jobType === "collection" || !j.accountName.trim()
+      ? null
+      : `${j.jobType}|${j.accountName.trim().toLowerCase()}`
+  const groups = new Map<string, ReleaseSlipJob[]>()
+  for (const j of jobs) {
+    const k = keyOf(j)
+    if (k) groups.set(k, [...(groups.get(k) ?? []), j])
+  }
+  const out: SlipJob[] = []
+  const done = new Set<string>()
+  for (const j of jobs) {
+    const k = keyOf(j)
+    const group = k ? groups.get(k)! : [j]
+    if (group.length < 2) {
+      out.push(j)
+      continue
+    }
+    if (done.has(k!)) continue
+    done.add(k!)
+    // Summed per code: OUT and IN separately, a code with both on one line.
+    const outs = new Map<string, { qty: number; pending: boolean }>()
+    const ins = new Map<string, { qty: number; pending: boolean }>()
+    for (const g of group)
+      for (const m of slipItems(g)) {
+        const pending = m.status === "pending"
+        if (m.qtyOut) {
+          const e = outs.get(itemName(m)) ?? { qty: 0, pending: false }
+          outs.set(itemName(m), { qty: e.qty + m.qtyOut, pending: e.pending || pending })
+        }
+        if (m.qtyIn) {
+          const e = ins.get(inItemName(m)) ?? { qty: 0, pending: false }
+          ins.set(inItemName(m), { qty: e.qty + m.qtyIn, pending: e.pending || pending })
+        }
+      }
+    const codes = [...new Set([...outs.keys(), ...ins.keys()])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    const summedItems: ReleaseSlipMovement[] = codes.map((code) => {
+      const o = outs.get(code)
+      const i = ins.get(code)
+      return { sku: code, label: code, qtyOut: o?.qty ?? 0, qtyIn: i?.qty ?? 0, status: o?.pending || i?.pending ? "pending" : "recorded" }
+    })
+    const first = group[0]
+    // The first order's lines typed here but not finished (a code without a
+    // quantity yet): kept in the block and tied to their own line, so the
+    // quantity typed next lands on the same line.
+    const firstItems = slipItems(first)
+    const inProgress = firstItems.map((m, i) => ({ m, i })).filter(({ m }) => !m.qtyOut && !m.qtyIn)
+    const movements = [...summedItems, ...inProgress.map(({ m }) => m)]
+    const lineMap: Record<number, number> = {}
+    inProgress.forEach(({ i }, k) => {
+      lineMap[summedItems.length + k] = i
+    })
+    out.push({
+      ...first,
+      movements,
+      orderNos: [...new Set(group.map((g) => g.orderNo.trim()).filter(Boolean))],
+      combinedIds: group.map((g) => g.jobId),
+      summedLines: summedItems.length,
+      editOffset: firstItems.length,
+      lineMap,
+      jobNote: [...new Set(group.map((g) => (g.jobNote ?? "").trim()).filter(Boolean))].join(" · ") || undefined,
+    })
+  }
+  return out
+}
 
 // The block of rows added by hand on the slip page (no type box ticked).
 export const MANUAL_JOB_TYPE = "manual"
@@ -188,13 +273,15 @@ function Editable({
 // Change and its payment, say) is shown in that job's block — its O box
 // ticked and the collection on a line of its own — instead of a second block.
 // Only a collection with no items of its own, and never an added row.
-function mergeCollections(jobs: ReleaseSlipJob[]) {
+function mergeCollections(jobs: SlipJob[]) {
   const into = new Map<string, ReleaseSlipJob[]>()
   const merged = new Set<string>()
   for (const c of jobs) {
     const order = c.orderNo.trim()
     if (c.jobType !== "collection" || c.added || !order || slipItems(c).length) continue
-    const host = jobs.find((j) => j !== c && !j.added && j.jobType !== "collection" && j.jobType !== MANUAL_JOB_TYPE && j.orderNo.trim() === order)
+    const host = jobs.find(
+      (j) => j !== c && !j.added && j.jobType !== "collection" && j.jobType !== MANUAL_JOB_TYPE && (j.orderNos ?? [j.orderNo]).some((o) => o.trim() === order)
+    )
     if (!host) continue
     into.set(host.jobId, [...(into.get(host.jobId) ?? []), c])
     merged.add(c.jobId)
@@ -394,7 +481,7 @@ function SkuPicker({ value, onCommit, options, label }: { value: string; onCommi
   )
 }
 
-export function paginate(jobs: ReleaseSlipJob[], summaryRows: number, minLines: Record<string, number> = {}): Page[] {
+export function paginate(jobs: SlipJob[], summaryRows: number, minLines: Record<string, number> = {}): Page[] {
   const { into, merged } = mergeCollections(jobs)
   // Split a job longer than a whole page into page-sized chunks.
   const blocks: Block[] = []
@@ -455,6 +542,7 @@ export function ReleaseSlipSheets({
   onEdit,
   onRemoveJob,
   skuOptions,
+  combine = true,
 }: {
   date: string
   technicianName: string
@@ -471,6 +559,8 @@ export function ReleaseSlipSheets({
   onRemoveJob?: (jobId: string) => void
   // Every SKU, for the on-screen SKU cells' pick list (SkuCell).
   skuOptions?: SlipSkuOption[]
+  // Same-account orders shown as one block (combineSameAccount).
+  combine?: boolean
 }) {
   // Errands done together: the technician's partner on any of these jobs is
   // named with them ("Jerson Capellan & Jeric Salirio") in the header and on
@@ -489,7 +579,8 @@ export function ReleaseSlipSheets({
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
   // Lines added with "+ Add line" (on-screen copy only; a filled one prints).
   const [minLines, setMinLines] = React.useState<Record<string, number>>({})
-  const pages = React.useMemo(() => paginate(jobs, summary.length, onEdit ? minLines : {}), [jobs, summary.length, minLines, onEdit])
+  const shownJobs = React.useMemo(() => (combine ? combineSameAccount(jobs) : jobs), [jobs, combine])
+  const pages = React.useMemo(() => paginate(shownJobs, summary.length, onEdit ? minLines : {}), [shownJobs, summary.length, minLines, onEdit])
   const summaryRows = [...summary, ...Array.from({ length: Math.max(0, MIN_SUMMARY_ROWS - summary.length) }, () => null)]
 
   const signature = (label: string, key: keyof SlipSignatures | null, value: string) => (
@@ -563,8 +654,16 @@ export function ReleaseSlipSheets({
                 const box = typeBox(b.job.jobType)
                 const boxes = new Set([box, ...b.collections.map((c) => typeBox(c.jobType))])
                 const job = b.job
+                // A combined block: its summed lines are read-only; a line
+                // typed after them is saved to the first order.
+                const combined = !!job.combinedIds
+                const summed = job.summedLines ?? 0
+                const lineEditable = (line: number) => !combined || line >= summed
+                const jobLine = (line: number) =>
+                  !combined ? line : (job.lineMap?.[line] ?? (job.editOffset ?? 0) + (line - job.movements.length))
                 const editLine = onEdit
-                  ? (line: number, field: keyof SlipLineEdit) => (next: string) => onEdit(job.jobId, { lines: { [line]: { [field]: next } } })
+                  ? (line: number, field: keyof SlipLineEdit) =>
+                      lineEditable(line) ? (next: string) => onEdit(job.jobId, { lines: { [jobLine(line)]: { [field]: next } } }) : undefined
                   : undefined
                 return (
                   <tbody key={bi} className="slip-job" data-testid="slip-job">
@@ -607,6 +706,12 @@ export function ReleaseSlipSheets({
                                       </button>
                                     )}
                                   </>
+                                ) : job.orderNos && job.orderNos.length > 1 ? (
+                                  job.orderNos.map((o) => (
+                                    <div key={o} data-testid="slip-combined-order">
+                                      {o}
+                                    </div>
+                                  ))
                                 ) : (
                                   job.orderNo
                                 )}
@@ -627,7 +732,7 @@ export function ReleaseSlipSheets({
                                   value={b.job.accountName}
                                   multiline
                                   label="Accnt. Name"
-                                  onCommit={onEdit && !b.continued ? (next) => onEdit(job.jobId, { accountName: next }) : undefined}
+                                  onCommit={onEdit && !b.continued && !combined ? (next) => onEdit(job.jobId, { accountName: next }) : undefined}
                                 />
                               </td>
                               {(["F", "R", "S", "O"] as const).map((k) => (
@@ -670,13 +775,13 @@ export function ReleaseSlipSheets({
                               value={note}
                               label="Notes"
                               onCommit={
-                                onEdit
+                                onEdit && lineEditable(line) && !(combined && jobNote !== undefined)
                                   ? (next) =>
                                       // The first line holds the job's collection note: an edit
                                       // there replaces it (and that line's own note).
                                       jobNote !== undefined
-                                        ? onEdit(job.jobId, { jobNote: next, lines: { [line]: { note: "" } } })
-                                        : onEdit(job.jobId, { lines: { [line]: { note: next } } })
+                                        ? onEdit(job.jobId, { jobNote: next, lines: { [jobLine(line)]: { note: "" } } })
+                                        : onEdit(job.jobId, { lines: { [jobLine(line)]: { note: next } } })
                                   : undefined
                               }
                             />

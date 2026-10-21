@@ -105,6 +105,9 @@ function ReleaseSlipContent() {
     window.history.replaceState(null, "", `?${params.toString()}`)
   }
   const [includePending, setIncludePending] = React.useState(false)
+  // Same-account orders as one block on the slip (both order numbers, items
+  // added up); untick to see and edit each order on its own.
+  const [combineAccounts, setCombineAccounts] = React.useState(true)
   const { data: users = [] } = useUsers()
   const technicians = React.useMemo(() => assignmentAccounts(users).sort((a, b) => a.name.localeCompare(b.name)), [users])
   // A technician always gets their own slip (the database decides); an admin
@@ -517,6 +520,10 @@ function ReleaseSlipContent() {
             <Checkbox checked={includePending} onCheckedChange={(v) => setIncludePending(v === true)} data-testid="slip-include-pending" />
             {t("releaseSlipIncludePending")}
           </label>
+          <label className="flex items-center gap-2 text-sm" title="Orders with the same account name and job type print as one block (items added up). Untick to edit each order on its own.">
+            <Checkbox checked={combineAccounts} onCheckedChange={(v) => setCombineAccounts(v === true)} data-testid="slip-combine-accounts" />
+            Combine same account
+          </label>
           <Button
             size="sm"
             variant="outline"
@@ -641,6 +648,7 @@ function ReleaseSlipContent() {
                       onEdit={canEdit ? editSlip(slip.key) : undefined}
                       onRemoveJob={canEdit ? removeOrderRow(slip.key) : undefined}
                       skuOptions={canEdit ? skuOptions : undefined}
+                      combine={combineAccounts}
                     />
                   </div>
                 ))}
@@ -653,7 +661,7 @@ function ReleaseSlipContent() {
             createPortal(
               <div className="release-slip-print">
                 {slips.map((slip) => (
-                  <ReleaseSlipSheets key={slip.key} date={date} technicianName={slip.name} jobs={slip.jobs} signatures={signatures} />
+                  <ReleaseSlipSheets key={slip.key} date={date} technicianName={slip.name} jobs={slip.jobs} signatures={signatures} combine={combineAccounts} />
                 ))}
               </div>,
               document.body

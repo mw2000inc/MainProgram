@@ -20,6 +20,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // 3. Items: each OUT / IN item on the row, beyond what is already queued for
 //    the job or its record (same product — or same label when unmapped — and
 //    direction), is added as a pending movement dated the slip's date.
+// 4. Items the slip shows less of than the database holds (a line removed, a
+//    quantity lowered) are taken out, so they don't come back on reload.
 //
 // A technician saves only their own slip; checked by the API route.
 
@@ -37,6 +39,8 @@ export type SlipSaveResult = {
   completed: number
   alreadyCompleted: number
   movements: number
+  // Items taken out (or lowered) because the slip removed them.
+  removed: number
   skipped: { orderNo: string; reason: string }[]
 }
 
@@ -63,9 +67,17 @@ type Job = { id: string; job_type: string; status: string; scheduled_date: strin
 
 export async function saveReleaseSlip(
   db: SupabaseClient,
-  input: { date: string; technicianUserId: string; actorUserId: string; rows: SlipSaveRow[] }
+  input: {
+    date: string
+    technicianUserId: string
+    actorUserId: string
+    rows: SlipSaveRow[]
+    // An admin may also remove / lower APPROVED items (stock given back);
+    // a technician only pending ones.
+    canChangeApproved?: boolean
+  }
 ): Promise<SlipSaveResult> {
-  const result: SlipSaveResult = { created: 0, completed: 0, alreadyCompleted: 0, movements: 0, skipped: [] }
+  const result: SlipSaveResult = { created: 0, completed: 0, alreadyCompleted: 0, movements: 0, removed: 0, skipped: [] }
   const { date, technicianUserId, actorUserId } = input
 
   const { data: tech } = await db.from("profiles").select("id, name").eq("id", technicianUserId).maybeSingle()
@@ -282,6 +294,71 @@ export async function saveReleaseSlip(
         const { error } = await db.from("stock_movements").insert(inserts)
         if (error) throw error
         result.movements += inserts.length
+      }
+
+      // ---- 4. items removed or lowered on the slip
+      // The row's items are everything the slip shows for the job, so an item
+      // the slip shows less of than the database holds was removed (or its
+      // quantity lowered) there — take it out, newest first, so it doesn't
+      // come back when the slip reloads. Only what the slip itself shows for
+      // the job counts (get_release_slip: the job, its Filter Change /
+      // Installation record, its repair's part lines — not a repair's
+      // replacement unit). Pending items always; an approved one only for an
+      // admin (its stock is given back by the DB triggers).
+      const visible = [`schedule_job_id.eq.${job.id}`]
+      if (record && jobType === "filter_change") visible.push(`filter_change_plan_id.eq.${record.id as string}`)
+      if (record && jobType === "installation") visible.push(`install_plan_id.eq.${record.id as string}`)
+      if (record && jobType === "repair") {
+        const { data: parts } = await db.from("repair_plan_parts").select("id").eq("repair_plan_id", record.id as string)
+        const partIds = ((parts ?? []) as { id: string }[]).map((p) => p.id)
+        if (partIds.length) visible.push(`repair_plan_part_id.in.(${partIds.join(",")})`)
+      }
+      const { data: shownMoves } = await db
+        .from("stock_movements")
+        .select("id, item_label, quantity_added, quantity_removed, status, created_at, products(sku)")
+        .or(visible.join(","))
+        .neq("status", "rejected")
+        .order("created_at", { ascending: false })
+      // Matched by the code the slip shows (the product's SKU, else the
+      // typed label), the same text the row's items carry.
+      type Move = { id: string; item_label: string | null; quantity_added: number; quantity_removed: number; status: string; products: { sku: string | null } | null }
+      const shownCode = (m: Move) => ((m.products?.sku ?? "").trim() || (m.item_label ?? "").trim())
+      const wantedByCode = new Map<string, { out: number; in: number }>()
+      for (const item of row.items) {
+        const code = item.sku.trim()
+        if (!code) continue
+        const w = wantedByCode.get(code) ?? { out: 0, in: 0 }
+        w.out += Math.max(0, Math.floor(item.qtyOut || 0))
+        w.in += Math.max(0, Math.floor(item.qtyIn || 0))
+        wantedByCode.set(code, w)
+      }
+      const byKey = new Map<string, Move[]>()
+      for (const m of (shownMoves ?? []) as unknown as Move[]) {
+        const key = shownCode(m)
+        if (!key) continue
+        byKey.set(key, [...(byKey.get(key) ?? []), m])
+      }
+      for (const [key, moves] of byKey) {
+        const w = wantedByCode.get(key) ?? { out: 0, in: 0 }
+        for (const side of ["quantity_removed", "quantity_added"] as const) {
+          const want = side === "quantity_removed" ? w.out : w.in
+          let excess = moves.reduce((n, m) => n + (m[side] || 0), 0) - want
+          for (const m of moves) {
+            if (excess <= 0) break
+            const qty = m[side] || 0
+            if (!qty || (m.status !== "pending" && !input.canChangeApproved)) continue
+            const other = side === "quantity_removed" ? m.quantity_added : m.quantity_removed
+            if (qty <= excess && !other) {
+              const { error } = await db.from("stock_movements").delete().eq("id", m.id)
+              if (error) throw error
+            } else {
+              const { error } = await db.from("stock_movements").update({ [side]: Math.max(0, qty - excess) }).eq("id", m.id)
+              if (error) throw error
+            }
+            excess -= Math.min(qty, excess)
+            result.removed += 1
+          }
+        }
       }
     } catch (e) {
       result.skipped.push({ orderNo: order || "(blank)", reason: e instanceof Error ? e.message : "failed" })
