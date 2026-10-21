@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     const result = await completeScheduleJobs(admin, jobIds, body.today, auth.callerId)
     return NextResponse.json(result)
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to complete jobs" }, { status: 500 })
+    // A database error isn't always an Error instance — keep its message so
+    // the admin sees the real reason, not just "Failed to complete jobs".
+    const message = (error as { message?: string } | null)?.message
+    return NextResponse.json({ error: message || "Failed to complete jobs" }, { status: 500 })
   }
 }

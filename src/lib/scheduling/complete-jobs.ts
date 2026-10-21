@@ -63,43 +63,61 @@ export async function completeScheduleJobs(
   const ids = done.map((j) => j.id)
   if (ids.length === 0) return result
 
+  // Completing the jobs above already completed their records in the
+  // database (sync_job_completion_to_records, 20261027000000 / 20261116000000),
+  // so only a record still not done is saved here — before, every record was
+  // saved again one at a time, each firing the inventory/date triggers again,
+  // which made a big batch take a long time. The few left are saved together.
+  const inParallel = async <T,>(items: T[], run: (item: T) => PromiseLike<unknown>) => {
+    for (let i = 0; i < items.length; i += 10) await Promise.all(items.slice(i, i + 10).map(run))
+  }
   const completeLinked = async (table: string, dateColumn: string) => {
     const { data: rows } = await admin.from(table).select(`id, ${dateColumn}, status, schedule_job_id`).in("schedule_job_id", ids)
-    const targets = ((rows ?? []) as unknown as Record<string, string | null>[]).filter((r) => r.status !== "Cancelled")
-    for (const r of targets) {
-      await admin
+    const linked = ((rows ?? []) as unknown as Record<string, string | null>[]).filter((r) => r.status !== "Cancelled")
+    const notDone = linked.filter((r) => r.status !== "Completed")
+    await inParallel(notDone, (r) =>
+      admin
         .from(table)
         .update({ status: "Completed", updated_by: actorId, ...(r[dateColumn] ? {} : { [dateColumn]: jobDay.get(r.schedule_job_id as string) ?? today }) })
         .eq("id", r.id as string)
-    }
-    return targets.length
+    )
+    return linked.length
   }
-  result.filterChangeVisits = await completeLinked("filter_change_plans", "acc_d")
-  result.installs = await completeLinked("install_plans", "installed_date")
-  result.repairs = await completeLinked("repair_plans", "acc_d")
+  const [fcCount, installCount, repairCount] = await Promise.all([
+    completeLinked("filter_change_plans", "acc_d"),
+    completeLinked("install_plans", "installed_date"),
+    completeLinked("repair_plans", "acc_d"),
+  ])
+  result.filterChangeVisits = fcCount
+  result.installs = installCount
+  result.repairs = repairCount
 
   const collectionJobIds = done.filter((j) => j.job_type === "collection").map((j) => j.id)
   if (collectionJobIds.length > 0) {
     const { data: rows } = await admin
       .from("collections")
-      .select("id, status, collected_by, collected_at, acc_d, schedule_job_id")
+      .select("id, status, collected, collected_by, collected_at, acc_d, schedule_job_id")
       .in("schedule_job_id", collectionJobIds)
     const nowIso = new Date().toISOString()
-    for (const r of (rows ?? []) as { id: string; status: string; collected_by: string | null; collected_at: string | null; acc_d: string | null; schedule_job_id: string }[]) {
-      if (r.status === "Cancelled") continue
-      await admin
-        .from("collections")
-        .update({
-          status: "Collected",
-          updated_by: actorId,
-          collected: true,
-          collected_by: r.collected_by ?? actorId,
-          collected_at: r.collected_at ?? nowIso,
-          ...(r.acc_d ? {} : { acc_d: jobDay.get(r.schedule_job_id) ?? today }),
-        })
-        .eq("id", r.id)
-      result.collections += 1
-    }
+    type Col = { id: string; status: string; collected: boolean | null; collected_by: string | null; collected_at: string | null; acc_d: string | null; schedule_job_id: string }
+    const live = ((rows ?? []) as Col[]).filter((r) => r.status !== "Cancelled")
+    result.collections = live.length
+    // Already collected by the database on the job's completion: left as is.
+    await inParallel(
+      live.filter((r) => !(r.status === "Collected" && r.collected)),
+      (r) =>
+        admin
+          .from("collections")
+          .update({
+            status: "Collected",
+            updated_by: actorId,
+            collected: true,
+            collected_by: r.collected_by ?? actorId,
+            collected_at: r.collected_at ?? nowIso,
+            ...(r.acc_d ? {} : { acc_d: jobDay.get(r.schedule_job_id) ?? today }),
+          })
+          .eq("id", r.id)
+    )
   }
 
   const { data: linkedVisits } = await admin.from("filter_change_plans").select("schedule_job_id").in("schedule_job_id", ids)
@@ -109,9 +127,11 @@ export async function completeScheduleJobs(
     const { data: products } = await admin.from("products").select("id, sku, date_added").order("date_added")
     const productBySku = new Map<string, string>()
     for (const p of (products ?? []) as { id: string; sku: string }[]) if (!productBySku.has(p.sku.trim())) productBySku.set(p.sku.trim(), p.id)
+    // One query for which of these jobs already have movements (not one per job).
+    const { data: queuedRows } = await admin.from("stock_movements").select("schedule_job_id").in("schedule_job_id", unlinkedWithFilters.map((j) => j.id))
+    const alreadyQueued = new Set(((queuedRows ?? []) as { schedule_job_id: string }[]).map((m) => m.schedule_job_id))
     for (const job of unlinkedWithFilters) {
-      const { data: existing } = await admin.from("stock_movements").select("id").eq("schedule_job_id", job.id).limit(1)
-      if (existing && existing.length > 0) continue
+      if (alreadyQueued.has(job.id)) continue
       const counts = new Map<string, number>()
       for (const code of (job.filter_codes ?? "").split(",").map((c) => c.trim()).filter(Boolean)) counts.set(code, (counts.get(code) ?? 0) + 1)
       const rows = [...counts].flatMap(([code, qty]) => {

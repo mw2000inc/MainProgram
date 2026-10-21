@@ -1151,6 +1151,9 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // selection the search is currently hiding is never acted on.
   const visibleSelected = pendingInView.filter((j) => selected.has(j.id))
   const completionTargets = visibleSelected.length > 0 ? visibleSelected : pendingInView
+  // The jobs the confirm was opened for — kept while it works, so the dialog
+  // doesn't recount to "0 job(s)" as the list refreshes mid-batch.
+  const [confirmTargets, setConfirmTargets] = React.useState<string[]>([])
 
   const sectionHeader = (label: string, count: number, testId: string, jobs?: typeof todaysJobs) => (
     <div data-testid={testId} className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2055,7 +2058,10 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                     <Checkbox checked={selectAllState(visibleJobs)} onCheckedChange={() => toggleSelectAll(visibleJobs)} aria-label={t("selectAllPending")} />
                     {t("selectAllPending")}
                   </label>
-                  <Button size="sm" className="gap-1.5" disabled={completeJobs.isPending} onClick={() => setConfirmComplete(true)}>
+                  <Button size="sm" className="gap-1.5" disabled={completeJobs.isPending} onClick={() => {
+                      setConfirmTargets(completionTargets.map((j) => j.id))
+                      setConfirmComplete(true)
+                    }}>
                     <CheckCheck className="h-3.5 w-3.5" />
                     {visibleSelected.length > 0
                       ? t("markSelectedCompleted", { count: String(completionTargets.length) })
@@ -2076,13 +2082,13 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         open={confirmComplete}
         onOpenChange={setConfirmComplete}
         title={t("batchCompleteTitle")}
-        description={t("batchCompleteDescription", { count: String(completionTargets.length), date: formatDate(todayIso()) })}
+        description={t("batchCompleteDescription", { count: String(confirmTargets.length), date: formatDate(todayIso()) })}
         confirmLabel={t("batchCompleteConfirm")}
         destructive={false}
         loading={completeJobs.isPending}
         onConfirm={async () => {
           await completeJobs
-            .mutateAsync({ jobIds: completionTargets.map((j) => j.id), today: todayIso() })
+            .mutateAsync({ jobIds: confirmTargets, today: todayIso() })
             .then(() => setSelected(new Set()))
             .catch(() => {})
           setConfirmComplete(false)
