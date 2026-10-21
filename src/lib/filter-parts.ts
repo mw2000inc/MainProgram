@@ -52,16 +52,19 @@ export function getCpSystemFilterSkus(system: CpSystem, products: Product[]): st
   return skus
 }
 
-// The filters a CP System has due on a visit date: whole months since the
-// order's CP Start, and every component whose interval divides it — the same
-// rule the database uses for generated visits (cp_system_due_filters,
-// 20261008000000). Codes are the part before " / ", each listed once.
-// Empty when nothing is due that month, or the date is on/before CP Start.
+// The filters a CP System has due on a visit date: CALENDAR months since the
+// order's CP Start (Jul 23 → Oct 21 is 3), and every component whose interval
+// divides it — the same rule the database uses for generated visits
+// (cp_system_due_filters, by occurrence month) and the one AppSheet uses. A
+// visit a few days before its day of the month is still that month's visit;
+// counting it a month short made nothing due and filled in every filter.
+// Codes are the part before " / ", each listed once. Empty when nothing is
+// due that month, or the date is on/before CP Start.
 export function cpSystemDueFilterCodes(system: CpSystem, cpStart: string | undefined, visitDate: string | undefined): string[] {
   if (!cpStart || !visitDate || visitDate <= cpStart) return []
-  const [sy, sm, sd] = cpStart.split("-").map(Number)
-  const [vy, vm, vd] = visitDate.split("-").map(Number)
-  const elapsed = (vy - sy) * 12 + (vm - sm) - (vd < sd ? 1 : 0)
+  const [sy, sm] = cpStart.split("-").map(Number)
+  const [vy, vm] = visitDate.split("-").map(Number)
+  const elapsed = (vy - sy) * 12 + (vm - sm)
   if (elapsed <= 0) return []
   const due = new Map<string, number>()
   for (const c of system.components) {
