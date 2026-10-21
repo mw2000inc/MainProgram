@@ -725,11 +725,7 @@ export function ReleaseSlipSheets({
                       // line's own item note.
                       const jobNote = li === 0 && !b.continued ? b.job.jobNote : undefined
                       const note = [jobNote, m?.note].filter(Boolean).join(" · ")
-                      const hasItem = !!m && !!(m.qtyOut || m.qtyIn)
-                      // The "For" box: on an editable line with an item (on-screen copy).
                       const line = b.offset + li
-                      const purposeEditable = !!onEdit && lineEditable(line) && hasItem
-                      const purposeText = hasItem ? (m?.purpose ?? "") : ""
                       const lineType = lineTypes[li] ?? null
                       const startsGroup = groupStart(li)
                       return (
@@ -833,25 +829,7 @@ export function ReleaseSlipSheets({
                           <td className="slip-num">
                             <Editable value={m && m.qtyIn ? qty(m.qtyIn) : ""} label="IN Qty" onCommit={editLine?.(line, "inQty")} />
                           </td>
-                          <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={[purposeText, note].filter(Boolean).join(" · ") || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
-                            {purposeEditable ? (
-                              <select
-                                className="slip-purpose"
-                                value={purposeText}
-                                aria-label="For"
-                                data-testid="slip-purpose"
-                                onChange={(e) => onEdit!(job.jobId, { lines: { [jobLine(line)]: { purpose: e.target.value } } })}
-                              >
-                                <option value="">For…</option>
-                                {SLIP_PURPOSES.map((p) => (
-                                  <option key={p} value={p}>
-                                    {p}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : purposeText ? (
-                              <b className="slip-purpose-text">{purposeText}</b>
-                            ) : null}
+                          <td className={jobNote ? "slip-note slip-note-job" : "slip-note"} title={note || undefined} data-testid={jobNote ? "slip-job-note" : undefined}>
                             <Editable
                               value={note}
                               label="Notes"
@@ -962,10 +940,8 @@ export const RELEASE_SLIP_CSS = `
 .slip-sku-option span { color: #4b5563; overflow: hidden; text-overflow: ellipsis; }
 .slip-sku-option.is-active { background: #eff6ff; }
 .slip-sku-empty { padding: 6px 10px; color: #6b7280; }
-.slip-purpose { font: inherit; font-size: 7pt; height: 4.2mm; padding: 0 1mm; margin-right: 1mm; border: 1px solid #cbd5e1; border-radius: 3px; background: #fff; color: #000; vertical-align: middle; float: left; }
 .slip-table tr.slip-group-start td { border-top-width: 0.6mm; }
 .slip-box-faint { opacity: 0.35; }
-.slip-purpose-text { font-weight: 700; margin-right: 1mm; float: left; }
 .slip-table td.slip-collect-label { text-align: center; font-weight: 700; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; background: #f3f4f6; }
 .slip-collect-line td { border-top-style: dashed; }
 .slip-add-line { all: unset; display: block; margin-top: 1mm; font-size: 7pt; font-weight: 400; cursor: pointer; color: #2563eb !important; }
