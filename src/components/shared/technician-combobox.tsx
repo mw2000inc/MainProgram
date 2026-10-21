@@ -9,6 +9,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { FormControl, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { InlineComboboxCell } from "@/components/shared/inline-edit-cell"
 import { TECHNICIANS } from "@/lib/constants"
+import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians"
 
@@ -25,17 +26,34 @@ import { isAssignedTechnician, normalizeTechnicianPair } from "@/lib/technicians
 // (TechnicianCombobox, InlineTechnicianCell) and pair (TechnicianPairCombobox,
 // InlineTechnicianPairCell) forms. The pair rules — no second without a real
 // first, no duplicates — live in lib/technicians.ts.
-const ALL_OPTIONS: ComboboxOption[] = TECHNICIANS.map((value) => ({ value }))
-// Pending Approvals treats blank as "Not assigned", so "N/A" isn't offered there.
-const OPTIONS_WITHOUT_NA: ComboboxOption[] = ALL_OPTIONS.filter((o) => o.value !== "N/A")
+// The roster offered: the TECHNICIANS list, then every login account with
+// the technician role that isn't on it yet (a technician who just made an
+// account shows up here on their own, alphabetically), then "N/A" last.
+// Accounts are read with the Users list; where that isn't readable (a
+// technician's own session) it's just the roster.
+function useTechnicianRoster(): string[] {
+  const { data: users = [] } = useUsers()
+  return React.useMemo(() => {
+    const roster = TECHNICIANS.filter((n) => n !== "N/A") as string[]
+    const known = new Set(roster.map((n) => n.toLowerCase()))
+    const accounts = users
+      .filter((u) => u.role === "technician")
+      .map((u) => (u.name ?? "").trim())
+      .filter((n) => n && !n.includes("@") && !known.has(n.toLowerCase()))
+      .sort((a, b) => a.localeCompare(b))
+    return [...roster, ...new Set(accounts), "N/A"]
+  }, [users])
+}
 
 // The suggestions for a technician box. `exclude` drops one name (the OTHER
 // technician on the pair — offering the first technician as the second is
-// never useful). "N/A" is only ever offered for a primary.
-function technicianOptions(includeNotApplicable: boolean, exclude?: string): ComboboxOption[] {
-  const base = includeNotApplicable ? ALL_OPTIONS : OPTIONS_WITHOUT_NA
+// never useful). "N/A" is only ever offered for a primary (Pending Approvals
+// treats blank as "Not assigned", so it isn't offered there).
+function technicianOptions(roster: string[], includeNotApplicable: boolean, exclude?: string): ComboboxOption[] {
   const skip = (exclude ?? "").trim().toLowerCase()
-  return skip ? base.filter((o) => o.value.toLowerCase() !== skip) : base
+  return roster
+    .filter((n) => (includeNotApplicable || n !== "N/A") && (!skip || n.toLowerCase() !== skip))
+    .map((value) => ({ value }))
 }
 
 // The typable technician field for forms and popovers. Whitespace is left alone
@@ -57,9 +75,10 @@ export function TechnicianCombobox({
   suggestions?: string[]
 }) {
   const { t } = useTranslation("common")
+  const roster = useTechnicianRoster()
   const options = React.useMemo(
-    () => (suggestions ? suggestions.map((value) => ({ value })) : technicianOptions(includeNotApplicable, exclude)),
-    [suggestions, includeNotApplicable, exclude]
+    () => (suggestions ? suggestions.map((value) => ({ value })) : technicianOptions(roster, includeNotApplicable, exclude)),
+    [suggestions, roster, includeNotApplicable, exclude]
   )
   return (
     <Combobox
@@ -210,7 +229,8 @@ export function InlineTechnicianCell({
   autoFocus?: boolean
 }) {
   const { t } = useTranslation("common")
-  const options = React.useMemo(() => technicianOptions(includeNotApplicable, exclude), [includeNotApplicable, exclude])
+  const roster = useTechnicianRoster()
+  const options = React.useMemo(() => technicianOptions(roster, includeNotApplicable, exclude), [roster, includeNotApplicable, exclude])
   return (
     <InlineComboboxCell
       value={value}
