@@ -602,19 +602,26 @@ export function ReleaseSlipSheets({
   // orders have no job type).
   typeBoxes?: boolean
 }) {
-  // Errands done together: the technician's partner on any of these jobs is
-  // named with them ("Jerson Capellan & Jeric Salirio") in the header and on
-  // the Technician signature line.
+  // Errands done together: the technician's partner is named with them
+  // ("Jerson Capellan & Jeric Salirio") in the header and on the Technician
+  // signature line — at most two names: the partner on the most of these
+  // jobs (the first one met on a tie), never a third.
   const crewName = React.useMemo(() => {
     const own = technicianName.trim()
     if (!own) return technicianName
-    const names = [own]
+    const partners = new Map<string, { name: string; jobs: number }>()
     for (const j of jobs)
       for (const n of [j.technician, j.technician2]) {
         const name = (n ?? "").trim()
-        if (name && !names.some((x) => x.toLowerCase() === name.toLowerCase())) names.push(name)
+        const key = name.toLowerCase()
+        if (!name || key === own.toLowerCase()) continue
+        const p = partners.get(key) ?? { name, jobs: 0 }
+        p.jobs += 1
+        partners.set(key, p)
       }
-    return names.join(" & ")
+    let partner: { name: string; jobs: number } | undefined
+    for (const p of partners.values()) if (!partner || p.jobs > partner.jobs) partner = p
+    return partner ? `${own} & ${partner.name}` : own
   }, [technicianName, jobs])
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
   // The vehicle(s) used that day, from the slip's jobs — shown in the header.
