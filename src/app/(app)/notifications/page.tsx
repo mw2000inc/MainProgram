@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { AlertTriangle, Bell, FileWarning, PackageX, Receipt, UserPlus } from "lucide-react"
+import { AlertTriangle, Bell, FileWarning, PackageX, Receipt, UserPlus, TriangleAlert, CircleX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -14,17 +14,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  useMarkAllNotificationsRead,
-  useMarkNotificationRead,
-  useNotifications,
-} from "@/lib/hooks/use-misc"
+import { useMarkAllNotificationsRead, useMarkNotificationRead } from "@/lib/hooks/use-misc"
 import { resolveNotificationTarget } from "@/lib/notification-navigation"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { cn, formatDateTime } from "@/lib/utils"
 import type { AppNotification, NotificationType } from "@/lib/types"
+import { useAdminVisibleNotifications } from "@/lib/hooks/use-admin-visible-notifications"
 
 const ICONS: Record<NotificationType, React.ElementType> = {
+  warning: TriangleAlert,
+  error: CircleX,
   "low-stock": AlertTriangle,
   "out-of-stock": PackageX,
   "expiring-contract": FileWarning,
@@ -33,6 +32,8 @@ const ICONS: Record<NotificationType, React.ElementType> = {
 }
 
 const ICON_COLORS: Record<NotificationType, string> = {
+  warning: "bg-warning/10 text-warning",
+  error: "bg-danger/10 text-danger",
   "low-stock": "bg-warning/10 text-warning",
   "out-of-stock": "bg-danger/10 text-danger",
   "expiring-contract": "bg-warning/10 text-warning",
@@ -41,6 +42,8 @@ const ICON_COLORS: Record<NotificationType, string> = {
 }
 
 const TYPE_LABEL_KEYS: Record<NotificationType, string> = {
+  warning: "typeWarning",
+  error: "typeError",
   "low-stock": "typeLowStock",
   "out-of-stock": "typeOutOfStock",
   "expiring-contract": "typeExpiringContract",
@@ -55,7 +58,7 @@ export default function NotificationsPage() {
   const { t } = useTranslation("notifications")
   const { t: tCommon } = useTranslation("common")
   const { t: tActivity } = useTranslation("activity")
-  const { data: notifications = [], isPending } = useNotifications()
+  const { data: notifications = [], isPending } = useAdminVisibleNotifications()
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
 
@@ -67,7 +70,9 @@ export default function NotificationsPage() {
     markRead.mutate(n.id)
     const target = resolveNotificationTarget(n)
     if (!target) {
-      toast.error(tActivity("noPageMappedYet"))
+      // A saved warning / error with no page: just marked read (an error
+      // pop-up here would be saved to the bell again).
+      if (n.type !== "warning" && n.type !== "error") toast.error(tActivity("noPageMappedYet"))
       return
     }
     if (target.kind === "unavailable") {

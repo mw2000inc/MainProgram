@@ -311,6 +311,10 @@ export function isAwaitingStockApproval(m: Pick<StockMovement, "status" | "chang
 }
 
 export type NotificationType =
+  // A warning / error pop-up someone saw, saved to the bell for admins
+  // (AppMessageLogger, /api/notifications/app-message).
+  | "warning"
+  | "error"
   | "low-stock"
   | "out-of-stock"
   | "expiring-contract"

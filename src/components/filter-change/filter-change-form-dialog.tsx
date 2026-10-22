@@ -45,6 +45,7 @@ import { useTranslation } from "@/lib/i18n/i18n-context"
 import { extractCityLabel } from "@/lib/geo/city-label"
 import { toast } from "sonner"
 import type { FilterChangePlan } from "@/lib/types"
+import { logAppMessage } from "@/components/shared/app-message-logger"
 import { statusForAccD } from "@/components/filter-change/filter-change-columns"
 import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
@@ -347,6 +348,13 @@ export function FilterChangeFormDialog({
     )
     if (duplicates.length > 0 && duplicateWarning?.key !== key) {
       setDuplicateWarning({ key, count: duplicates.length, order, date: visitDate, plans: duplicates })
+      // Kept in the bell too, after this form is closed.
+      logAppMessage(
+        "warning",
+        t("duplicatePendingWarning", { count: String(duplicates.length), order, date: visitDate }),
+        undefined,
+        `/filter-change?id=${encodeURIComponent(duplicates[0].id)}`
+      )
       return
     }
     const input = {

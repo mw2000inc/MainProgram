@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Bell, AlertTriangle, PackageX, FileWarning, UserPlus, Receipt } from "lucide-react"
+import { Bell, AlertTriangle, PackageX, FileWarning, UserPlus, Receipt, TriangleAlert, CircleX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -12,14 +12,17 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from "@/lib/hooks/use-misc"
+import { useMarkAllNotificationsRead, useMarkNotificationRead } from "@/lib/hooks/use-misc"
 import { resolveNotificationTarget } from "@/lib/notification-navigation"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { formatDateTime } from "@/lib/utils"
 import type { AppNotification, NotificationType } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useAdminVisibleNotifications } from "@/lib/hooks/use-admin-visible-notifications"
 
 const ICONS: Record<NotificationType, React.ElementType> = {
+  warning: TriangleAlert,
+  error: CircleX,
   "low-stock": AlertTriangle,
   "out-of-stock": PackageX,
   "expiring-contract": FileWarning,
@@ -28,6 +31,8 @@ const ICONS: Record<NotificationType, React.ElementType> = {
 }
 
 const ICON_COLORS: Record<NotificationType, string> = {
+  warning: "text-warning",
+  error: "text-danger",
   "low-stock": "text-warning",
   "out-of-stock": "text-danger",
   "expiring-contract": "text-warning",
@@ -40,7 +45,7 @@ export function NotificationsMenu() {
   const { t } = useTranslation("notifications")
   const { t: tActivity } = useTranslation("activity")
   const [open, setOpen] = React.useState(false)
-  const { data: notifications = [] } = useNotifications()
+  const { data: notifications = [] } = useAdminVisibleNotifications()
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
   const unreadCount = notifications.filter((n) => !n.isRead).length
@@ -60,7 +65,9 @@ export function NotificationsMenu() {
     setOpen(false)
     const target = resolveNotificationTarget(n)
     if (!target) {
-      toast.error(tActivity("noPageMappedYet"))
+      // A saved warning / error with no page: just marked read (an error
+      // pop-up here would be saved to the bell again).
+      if (n.type !== "warning" && n.type !== "error") toast.error(tActivity("noPageMappedYet"))
       return
     }
     if (target.kind === "unavailable") {

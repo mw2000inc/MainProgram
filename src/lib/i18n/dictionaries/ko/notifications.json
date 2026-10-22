@@ -10,6 +10,8 @@
   "typeExpiringContract": "계약 만료 임박",
   "typeNewCustomer": "신규 고객",
   "typeNewSale": "신규 판매",
+  "typeWarning": "경고",
+  "typeError": "오류",
   "statusPlaceholder": "상태",
   "unread": "읽지 않음",
   "read": "읽음",

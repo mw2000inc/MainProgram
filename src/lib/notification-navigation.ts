@@ -19,6 +19,9 @@ import type { AppNotification, NotificationType } from "@/lib/types"
 //     migration) — a contract's start/end lives on customers, so this is
 //     the best available answer if one is ever actually inserted.
 const NOTIFICATION_ENTITY_TYPE: Record<NotificationType, string> = {
+  // Saved pop-up messages point at no record.
+  warning: "",
+  error: "",
   "new-customer": "customers",
   "expiring-contract": "customers",
   "low-stock": "products",
@@ -35,5 +38,9 @@ const NOTIFICATION_ENTITY_TYPE: Record<NotificationType, string> = {
 // entity_type already is.
 export function resolveNotificationTarget(notification: AppNotification): ActivityLogTarget | undefined {
   if (!notification.relatedEntityId) return undefined
+  // A saved warning / error pop-up: the in-app page it happened on.
+  if (notification.type === "warning" || notification.type === "error") {
+    return /^\/(?!\/)/.test(notification.relatedEntityId) ? { kind: "href", href: notification.relatedEntityId } : undefined
+  }
   return resolveEntityTarget(NOTIFICATION_ENTITY_TYPE[notification.type], notification.relatedEntityId)
 }

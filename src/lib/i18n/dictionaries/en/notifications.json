@@ -10,6 +10,8 @@
   "typeExpiringContract": "Expiring Contract",
   "typeNewCustomer": "New Customer",
   "typeNewSale": "New Sale",
+  "typeWarning": "Warning",
+  "typeError": "Error",
   "statusPlaceholder": "Status",
   "unread": "Unread",
   "read": "Read",
