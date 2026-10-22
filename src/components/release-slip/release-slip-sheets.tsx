@@ -553,6 +553,9 @@ export interface SlipSignatures {
   checkedBy: string
   notedBy: string
   approvedBy: string
+  // The Store line as typed (Shopee / Lazada slip, whoEditable); unset = the
+  // store's own name.
+  who?: string
 }
 
 export function ReleaseSlipSheets({
@@ -566,6 +569,9 @@ export function ReleaseSlipSheets({
   onRemoveOrder,
   skuOptions,
   combine = true,
+  whoLabel = "Technician:",
+  whoEditable = false,
+  typeBoxes = true,
 }: {
   date: string
   technicianName: string
@@ -587,6 +593,14 @@ export function ReleaseSlipSheets({
   skuOptions?: SlipSkuOption[]
   // Same-account orders shown as one block (combineSameAccount).
   combine?: boolean
+  // The header / signature label for whose slip it is ("Store:" on the
+  // Shopee / Lazada slip).
+  whoLabel?: string
+  // true: that line is a typed box too (signatures.who), shown in the header.
+  whoEditable?: boolean
+  // false: the F / R / S / O boxes stay blank and can't be ticked (online
+  // orders have no job type).
+  typeBoxes?: boolean
 }) {
   // Errands done together: the technician's partner on any of these jobs is
   // named with them ("Jerson Capellan & Jeric Salirio") in the header and on
@@ -647,7 +661,7 @@ export function ReleaseSlipSheets({
               DATE: <b>{formatDate(date)}</b>
             </span>
             <span>
-              Technician: <b>{crewName || "—"}</b>
+              {whoLabel} <b>{(whoEditable ? (signatures.who ?? crewName) : crewName) || "—"}</b>
             </span>
             <span>
               Page {pi + 1} of {pages.length}
@@ -797,6 +811,7 @@ export function ReleaseSlipSheets({
                           )}
                           {/* … and give every line its own (see lineTypes). */}
                           {(["F", "R", "S", "O"] as const).map((k) => {
+                            if (!typeBoxes) return <td key={k} className="slip-box" />
                             // An added row's first line: its order's type (click to tick, again to clear).
                             if (li === 0 && job.added && onEdit && !b.continued) {
                               return (
@@ -904,7 +919,7 @@ export function ReleaseSlipSheets({
                 </table>
               </div>
               <div className="slip-signs">
-                {signature("Technician:", null, crewName)}
+                {signature(whoLabel, whoEditable ? "who" : null, whoEditable ? (signatures.who ?? crewName) : crewName)}
                 {signature("Checked By:", "checkedBy", signatures.checkedBy)}
                 {signature("Noted By:", "notedBy", signatures.notedBy)}
                 {signature("Approved By:", "approvedBy", signatures.approvedBy)}

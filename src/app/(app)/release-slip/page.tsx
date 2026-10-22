@@ -23,6 +23,8 @@ import {
   type SlipSignatures,
 } from "@/components/release-slip/release-slip-sheets"
 import { AddSlipItemDialog } from "@/components/release-slip/add-slip-item-dialog"
+import { ChannelReleaseSlip } from "@/components/release-slip/channel-release-slip"
+import { SLIP_CHANNELS, type SlipChannel } from "@/lib/release-slip-channels"
 import { fetchReleaseSlip } from "@/lib/api/release-slip"
 import { listProducts } from "@/lib/api/inventory"
 import { productsKey } from "@/lib/hooks/use-inventory"
@@ -43,6 +45,8 @@ import type { ReleaseSlipJob } from "@/lib/api/release-slip"
 
 // The admin's technician picker value for every technician's slip at once.
 const ALL_TECHNICIANS = "all"
+// …and for an online store's slip (Shopee / Lazada — ChannelReleaseSlip).
+const CHANNEL_PREFIX = "channel:"
 
 // A ?date= value: YYYY-MM-DD and a real calendar date, else today (Manila).
 function validDate(value: string | null): string | undefined {
@@ -115,8 +119,9 @@ function ReleaseSlipContent() {
   // default) — then the day's jobs come in one call and are split per
   // technician below.
   const [pickedTechnician, setPickedTechnician] = React.useState<string>(ALL_TECHNICIANS)
+  const channel = isAdmin && pickedTechnician.startsWith(CHANNEL_PREFIX) ? (pickedTechnician.slice(CHANNEL_PREFIX.length) as SlipChannel) : null
   const allMode = isAdmin && pickedTechnician === ALL_TECHNICIANS
-  const technicianId = isAdmin ? (allMode ? undefined : pickedTechnician) : user?.id
+  const technicianId = isAdmin ? (allMode || channel ? undefined : pickedTechnician) : user?.id
   const [signatures, setSignatures] = React.useState<SlipSignatures>(DEFAULT_SIGNATURES)
   // An admin's on-screen edits (see applySlipEdits): per slip, then per job —
   // for this date / technician / pending choice only; changing any of them,
@@ -186,7 +191,7 @@ function ReleaseSlipContent() {
   const { data, isPending, error } = useQuery({
     queryKey: ["releaseSlip", date, technicianId ?? null, includePending],
     queryFn: () => fetchReleaseSlip(date, technicianId, includePending),
-    enabled: !!user,
+    enabled: !!user && !channel,
   })
   // The amount to collect on each visit, for the Notes column. Collections are
   // readable by technicians; the Sale List (the C/F fallback) only by admins.
@@ -276,7 +281,7 @@ function ReleaseSlipContent() {
   const { data: wholeDay } = useQuery({
     queryKey: ["releaseSlip", date, technicianId ?? null, true],
     queryFn: () => fetchReleaseSlip(date, technicianId, true),
-    enabled: !!user && !allMode,
+    enabled: !!user && !allMode && !channel,
   })
   const noteSuggestions = React.useCallback(
     (item: string) => {
@@ -575,21 +580,28 @@ function ReleaseSlipContent() {
                     {p.name}
                   </SelectItem>
                 ))}
+                {SLIP_CHANNELS.map((c) => (
+                  <SelectItem key={c} value={CHANNEL_PREFIX + c} data-testid={`slip-channel-${c.toLowerCase()}`}>
+                    {c}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={includePending} onCheckedChange={(v) => setIncludePending(v === true)} data-testid="slip-include-pending" />
-            {t("releaseSlipIncludePending")}
-          </label>
-          <label className="flex items-center gap-2 text-sm" title="Orders with the same account name and job type print as one block (items added up). Untick to edit each order on its own.">
+          {!channel && (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={includePending} onCheckedChange={(v) => setIncludePending(v === true)} data-testid="slip-include-pending" />
+              {t("releaseSlipIncludePending")}
+            </label>
+          )}
+          <label className={channel ? "hidden" : "flex items-center gap-2 text-sm"} title="Orders with the same account name and job type print as one block (items added up). Untick to edit each order on its own.">
             <Checkbox checked={combineAccounts} onCheckedChange={(v) => setCombineAccounts(v === true)} data-testid="slip-combine-accounts" />
             Combine same account
           </label>
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5"
+            className={channel ? "hidden" : "gap-1.5"}
             onClick={() => setAddOpen(true)}
             disabled={!technicianId}
             title={allMode ? t("releaseSlipAddPickTechnician") : undefined}
@@ -600,8 +612,10 @@ function ReleaseSlipContent() {
         </div>
       </div>
 
+      {/* Shopee / Lazada: their own slip (in place of the technician slip below). */}
+      {channel && <ChannelReleaseSlip channel={channel} date={date} signatures={signatures} onSignaturesChange={setSignatures} skuOptions={skuOptions} onPrint={printAs} />}
       {/* The slip's actions: one bar above the preview. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2" data-testid="slip-toolbar">
+      <div className={channel ? "hidden" : "flex flex-wrap items-center gap-2 rounded-md border bg-card p-2"} data-testid="slip-toolbar">
         <Button size="sm" className="gap-1.5" onClick={downloadPdf} disabled={!ready || slips.length === 0} data-testid="slip-download-pdf">
           <Download className="h-3.5 w-3.5" /> {t("releaseSlipDownloadPdf")}
         </Button>
@@ -641,7 +655,7 @@ function ReleaseSlipContent() {
         )}
       </div>
 
-      {error ? (
+      {channel ? null : error ? (
         <p className="text-sm text-danger" data-testid="slip-error">
           {t("releaseSlipError")}
         </p>
