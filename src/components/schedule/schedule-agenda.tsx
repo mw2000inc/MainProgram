@@ -5,7 +5,7 @@ import { addDays, addMonths, format, parseISO } from "date-fns"
 import Link from "next/link"
 import { isOverdueJob, OVERDUE_SCHEDULE_HREF } from "@/lib/scheduling/overdue"
 import { businessToday } from "@/lib/dispatch-lead-time"
-import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, History, Loader2, Pencil, Plus, ArrowRight, Printer, Search, Send, Trash2, X } from "lucide-react"
+import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, History, Loader2, Pencil, Plus, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Printer, Search, Send, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FullScreenToggleButton } from "@/components/shared/fullscreen-toggle-button"
@@ -33,6 +33,7 @@ import { PlanStatusBadge } from "@/components/shared/status-badge"
 import { PanelExportMenu } from "@/components/dashboard/panel-export-menu"
 import { ScheduleFormDialog, type ScheduleJobPrefill } from "@/components/schedule/schedule-form-dialog"
 import { buildUnscheduledVisits, type UnscheduledVisit } from "@/lib/scheduling/unscheduled-visits"
+import { resolveRows } from "@/components/schedule/schedule-table-view"
 import { useJobDetails, type JobDetails } from "@/lib/scheduling/job-account-name"
 import { formatFilterCodes, parseFilterCodes } from "@/lib/filter-codes"
 import { DirectionsLink, PhoneActions } from "@/components/shared/contact-actions"
@@ -83,7 +84,7 @@ import { useCollections } from "@/lib/hooks/use-collections"
 import { useStockMovementRows, type StockMovementRow } from "@/lib/hooks/use-inventory"
 import { useUsers } from "@/lib/hooks/use-misc"
 import { VEHICLE_TYPES } from "@/lib/constants"
-import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus, ScheduleJobType } from "@/lib/types"
+import type { ScheduleJob, ScheduleJobSource, ScheduleJobStatus } from "@/lib/types"
 
 // planned: filled in from the job's own filters (see MarkJobDoneDialog).
 type FilterItemDraft = { key: number; productId: string; quantity: string; planned?: boolean }
@@ -294,6 +295,12 @@ function canEditStatus(job: ScheduleJob, isAdmin: boolean, userId: string | unde
 type StatusFilter = "all" | "pending" | "completed"
 type ViewMode = "grid" | "table"
 const CARD_STATUS_KEY = "schedule-card-status"
+// The Unscheduled Visits list (full-screen section and the card's "N
+// unscheduled visit(s)" link) is hidden since 2026-10-22: a visit is scheduled
+// from the Daily Report / its own form, and creating a second job here made
+// doubles in the Daily Report's Schedule. The list is still built for the
+// Saturday redistribute / coverage dialogs.
+const SHOW_UNSCHEDULED_VISITS = false
 const TABLE_COLUMN_LABEL = {
   date: "tableDate",
   jobType: "tableJobType",
@@ -306,10 +313,13 @@ const TABLE_COLUMN_LABEL = {
   notes: "tableNotes",
   remarks: "tableRemarks",
 } as const
+// The full-screen Table View's columns: the printable sheet's (ScheduleTableView).
+const SHEET_COLUMNS = ["Time", "Contact Person", "Contact No.", "Order Number", "Member Acct. Name", "Address", "Item-OUT", "Assigned Technician", "Collection", "Description", "Unit Model"] as const
+type SortColumn = (typeof SHEET_COLUMNS)[number] | "Status"
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = { all: "statusFilterAll", pending: "statusFilterPending", completed: "statusFilterCompleted" }
 
 // Table View cells an admin can edit in place (double-click).
-type EditableField = "date" | "jobType" | "technician" | "vehicle" | "orderNo" | "status" | "notes" | "remarks"
+type EditableField = "date" | "technician" | "orderNo" | "status" | "notes"
 
 // Where a cell editor's own dropdowns render (Radix portals outside the
 // table) — focus moving into one of these is still "inside" the editor.
@@ -396,7 +406,6 @@ function CellSelect<V extends string>({
   )
 }
 
-const JOB_TYPES: ScheduleJobType[] = ["installation", "filter_change", "repair", "collection", "monitoring", "other"]
 const STATUS_LABEL_KEY: Record<ScheduleJobStatus, string> = {
   pending: "pending",
   pending_approval: "pendingApproval",
@@ -771,11 +780,6 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     return isSaturday(job.scheduledDate) && job.status === "pending_approval" && isAssignedTechnician(input.technician)
       ? { ...input, status: "pending" }
       : input
-  }
-  // A vehicle with a fixed crew (the Liteace) brings its two technicians.
-  const saveVehicle = (job: ScheduleJob, vehicle: string) => {
-    const crew = crewFillForVehicle(vehicle, job.technician)
-    saveJob(job, { vehicle, ...(crew ? technicianInput(crew.primary, crew.secondary) : {}) })
   }
   // Pending -> Completed goes through the same completion as the batch
   // "Mark as Completed", so the linked record is completed (and its items
@@ -1154,6 +1158,8 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // The jobs the confirm was opened for — kept while it works, so the dialog
   // doesn't recount to "0 job(s)" as the list refreshes mid-batch.
   const [confirmTargets, setConfirmTargets] = React.useState<string[]>([])
+  // The full-screen table's A–Z / Z–A column (see sortHeader).
+  const [sheetSort, setSheetSort] = React.useState<{ col: SortColumn; dir: "asc" | "desc" } | null>(null)
 
   const sectionHeader = (label: string, count: number, testId: string, jobs?: typeof todaysJobs) => (
     <div data-testid={testId} className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1180,10 +1186,76 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     </div>
   )
 
-  // Table View: the print layout's columns and blue header, one row per job
-  // in the same order and with the same filters as the grid. Admins get a
-  // selection column (pending rows only) feeding the same batch Mark as
-  // Completed; clicking a row opens the job, as a card does.
+  // Table View: the same columns as the Schedule page's printable Table View
+  // (ScheduleTableView / resolveRows — Time, Contact Person, … Unit Model),
+  // with the blue header and one row per job in the grid's order and filters;
+  // a job's second address on its own row below it, as on the sheet. Kept
+  // around the sheet's columns: the selection column (pending rows) for the
+  // batch Mark as Completed, the job type under the Order Number, the
+  // inventory items under Item-OUT, a Status column and the edit button.
+  // Time, Order Number, Assigned Technician, Description (the job's notes)
+  // and Status are edited in place as before.
+  const sheetRows = new Map(resolveRows(visibleJobs, customers, filterChangePlans, collectionRecords, saleListEntries, jobDetails).map((row, i) => [visibleJobs[i].id, row]))
+  const severalDays = new Set(visibleJobs.map((j) => j.scheduledDate)).size > 1
+  // A–Z / Z–A by a column, like the member list: click a header once for
+  // A–Z, again for Z–A, a third time back to the schedule's own order. Case
+  // ignored, numbers in natural order, blanks always last.
+  const sortValue = (job: ScheduleJob, col: SortColumn): string => {
+    const row = sheetRows.get(job.id)
+    switch (col) {
+      case "Time":
+        return job.scheduledTime ?? ""
+      case "Contact Person":
+        return row?.contactPerson ?? ""
+      case "Contact No.":
+        return row?.contactNo ?? ""
+      case "Order Number":
+        return job.orderNo ?? ""
+      case "Member Acct. Name":
+        return row?.memberAcctName ?? ""
+      case "Address":
+        return row?.address ?? ""
+      case "Item-OUT":
+        return row?.itemOut ?? ""
+      case "Assigned Technician":
+        return isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : ""
+      case "Collection":
+        return row?.collection ?? ""
+      case "Description":
+        return job.notes ?? ""
+      case "Unit Model":
+        return row?.unitModel ?? ""
+      case "Status":
+        return tStatus(STATUS_LABEL_KEY[job.status])
+    }
+  }
+  const tableJobs = !sheetSort
+    ? visibleJobs
+    : [...visibleJobs].sort((a, b) => {
+        const va = sortValue(a, sheetSort.col).trim()
+        const vb = sortValue(b, sheetSort.col).trim()
+        if (!va || !vb) return !va && !vb ? 0 : !va ? 1 : -1
+        const c = va.localeCompare(vb, undefined, { sensitivity: "base", numeric: true })
+        return sheetSort.dir === "asc" ? c : -c
+      })
+  const toggleSheetSort = (col: SortColumn) =>
+    setSheetSort((s) => (s?.col !== col ? { col, dir: "asc" } : s.dir === "asc" ? { col, dir: "desc" } : null))
+  const sortHeader = (col: SortColumn, label: string) => (
+    <th key={col} className="px-3 py-2 font-medium whitespace-nowrap" aria-sort={sheetSort?.col === col ? (sheetSort.dir === "asc" ? "ascending" : "descending") : undefined}>
+      <button type="button" className="flex items-center gap-1 transition-opacity hover:opacity-80" onClick={() => toggleSheetSort(col)} data-testid={`schedule-sort-${col}`}>
+        {label}
+        {sheetSort?.col === col ? (
+          sheetSort.dir === "asc" ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-50" />
+        )}
+      </button>
+    </th>
+  )
   const jobTable = () => (
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-sm" data-testid="schedule-job-table">
@@ -1201,152 +1273,144 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
                 )}
               </th>
             )}
-            {(["date", "jobType", "technician", "vehicle", "orderNo", "customer", "status", "inventory", "notes", "remarks"] as const).map((key) => (
-              <th key={key} className="px-3 py-2 font-medium whitespace-nowrap">
-                {t(TABLE_COLUMN_LABEL[key])}
-              </th>
-            ))}
+            {/* The printable sheet's headers, in English like the sheet itself. */}
+            {SHEET_COLUMNS.map((h) => sortHeader(h, h))}
+            {sortHeader("Status", t(TABLE_COLUMN_LABEL.status))}
             {isAdmin && <th className="w-10 px-2 py-2" aria-label={tCommon("edit")} />}
           </tr>
         </thead>
         <tbody>
-          {visibleJobs.map((job, i) => (
-            <tr
-              key={job.id}
-              data-testid="schedule-table-row"
-              className={cn("border-t align-top", i % 2 === 1 && "bg-muted/40")}
-            >
-              {selectMode && (
-                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={job.status === "completed" || selected.has(job.id)}
-                    onCheckedChange={() => toggleSelected(job.id)}
-                    disabled={!completable(job)}
-                    aria-label={t("selectJob")}
-                    data-testid="schedule-select-job"
-                  />
-                </td>
-              )}
-              <EditableCell
-                {...cellProps(job, "date")}
-                className="whitespace-nowrap"
-                display={
-                  <>
-                    {formatDate(job.scheduledDate)}
-                    {job.scheduledTime && <div className="text-xs text-muted-foreground">{job.scheduledTime}</div>}
-                  </>
-                }
-              >
-                <div className="flex flex-col gap-1">
-                  <InlineDateCell value={job.scheduledDate} onCommit={(next) => next && saveJob(job, dateChange(job, next))} />
-                  <InlineTextCell
-                    value={job.scheduledTime}
-                    placeholder={t("timePlaceholder")}
-                    className="w-[136px]"
-                    onCommit={(next) => saveJob(job, { scheduledTime: next.trim() })}
-                  />
-                </div>
-              </EditableCell>
-              <EditableCell
-                {...cellProps(job, "jobType")}
-                className="whitespace-nowrap"
-                display={
-                  <span className="inline-flex items-center gap-1.5">
-                    {isErrand(job) && <ErrandBadge t={t} />}
-                    {jobLabel(job, t)}
-                    <JobSourceBadge source={job.source} t={t} />
-                    {isDraftJob(job) && <DraftBadge t={t} />}
-                    {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
-                    {paymentLine(job)}
-                    {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
-                  </span>
-                }
-              >
-                <CellSelect
-                  value={job.jobType}
-                  options={JOB_TYPES.map((type) => ({ value: type, label: t(type) }))}
-                  onCommit={(jobType) => {
-                    saveJob(job, { jobType })
-                    setEditingCell(null)
-                  }}
-                />
-              </EditableCell>
-              <EditableCell
-                {...cellProps(job, "technician")}
-                display={isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : t("unassigned")}
-              >
-                <InlineTechnicianPairCell
-                  primary={job.technician}
-                  secondary={job.technician2}
-                  onCommit={(patch) => saveJob(job, technicianChange(job, patch.primary ?? job.technician, patch.secondary ?? job.technician2 ?? ""))}
-                />
-              </EditableCell>
-              <EditableCell {...cellProps(job, "vehicle")} display={job.vehicle || "—"}>
-                <InlineComboboxCell
-                  value={job.vehicle}
-                  options={VEHICLE_OPTIONS}
-                  placeholder={t("selectVehicle")}
-                  commitOnSelect
-                  showAllOnExactMatch
-                  onCommit={(next) => {
-                    saveVehicle(job, next.trim())
-                    setEditingCell(null)
-                  }}
-                />
-              </EditableCell>
-              <EditableCell {...cellProps(job, "orderNo")} className="whitespace-nowrap" display={job.orderNo || "—"}>
-                <InlineTextCell value={job.orderNo} className="w-32" onCommit={(next) => saveJob(job, { orderNo: next.trim() })} />
-              </EditableCell>
-              <td className="min-w-48 max-w-72 px-3 py-2" data-testid="schedule-customer-cell">
-                <JobDetailLines details={jobDetails(job)} job={job} />
-              </td>
-              <EditableCell {...cellProps(job, "status")} display={<PlanStatusBadge status={job.status} />}>
-                <CellSelect
-                  value={job.status}
-                  options={(["pending", "completed", "cancelled", ...(job.status === "pending_approval" ? ["pending_approval" as const] : [])] as ScheduleJobStatus[]).map(
-                    (status) => ({ value: status, label: tStatus(STATUS_LABEL_KEY[status]) })
+          {tableJobs.map((job, i) => {
+            const row = sheetRows.get(job.id)
+            const movements = movementsByJob.get(job.id) ?? []
+            return (
+              <React.Fragment key={job.id}>
+                <tr data-testid="schedule-table-row" className={cn("border-t align-top", i % 2 === 1 && "bg-muted/40")}>
+                  {selectMode && (
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={job.status === "completed" || selected.has(job.id)}
+                        onCheckedChange={() => toggleSelected(job.id)}
+                        disabled={!completable(job)}
+                        aria-label={t("selectJob")}
+                        data-testid="schedule-select-job"
+                      />
+                    </td>
                   )}
-                  onCommit={(status) => {
-                    saveStatus(job, status)
-                    setEditingCell(null)
-                  }}
-                />
-              </EditableCell>
-              <td className="px-3 py-2" data-testid="schedule-inventory-cell">
-                <JobInventoryCell movements={movementsByJob.get(job.id) ?? []} onOpen={() => setInventoryJob(job)} />
-              </td>
-              <EditableCell
-                {...cellProps(job, "notes")}
-                className="max-w-[28rem] whitespace-pre-line wrap-break-word"
-                display={job.notes || "—"}
-              >
-                <InlineTextAreaCell value={job.notes} className="w-72" onCommit={(next) => saveJob(job, { notes: next })} />
-              </EditableCell>
-              <EditableCell
-                {...cellProps(job, "remarks")}
-                className="max-w-[20rem] whitespace-pre-line wrap-break-word"
-                display={job.remarks || "—"}
-              >
-                <InlineTextAreaCell value={job.remarks} className="w-60" onCommit={(next) => saveJob(job, { remarks: next })} />
-              </EditableCell>
-              {isAdmin && (
-                <td className="px-2 py-1.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label={t("editJob")}
-                    title={t("editJob")}
-                    data-testid="schedule-edit-job"
-                    onClick={() => openEdit(job)}
+                  <EditableCell
+                    {...cellProps(job, "date")}
+                    className="whitespace-nowrap"
+                    display={
+                      <>
+                        {job.scheduledTime || "—"}
+                        {/* Over several days ("Next 30 days"), the day too. */}
+                        {severalDays && <div className="text-xs text-muted-foreground">{formatDate(job.scheduledDate)}</div>}
+                      </>
+                    }
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                </td>
-              )}
-            </tr>
-          ))}
+                    <div className="flex flex-col gap-1">
+                      <InlineDateCell value={job.scheduledDate} onCommit={(next) => next && saveJob(job, dateChange(job, next))} />
+                      <InlineTextCell
+                        value={job.scheduledTime}
+                        placeholder={t("timePlaceholder")}
+                        className="w-[136px]"
+                        onCommit={(next) => saveJob(job, { scheduledTime: next.trim() })}
+                      />
+                    </div>
+                  </EditableCell>
+                  <td className="px-3 py-2">{row?.contactPerson || "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{row?.contactNo || "—"}</td>
+                  <EditableCell
+                    {...cellProps(job, "orderNo")}
+                    className="whitespace-nowrap"
+                    display={
+                      <>
+                        {job.orderNo || "—"}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                          {isErrand(job) && <ErrandBadge t={t} />}
+                          {jobLabel(job, t)}
+                          <JobSourceBadge source={job.source} t={t} />
+                          {isDraftJob(job) && <DraftBadge t={t} />}
+                          {needsTechnician(job) && <NeedsTechnicianBadge t={t} />}
+                          {job.rescheduledFrom && <RescheduledBadge date={job.rescheduledFrom} t={t} />}
+                        </div>
+                      </>
+                    }
+                  >
+                    <InlineTextCell value={job.orderNo} className="w-32" onCommit={(next) => saveJob(job, { orderNo: next.trim() })} />
+                  </EditableCell>
+                  <td className="px-3 py-2" data-testid="schedule-customer-cell">
+                    {row?.memberAcctName ? (
+                      <CustomerNameButton target={{ orderNo: row.orderNumber, name: row.memberAcctName, address: row.address, contactNumber: row.contactNo }} className="whitespace-normal">
+                        {row.memberAcctName}
+                      </CustomerNameButton>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="min-w-48 max-w-72 px-3 py-2">{row?.address || "—"}</td>
+                  <td className="px-3 py-2" data-testid="schedule-inventory-cell">
+                    {row?.itemOut || (movements.length ? null : "—")}
+                    {movements.length > 0 && (
+                      <div className={row?.itemOut ? "mt-1" : undefined}>
+                        <JobInventoryCell movements={movements} onOpen={() => setInventoryJob(job)} />
+                      </div>
+                    )}
+                  </td>
+                  <EditableCell
+                    {...cellProps(job, "technician")}
+                    display={isAssignedTechnician(job.technician) ? formatTechnicians(job.technician, job.technician2, t("and")) : t("unassigned")}
+                  >
+                    <InlineTechnicianPairCell
+                      primary={job.technician}
+                      secondary={job.technician2}
+                      onCommit={(patch) => saveJob(job, technicianChange(job, patch.primary ?? job.technician, patch.secondary ?? job.technician2 ?? ""))}
+                    />
+                  </EditableCell>
+                  <td className="px-3 py-2 whitespace-nowrap">{row?.collection || "—"}</td>
+                  <EditableCell {...cellProps(job, "notes")} className="max-w-[28rem] whitespace-pre-line wrap-break-word" display={job.notes || "—"}>
+                    <InlineTextAreaCell value={job.notes} className="w-72" onCommit={(next) => saveJob(job, { notes: next })} />
+                  </EditableCell>
+                  <td className="px-3 py-2">{row?.unitModel || "—"}</td>
+                  <EditableCell {...cellProps(job, "status")} display={<PlanStatusBadge status={job.status} />}>
+                    <CellSelect
+                      value={job.status}
+                      options={(["pending", "completed", "cancelled", ...(job.status === "pending_approval" ? ["pending_approval" as const] : [])] as ScheduleJobStatus[]).map(
+                        (status) => ({ value: status, label: tStatus(STATUS_LABEL_KEY[status]) })
+                      )}
+                      onCommit={(status) => {
+                        saveStatus(job, status)
+                        setEditingCell(null)
+                      }}
+                    />
+                  </EditableCell>
+                  {isAdmin && (
+                    <td className="px-2 py-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label={t("editJob")}
+                        title={t("editJob")}
+                        data-testid="schedule-edit-job"
+                        onClick={() => openEdit(job)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+                {row?.secondaryAddress && (
+                  <tr className={cn("align-top", i % 2 === 1 && "bg-muted/40")} data-testid="schedule-table-second-address">
+                    <td colSpan={(selectMode ? 1 : 0) + 5} />
+                    <td className="px-3 pb-2 italic text-muted-foreground">{row.secondaryAddress}</td>
+                    <td colSpan={6 + (isAdmin ? 1 : 0)} />
+                  </tr>
+                )}
+              </React.Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -1483,7 +1547,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
     </Button>
   )
   const unscheduledSection = () =>
-    visibleVisits.length === 0 ? null : (
+    !SHOW_UNSCHEDULED_VISITS || visibleVisits.length === 0 ? null : (
       <section data-testid="unscheduled-visits" className="mt-6 rounded-md border border-dashed border-warning/50 bg-warning/5 p-3">
         <div className="mb-1 flex flex-wrap items-center gap-2">
           <Checkbox
@@ -1813,7 +1877,7 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}
-      {!isPending && unscheduledVisits.length > 0 && !expanded && (
+      {SHOW_UNSCHEDULED_VISITS && !isPending && unscheduledVisits.length > 0 && !expanded && (
         <button
           type="button"
           data-testid="unscheduled-visits-link"

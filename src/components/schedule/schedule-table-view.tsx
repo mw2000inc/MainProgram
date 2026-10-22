@@ -43,7 +43,9 @@ function pickBestMatch<T>(items: T[], dateOf: (item: T) => string | undefined, p
   return [...items].sort((a, b) => (dateOf(b) ?? "").localeCompare(dateOf(a) ?? ""))[0]
 }
 
-function resolveRows(
+// One sheet row per job — also the full-screen Schedule table's columns
+// (ScheduleAgenda's jobTable), so both read the same.
+export function resolveRows(
   dayJobs: ScheduleJob[],
   customers: Customer[],
   filterChangePlans: FilterChangePlan[],
