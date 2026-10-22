@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { MoreHorizontal, Pencil, Trash2, KeyRound } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,11 +45,14 @@ function RowActionsCell({
   currentUserId,
   onEdit,
   onDelete,
+  onSetPassword,
 }: {
   user: User
   currentUserId?: string
   onEdit: (user: User) => void
   onDelete: (user: User) => void
+  // Given only to cashout (canManagePasswords): "Change password".
+  onSetPassword?: (user: User) => void
 }) {
   const { t } = useTranslation("common")
   return (
@@ -63,6 +66,11 @@ function RowActionsCell({
         <DropdownMenuItem onClick={() => onEdit(user)}>
           <Pencil className="h-4 w-4" /> {t("edit")}
         </DropdownMenuItem>
+        {onSetPassword && (
+          <DropdownMenuItem onClick={() => onSetPassword(user)} data-testid="user-set-password">
+            <KeyRound className="h-4 w-4" /> Change password
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem variant="destructive" disabled={user.id === currentUserId} onClick={() => onDelete(user)}>
           <Trash2 className="h-4 w-4" /> {t("delete")}
         </DropdownMenuItem>
@@ -75,10 +83,12 @@ export function getUsersColumns({
   currentUserId,
   onEdit,
   onDelete,
+  onSetPassword,
 }: {
   currentUserId?: string
   onEdit: (user: User) => void
   onDelete: (user: User) => void
+  onSetPassword?: (user: User) => void
 }): ColumnDef<User, unknown>[] {
   return [
     {
@@ -104,7 +114,7 @@ export function getUsersColumns({
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <RowActionsCell user={row.original} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} />
+        <RowActionsCell user={row.original} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onSetPassword={onSetPassword} />
       ),
     },
   ]

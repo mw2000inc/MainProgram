@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { rememberPassword } from "@/lib/password-vault"
 
 // Creating a user with a set password is a privileged operation (requires the
 // service-role key), so it has to happen server-side. This route re-checks
@@ -83,6 +84,9 @@ export async function POST(request: Request) {
   // brand-new public self-signup, which has no app_metadata.role at all and
   // is supposed to land on the 'technician' default.
   await admin.from("profiles").update({ role, created_by: caller.id, updated_by: caller.id }).eq("id", data.user.id)
+  // Cashout can see the password it was created with (encrypted copy; see
+  // password-vault.ts) until it's changed.
+  await rememberPassword(admin, data.user.id, password, caller.id)
 
   return NextResponse.json({ id: data.user.id })
 }

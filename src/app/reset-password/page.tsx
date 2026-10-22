@@ -86,6 +86,8 @@ export default function ResetPasswordPage() {
       return
     }
     toast.success(t("passwordUpdatedSignIn"))
+    // Cashout's saved copy of the old password (Users page) is out of date now.
+    await fetch("/api/account/password-changed", { method: "POST" }).catch(() => undefined)
     await supabase.auth.signOut()
     router.push("/login")
   }

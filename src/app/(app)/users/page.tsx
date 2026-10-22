@@ -10,6 +10,8 @@ import { DataTable } from "@/components/data-table/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { AdminGuard } from "@/components/shared/admin-guard"
 import { UserFormDialog } from "@/components/users/user-form-dialog"
+import { SetPasswordDialog } from "@/components/users/set-password-dialog"
+import { canManagePasswords } from "@/lib/password-manager"
 import { getUsersColumns } from "@/components/users/users-columns"
 import { useDeleteUser, useUsers } from "@/lib/hooks/use-misc"
 import { useDeepLinkNotFoundToast } from "@/lib/hooks/use-deep-link-not-found"
@@ -33,6 +35,9 @@ function UsersContent() {
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<User | undefined>(undefined)
   const [deleting, setDeleting] = React.useState<User | undefined>(undefined)
+  // Cashout only (canManagePasswords): the account whose password is being set.
+  const [settingPassword, setSettingPassword] = React.useState<User | undefined>(undefined)
+  const mayManagePasswords = canManagePasswords(actor?.id)
 
   useDeepLinkNotFoundToast(initialId, isPending, users.some((u) => u.id === initialId))
 
@@ -55,8 +60,9 @@ function UsersContent() {
           setFormOpen(true)
         },
         onDelete: (u) => setDeleting(u),
+        onSetPassword: mayManagePasswords ? (u) => setSettingPassword(u) : undefined,
       }),
-    [actor?.id]
+    [actor?.id, mayManagePasswords]
   )
 
   if (isPending) {
@@ -101,6 +107,7 @@ function UsersContent() {
         </Card>
 
         <UserFormDialog open={formOpen} onOpenChange={setFormOpen} user={editing} />
+        {mayManagePasswords && <SetPasswordDialog user={settingPassword} onOpenChange={(o) => !o && setSettingPassword(undefined)} />}
 
         <ConfirmDialog
           open={!!deleting}
