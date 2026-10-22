@@ -30,6 +30,7 @@ export function ActivityLogView({
   searchPlaceholder,
   emptyMessage,
   useLogs,
+  vehicleOf,
 }: {
   title: string
   description: string
@@ -38,6 +39,8 @@ export function ActivityLogView({
   searchPlaceholder: string
   emptyMessage: string
   useLogs: (date: string | undefined) => UseQueryResult<ActivityLogEntry[]>
+  // Technician Activity: adds a Vehicle column (see getActivityColumns).
+  vehicleOf?: (entry: ActivityLogEntry) => string
 }) {
   const router = useRouter()
   const { t } = useTranslation("activity")
@@ -77,7 +80,7 @@ export function ActivityLogView({
     router.push(target.href)
   }
 
-  const columns = React.useMemo(() => getActivityColumns(actorLabel, setSelected), [actorLabel])
+  const columns = React.useMemo(() => getActivityColumns(actorLabel, setSelected, vehicleOf), [actorLabel, vehicleOf])
 
   if (isPending) {
     return (

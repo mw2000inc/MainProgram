@@ -617,6 +617,8 @@ export function ReleaseSlipSheets({
     return names.join(" & ")
   }, [technicianName, jobs])
   const summary = React.useMemo(() => buildSummary(jobs), [jobs])
+  // The vehicle(s) used that day, from the slip's jobs — shown in the header.
+  const vehicles = React.useMemo(() => [...new Set(jobs.map((j) => (j.vehicle ?? "").trim()).filter(Boolean))].join(" / "), [jobs])
   // Lines added with "+ Add line" (on-screen copy only; a filled one prints).
   const [minLines, setMinLines] = React.useState<Record<string, number>>({})
   const shownJobs = React.useMemo(() => (combine ? combineSameAccount(jobs) : jobs), [jobs, combine])
@@ -662,6 +664,11 @@ export function ReleaseSlipSheets({
             </span>
             <span>
               {whoLabel} <b>{(whoEditable ? (signatures.who ?? crewName) : crewName) || "—"}</b>
+              {vehicles && (
+                <span data-testid="slip-vehicle">
+                  {" "}· Vehicle: <b>{vehicles}</b>
+                </span>
+              )}
             </span>
             <span>
               Page {pi + 1} of {pages.length}

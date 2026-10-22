@@ -43,7 +43,9 @@ function DetailsCell({
 // field diff, so it's kept as an explicit action rather than dropped.
 export function getActivityColumns(
   actorLabel: string,
-  onViewDetails: (entry: ActivityLogEntry) => void
+  onViewDetails: (entry: ActivityLogEntry) => void,
+  // Technician Activity: the vehicle that technician used that day.
+  vehicleOf?: (entry: ActivityLogEntry) => string
 ): ColumnDef<ActivityLogEntry, unknown>[] {
   return [
     {
@@ -51,6 +53,16 @@ export function getActivityColumns(
       header: actorLabel,
       cell: ({ row }) => <span className="font-medium">{row.original.userName}</span>,
     },
+    ...(vehicleOf
+      ? [
+          {
+            id: "vehicle",
+            header: "Vehicle",
+            accessorFn: (entry: ActivityLogEntry) => vehicleOf(entry),
+            cell: ({ row }: { row: { original: ActivityLogEntry } }) => vehicleOf(row.original) || "—",
+          } as ColumnDef<ActivityLogEntry, unknown>,
+        ]
+      : []),
     {
       id: "action",
       header: () => <ColumnHeader tKey="action" ns="activity" />,

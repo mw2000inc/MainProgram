@@ -1020,6 +1020,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         {job.notes && !isErrand(job) && <p className="text-xs wrap-break-word">{job.notes}</p>}
         <p className="text-xs text-muted-foreground truncate">
           {formatTechnicians(job.technician, job.technician2, t("and"))}
+          {/* The vehicle they use for it — a technician sees theirs here. */}
+          {job.vehicle?.trim() && (
+            <span data-testid="schedule-job-vehicle">
+              {" · "}Vehicle: <span className="font-medium text-foreground">{job.vehicle.trim()}</span>
+            </span>
+          )}
           {stopNumberByJobId.has(job.id) && (
             <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
               {t("routeStop", { n: String(stopNumberByJobId.get(job.id)) })}

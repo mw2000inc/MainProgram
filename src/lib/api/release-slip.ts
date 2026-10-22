@@ -38,6 +38,9 @@ export interface ReleaseSlipJob {
   // visit ("To Collect: ₱8,500.00 (Cash)" — see release-slip-collect.ts),
   // printed in the job's first Notes cell.
   jobNote?: string
+  // The job's vehicle (schedule_jobs.vehicle) — the slip header names the
+  // vehicle(s) used that day.
+  vehicle?: string
   // A blank order row an admin added on the slip page ("+ Add Order No."):
   // its Order No. and type boxes are editable too. Never saved.
   added?: boolean
@@ -80,9 +83,15 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
   // column doesn't exist: nothing is hidden.
   const ids = (raw.jobs ?? []).map((j) => j.job_id)
   const hidden = new Set<string>()
+  // Each job's vehicle, for the slip header (same query).
+  const vehicleById = new Map<string, string>()
   if (ids.length) {
-    const { data: rows, error: hiddenError } = await supabase.from("schedule_jobs").select("id").in("id", ids).eq("slip_hidden", true)
-    if (!hiddenError) for (const r of (rows ?? []) as { id: string }[]) hidden.add(r.id)
+    const { data: rows, error: hiddenError } = await supabase.from("schedule_jobs").select("id, slip_hidden, vehicle").in("id", ids)
+    if (!hiddenError)
+      for (const r of (rows ?? []) as { id: string; slip_hidden: boolean | null; vehicle: string | null }[]) {
+        if (r.slip_hidden) hidden.add(r.id)
+        if ((r.vehicle ?? "").trim()) vehicleById.set(r.id, (r.vehicle ?? "").trim())
+      }
   }
   return {
     technicianName: raw.technician_name ?? "",
@@ -95,6 +104,7 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
       status: j.status,
       technician: j.technician,
       technician2: j.technician_2,
+      vehicle: vehicleById.get(j.job_id),
       movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined, slipType: m.slip_type || undefined })),
     })),
   }
