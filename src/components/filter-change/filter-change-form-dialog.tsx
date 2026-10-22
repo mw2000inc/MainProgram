@@ -4,7 +4,7 @@ import * as React from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { CheckCircle2, Sparkles } from "lucide-react"
+import { CheckCircle2, ExternalLink, Sparkles } from "lucide-react"
 import {
   Dialog,
   DialogBody,
@@ -183,7 +183,9 @@ export function FilterChangeFormDialog({
   // and turns the button into "Save anyway"; changing the order or date
   // clears it.
   const { data: allPlans = [] } = useFilterChangePlans()
-  const [duplicateWarning, setDuplicateWarning] = React.useState<{ key: string; count: number; order: string; date: string } | null>(null)
+  // plans: the pending visits it matched — each a link in the warning that
+  // opens it on the Filter Change page in a new tab (this form stays as typed).
+  const [duplicateWarning, setDuplicateWarning] = React.useState<{ key: string; count: number; order: string; date: string; plans: FilterChangePlan[] } | null>(null)
   const watchedOrder = form.watch("orderNumber")
   const watchedPlanDate = form.watch("planDate")
   const watchedPreD = form.watch("preD")
@@ -344,7 +346,7 @@ export function FilterChangeFormDialog({
       (p) => p.id !== plan?.id && p.status === "Pending" && p.orderNumber.trim() === order && (p.preD || p.planDate) === visitDate
     )
     if (duplicates.length > 0 && duplicateWarning?.key !== key) {
-      setDuplicateWarning({ key, count: duplicates.length, order, date: visitDate })
+      setDuplicateWarning({ key, count: duplicates.length, order, date: visitDate, plans: duplicates })
       return
     }
     const input = {
@@ -632,6 +634,22 @@ export function FilterChangeFormDialog({
             {duplicateWarning && (
               <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" data-testid="fc-duplicate-warning">
                 {t("duplicatePendingWarning", { count: String(duplicateWarning.count), order: duplicateWarning.order, date: duplicateWarning.date })}
+                <ul className="mt-1.5 space-y-1">
+                  {duplicateWarning.plans.map((d) => (
+                    <li key={d.id}>
+                      <a
+                        href={`/filter-change?id=${encodeURIComponent(d.id)}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                        data-testid="fc-duplicate-link"
+                      >
+                        {[d.orderNumber.trim(), d.memberAccount.trim(), d.filterType.trim(), d.serviceman.trim()].filter(Boolean).join(" · ")}
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             <DialogFooter>

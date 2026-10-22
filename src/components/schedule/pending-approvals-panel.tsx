@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { BellOff, History } from "lucide-react"
+import { BellOff, History, Trash2 } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,13 +14,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable } from "@/components/data-table/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { DailyReportDateButton } from "@/components/dashboard/daily-report-date-button"
-import { useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
-import { useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
-import { useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
-import { useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
+import { filterChangePlansKey, useFilterChangePlans, useUpdateFilterChangePlan } from "@/lib/hooks/use-filter-change-plans"
+import { installPlansKey, useInstallPlans, useUpdateInstallPlan } from "@/lib/hooks/use-install-plans"
+import { collectionsKey, useCollections, useUpdateCollection } from "@/lib/hooks/use-collections"
+import { repairPlansKey, useRepairPlans, useUpdateRepairPlan } from "@/lib/hooks/use-repair-plans"
+import { deleteFilterChangePlans } from "@/lib/api/filter-change-plans"
+import { deleteInstallPlans } from "@/lib/api/install-plans"
+import { deleteCollections } from "@/lib/api/collections"
+import { deleteRepairPlans } from "@/lib/api/repair-plans"
 import { useCustomers } from "@/lib/hooks/use-customers"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
-import { useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { scheduleJobsKey, useScheduleJobs } from "@/lib/hooks/use-schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { computeStopNumbers, formatTechnicians } from "@/components/schedule/schedule-columns"
 import { ApprovalDetailDialog } from "@/components/schedule/approval-detail-dialog"
@@ -462,6 +468,33 @@ export function PendingApprovalsPanel({
   // assignment — see batchMismatch below for what blocks it otherwise.
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [confirmBulkApproveOpen, setConfirmBulkApproveOpen] = React.useState(false)
+  // "Delete Selected": the ticked items (visits still waiting for approval —
+  // this panel lists nothing else) are deleted, e.g. one entered twice.
+  // Asked first; each module's own delete, like its page's delete button.
+  const qc = useQueryClient()
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+  async function handleBulkDelete(rowsToDelete: PendingApprovalRow[]) {
+    const idsOf = (type: DispatchEntityType) => rowsToDelete.filter((r) => r.entityType === type).map((r) => r.entityId)
+    const deletes: [string[], (ids: string[]) => Promise<void>, readonly string[]][] = [
+      [idsOf("filter_change_plans"), deleteFilterChangePlans, filterChangePlansKey],
+      [idsOf("install_plans"), deleteInstallPlans, installPlansKey],
+      [idsOf("collections"), deleteCollections, collectionsKey],
+      [idsOf("repair_plans"), deleteRepairPlans, repairPlansKey],
+    ]
+    setBulkDeleting(true)
+    try {
+      for (const [ids, remove] of deletes) if (ids.length) await remove(ids)
+      toast.success(t("bulkDeleted", { count: String(rowsToDelete.length) }))
+      setSelected(new Set())
+    } catch (e) {
+      toast.error((e as { message?: string } | null)?.message || t("bulkDeleteFailed"))
+    } finally {
+      for (const [, , key] of deletes) qc.invalidateQueries({ queryKey: key })
+      qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      setBulkDeleting(false)
+    }
+  }
   const confirmWithoutNotify = useConfirmDispatchItemsWithoutNotifying()
   const [confirmWithoutNotifyOpen, setConfirmWithoutNotifyOpen] = React.useState(false)
   const [bulkApproving, setBulkApproving] = React.useState(false)
@@ -841,6 +874,18 @@ export function PendingApprovalsPanel({
               </Button>
               <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-destructive hover:text-destructive"
+                disabled={bulkDeleting || selectedRows.length === 0}
+                onClick={() => setConfirmBulkDeleteOpen(true)}
+                data-testid="pending-approvals-delete-selected"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {bulkDeleting ? t("deleting") : t("bulkDeleteSelectedCount", { count: String(selectedRows.length) })}
+              </Button>
+              <Button
+                type="button"
                 size="sm"
                 className="gap-1.5"
                 disabled={!canBulkApprove || bulkApproving}
@@ -883,6 +928,22 @@ export function PendingApprovalsPanel({
           open={historyOpen}
           onOpenChange={setHistoryOpen}
           defaultDate={historyDefaultDate}
+        />
+      )}
+      {isAdmin && (
+        <ConfirmDialog
+          open={confirmBulkDeleteOpen}
+          onOpenChange={(o) => !bulkDeleting && setConfirmBulkDeleteOpen(o)}
+          title={t("confirmBulkDeleteTitle", { count: String(selectedRows.length) })}
+          description={`${t("confirmBulkDeleteDescription")} — ${selectedRows
+            .map((r) => [r.orderNumber, r.customerName, formatDate(r.scheduledDate)].filter(Boolean).join(" · "))
+            .join("; ")}`}
+          confirmLabel={t("bulkDeleteConfirm")}
+          loading={bulkDeleting}
+          onConfirm={async () => {
+            await handleBulkDelete(selectedRows)
+            setConfirmBulkDeleteOpen(false)
+          }}
         />
       )}
       {isAdmin && (
