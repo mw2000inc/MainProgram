@@ -25,7 +25,14 @@ self.addEventListener("activate", (event) => {
 // A no-op passthrough — some browsers' installability checks look for a
 // registered fetch handler, but this one never intercepts the response;
 // it just lets the request go to the network as normal.
+//
+// On a local dev server (localhost / 127.0.0.1) it doesn't touch requests at
+// all: the browser handles them itself, so a worker still installed from an
+// earlier visit can't get in the way of local sign-in or API calls before
+// register-service-worker.tsx unregisters it.
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 self.addEventListener("fetch", (event) => {
+  if (LOCAL_HOSTS.includes(self.location.hostname)) return
   event.respondWith(fetch(event.request))
 })
 

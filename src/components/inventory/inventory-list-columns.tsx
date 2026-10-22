@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { cn, formatDate, formatDateTime } from "@/lib/utils"
+import { cn, formatDate } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 import { isAwaitingStockApproval } from "@/lib/types"
 
@@ -324,9 +324,11 @@ export function getInventoryListExpandedColumns({
       cell: ({ row }) => row.original.approvedByName || "—",
     } as ColumnDef<StockMovementRow, unknown>,
     {
+      // When the item was entered — the date only, no time of day (the
+      // admin's request, 2026-10-22).
       accessorKey: "createdAt",
-      header: () => <ColumnHeader tKey="time" ns="inventory" />,
-      cell: ({ row }) => formatDateTime(row.original.createdAt),
+      header: () => <ColumnHeader tKey="date" ns="inventory" />,
+      cell: ({ row }) => <span className="whitespace-nowrap">{formatDate(row.original.createdAt)}</span>,
     } as ColumnDef<StockMovementRow, unknown>,
     ]),
   ]

@@ -1,6 +1,7 @@
 import "server-only"
 import { cookies } from "next/headers"
 import { createServerClient } from "@supabase/ssr"
+import { supabaseCookieOptions } from "./cookie-options"
 
 // Server-side client for Route Handlers — reads the caller's session from
 // cookies so we can verify who's making the request before doing anything privileged.
@@ -10,6 +11,7 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: supabaseCookieOptions,
       cookies: {
         getAll() {
           return cookieStore.getAll()
