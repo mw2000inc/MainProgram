@@ -253,6 +253,27 @@ function withRepairInOutColumn(columns: ColumnDef<RepairPlan, unknown>[], partsB
   return [columns[0], column, ...columns.slice(1)]
 }
 
+// The Repair panel's "Unit" column: the customer's unit the repair is for —
+// the repair's own Model, else the order's Product # on the Sale List (so a
+// repair saved without a Model still shows it). Right after Order No.
+function withRepairUnitColumn(columns: ColumnDef<RepairPlan, unknown>[], unitFor: (repair: RepairPlan) => string): ColumnDef<RepairPlan, unknown>[] {
+  const column: ColumnDef<RepairPlan, unknown> = {
+    id: "__repairUnit",
+    header: () => <RepairUnitHeader />,
+    cell: ({ row }) => {
+      const unit = unitFor(row.original)
+      return unit ? <span className="whitespace-nowrap">{unit}</span> : <span className="text-muted-foreground">—</span>
+    },
+  }
+  const at = columns.findIndex((c) => (c as { accessorKey?: string }).accessorKey === "orderNo")
+  return at >= 0 ? [...columns.slice(0, at + 1), column, ...columns.slice(at + 1)] : [...columns, column]
+}
+
+function RepairUnitHeader() {
+  const { t } = useTranslation("fields")
+  return <>{t("unit")}</>
+}
+
 // The Installation panel's "Part No" column: parts added for the install on
 // the Release Slip (installSlipParts), as PART OUT / PART IN badges — the
 // same look as a repair's Part No. * = awaiting inventory approval.
@@ -782,7 +803,15 @@ export function DailyReportSection() {
   )
   const installPartsFor = React.useCallback((plan: InstallPlan) => installSlipParts(plan, stockMovements), [stockMovements])
   const installColumnsWithParts = React.useMemo(() => withInstallPartsColumn(installColumns, installPartsFor), [installColumns, installPartsFor])
-  const repairColumnsWithInOut = React.useMemo(() => withRepairInOutColumn(repairColumns, partsByRepair), [repairColumns, partsByRepair]
+  const repairUnitFor = React.useCallback(
+    (repair: RepairPlan) =>
+      (repair.model ?? "").trim() ||
+      (detailSaleEntries.find((e) => e.orderNumber.trim() === (repair.orderNo ?? "").trim())?.productNo ?? "").trim(),
+    [detailSaleEntries]
+  )
+  const repairColumnsWithInOut = React.useMemo(
+    () => withRepairInOutColumn(withRepairUnitColumn(repairColumns, repairUnitFor), partsByRepair),
+    [repairColumns, partsByRepair, repairUnitFor]
   )
   const collectionsColumns = React.useMemo(
     () =>

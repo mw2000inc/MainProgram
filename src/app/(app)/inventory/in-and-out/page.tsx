@@ -352,6 +352,7 @@ function InAndOutSummaryContent() {
         onOpenChange={setFormOpen}
         movement={editing}
         defaultDirection={addDirection}
+        lockDirection
       />
 
       <ConfirmDialog

@@ -112,6 +112,7 @@ export function StockMovementFormDialog({
   onOpenChange,
   movement,
   defaultDirection = "in",
+  lockDirection = false,
   defaultDate,
 }: {
   open: boolean
@@ -123,6 +124,10 @@ export function StockMovementFormDialog({
   // In & Out Summary's "Out Stock" panel should default to Stock Out). Ignored
   // in edit mode.
   defaultDirection?: "in" | "out"
+  // true: the Add form's Direction stays on defaultDirection and can't be
+  // switched (opened from the In & Out Summary's In Stock / Out Stock panel,
+  // whose side already says which way it goes).
+  lockDirection?: boolean
   // Pre-fills the Add form's editable Date — the date the page it was opened
   // from is currently showing (Inventory's Date, the Daily Report's date), so
   // an entry made while viewing a past day files under that day. Falls back to
@@ -155,6 +160,7 @@ export function StockMovementFormDialog({
             open={open}
             onOpenChange={onOpenChange}
             defaultDirection={defaultDirection}
+            lockDirection={lockDirection}
             defaultDate={defaultDate}
           />
         )}
@@ -167,11 +173,13 @@ function AddMovementForm({
   open,
   onOpenChange,
   defaultDirection,
+  lockDirection,
   defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDirection: "in" | "out"
+  lockDirection: boolean
   defaultDate?: string
 }) {
   const { user } = useAuth()
@@ -339,9 +347,12 @@ function AddMovementForm({
                 {/* Starts on the direction of the button that opened the form
                     (defaultDirection); the admin can switch it — Stock In to
                     add a product to stock, Stock Out to take it out. Switching
-                    also sets that direction's usual reason (still changeable). */}
+                    also sets that direction's usual reason (still changeable).
+                    Locked (not switchable) when opened from the In Stock / Out
+                    Stock panel (lockDirection). */}
                 <Select
                   value={field.value}
+                  disabled={lockDirection}
                   onValueChange={(next) => {
                     const direction = next as "in" | "out"
                     field.onChange(direction)

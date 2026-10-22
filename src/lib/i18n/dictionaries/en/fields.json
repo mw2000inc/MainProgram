@@ -20,6 +20,7 @@
   "installedDate": "Installed Date",
   "note": "Note",
   "accountName": "Account Name",
+  "unit": "Unit",
   "unitInOut": "Unit IN/OUT",
   "problem": "Problem",
   "solutionStatus": "Solution / Status",

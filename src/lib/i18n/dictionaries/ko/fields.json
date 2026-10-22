@@ -20,6 +20,7 @@
   "installedDate": "설치 완료일",
   "note": "비고",
   "accountName": "계정 이름",
+  "unit": "제품",
   "unitInOut": "장비 입고/출고",
   "problem": "문제",
   "solutionStatus": "해결 / 상태",

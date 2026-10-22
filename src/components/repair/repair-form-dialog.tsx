@@ -297,10 +297,46 @@ export function RepairFormDialog({
   // See filter-change-form-dialog.tsx's own comment on this same pattern —
   // fills only currently-empty fields, add-only, never overwrites anything
   // already typed.
+  // The unit a repair is for: the order's Product # on the Sale List (e.g.
+  // "105 / MW) Oasis-T1"), else the member's dispenser type. Filled only
+  // while Model is empty and no replacement IN/OUT is set (with IN/OUT, Model
+  // is the replacement unit that's queued in Inventory, not the member's own).
+  function fillModel(orderNo: string, dispenserType?: string): boolean {
+    if ((form.getValues("model") ?? "").trim() || form.getValues("inOut")) return false
+    const productNo = saleListEntries.find((e) => e.orderNumber.trim() === orderNo.trim())?.productNo?.trim()
+    const model = productNo || dispenserType?.trim()
+    if (!model) return false
+    form.setValue("model", model)
+    return true
+  }
+
+  // A typed Order No. that exactly matches a Sale List order fills the empty
+  // fields (Account Name, Address, Contact #, Unit) after a short pause —
+  // the same as leaving the box, without having to.
+  const [autoFilledFor, setAutoFilledFor] = React.useState("")
+  React.useEffect(() => {
+    if (isEdit || !open) return
+    const order = (orderNoValue ?? "").trim()
+    if (!order || order === autoFilledFor) return
+    if (!saleListEntries.some((e) => e.orderNumber.trim() === order)) return
+    const timer = setTimeout(() => {
+      setAutoFilledFor(order)
+      handleOrderNoBlur(order)
+    }, 400)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderNoValue, isEdit, open, saleListEntries])
+  React.useEffect(() => {
+    if (open) setAutoFilledFor("")
+  }, [open])
+
   function handleOrderNoBlur(orderNo: string) {
     if (isEdit) return
     const customer = findCustomerByOrderNumber(customers, saleListEntries, orderNo)
-    if (!customer) return
+    if (!customer) {
+      if (fillModel(orderNo)) toast.success(tCommon("customerInfoFilled"))
+      return
+    }
     let filled = false
     const name = customer.companyName || customer.fullName
     if (name && !form.getValues("accountName").trim()) {
@@ -315,10 +351,7 @@ export function RepairFormDialog({
       form.setValue("contactNumber", customer.contactNumber)
       filled = true
     }
-    if (customer.dispenserType && !(form.getValues("model") ?? "").trim()) {
-      form.setValue("model", customer.dispenserType)
-      filled = true
-    }
+    if (fillModel(orderNo, customer.dispenserType)) filled = true
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
@@ -365,10 +398,7 @@ export function RepairFormDialog({
       form.setValue("contactNumber", customer.contactNumber)
       filled = true
     }
-    if (customer.dispenserType && !(form.getValues("model") ?? "").trim()) {
-      form.setValue("model", customer.dispenserType)
-      filled = true
-    }
+    if (fillModel(form.getValues("orderNo"), customer.dispenserType)) filled = true
     if (filled) toast.success(tCommon("customerInfoFilled"))
   }
 
@@ -533,6 +563,29 @@ export function RepairFormDialog({
                         field.onBlur()
                         handleCustomerLookupBlur("name", e.target.value)
                       }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Unit: the customer's unit the repair is for (the Model column) —
+                filled from the order's Product # on the Sale List as soon as
+                a typed Order No. matches one (fillModel); still typable, with
+                MODEL_OPTIONS as suggestions. With a replacement IN/OUT set
+                below, it's the replacement unit queued in Inventory. */}
+            <FormField
+              control={form.control}
+              name="model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tFields("unit")}</FormLabel>
+                  <FormControl>
+                    <Combobox
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      options={MODEL_OPTIONS}
+                      placeholder={tCommon("selectField", { field: tFields("unit") })}
                     />
                   </FormControl>
                   <FormMessage />
@@ -801,27 +854,6 @@ export function RepairFormDialog({
                   <FormLabel>{tFields("sc")}</FormLabel>
                   <FormControl>
                     <Input placeholder={t("optional")} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="model"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tFields("model")}</FormLabel>
-                  <FormControl>
-                    {/* Free-text combobox, not a strict Select — a custom
-                        unit/model name is always typable, with
-                        MODEL_OPTIONS offered as suggestions below it. */}
-                    <Combobox
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      options={MODEL_OPTIONS}
-                      placeholder={tCommon("selectField", { field: tFields("model") })}
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
