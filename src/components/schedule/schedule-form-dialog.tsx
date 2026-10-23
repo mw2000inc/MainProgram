@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Combobox } from "@/components/ui/combobox"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Form,
@@ -61,6 +62,15 @@ const JOB_TYPES = Object.keys(JOB_TYPE_LABELS) as ScheduleJobType[]
 // The filters an order needs for a Filter Change on a date: those of its own
 // upcoming Filter Change (within 60 days, not yet linked to a job — the
 // record approval links the job to), else its CP System's (Sale List).
+
+// The Time box's quick picks (still typable): a part of the day, or the hour.
+const TIME_OPTIONS = [
+  "ANYTIME",
+  "MORNING",
+  "AFTERNOON",
+  ...["8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"],
+].map((value) => ({ value }))
+
 function orderFilterCodes(
   orderNo: string,
   scheduledDate: string,
@@ -773,6 +783,10 @@ export function ScheduleFormDialog({
                 </FormItem>
               )}
             />
+            {/* Date and Time side by side — the time is picked from a short
+                list (or typed: "ANYTIME", "2:30 PM"…), and shows in the
+                Schedule's Time column. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_12rem] sm:items-start">
             <FormField
               control={form.control}
               name="scheduledDate"
@@ -808,12 +822,20 @@ export function ScheduleFormDialog({
                 <FormItem>
                   <FormLabel>{t("timeOptional")}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t("timePlaceholder")} {...field} />
+                    <Combobox
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      options={TIME_OPTIONS}
+                      placeholder={t("timePlaceholder")}
+                      showAllOnExactMatch
+                      data-testid="job-time"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            </div>
             <FormField
               control={form.control}
               name="secondaryAddress"
