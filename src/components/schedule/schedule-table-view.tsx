@@ -63,11 +63,16 @@ export function resolveRows(
           job.scheduledDate
         )
       : undefined
+    // Only a collection for THIS visit's day (its Pre D, else Plan D, or the
+    // day it was collected) — not the order's latest collection from another
+    // day, which made an amount show on every visit of that order. Typing a
+    // collection for the customer on the day makes it appear here.
     const collectionMatch = job.orderNo
-      ? pickBestMatch(
-          collections.filter((c) => c.orderNo === job.orderNo),
-          (c) => c.collectionDate,
-          job.scheduledDate
+      ? collections.find(
+          (c) =>
+            c.orderNo === job.orderNo &&
+            c.status !== "Cancelled" &&
+            ((c.preD || c.collectionDate) === job.scheduledDate || c.accD === job.scheduledDate)
         )
       : undefined
     const saleListMatch = job.orderNo

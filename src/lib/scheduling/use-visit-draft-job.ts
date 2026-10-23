@@ -40,6 +40,11 @@ type DraftOptions = {
   // A Filter Change's filters (its Filter field) — what the technician brings
   // and what's deducted on completion.
   filterCodes?: string
+  // The vehicle picked on the form: the job's vehicle (else the crew's /
+  // automatic one), and filled into the technician's other jobs that day that
+  // have none yet — so it shows on their Daily Report and Release Slip. On a
+  // record that already has a job, a different vehicle updates that job.
+  vehicle?: string
   // Saved by an admin from the Daily Report: the job is approved at once (no
   // Pending Schedule Approval step) — a new one right after it's created, and
   // a record's existing draft when the record is edited there. Only with a
@@ -81,10 +86,32 @@ export function useVisitDraftJob() {
     qc.invalidateQueries({ queryKey: scheduleJobsKey })
   }
 
+  // The picked vehicle onto the technician's other open jobs that day that
+  // have no vehicle yet (one vehicle per technician per day).
+  const fillTechnicianDay = async (jobId: string, date: string, ids: (string | undefined)[], vehicle: string) => {
+    const mine = ids.filter(Boolean) as string[]
+    if (!vehicle || !mine.length) return
+    const others = jobs.filter(
+      (j) =>
+        j.id !== jobId &&
+        j.scheduledDate === date &&
+        (j.status === "pending" || j.status === "pending_approval") &&
+        !(j.vehicle ?? "").trim() &&
+        [j.technicianUserId, j.technician2UserId].some((id) => !!id && mine.includes(id))
+    )
+    for (const j of others) await updateScheduleJob(j.id, { vehicle }).catch(() => undefined)
+  }
+
   return async function ensureVisitDraftJob(o: DraftOptions) {
     if (o.existingJobId) {
       // Edited from the Daily Report: a draft still waiting is approved now.
       const existing = jobs.find((j) => j.id === o.existingJobId)
+      const vehicle = (o.vehicle ?? "").trim()
+      if (existing && vehicle && vehicle !== (existing.vehicle ?? "").trim()) {
+        await updateScheduleJob(existing.id, { vehicle }).catch(() => undefined)
+        await fillTechnicianDay(existing.id, existing.scheduledDate, [existing.technicianUserId, existing.technician2UserId], vehicle)
+        qc.invalidateQueries({ queryKey: scheduleJobsKey })
+      }
       if (o.approve && existing?.status === "pending_approval" && isAssignedTechnician(existing.technician)) {
         try {
           await approveJob(existing.id, o.table)
@@ -158,12 +185,13 @@ export function useVisitDraftJob() {
         technician2: pair.secondary,
         technicianUserId: ids.technicianUserId || "",
         technician2UserId: ids.technician2UserId || "",
-        vehicle: crew?.vehicle ?? assigned?.vehicle ?? "",
+        vehicle: (o.vehicle ?? "").trim() || crew?.vehicle || assigned?.vehicle || "",
         secondaryAddress: address || undefined,
         notes: notes || undefined,
         filterCodes: o.filterCodes?.trim() || undefined,
       })
       await linkVisitToScheduleJob(o.table, o.recordId, job.id)
+      if ((o.vehicle ?? "").trim()) await fillTechnicianDay(job.id, date, [ids.technicianUserId, ids.technician2UserId], (o.vehicle ?? "").trim())
       if (o.approve && isAssignedTechnician(pair.primary)) {
         // Saved from the Daily Report: approved straight away.
         await approveJob(job.id, o.table)

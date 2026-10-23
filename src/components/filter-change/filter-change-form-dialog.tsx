@@ -49,6 +49,10 @@ import { logAppMessage } from "@/components/shared/app-message-logger"
 import { statusForAccD } from "@/components/filter-change/filter-change-columns"
 import { useVisitDraftJob } from "@/lib/scheduling/use-visit-draft-job"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
+import { useScheduleJobs } from "@/lib/hooks/use-schedule"
+import { VEHICLE_TYPES } from "@/lib/constants"
+
+const VEHICLE_OPTIONS = VEHICLE_TYPES.map((v) => ({ value: v }))
 import { businessToday } from "@/lib/dispatch-lead-time"
 import { format, parseISO, subMonths } from "date-fns"
 
@@ -82,6 +86,8 @@ function createSchema(
     // normalized again in onSubmit.
     serviceman: z.string().trim().optional(),
     serviceman2: z.string().trim().optional(),
+    // The visit's vehicle — kept on its schedule job, not the record.
+    vehicle: z.string().trim().optional(),
     note: z.string().optional(),
   }).superRefine((v, ctx) => {
     for (const key of ["planDate", "preD"] as const) {
@@ -108,6 +114,7 @@ function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: 
       accD: plan.accD ?? "",
       serviceman: plan.serviceman,
       serviceman2: plan.serviceman2 ?? "",
+      vehicle: "",
       note: plan.note ?? "",
     }
   }
@@ -124,6 +131,7 @@ function defaultValues(defaultDate: string, defaultOrderNumber?: string, plan?: 
     accD: "",
     serviceman: "",
     serviceman2: "",
+    vehicle: "",
     note: "",
   }
 }
@@ -184,6 +192,22 @@ export function FilterChangeFormDialog({
   // and turns the button into "Save anyway"; changing the order or date
   // clears it.
   const { data: allPlans = [] } = useFilterChangePlans()
+  // The vehicle on the visit's schedule job (editing) — prefilled once the
+  // form opens, and compared on save so an unchanged one isn't re-saved.
+  const { data: scheduleJobs = [] } = useScheduleJobs()
+  const planJobVehicle = (plan?.scheduleJobId ? scheduleJobs.find((j) => j.id === plan.scheduleJobId)?.vehicle : "")?.trim() ?? ""
+  const [vehicleFilledFor, setVehicleFilledFor] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    if (!open) {
+      setVehicleFilledFor(null)
+      return
+    }
+    const key = plan?.id ?? "new"
+    if (vehicleFilledFor === key || (plan?.scheduleJobId && !scheduleJobs.length)) return
+    setVehicleFilledFor(key)
+    if (planJobVehicle && !(form.getValues("vehicle") ?? "").trim()) form.setValue("vehicle", planJobVehicle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, plan?.id, planJobVehicle, scheduleJobs.length])
   // plans: the pending visits it matched — each a link in the warning that
   // opens it on the Filter Change page in a new tab (this form stays as typed).
   const [duplicateWarning, setDuplicateWarning] = React.useState<{ key: string; count: number; order: string; date: string; plans: FilterChangePlan[] } | null>(null)
@@ -357,8 +381,11 @@ export function FilterChangeFormDialog({
       )
       return
     }
+    // The vehicle belongs to the visit's schedule job, not the record.
+    const { vehicle: vehicleValue, ...recordValues } = values
+    const vehicle = (vehicleValue ?? "").trim()
     const input = {
-      ...values,
+      ...recordValues,
       contactNumber: values.contactNumber ?? "",
       address: values.address ?? "",
       sc: values.sc ?? "",
@@ -397,7 +424,11 @@ export function FilterChangeFormDialog({
         technician2: input.serviceman2,
         notes: [values.memberAccount, values.filterType].filter(Boolean).join(" — "),
         filterCodes: values.filterType,
+        vehicle,
       })
+    } else if (isEdit && saved.scheduleJobId && vehicle && vehicle !== planJobVehicle) {
+      // Edited elsewhere: a changed vehicle goes onto the visit's job.
+      await ensureVisitDraftJob({ table: "filter_change_plans", jobType: "filter_change", recordId: saved.id, existingJobId: saved.scheduleJobId, vehicle })
     }
     onSaved?.(saved)
     onOpenChange(false)
@@ -609,6 +640,22 @@ export function FilterChangeFormDialog({
                 name="serviceman2"
                 render={({ field }) => (
                   <SecondTechnicianFormItem value={field.value} onChange={field.onChange} primary={servicemanValue} />
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vehicle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle</FormLabel>
+                    <FormControl>
+                      {/* Pick one or type any vehicle — saved on the visit's
+                          schedule job, so its technician(s) see it on their
+                          Daily Report and Release Slip (useVisitDraftJob). */}
+                      <Combobox value={field.value ?? ""} onChange={field.onChange} options={VEHICLE_OPTIONS} placeholder="Select or type a vehicle" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
               <FormField
