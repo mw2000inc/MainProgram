@@ -1401,9 +1401,9 @@ export function DailyReportSection() {
         </SortableContext>
       </DndContext>
 
-      <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
-      <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
-      <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
+      <FilterChangeFormDialog open={filterChangeFormOpen} onOpenChange={setFilterChangeFormOpen} defaultDate={reportDate} autoApprove={isAdmin} prefillPreD />
+      <InstallFormDialog open={installFormOpen} onOpenChange={setInstallFormOpen} defaultDate={reportDate} autoApprove={isAdmin} prefillPreD />
+      <RepairFormDialog open={repairFormOpen} onOpenChange={setRepairFormOpen} defaultDate={reportDate} autoApprove={isAdmin} prefillPreD />
       {(() => {
         if (!detail) return null
         const tf = tFieldsDetail
@@ -1537,7 +1537,7 @@ export function DailyReportSection() {
         onOpenChange={(open) => !open && setClearingFcIds([])}
         onDone={() => clearDoneRef.current?.()}
       />
-      <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} autoApprove={isAdmin} />
+      <CollectionsFormDialog open={collectionsFormOpen} onOpenChange={setCollectionsFormOpen} defaultDate={reportDate} autoApprove={isAdmin} prefillPreD />
       <StockMovementFormDialog
         open={inventoryFormOpen || !!editingStockMovement}
         onOpenChange={(o) => {

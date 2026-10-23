@@ -144,10 +144,14 @@ export function FilterChangeFormDialog({
   plan,
   onSaved,
   autoApprove,
+  prefillPreD,
 }: {
   // Opened from the Daily Report by an admin: the visit's job is approved at
   // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
   autoApprove?: boolean
+  // Opened from the Daily Report's Add: a new record's Pre D (Pre-Installed
+  // Date for installs) starts on the report's date (defaultDate).
+  prefillPreD?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -253,6 +257,7 @@ export function FilterChangeFormDialog({
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
+    if (!plan && prefillPreD && defaultDate) form.setValue("preD", defaultDate)
     suggestTechnician.reset()
     // Same lookup the blur handler runs below — opening this dialog already
     // pointed at a real order (e.g. from that order's own detail page)

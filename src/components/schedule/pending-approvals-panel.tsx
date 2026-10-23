@@ -169,7 +169,7 @@ function buildRows(
   }
 
   for (const p of filterChangePlans ?? []) {
-    if (!isVisibleDispatchStatus(p.dispatchStatus)) continue
+    if (!isVisibleDispatchStatus(p.dispatchStatus) || isDoneRecord(p.status)) continue
     const customer = findCustomer(customers, saleListEntries, { customerId: p.customerId, orderNumber: p.orderNumber })
     rows.push(
       withJob(p.scheduleJobId, {
@@ -195,7 +195,7 @@ function buildRows(
     )
   }
   for (const p of installPlans ?? []) {
-    if (!isVisibleDispatchStatus(p.dispatchStatus)) continue
+    if (!isVisibleDispatchStatus(p.dispatchStatus) || isDoneRecord(p.status)) continue
     const customer = findCustomer(customers, saleListEntries, { orderNumber: p.orderNo })
     rows.push(
       withJob(p.scheduleJobId, {
@@ -220,7 +220,7 @@ function buildRows(
     )
   }
   for (const c of collections ?? []) {
-    if (!isVisibleDispatchStatus(c.dispatchStatus)) continue
+    if (!isVisibleDispatchStatus(c.dispatchStatus) || isDoneRecord(c.status, c.collected)) continue
     const customer = findCustomer(customers, saleListEntries, { customerId: c.customerId, orderNumber: c.orderNo })
     rows.push(
       withJob(c.scheduleJobId, {
@@ -246,7 +246,7 @@ function buildRows(
     )
   }
   for (const r of repairPlans ?? []) {
-    if (!isVisibleDispatchStatus(r.dispatchStatus)) continue
+    if (!isVisibleDispatchStatus(r.dispatchStatus) || isDoneRecord(r.status)) continue
     const customer = findCustomer(customers, saleListEntries, { orderNumber: r.orderNo })
     rows.push(
       withJob(r.scheduleJobId, {
@@ -373,6 +373,12 @@ function matchesStatusFilter(status: PendingApprovalRow["dispatchStatus"], filte
 // isolate exactly that backlog. "all" remains available for the full,
 // unfiltered history.
 export type DateRangeFilter = "upcoming" | "all" | "next2Days" | "overdue"
+
+// A visit that's already done — completed, collected or cancelled — needs no
+// approval, so it isn't listed (an old draft that was finished anyway).
+function isDoneRecord(status: string | undefined, collected?: boolean): boolean {
+  return status === "Completed" || status === "Collected" || status === "Cancelled" || !!collected
+}
 
 function matchesDateRangeFilter(scheduledDate: string, filter: DateRangeFilter): boolean {
   if (filter === "all") return true
@@ -1099,7 +1105,11 @@ function ApprovalSummary({ countsByType }: { countsByType: Record<DispatchEntity
 // requiring every consumer to pull the full row list) since the Schedule
 // page's tab trigger needs only the number, computed from the exact same
 // underlying queries/cache.
+// Counts what needs approving from today on — the same rows as the list's
+// default "Upcoming" view; a past draft (its day already gone) isn't counted
+// (still under "Overdue" / "All dates").
 export function usePendingApprovalsCount(): number {
   const { rows } = usePendingApprovalRows()
-  return rows.length
+  const today = todayIso()
+  return rows.filter((r) => r.scheduledDate >= today).length
 }

@@ -180,10 +180,14 @@ export function RepairFormDialog({
   defaultOrderNo,
   plan,
   autoApprove,
+  prefillPreD,
 }: {
   // Opened from the Daily Report by an admin: the visit's job is approved at
   // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
   autoApprove?: boolean
+  // Opened from the Daily Report's Add: a new record's Pre D (Pre-Installed
+  // Date for installs) starts on the report's date (defaultDate).
+  prefillPreD?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -405,6 +409,7 @@ export function RepairFormDialog({
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    if (!plan && prefillPreD && defaultDate) form.setValue("preD", defaultDate)
     accDEditedRef.current = false
     // Never carries over from a previous "Add" session — staged parts are
     // scoped to the one not-yet-saved repair currently being created.

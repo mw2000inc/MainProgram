@@ -23,6 +23,7 @@
   "removeFilter": "Remove filter",
   "plannedFilters": "Filters for this job (deducted on completion): {filters}",
   "duplicateOpenJob": "A {type} {state} already exists for Order No. {orderNo} on {date} — no second one was added.",
+  "duplicateOpenJobAdded": "Order No. {orderNo} already has a {type} {state} on {date} — this one was added too and shows on the Daily Report. Check it isn't the same visit twice.",
   "duplicateStateDraft": "draft",
   "duplicateStateJob": "job",
   "visitDraftCreated": "Draft {type} job created for {date} — it's waiting in Schedule › Pending Schedule Approval.",

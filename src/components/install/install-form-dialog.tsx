@@ -187,10 +187,14 @@ export function InstallFormDialog({
   defaultOrderNo,
   plan,
   autoApprove,
+  prefillPreD,
 }: {
   // Opened from the Daily Report by an admin: the visit's job is approved at
   // once instead of waiting in Pending Schedule Approval (useVisitDraftJob).
   autoApprove?: boolean
+  // Opened from the Daily Report's Add: a new record's Pre D (Pre-Installed
+  // Date for installs) starts on the report's date (defaultDate).
+  prefillPreD?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate: string
@@ -233,6 +237,7 @@ export function InstallFormDialog({
   React.useEffect(() => {
     if (!open) return
     form.reset(defaultValues(defaultDate, defaultOrderNo, plan))
+    if (!plan && prefillPreD && defaultDate) form.setValue("preInstalledDate", defaultDate)
     // Same immediate-fill-on-open as Filter Change/Collection/Repair's own
     // defaultOrderNo — opening this dialog already pointed at a real order
     // (e.g. from that order's own detail page) fills the rest in right away,

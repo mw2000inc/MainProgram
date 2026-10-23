@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
+import { findOpenJobForOrder, linkVisitToScheduleJob, updateScheduleJob } from "@/lib/api/schedule"
 import { findCustomerByOrderNumber } from "@/lib/customer-lookup"
 import { collectionsKey } from "@/lib/hooks/use-collections"
 import { filterChangePlansKey } from "@/lib/hooks/use-filter-change-plans"
@@ -16,9 +16,9 @@ import { createDispatchAssigner } from "@/lib/scheduling/dispatch-assignment"
 import { usePreviousTechnicians } from "@/lib/scheduling/use-previous-technicians"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { useDuplicateJobGuard } from "@/lib/scheduling/use-duplicate-job-guard"
 import { assignmentAccounts, crewOfTechnician, isAssignedTechnician, normalizeTechnicianPair, technicianAccountIds } from "@/lib/technicians"
 import { formatDate } from "@/lib/utils"
+import { useAuth } from "@/lib/auth/auth-context"
 
 type DraftOptions = {
   table: "install_plans" | "repair_plans" | "collections" | "filter_change_plans"
@@ -45,10 +45,12 @@ type DraftOptions = {
   // have none yet — so it shows on their Daily Report and Release Slip. On a
   // record that already has a job, a different vehicle updates that job.
   vehicle?: string
-  // Saved by an admin from the Daily Report: the job is approved at once (no
-  // Pending Schedule Approval step) — a new one right after it's created, and
-  // a record's existing draft when the record is edited there. Only with a
-  // technician; without one it stays a draft.
+  // Approve the job at once (no Pending Schedule Approval step) — a new one
+  // right after it's created, and a record's existing draft when the record is
+  // edited from the Daily Report. Unset: approved whenever an ADMIN adds the
+  // visit, from any page (Filter Change, Sale List, member page…), so it goes
+  // straight onto that day's Daily Report. Only with a technician; without
+  // one it stays a draft.
   approve?: boolean
 }
 
@@ -73,9 +75,10 @@ export function useVisitDraftJob() {
   const { data: saleListEntries = [] } = useSaleListEntries()
   const qc = useQueryClient()
   const { t } = useTranslation("schedule")
-  const duplicateWarning = useDuplicateJobGuard()
   const { data: jobs = [] } = useScheduleJobs()
   const previous = usePreviousTechnicians()
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
 
   // The same switch the Schedule's Approve makes ('pending_approval' →
   // 'pending'), so the database confirms the record and writes its Pre D just
@@ -102,7 +105,22 @@ export function useVisitDraftJob() {
     for (const j of others) await updateScheduleJob(j.id, { vehicle }).catch(() => undefined)
   }
 
+  // A notice (kept in the bell) when the order already has something else on
+  // that day's schedule — a Filter Change and a Collection, say — so the admin
+  // sees it at once on the Daily Report instead of finding a double later.
+  // (Another job of the SAME type is told by its own notice, below.)
+  const noteSameDay = (jobId: string, jobType: DraftOptions["jobType"], orderNo: string, date: string) => {
+    if (!orderNo) return
+    const others = jobs.filter(
+      (j) => j.id !== jobId && j.jobType !== jobType && (j.orderNo ?? "").trim() === orderNo && j.scheduledDate === date && j.status !== "cancelled"
+    )
+    if (!others.length) return
+    const kinds = [...new Set(others.map((j) => t(j.jobType)))].join(", ")
+    toast.warning(`${orderNo} already has ${kinds} on ${formatDate(date)} — check it isn't the same visit twice.`)
+  }
+
   return async function ensureVisitDraftJob(o: DraftOptions) {
+    const approve = o.approve ?? isAdmin
     if (o.existingJobId) {
       // Edited from the Daily Report: a draft still waiting is approved now.
       const existing = jobs.find((j) => j.id === o.existingJobId)
@@ -112,7 +130,7 @@ export function useVisitDraftJob() {
         await fillTechnicianDay(existing.id, existing.scheduledDate, [existing.technicianUserId, existing.technician2UserId], vehicle)
         qc.invalidateQueries({ queryKey: scheduleJobsKey })
       }
-      if (o.approve && existing?.status === "pending_approval" && isAssignedTechnician(existing.technician)) {
+      if (approve && existing?.status === "pending_approval" && isAssignedTechnician(existing.technician)) {
         try {
           await approveJob(existing.id, o.table)
           toast.success(t("visitJobApproved", { type: t(o.jobType), date: formatDate(existing.scheduledDate) }))
@@ -168,12 +186,19 @@ export function useVisitDraftJob() {
         : [o.accountName?.trim(), product, o.amount ? `₱${o.amount.toLocaleString()}` : ""].filter(Boolean).join(" — ")
     const address = o.address?.trim() || customer?.address?.trim()
     try {
-      // One open job per order and type: the record is saved, but no second
-      // draft is made — the warning says where the existing one is.
-      const duplicate = await duplicateWarning(o.jobType, orderNo)
-      if (duplicate) {
-        toast.warning(duplicate)
-        return
+      // Another open job of the same type for this order: still added (it
+      // shows on the Daily Report too) — the admin is told where the other
+      // one is, in a notice kept in the bell.
+      const existingOpen = orderNo ? await findOpenJobForOrder(o.jobType, orderNo) : undefined
+      if (existingOpen) {
+        toast.warning(
+          t("duplicateOpenJobAdded", {
+            type: t(o.jobType),
+            state: t(existingOpen.status === "pending_approval" ? "duplicateStateDraft" : "duplicateStateJob"),
+            orderNo,
+            date: formatDate(existingOpen.scheduledDate),
+          })
+        )
       }
       const job = await createJob.mutateAsync({
         jobType: o.jobType,
@@ -192,8 +217,9 @@ export function useVisitDraftJob() {
       })
       await linkVisitToScheduleJob(o.table, o.recordId, job.id)
       if ((o.vehicle ?? "").trim()) await fillTechnicianDay(job.id, date, [ids.technicianUserId, ids.technician2UserId], (o.vehicle ?? "").trim())
-      if (o.approve && isAssignedTechnician(pair.primary)) {
-        // Saved from the Daily Report: approved straight away.
+      noteSameDay(job.id, o.jobType, orderNo, date)
+      if (approve && isAssignedTechnician(pair.primary)) {
+        // Added by an admin: approved straight away — on the Daily Report.
         await approveJob(job.id, o.table)
         toast.success(t("visitJobApproved", { type: t(o.jobType), date: formatDate(date) }))
         return
