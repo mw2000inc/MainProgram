@@ -154,6 +154,7 @@ type StockMovementRow = {
   pending_requested_at?: string | null
   purpose?: string | null
   slip_type?: string | null
+  added_on_inventory?: boolean | null
 }
 
 type MovementEditInput = Pick<
@@ -233,6 +234,7 @@ function movementFromRow(row: StockMovementRow): StockMovement {
     changeRequest: changeRequestFromRow(row),
     purpose: row.purpose ?? undefined,
     slipType: row.slip_type ?? undefined,
+    addedOnInventory: !!row.added_on_inventory,
   }
 }
 
@@ -273,22 +275,28 @@ async function resultingProductStock(productId: string, movement: StockMovement)
 }
 
 export async function addStockMovement(input: Omit<StockMovement, "id" | "createdAt">): Promise<StockMovementResult> {
-  const { data, error } = await supabase
-    .from("stock_movements")
-    .insert({
-      date: input.date,
-      product_id: input.productId,
-      quantity_added: input.quantityAdded,
-      quantity_removed: input.quantityRemoved,
-      second_hand_ready_quantity: input.secondHandReadyQuantity,
-      second_hand_repair_quantity: input.secondHandRepairQuantity,
-      demo_quantity: input.demoQuantity,
-      reason: input.reason,
-      user_id: input.userId,
-      reference_number: input.referenceNumber,
-    })
-    .select()
-    .single()
+  const row = {
+    date: input.date,
+    product_id: input.productId,
+    quantity_added: input.quantityAdded,
+    quantity_removed: input.quantityRemoved,
+    second_hand_ready_quantity: input.secondHandReadyQuantity,
+    second_hand_repair_quantity: input.secondHandRepairQuantity,
+    demo_quantity: input.demoQuantity,
+    reason: input.reason,
+    user_id: input.userId,
+    reference_number: input.referenceNumber,
+    // Inventory pages only (see StockMovement.addedOnInventory).
+    ...(input.addedOnInventory ? { added_on_inventory: true } : {}),
+  }
+  let { data, error } = await supabase.from("stock_movements").insert(row).select().single()
+  // Before the 20261125000000 migration the column doesn't exist yet: saved
+  // without the mark rather than not at all.
+  if (error && input.addedOnInventory && /added_on_inventory/.test(error.message)) {
+    const { added_on_inventory: _mark, ...plain } = row as typeof row & { added_on_inventory?: boolean }
+    void _mark
+    ;({ data, error } = await supabase.from("stock_movements").insert(plain).select().single())
+  }
   if (error) throw error
   const movement = movementFromRow(data as StockMovementRow)
   return resultingProductStock(movement.productId, movement)
@@ -302,7 +310,9 @@ export async function addStockMovement(input: Omit<StockMovement, "id" | "create
 // DB trigger corrects products.stock_quantity by the difference.
 export async function updateStockMovement(id: string, input: MovementEditInput): Promise<StockMovementResult> {
   const current = await movementState(id)
-  const asRequest = current.status === "approved"
+  // Stock added on the Inventory pages is edited directly (no approval step):
+  // the database corrects products.stock_quantity by the difference itself.
+  const asRequest = current.status === "approved" && !current.added_on_inventory
   const { data, error } = await supabase
     .from("stock_movements")
     .update(

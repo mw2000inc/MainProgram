@@ -377,6 +377,7 @@ function InventoryContent() {
         open={movementFormOpen}
         onOpenChange={setMovementFormOpen}
         defaultDirection="in"
+        addedOnInventory
         defaultDate={selectedDate}
       />
 

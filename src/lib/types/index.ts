@@ -238,6 +238,9 @@ export type StockMovementReason =
 export interface StockMovement {
   id: string
   date: string
+  // Added on the Inventory pages (20261125000000): applied at once, an edit
+  // needs no approval, and the Daily Report's Inventory List leaves it out.
+  addedOnInventory?: boolean
   createdAt: string
   productId: string
   quantityAdded: number

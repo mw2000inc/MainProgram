@@ -200,18 +200,6 @@ export function FilterChangeFormDialog({
   // form opens, and compared on save so an unchanged one isn't re-saved.
   const { data: scheduleJobs = [] } = useScheduleJobs()
   const planJobVehicle = (plan?.scheduleJobId ? scheduleJobs.find((j) => j.id === plan.scheduleJobId)?.vehicle : "")?.trim() ?? ""
-  const [vehicleFilledFor, setVehicleFilledFor] = React.useState<string | null>(null)
-  React.useEffect(() => {
-    if (!open) {
-      setVehicleFilledFor(null)
-      return
-    }
-    const key = plan?.id ?? "new"
-    if (vehicleFilledFor === key || (plan?.scheduleJobId && !scheduleJobs.length)) return
-    setVehicleFilledFor(key)
-    if (planJobVehicle && !(form.getValues("vehicle") ?? "").trim()) form.setValue("vehicle", planJobVehicle)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, plan?.id, planJobVehicle, scheduleJobs.length])
   // plans: the pending visits it matched — each a link in the warning that
   // opens it on the Filter Change page in a new tab (this form stays as typed).
   const [duplicateWarning, setDuplicateWarning] = React.useState<{ key: string; count: number; order: string; date: string; plans: FilterChangePlan[] } | null>(null)
@@ -256,7 +244,9 @@ export function FilterChangeFormDialog({
 
   React.useEffect(() => {
     if (!open) return
-    form.reset(defaultValues(defaultDate, defaultOrderNumber, plan))
+    // The vehicle comes with the reset (it's on the visit's job, not the
+    // record) — set separately it was wiped by this very reset.
+    form.reset({ ...defaultValues(defaultDate, defaultOrderNumber, plan), vehicle: planJobVehicle })
     if (!plan && prefillPreD && defaultDate) form.setValue("preD", defaultDate)
     suggestTechnician.reset()
     // Same lookup the blur handler runs below — opening this dialog already
@@ -266,6 +256,13 @@ export function FilterChangeFormDialog({
     if (!plan && defaultOrderNumber) handleOrderNumberBlur(defaultOrderNumber)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNumber, plan])
+
+  // The jobs list can finish loading after the form opened: the vehicle is
+  // filled in then (only while the box is still empty).
+  React.useEffect(() => {
+    if (open && plan && planJobVehicle && !(form.getValues("vehicle") ?? "").trim()) form.setValue("vehicle", planJobVehicle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planJobVehicle])
 
   // Fills serviceman with the nearest-technician pick (see
   // filter-change-suggest.ts) — never submitted automatically, the admin

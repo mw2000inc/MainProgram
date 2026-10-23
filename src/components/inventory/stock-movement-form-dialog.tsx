@@ -113,6 +113,7 @@ export function StockMovementFormDialog({
   movement,
   defaultDirection = "in",
   lockDirection = false,
+  addedOnInventory = false,
   defaultDate,
 }: {
   open: boolean
@@ -128,6 +129,9 @@ export function StockMovementFormDialog({
   // switched (opened from the In & Out Summary's In Stock / Out Stock panel,
   // whose side already says which way it goes).
   lockDirection?: boolean
+  // Opened on the Inventory pages: the new movement is marked as added there
+  // (StockMovement.addedOnInventory) — no approval, not on the Daily Report.
+  addedOnInventory?: boolean
   // Pre-fills the Add form's editable Date — the date the page it was opened
   // from is currently showing (Inventory's Date, the Daily Report's date), so
   // an entry made while viewing a past day files under that day. Falls back to
@@ -161,6 +165,7 @@ export function StockMovementFormDialog({
             onOpenChange={onOpenChange}
             defaultDirection={defaultDirection}
             lockDirection={lockDirection}
+            addedOnInventory={addedOnInventory}
             defaultDate={defaultDate}
           />
         )}
@@ -174,12 +179,14 @@ function AddMovementForm({
   onOpenChange,
   defaultDirection,
   lockDirection,
+  addedOnInventory,
   defaultDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDirection: "in" | "out"
   lockDirection: boolean
+  addedOnInventory: boolean
   defaultDate?: string
 }) {
   const { user } = useAuth()
@@ -241,6 +248,7 @@ function AddMovementForm({
       reason: values.reason,
       userId: user?.id ?? "",
       referenceNumber: generateId("ADJ").toUpperCase(),
+      addedOnInventory,
     })
     onOpenChange(false)
   }

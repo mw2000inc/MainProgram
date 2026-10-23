@@ -72,6 +72,20 @@ async function loadProfile(session: Session | null, retries = 2): Promise<User |
   return null
 }
 
+// The stored session, retried while the network is down ("Failed to fetch"
+// while renewing it): a dropped connection is not a sign-out. undefined =
+// still unreachable after the retries; null = genuinely signed out.
+async function loadSession(retries = 3): Promise<Session | null | undefined> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const { data, error } = await supabase.auth.getSession().catch((e: unknown) => ({ data: { session: null }, error: e as Error }))
+    if (data.session) return data.session
+    const offline = !!error && (error.name === "AuthRetryableFetchError" || /failed to fetch|network|load failed/i.test(error.message ?? ""))
+    if (!offline) return null
+    if (attempt < retries) await sleep(1000 * (attempt + 1))
+  }
+  return undefined
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -80,14 +94,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     let active = true
     // One-time bootstrap of the existing session on mount (client-only external system).
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!data.session) {
-        if (!active) return
+    loadSession().then(async (session) => {
+      if (!active) return
+      if (session === undefined) {
+        // Still no connection after the retries: keep loading (no sign-out,
+        // no trip to the login page) — Supabase keeps retrying, and its
+        // TOKEN_REFRESHED below brings the user in once it reconnects.
+        return
+      }
+      if (!session) {
         setUser(null)
         setLoading(false)
         return
       }
-      const profile = await loadProfile(data.session)
+      const profile = await loadProfile(session)
       if (!active) return
       // Only a genuinely absent session means "logged out" — a failed profile fetch
       // while the session is still valid should never sign the user out.
@@ -95,7 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     })
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // The first-load event is handled by the bootstrap above — when the
+      // network is down Supabase reports it with no session, which isn't a
+      // sign-out (a real one comes as SIGNED_OUT).
+      if (event === "INITIAL_SESSION") return
       if (!session) {
         if (active) {
           setUser(null)

@@ -353,6 +353,7 @@ function InAndOutSummaryContent() {
         movement={editing}
         defaultDirection={addDirection}
         lockDirection
+        addedOnInventory
       />
 
       <ConfirmDialog

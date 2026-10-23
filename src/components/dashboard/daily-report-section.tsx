@@ -1016,6 +1016,9 @@ export function DailyReportSection() {
       return id && knownJobs.has(id) ? id : undefined
     }
     return stockMovements.filter((m) => {
+      // Stock added on the Inventory pages is the admin's own count, not the
+      // day's field work — never listed here.
+      if (m.addedOnInventory) return false
       const job = jobOf(m)
       if (job) return jobIds.has(job)
       return (
