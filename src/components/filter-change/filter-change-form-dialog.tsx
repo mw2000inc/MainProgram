@@ -257,6 +257,35 @@ export function FilterChangeFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultOrderNumber, plan])
 
+  // Picking a Serviceman fills Vehicle with the one that technician already
+  // has that day (Pre D, else Date) — the first of their jobs that day given
+  // a vehicle. Only into an empty box, or over the vehicle it filled itself
+  // for a previous pick; one typed by hand is kept.
+  const autoVehicleRef = React.useRef("")
+  React.useEffect(() => {
+    if (!open) return
+    const tech = (servicemanValue ?? "").trim().toLowerCase()
+    const day = watchedPreD || watchedPlanDate
+    if (!tech || !day) return
+    const theirs = scheduleJobs
+      .filter(
+        (j) =>
+          j.id !== plan?.scheduleJobId &&
+          j.scheduledDate === day &&
+          j.status !== "cancelled" &&
+          (j.vehicle ?? "").trim() &&
+          [j.technician, j.technician2].some((n) => (n ?? "").trim().toLowerCase() === tech)
+      )
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
+    const vehicle = (theirs[0]?.vehicle ?? "").trim()
+    const current = (form.getValues("vehicle") ?? "").trim()
+    if (vehicle && (!current || current === autoVehicleRef.current) && current !== vehicle) {
+      form.setValue("vehicle", vehicle)
+      autoVehicleRef.current = vehicle
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, servicemanValue, watchedPreD, watchedPlanDate, scheduleJobs])
+
   // The jobs list can finish loading after the form opened: the vehicle is
   // filled in then (only while the box is still empty).
   React.useEffect(() => {
