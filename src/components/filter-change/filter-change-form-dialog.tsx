@@ -261,12 +261,25 @@ export function FilterChangeFormDialog({
   // has that day (Pre D, else Date) — the first of their jobs that day given
   // a vehicle. Only into an empty box, or over the vehicle it filled itself
   // for a previous pick; one typed by hand is kept.
+  // No serviceman (or one with no vehicle that day): a vehicle it filled
+  // itself is taken back out.
   const autoVehicleRef = React.useRef("")
   React.useEffect(() => {
-    if (!open) return
+    if (!open) {
+      autoVehicleRef.current = ""
+      return
+    }
     const tech = (servicemanValue ?? "").trim().toLowerCase()
     const day = watchedPreD || watchedPlanDate
-    if (!tech || !day) return
+    const clearAuto = () => {
+      const current = (form.getValues("vehicle") ?? "").trim()
+      if (autoVehicleRef.current && current === autoVehicleRef.current) form.setValue("vehicle", "")
+      autoVehicleRef.current = ""
+    }
+    if (!tech || !day) {
+      clearAuto()
+      return
+    }
     const theirs = scheduleJobs
       .filter(
         (j) =>
@@ -278,6 +291,10 @@ export function FilterChangeFormDialog({
       )
       .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
     const vehicle = (theirs[0]?.vehicle ?? "").trim()
+    if (!vehicle) {
+      clearAuto()
+      return
+    }
     const current = (form.getValues("vehicle") ?? "").trim()
     if (vehicle && (!current || current === autoVehicleRef.current) && current !== vehicle) {
       form.setValue("vehicle", vehicle)
