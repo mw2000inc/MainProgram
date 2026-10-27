@@ -41,6 +41,10 @@ export interface ReleaseSlipJob {
   // The job's vehicle (schedule_jobs.vehicle) — the slip header names the
   // vehicle(s) used that day.
   vehicle?: string
+  // The schedule job's own status ('pending', 'completed', …) — `status`
+  // above also counts a done record; the slip leaves out a Collection whose
+  // job is still pending on the Schedule.
+  jobStatus?: string
   // A blank order row an admin added on the slip page ("+ Add Order No."):
   // its Order No. and type boxes are editable too. Never saved.
   added?: boolean
@@ -83,14 +87,16 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
   // column doesn't exist: nothing is hidden.
   const ids = (raw.jobs ?? []).map((j) => j.job_id)
   const hidden = new Set<string>()
-  // Each job's vehicle, for the slip header (same query).
+  // Each job's vehicle, for the slip header, and its own status (same query).
   const vehicleById = new Map<string, string>()
+  const jobStatusById = new Map<string, string>()
   if (ids.length) {
-    const { data: rows, error: hiddenError } = await supabase.from("schedule_jobs").select("id, slip_hidden, vehicle").in("id", ids)
+    const { data: rows, error: hiddenError } = await supabase.from("schedule_jobs").select("id, slip_hidden, vehicle, status").in("id", ids)
     if (!hiddenError)
-      for (const r of (rows ?? []) as { id: string; slip_hidden: boolean | null; vehicle: string | null }[]) {
+      for (const r of (rows ?? []) as { id: string; slip_hidden: boolean | null; vehicle: string | null; status: string | null }[]) {
         if (r.slip_hidden) hidden.add(r.id)
         if ((r.vehicle ?? "").trim()) vehicleById.set(r.id, (r.vehicle ?? "").trim())
+        if (r.status) jobStatusById.set(r.id, r.status)
       }
   }
   return {
@@ -105,6 +111,7 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
       technician: j.technician,
       technician2: j.technician_2,
       vehicle: vehicleById.get(j.job_id),
+      jobStatus: jobStatusById.get(j.job_id),
       movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined, slipType: m.slip_type || undefined })),
     })),
   }

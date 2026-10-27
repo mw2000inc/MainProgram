@@ -223,7 +223,13 @@ function ReleaseSlipContent() {
   // Each job with its items and the money to collect on the visit.
   const jobs = React.useMemo(() => {
     const list = (data?.jobs ?? []).filter(
-      (j) => !cancelledJobIds.has(j.jobId) && !(j.jobType === "collection" && j.status === "completed" && uncollectedJobIds.has(j.jobId))
+      (j) =>
+        !cancelledJobIds.has(j.jobId) &&
+        !(j.jobType === "collection" && j.status === "completed" && uncollectedJobIds.has(j.jobId)) &&
+        // A Collection still Pending on the Schedule stays off the slip — even
+        // when its payment was ticked, or the order's Filter Change is done
+        // (unless "Include pending jobs" is ticked).
+        !(j.jobType === "collection" && !includePending && j.jobStatus && j.jobStatus !== "completed")
     )
     return list.map((j) => {
       // Pending jobs ("Include pending jobs") show what's already queued for
@@ -238,7 +244,7 @@ function ReleaseSlipContent() {
         jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
       }
     })
-  }, [data, date, collections, saleListEntries, repairPlans, installPlans, cancelledJobIds, uncollectedJobIds])
+  }, [data, date, collections, saleListEntries, repairPlans, installPlans, cancelledJobIds, uncollectedJobIds, includePending])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)
