@@ -443,7 +443,27 @@ function EditMovementForm({
 }) {
   const { data: products = [] } = useProducts()
   const updateMovement = useUpdateStockMovement()
-  const selectedProduct = products.find((p) => p.id === movement.productId)
+  // The product can be changed (e.g. the Filter Change item that went out as
+  // the wrong filter) — the Filter Change itself keeps its Filter.
+  const [productId, setProductId] = React.useState(movement.productId)
+  const [productText, setProductText] = React.useState("")
+  const productOptions = React.useMemo(() => products.map((p) => ({ value: p.name })), [products])
+  const original = products.find((p) => p.id === movement.productId)
+  React.useEffect(() => {
+    if (!open) return
+    // Back to the item's own product each time the form opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setProductId(movement.productId)
+    setProductText(original?.name ?? movement.itemLabel ?? "")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, movement.id, original?.name])
+  const changeProductText = (text: string) => {
+    setProductText(text)
+    const match = products.find((p) => p.name.trim().toLowerCase() === text.trim().toLowerCase())
+    setProductId(match?.id ?? "")
+  }
+  const selectedProduct = products.find((p) => p.id === productId)
+  const productChanged = !!productId && productId !== movement.productId
   const isSaleOrigin = movement.reason === "Sale"
   const isFilterChangeOrigin = movement.reason === "Filter Change"
   const { t } = useTranslation("inventory")
@@ -460,6 +480,7 @@ function EditMovementForm({
   }, [open, movement])
 
   async function onSubmit(values: EditFormValues) {
+    if (!productId) return
     await updateMovement.mutateAsync({
       id: movement.id,
       input: {
@@ -473,6 +494,7 @@ function EditMovementForm({
         // picked a reason, keep the original — a quantity fix must not turn a
         // Filter Change item into an Adjustment.
         reason: form.formState.dirtyFields.reason ? values.reason : (movement.reason as typeof values.reason),
+        ...(productChanged ? { productId } : {}),
       },
     })
     onOpenChange(false)
@@ -483,8 +505,23 @@ function EditMovementForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid gap-2">
           <Label>{t("product")}</Label>
-          <Input value={selectedProduct?.name ?? t("unknownProduct")} disabled />
-          <p className="text-xs text-muted-foreground">{t("productCannotBeChanged")}</p>
+          <Combobox
+            value={productText}
+            onChange={changeProductText}
+            options={productOptions}
+            placeholder={t("productTypeToSearch")}
+            maxResults={20}
+            emptyMessage={t("noMatchingProduct")}
+            openOnFocus={false}
+            data-testid="edit-movement-product"
+          />
+          {!productId ? (
+            <p className="text-xs text-destructive">{t("noMatchingProduct")}</p>
+          ) : productChanged ? (
+            <p className="text-xs text-muted-foreground">{t("productChangeNote", { from: original?.name ?? movement.itemLabel ?? "—" })}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("productChangeHint")}</p>
+          )}
         </div>
         {selectedProduct && (
           <p className="text-sm text-muted-foreground">{t("currentStockUnits", { stock: String(selectedProduct.stockQuantity) })}</p>

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { useTranslation } from "@/lib/i18n/i18n-context"
+import { canChangeInventoryDecision } from "@/lib/inventory-decision-editors"
+import { useAuth } from "@/lib/auth/auth-context"
 import { cn, formatDate } from "@/lib/utils"
 import type { StockMovementRow } from "@/lib/hooks/use-inventory"
 import { isAwaitingStockApproval } from "@/lib/types"
@@ -73,10 +75,37 @@ export function ApprovalActionsCell({
 }) {
   const { t } = useTranslation("inventory")
   const { t: tCommon } = useTranslation("common")
-  if (!isAwaitingStockApproval(movement)) return null
+  const { user } = useAuth()
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation()
     fn()
+  }
+  if (!isAwaitingStockApproval(movement)) {
+    // Already decided: Jan and cashout can change it the other way, whoever
+    // decided it (canChangeInventoryDecision) — stock follows in the database.
+    if (!canChangeInventoryDecision(user?.id) || movement.changeRequest) return null
+    if (movement.status === "rejected" && movement.productId) {
+      return (
+        <Button size="sm" variant="outline" className="h-7 gap-1 px-2" onClick={stop(() => onApprove(movement))} title={t("approveAfterReject")} data-testid="inventory-reapprove">
+          <Check className="h-3.5 w-3.5" /> {tCommon("approve")}
+        </Button>
+      )
+    }
+    if (movement.status === "approved") {
+      return (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 px-2 text-danger"
+          onClick={stop(() => onReject(movement))}
+          title={t("rejectAfterApprove")}
+          data-testid="inventory-unapprove"
+        >
+          <X className="h-3.5 w-3.5" /> {tCommon("reject")}
+        </Button>
+      )
+    }
+    return null
   }
   return (
     <div className="flex items-center gap-1">

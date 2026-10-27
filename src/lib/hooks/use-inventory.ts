@@ -403,6 +403,8 @@ export function useRejectStockMovements() {
     onError: (error: Error) => toast.error(error.message || "Failed to reject"),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: stockMovementsKey })
+      // Rejecting an APPROVED item (Jan / cashout) gives its stock back.
+      qc.invalidateQueries({ queryKey: productsKey })
       qc.invalidateQueries({ queryKey: ["activityLogs"] })
     },
   })

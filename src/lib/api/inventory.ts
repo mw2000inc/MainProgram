@@ -160,7 +160,12 @@ type StockMovementRow = {
 type MovementEditInput = Pick<
   StockMovement,
   "quantityAdded" | "quantityRemoved" | "secondHandReadyQuantity" | "secondHandRepairQuantity" | "demoQuantity" | "reason"
->
+> & {
+  // A different product for the item (only when changed) — its record, e.g.
+  // the Filter Change, keeps its own Filter; stock moves between the two
+  // products by the database (20261126000000).
+  productId?: string
+}
 
 const editColumns = (input: MovementEditInput) => ({
   quantity_added: input.quantityAdded,
@@ -169,6 +174,8 @@ const editColumns = (input: MovementEditInput) => ({
   second_hand_repair_quantity: input.secondHandRepairQuantity,
   demo_quantity: input.demoQuantity,
   reason: input.reason,
+  // A mapped product replaces any typed (unmapped) label.
+  ...(input.productId ? { product_id: input.productId, item_label: null } : {}),
 })
 
 function changeRequestFromRow(row: StockMovementRow): StockMovement["changeRequest"] {
@@ -389,6 +396,9 @@ export async function approveStockMovement(
       status: "approved",
       approved_at: new Date().toISOString(),
       approved_by: approvedBy,
+      // A Rejected item approved after all (Jan / cashout) is no longer rejected.
+      rejected_at: null,
+      rejected_by: null,
       ...(adjust?.productId ? { product_id: adjust.productId } : {}),
       ...(adjust?.quantityRemoved !== undefined ? { quantity_removed: adjust.quantityRemoved } : {}),
       ...(adjust?.quantityAdded !== undefined ? { quantity_added: adjust.quantityAdded } : {}),
