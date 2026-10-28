@@ -108,6 +108,7 @@
   "action": "작업",
   "record": "기록",
   "dateTime": "날짜 및 시간",
+  "date": "날짜",
   "viewFieldChanges": "필드 변경 사항 보기",
   "before": "변경 전",
   "after": "변경 후",

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ColumnHeader } from "@/components/shared/column-header"
 import { actionLabel, entityTypeLabel } from "@/lib/activity-log-config"
 import { useTranslation } from "@/lib/i18n/i18n-context"
-import { formatDateTime } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
 import type { ActivityLogEntry } from "@/lib/types"
 
 function ActionCell({ entry }: { entry: ActivityLogEntry }) {
@@ -75,8 +75,9 @@ export function getActivityColumns(
     },
     {
       accessorKey: "createdAt",
-      header: () => <ColumnHeader tKey="dateTime" ns="activity" />,
-      cell: ({ row }) => formatDateTime(row.original.createdAt),
+      header: () => <ColumnHeader tKey="date" ns="activity" />,
+      // Date only (no time) — Admin and Technician Activity.
+      cell: ({ row }) => formatDate(row.original.createdAt),
     },
     {
       id: "details",

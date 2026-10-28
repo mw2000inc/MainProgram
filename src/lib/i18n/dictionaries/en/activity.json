@@ -108,6 +108,7 @@
   "action": "Action",
   "record": "Record",
   "dateTime": "Date & Time",
+  "date": "Date",
   "viewFieldChanges": "View field changes",
   "before": "Before",
   "after": "After",
