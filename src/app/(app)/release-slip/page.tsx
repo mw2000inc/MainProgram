@@ -74,6 +74,7 @@ type SlipSaveRowInput = {
   accountName: string
   jobType: "filter_change" | "repair" | "installation" | "collection"
   items: { sku: string; qtyOut: number; qtyIn: number }[]
+  shown?: { sku: string; qtyOut: number; qtyIn: number }[]
 }
 
 function formatSlipDate(iso: string): string {
@@ -362,9 +363,12 @@ function ReleaseSlipContent() {
   React.useEffect(() => {
     if (!shownOrder) return
     const next = JSON.parse(shownOrder) as Record<string, string[]>
+    // Codes remembered before (typed lines whose save hasn't come back yet)
+    // stay, after the ones shown now.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLineOrder((prev) => {
-      const merged = { ...prev, ...next }
+      const merged = { ...prev }
+      for (const [id, codes] of Object.entries(next)) merged[id] = [...codes, ...(prev[id] ?? []).filter((c) => !codes.includes(c))]
       return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
     })
   }, [shownOrder])
@@ -445,7 +449,12 @@ function ReleaseSlipContent() {
         const back = m.inSku && m.qtyIn ? [{ sku: m.inSku.trim(), qtyOut: 0, qtyIn: m.qtyIn, purpose: m.purpose, slipType: m.slipType }] : []
         return [...(out.sku && (out.qtyOut || out.qtyIn) ? [out] : []), ...back]
       })
-      rows.push({ jobId: job.added ? undefined : job.jobId, orderNo: job.orderNo, accountName: job.accountName, jobType: job.jobType as SlipSaveRowInput["jobType"], items })
+      // What this slip loaded for the job: only those can be taken out by
+      // this save — items added since (another tab, the technician's phone)
+      // aren't removed just because this slip doesn't show them yet.
+      const loaded = jobs.find((j) => j.jobId === job.jobId)
+      const shown = job.added || !loaded ? undefined : loaded.movements.map((m) => ({ sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.qtyIn || 0 }))
+      rows.push({ jobId: job.added ? undefined : job.jobId, orderNo: job.orderNo, accountName: job.accountName, jobType: job.jobType as SlipSaveRowInput["jobType"], items, shown })
       sourceIds.push(job.jobId)
     }
     return { rows, noType, sourceIds, slipKey: slip.key }

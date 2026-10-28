@@ -33,6 +33,11 @@ export type SlipSaveRow = {
   accountName: string
   jobType: SlipSaveJobType
   items: SlipSaveItem[]
+  // What the sender's slip had loaded for the job. When given, an item is
+  // taken out only as far as the sender saw it and lowered it — an item
+  // added since (another open slip) isn't removed by a slip that never
+  // showed it.
+  shown?: { sku: string; qtyOut: number; qtyIn: number }[]
 }
 export type SlipSaveResult = {
   created: number
@@ -427,11 +432,24 @@ export async function saveReleaseSlip(
           if (error) throw error
         }
       }
+      const shownByCode = new Map<string, { out: number; in: number }>()
+      for (const item of row.shown ?? []) {
+        const code = item.sku.trim()
+        if (!code) continue
+        const s = shownByCode.get(code) ?? { out: 0, in: 0 }
+        s.out += Math.max(0, Math.floor(item.qtyOut || 0))
+        s.in += Math.max(0, Math.floor(item.qtyIn || 0))
+        shownByCode.set(code, s)
+      }
       for (const [key, moves] of byKey) {
         const w = wantedByCode.get(key) ?? { out: 0, in: 0 }
         for (const side of ["quantity_removed", "quantity_added"] as const) {
           const want = side === "quantity_removed" ? w.out : w.in
           let excess = moves.reduce((n, m) => n + (m[side] || 0), 0) - want
+          if (row.shown) {
+            const saw = shownByCode.get(key) ?? { out: 0, in: 0 }
+            excess = Math.min(excess, (side === "quantity_removed" ? saw.out : saw.in) - want)
+          }
           for (const m of moves) {
             if (excess <= 0) break
             const qty = m[side] || 0
