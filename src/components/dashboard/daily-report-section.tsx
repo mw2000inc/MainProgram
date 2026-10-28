@@ -913,8 +913,15 @@ export function DailyReportSection() {
     () => new Set(scheduleJobs.filter((j) => j.status === "pending" || j.status === "completed").map((j) => j.id)),
     [scheduleJobs]
   )
-  const isApprovedForReport = React.useCallback(
-    (r: { status: string; scheduleJobId?: string }) => r.status !== "Pending" || (!!r.scheduleJobId && approvedJobIds.has(r.scheduleJobId)),
+  // Whether a record on its day is listed: a still-Pending one whenever an
+  // admin has set its Pre D (the day filter below) — with no job yet, or an
+  // approved one (a draft job shows through onScheduleToday, marked Awaiting
+  // approval), whatever its confirmation; so a Pre D set on the Filter
+  // Change / Collection page shows on that day's report at once. A done one
+  // keeps the confirmation rule (isDailyReportEligible).
+  const isReportable = React.useCallback(
+    (r: { status: string; scheduleJobId?: string; dispatchStatus?: DispatchStatus }) =>
+      r.status === "Pending" ? !r.scheduleJobId || approvedJobIds.has(r.scheduleJobId) : isDailyReportEligible(r.dispatchStatus),
     [approvedJobIds]
   )
   // Which day a record belongs on. A still-Pending record shows only on its
@@ -937,9 +944,9 @@ export function DailyReportSection() {
   const dayFilterChangePlans = React.useMemo(
     () =>
       filterChangePlans.filter(
-        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.planDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.planDate) && isReportable(p))
       ),
-    [filterChangePlans, isOnReportDay, isApprovedForReport, onScheduleToday]
+    [filterChangePlans, isOnReportDay, isReportable, onScheduleToday]
   )
   // InstallPlan has no preD field — its own equivalent "rescheduled date"
   // is preInstalledDate (input date is the plan/entry date, installedDate
@@ -956,24 +963,23 @@ export function DailyReportSection() {
           ((p.status === "Completed"
             ? (p.installedDate || p.preInstalledDate || p.inputDate) === reportDate
             : isOnReportDay(p.status, p.preInstalledDate, p.inputDate)) &&
-            isDailyReportEligible(p.dispatchStatus) &&
-            isApprovedForReport(p))
+            isReportable(p))
       ),
-    [installPlans, isOnReportDay, isApprovedForReport, reportDate, onScheduleToday]
+    [installPlans, isOnReportDay, isReportable, reportDate, onScheduleToday]
   )
   const dayRepairPlans = React.useMemo(
     () =>
       repairPlans.filter(
-        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.issuedDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.issuedDate) && isReportable(p))
       ),
-    [repairPlans, isOnReportDay, isApprovedForReport, onScheduleToday]
+    [repairPlans, isOnReportDay, isReportable, onScheduleToday]
   )
   const dayCollectionPlans = React.useMemo(
     () =>
       collectionPlans.filter(
-        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.collectionDate) && isDailyReportEligible(p.dispatchStatus) && isApprovedForReport(p))
+        (p) => onScheduleToday(p) || (isOnReportDay(p.status, p.preD, p.collectionDate) && isReportable(p))
       ),
-    [collectionPlans, isOnReportDay, isApprovedForReport, onScheduleToday]
+    [collectionPlans, isOnReportDay, isReportable, onScheduleToday]
   )
   // Rows awaiting approval per panel, for the notices.
   const awaitingCount = <T extends { scheduleJobId?: string }>(rows: T[]) => rows.filter(isAwaiting).length
