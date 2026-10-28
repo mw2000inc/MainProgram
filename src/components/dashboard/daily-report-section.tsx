@@ -47,7 +47,7 @@ import {
 } from "@/components/filter-change/filter-change-columns"
 import { FilterChangeFormDialog } from "@/components/filter-change/filter-change-form-dialog"
 import { getInstallColumns, INSTALL_EXPORT_COLUMNS } from "@/components/install/install-columns"
-import { installSlipParts, installSlipPartsText, type InstallSlipPart } from "@/lib/install-slip-parts"
+import { collectionSlipParts, filterChangeSlipParts, installSlipParts, installSlipPartsText, type InstallSlipPart } from "@/lib/install-slip-parts"
 import { InstallFormDialog } from "@/components/install/install-form-dialog"
 import { getRepairColumns, REPAIR_EXPORT_COLUMNS } from "@/components/repair/repair-columns"
 import { RepairFormDialog } from "@/components/repair/repair-form-dialog"
@@ -274,17 +274,19 @@ function RepairUnitHeader() {
   return <>{t("unit")}</>
 }
 
-// The Installation panel's "Part No" column: parts added for the install on
-// the Release Slip (installSlipParts), as PART OUT / PART IN badges — the
-// same look as a repair's Part No. * = awaiting inventory approval.
-function withInstallPartsColumn(columns: ColumnDef<InstallPlan, unknown>[], partsFor: (plan: InstallPlan) => InstallSlipPart[]): ColumnDef<InstallPlan, unknown>[] {
-  const column: ColumnDef<InstallPlan, unknown> = {
+// The Installation / Filter Change / Collection panels' "Part No" column:
+// parts added for the record (installSlipParts, filterChangeSlipParts,
+// collectionSlipParts), as PART OUT / PART IN badges — the same look as a
+// repair's Part No. * = awaiting inventory approval.
+function withPartsColumn<T>(columns: ColumnDef<T, unknown>[], partsFor: (plan: T) => InstallSlipPart[], afterKey: string): ColumnDef<T, unknown>[] {
+  const column: ColumnDef<T, unknown> = {
     id: "__installParts",
     header: () => <InstallPartsHeader />,
     cell: ({ row }) => <InstallPartsCell parts={partsFor(row.original)} />,
   }
-  // Right after Installed Date (else at the end, when that column is hidden).
-  const at = columns.findIndex((c) => (c as { accessorKey?: string }).accessorKey === "installedDate")
+  // Right after afterKey (Installed Date / Acc D; else at the end, when that
+  // column is hidden).
+  const at = columns.findIndex((c) => (c as { accessorKey?: string }).accessorKey === afterKey)
   return at >= 0 ? [...columns.slice(0, at + 1), column, ...columns.slice(at + 1)] : [...columns, column]
 }
 
@@ -802,7 +804,11 @@ export function DailyReportSection() {
     [visibleFieldsFor, isAdmin, updateRepairPlan, allowCompletion, isAwaiting, reportDate]
   )
   const installPartsFor = React.useCallback((plan: InstallPlan) => installSlipParts(plan, stockMovements), [stockMovements])
-  const installColumnsWithParts = React.useMemo(() => withInstallPartsColumn(installColumns, installPartsFor), [installColumns, installPartsFor])
+  const installColumnsWithParts = React.useMemo(() => withPartsColumn(installColumns, installPartsFor, "installedDate"), [installColumns, installPartsFor])
+  const filterChangeColumnsWithParts = React.useMemo(
+    () => withPartsColumn(filterChangeColumns, (plan: FilterChangePlan) => filterChangeSlipParts(plan, stockMovements), "accD"),
+    [filterChangeColumns, stockMovements]
+  )
   const repairUnitFor = React.useCallback(
     (repair: RepairPlan) =>
       (repair.model ?? "").trim() ||
@@ -848,6 +854,10 @@ export function DailyReportSection() {
         isAwaiting
       ),
     [visibleFieldsFor, isAdmin, updateCollection, allowCompletion, isAwaiting, reportDate]
+  )
+  const collectionsColumnsWithParts = React.useMemo(
+    () => withPartsColumn(collectionsColumns, (plan: CollectionPlan) => collectionSlipParts(plan, stockMovements), "accD"),
+    [collectionsColumns, stockMovements]
   )
   // Not one of the six admin-configurable sections (see the PanelId comment
   // above), so no visibleFieldsFor entry exists for it — always the full
@@ -1082,7 +1092,7 @@ export function DailyReportSection() {
       <DashboardPlanPanel
         title={labelFor("filter_change")}
         icon={Droplets}
-        columns={filterChangeColumns}
+        columns={filterChangeColumnsWithParts}
         data={dayFilterChangePlans}
         selectionActions={
           isAdmin
@@ -1175,7 +1185,7 @@ export function DailyReportSection() {
       <DashboardPlanPanel
         title={labelFor("collection")}
         icon={Banknote}
-        columns={collectionsColumns}
+        columns={collectionsColumnsWithParts}
         data={dayCollectionPlans}
         notice={
           <AwaitingApprovalNotice

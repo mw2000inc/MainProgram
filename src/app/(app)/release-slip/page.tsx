@@ -26,6 +26,7 @@ import { AddSlipItemDialog } from "@/components/release-slip/add-slip-item-dialo
 import { ChannelReleaseSlip } from "@/components/release-slip/channel-release-slip"
 import { SLIP_CHANNELS, type SlipChannel } from "@/lib/release-slip-channels"
 import { fetchReleaseSlip } from "@/lib/api/release-slip"
+import { inShownOrder, lineCode } from "@/lib/release-slip-lines"
 import { listProducts } from "@/lib/api/inventory"
 import { productsKey } from "@/lib/hooks/use-inventory"
 import { loadManualItems, manualSlipJob, saveManualItems, type ManualSlipItem } from "@/lib/release-slip-manual"
@@ -220,6 +221,12 @@ function ReleaseSlipContent() {
     () => new Set(collections.filter((c) => c.scheduleJobId && c.status === "Pending").map((c) => c.scheduleJobId as string)),
     [collections]
   )
+  // The order each job's lines were last shown in (item codes, as typed).
+  // The database lists them by code, so after a save a line typed at the
+  // bottom would jump up — and anything typed meanwhile (edits are kept by
+  // line number) would land on the wrong line. Saved lines keep their place;
+  // new ones go at the end.
+  const [lineOrder, setLineOrder] = React.useState<Record<string, string[]>>({})
   // Each job with its items and the money to collect on the visit.
   const jobs = React.useMemo(() => {
     const list = (data?.jobs ?? []).filter(
@@ -240,11 +247,11 @@ function ReleaseSlipContent() {
       const parts = repairPartLines(j, repairPlans) ?? installUnitLines(j, installPlans, saleListEntries)
       return {
         ...j,
-        ...(parts ? { movements: parts } : {}),
+        movements: inShownOrder(parts ?? j.movements, lineOrder[j.jobId]),
         jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
       }
     })
-  }, [data, date, collections, saleListEntries, repairPlans, installPlans, cancelledJobIds, uncollectedJobIds, includePending])
+  }, [data, date, collections, saleListEntries, repairPlans, installPlans, cancelledJobIds, uncollectedJobIds, includePending, lineOrder])
   // Extra parts / errand notes added on this page, kept in this browser per
   // date and technician (see release-slip-manual.ts).
   const [mounted, setMounted] = React.useState(false)
@@ -337,6 +344,30 @@ function ReleaseSlipContent() {
     if (unassigned.length) list.push({ key: "unassigned", name: t("releaseSlipUnassigned"), jobs: unassigned })
     return list
   })().map((slip) => ({ ...slip, jobs: applySlipEdits([...slip.jobs, ...(added[slip.key] ?? []).map(blankSlipJob)], edits[slip.key]) }))
+
+  // Remember the order the single slip's lines are shown in (see lineOrder):
+  // a job not being edited (shows what's saved), and — when a save sends it —
+  // a job as it was typed (rememberOrder).
+  const shownLineOrder = (only?: string[]) =>
+    Object.fromEntries(
+      (slips[0]?.jobs ?? [])
+        .filter((j) => j.jobId !== "manual" && !j.added && (only ? only.includes(j.jobId) : !edits[slips[0].key]?.[j.jobId]))
+        .map((j) => [j.jobId, j.movements.map(lineCode)])
+    )
+  const rememberOrder = (jobIds: string[]) => {
+    const typed = shownLineOrder(jobIds)
+    setLineOrder((prev) => ({ ...prev, ...typed }))
+  }
+  const shownOrder = allMode ? "" : JSON.stringify(shownLineOrder())
+  React.useEffect(() => {
+    if (!shownOrder) return
+    const next = JSON.parse(shownOrder) as Record<string, string[]>
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLineOrder((prev) => {
+      const merged = { ...prev, ...next }
+      return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
+    })
+  }, [shownOrder])
 
   // "Save to Daily Report": the slip's rows → completed visits on this date
   // for this technician, their items queued in Inventory (pending). Sent:
@@ -448,6 +479,14 @@ function ReleaseSlipContent() {
     let n = 0
     for (const job of slip.jobs) {
       if (!job.added || job.orderNo.trim()) continue
+      // Not while a line is half typed (an item without a quantity, or the
+      // other way round) — it would be lost when the row is saved.
+      const halfTyped = job.movements.some((m) => {
+        const hasItem = !!(m.sku || m.label).trim() || !!(m.inSku ?? "").trim()
+        const hasQty = m.qtyOut > 0 || m.qtyIn > 0
+        return hasItem !== hasQty
+      })
+      if (halfTyped) continue
       const lines = job.movements.flatMap((m): ManualSlipItem[] => {
         const note = (m.note ?? "").trim() || "Errand"
         const out: ManualSlipItem[] = []
@@ -461,21 +500,52 @@ function ReleaseSlipContent() {
       items.push(...lines)
       savedRows.push(job.jobId)
     }
-    if (!items.length) return 0
-    const queued: ManualSlipItem[] = []
-    for (const item of items) {
+    // Lines typed on the Manual / Errand Items block itself: a new line (past
+    // the saved items) is a new errand item; a saved one whose item or
+    // quantity was changed replaces it (its pending Inventory item swapped).
+    const manualJob = slip.jobs.find((j) => j.jobId === "manual")
+    const replaced = new Map<number, ManualSlipItem>()
+    if (manualJob && edits[slip.key]?.manual) {
+      manualJob.movements.forEach((m, i) => {
+        if (!m.edited || m.errand) return
+        const sku = (m.sku || m.label).trim()
+        const direction: "out" | "in" = m.qtyOut > 0 ? "out" : "in"
+        const qty = direction === "out" ? m.qtyOut : m.qtyIn
+        if (!sku || !(qty > 0)) return
+        const saved = manual.items[i]
+        const next: ManualSlipItem = { id: `errand-${Date.now()}-${n++}`, category: "part", item: sku, direction, qty, note: (m.note ?? "").trim() || saved?.note || "Errand" }
+        if (!saved) items.push(next)
+        else if (saved.item.trim() !== sku || saved.qty !== qty || saved.direction !== direction) replaced.set(i, next)
+      })
+    }
+    if (!items.length && !replaced.size) return 0
+    const queue = async (item: ManualSlipItem): Promise<ManualSlipItem> => {
       let movementId: string | undefined
       try {
         movementId = await queueManualItem(item)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Couldn't add it to the Inventory List")
       }
-      queued.push({ ...item, movementId })
+      return { ...item, movementId }
     }
-    setManualItems([...manual.items, ...queued])
+    const kept = [...manual.items]
+    for (const [i, next] of replaced) {
+      const old = kept[i]
+      if (old?.movementId) await fetch(`/api/release-slip/manual-item?id=${encodeURIComponent(old.movementId)}`, { method: "DELETE" }).catch(() => undefined)
+      kept[i] = await queue(next)
+    }
+    const queued: ManualSlipItem[] = []
+    for (const item of items) queued.push(await queue(item))
+    setManualItems([...kept, ...queued])
     qc.invalidateQueries({ queryKey: ["stockMovements"] })
     for (const id of savedRows) removeOrderRow(slip.key)(id)
-    return queued.length
+    // The block's typed edits are now its saved items.
+    setEditState((st) => {
+      const slipEdits = { ...(st.edits[slip.key] ?? {}) }
+      delete slipEdits.manual
+      return { ...st, edits: { ...st.edits, [slip.key]: slipEdits } }
+    })
+    return queued.length + replaced.size
   }
 
   async function startSave() {
@@ -571,15 +641,37 @@ function ReleaseSlipContent() {
   React.useEffect(() => {
     if (!canEdit || allMode || !technicianId || saving || pendingSave) return
     const { rows, sourceIds, slipKey } = buildRows("edited")
+    // Errand work (an order-less added row with an item, or lines typed on
+    // the Manual / Errand block) saves on its own, a moment after typing.
+    const slip = slips[0]
+    const errandWork =
+      !!slip &&
+      (slip.jobs.some((j) => j.added && !j.orderNo.trim() && j.movements.some((m) => (m.sku || m.label).trim() && (m.qtyOut > 0 || m.qtyIn > 0))) ||
+        !!edits[slip.key]?.manual)
+    if (errandWork && rows.length === 0) {
+      const timer = window.setTimeout(async () => {
+        if (autoRunning.current) return
+        autoRunning.current = true
+        try {
+          const n = await saveErrandRows()
+          if (n) setAutoStatus({ state: "saved", at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) })
+        } finally {
+          autoRunning.current = false
+        }
+      }, 1500)
+      return () => window.clearTimeout(timer)
+    }
     if (rows.length === 0) return
     // The edits being saved — anything changed after this stays for next time.
     const snapshot = editState
+    const typedOrder = shownLineOrder(sourceIds)
     const timer = window.setTimeout(async () => {
       if (autoRunning.current) return
       autoRunning.current = true
       setAutoStatus({ state: "saving" })
       try {
         await postSave(rows)
+        setLineOrder((prev) => ({ ...prev, ...typedOrder }))
         setEditState((s) => {
           if (s.key !== snapshot.key) return s
           const slipEdits = { ...(s.edits[slipKey] ?? {}) }
@@ -616,6 +708,7 @@ function ReleaseSlipContent() {
         return
       }
       const body = await postSave(rows)
+      rememberOrder(rows.flatMap((r) => (r.jobId ? [r.jobId] : [])))
       toast.success(t("releaseSlipSaved", { completed: String(body.completed + body.alreadyCompleted), created: String(body.created), movements: String(body.movements) }))
       setPendingSave(null)
       resetEdits()

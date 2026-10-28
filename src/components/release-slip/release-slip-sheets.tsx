@@ -635,7 +635,9 @@ export function ReleaseSlipSheets({
   // An order's × (on-screen copy, not on a continued block): removes it and
   // the same-order collection shown with it.
   const removeOrderButton = (b: Block, orderNo: string, jobIds: string[]) => {
-    if (!onRemoveOrder || b.continued || !jobIds.length) return null
+    // Not on the Manual / Errand Items block — it isn't a job (its items are
+    // removed one by one in the list above the slip).
+    if (!onRemoveOrder || b.continued || !jobIds.length || jobIds.includes("manual")) return null
     const ids = [...jobIds, ...b.collections.filter((c) => c.orderNo.trim() === orderNo).map((c) => c.jobId)]
     return (
       <button type="button" className="slip-remove" onClick={() => onRemoveOrder(ids, orderNo)} aria-label={`Remove ${orderNo} from this slip`} title="Remove from this slip" data-testid="slip-remove-order">

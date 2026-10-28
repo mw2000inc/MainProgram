@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client"
 import { wrapSupabaseError } from "@/lib/supabase/errors"
+import { mergeSlipLines } from "@/lib/release-slip-lines"
 
 export interface ReleaseSlipMovement {
   sku: string
@@ -112,7 +113,7 @@ export async function fetchReleaseSlip(date: string, technicianUserId: string | 
       technician2: j.technician_2,
       vehicle: vehicleById.get(j.job_id),
       jobStatus: jobStatusById.get(j.job_id),
-      movements: (j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined, slipType: m.slip_type || undefined })),
+      movements: mergeSlipLines((j.movements ?? []).map((m) => ({ sku: m.sku, label: m.label, qtyOut: Number(m.qty_out) || 0, qtyIn: Number(m.qty_in) || 0, status: m.status, purpose: m.purpose || undefined, slipType: m.slip_type || undefined }))),
     })),
   }
 }

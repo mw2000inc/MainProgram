@@ -41,3 +41,44 @@ export function installSlipPartsText(parts: InstallSlipPart[]): string {
     ])
     .join(", ")
 }
+
+type PartsMovement = Parameters<typeof installSlipParts>[1][number] & { filterChangePlanId?: string; repairPlanId?: string; repairPlanPartId?: string; relatedScheduleJobId?: string }
+
+function addPart(parts: InstallSlipPart[], m: PartsMovement) {
+  const sku = ((m.productId ? m.sku : m.itemLabel) || m.productName || "").trim()
+  if (!sku) return
+  let p = parts.find((x) => x.sku === sku)
+  if (!p) {
+    p = { sku, out: 0, in: 0, pending: false }
+    parts.push(p)
+  }
+  p.out += m.quantityRemoved || 0
+  p.in += m.quantityAdded || 0
+  if (m.status === "pending" || m.changeRequest) p.pending = true
+}
+
+// A Filter Change visit's parts (Daily Report Filter Change "Part No"): the
+// items queued for it — on its form or added on the Release Slip — and the
+// ones saved onto its job that belong to no other record. Rejected ones are
+// left out.
+export function filterChangeSlipParts(plan: { id: string; scheduleJobId?: string }, movements: PartsMovement[]): InstallSlipPart[] {
+  const parts: InstallSlipPart[] = []
+  for (const m of movements) {
+    if (m.status === "rejected") continue
+    const onJob = !!plan.scheduleJobId && m.scheduleJobId === plan.scheduleJobId && !m.filterChangePlanId && !m.installPlanId && !m.repairPlanId && !m.repairPlanPartId
+    if (m.filterChangePlanId === plan.id || onJob) addPart(parts, m)
+  }
+  return parts
+}
+
+// A Collection's parts: items saved onto its visit's job (Release Slip) that
+// belong to no Filter Change / install / repair record.
+export function collectionSlipParts(plan: { scheduleJobId?: string }, movements: PartsMovement[]): InstallSlipPart[] {
+  const parts: InstallSlipPart[] = []
+  if (!plan.scheduleJobId) return parts
+  for (const m of movements) {
+    if (m.status === "rejected" || m.filterChangePlanId || m.installPlanId || m.repairPlanId || m.repairPlanPartId) continue
+    if ((m.scheduleJobId || m.relatedScheduleJobId) === plan.scheduleJobId) addPart(parts, m)
+  }
+  return parts
+}
