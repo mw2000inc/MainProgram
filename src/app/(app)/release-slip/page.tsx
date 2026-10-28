@@ -435,11 +435,56 @@ function ReleaseSlipContent() {
     }
     return body as { completed: number; alreadyCompleted: number; created: number; movements: number }
   }
-  function startSave() {
+  // An added row with NO Order No. is an errand (parts taken for no order):
+  // each of its items is saved like "Add Item / Task" — queued in the
+  // Inventory List as a pending errand item and moved into the slip's
+  // Manual / Errand Items block — instead of being skipped. Returns how many
+  // items were saved.
+  async function saveErrandRows(): Promise<number> {
+    const slip = slips[0]
+    if (!slip || allMode || !technicianId) return 0
+    const items: ManualSlipItem[] = []
+    const savedRows: string[] = []
+    let n = 0
+    for (const job of slip.jobs) {
+      if (!job.added || job.orderNo.trim()) continue
+      const lines = job.movements.flatMap((m): ManualSlipItem[] => {
+        const note = (m.note ?? "").trim() || "Errand"
+        const out: ManualSlipItem[] = []
+        const sku = (m.sku || m.label).trim()
+        if (sku && m.qtyOut > 0) out.push({ id: `errand-${Date.now()}-${n++}`, category: "part", item: sku, direction: "out", qty: m.qtyOut, note })
+        const inSku = (m.inSku || (m.qtyIn > 0 ? sku : "")).trim()
+        if (inSku && m.qtyIn > 0) out.push({ id: `errand-${Date.now()}-${n++}`, category: "part", item: inSku, direction: "in", qty: m.qtyIn, note })
+        return out
+      })
+      if (!lines.length) continue
+      items.push(...lines)
+      savedRows.push(job.jobId)
+    }
+    if (!items.length) return 0
+    const queued: ManualSlipItem[] = []
+    for (const item of items) {
+      let movementId: string | undefined
+      try {
+        movementId = await queueManualItem(item)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Couldn't add it to the Inventory List")
+      }
+      queued.push({ ...item, movementId })
+    }
+    setManualItems([...manual.items, ...queued])
+    qc.invalidateQueries({ queryKey: ["stockMovements"] })
+    for (const id of savedRows) removeOrderRow(slip.key)(id)
+    return queued.length
+  }
+
+  async function startSave() {
+    const errands = await saveErrandRows()
+    if (errands) toast.success(`Saved ${errands} errand item(s) to the Inventory List`)
     const { rows, noType } = buildRows("all")
     if (noType.length) toast.warning(t("releaseSlipSaveNoType", { orders: noType.join(", ") }))
     if (rows.length === 0) {
-      if (!noType.length) toast.info(t("releaseSlipSaveNothing"))
+      if (!noType.length && !errands) toast.info(t("releaseSlipSaveNothing"))
       return
     }
     setPendingSave({ rows })
@@ -516,8 +561,15 @@ function ReleaseSlipContent() {
   // anything edited again while saving stays and saves on the next round.
   const [autoStatus, setAutoStatus] = React.useState<{ state: "idle" | "saving" | "saved"; at?: string }>({ state: "idle" })
   const autoRunning = React.useRef(false)
+  // Always this render's buildRows — a Save that waited for a running
+  // auto-save builds its rows afresh, so a row the auto-save just saved (now
+  // a job of its own) isn't sent a second time and created twice.
+  const buildRowsRef = React.useRef(buildRows)
   React.useEffect(() => {
-    if (!canEdit || allMode || !technicianId || saving) return
+    buildRowsRef.current = buildRows
+  })
+  React.useEffect(() => {
+    if (!canEdit || allMode || !technicianId || saving || pendingSave) return
     const { rows, sourceIds, slipKey } = buildRows("edited")
     if (rows.length === 0) return
     // The edits being saved — anything changed after this stays for next time.
@@ -545,12 +597,25 @@ function ReleaseSlipContent() {
     }, 1500)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editState, canEdit, allMode, technicianId, saving, data])
+  }, [editState, canEdit, allMode, technicianId, saving, data, pendingSave])
   async function confirmSave() {
     if (!pendingSave) return
     setSaving(true)
     try {
-      const body = await postSave(pendingSave.rows)
+      // An auto-save already under way finishes first; then the rows are
+      // built again from what's on the slip now (not when the box opened).
+      let rows = pendingSave.rows
+      if (autoRunning.current) {
+        for (let i = 0; i < 50 && autoRunning.current; i++) await new Promise((r) => setTimeout(r, 200))
+        await new Promise((r) => setTimeout(r, 300))
+        rows = buildRowsRef.current("all").rows
+      }
+      if (!rows.length) {
+        toast.info(t("releaseSlipSaveNothing"))
+        setPendingSave(null)
+        return
+      }
+      const body = await postSave(rows)
       toast.success(t("releaseSlipSaved", { completed: String(body.completed + body.alreadyCompleted), created: String(body.created), movements: String(body.movements) }))
       setPendingSave(null)
       resetEdits()
