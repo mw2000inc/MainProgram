@@ -1391,9 +1391,12 @@ export function DailyReportSection() {
                 key={id}
                 id={id}
                 isAdmin={canArrange}
-                canResize={!!user}
-                width={sizes[id]?.width}
-                height={sizes[id]?.height}
+                // Technicians' panels (their phones) don't resize — their
+                // Schedule card is a fixed 5 jobs tall and scrolls inside — and
+                // a size saved earlier is ignored.
+                canResize={!!user && user.role !== "technician"}
+                width={user?.role === "technician" ? undefined : sizes[id]?.width}
+                height={user?.role === "technician" ? undefined : sizes[id]?.height}
                 defaultWidthClassName={defaultWidthClassName(id, isGrid, isAdmin)}
                 onResizeEnd={(size) => handleResizeEnd(id, size)}
               >

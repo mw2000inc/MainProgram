@@ -958,6 +958,30 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
   // selectMode (the full-screen view, for an admin): a pending job's box
   // selects it for the batch Mark as Completed instead of opening the
   // single-job Mark done dialog; a completed job's box just shows it's done.
+  // A technician's Schedule card (their phone): exactly 5 jobs tall, the rest
+  // scrolled to inside it — the card itself no longer grows or resizes. The
+  // height is measured from the 5th job's bottom, so it fits whatever each
+  // job's length.
+  const cardListRef = React.useRef<HTMLDivElement>(null)
+  const [cardListHeight, setCardListHeight] = React.useState<number | undefined>(undefined)
+  React.useLayoutEffect(() => {
+    if (isAdmin) return
+    const measure = () => {
+      const list = cardListRef.current
+      if (!list) return
+      const jobs = list.querySelectorAll<HTMLElement>('[data-testid="schedule-job"]')
+      if (jobs.length <= 5) {
+        setCardListHeight(undefined)
+        return
+      }
+      const fifth = jobs[4].getBoundingClientRect()
+      setCardListHeight(Math.ceil(fifth.bottom - list.getBoundingClientRect().top + list.scrollTop) + 4)
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  })
+
   const renderJob = (job: (typeof todaysJobs)[number], first: boolean, selectMode = false) => (
     <div className={cn("flex items-start gap-3 py-2.5", !first && "border-t")} data-testid="schedule-job" data-order={job.orderNo ?? ""}>
     {selectMode ? (
@@ -1918,7 +1942,12 @@ export function ScheduleAgenda({ date, title = "Schedule" }: { date: string; tit
         </p>
       )}
       {!isPending && cardJobs.length > 0 && (
-        <div>
+        <div
+          ref={cardListRef}
+          className={cn(!isAdmin && cardListHeight && "overflow-y-auto overscroll-contain pr-1")}
+          style={!isAdmin && cardListHeight ? { maxHeight: cardListHeight } : undefined}
+          data-testid="schedule-card-list"
+        >
           {technicianGroups.map((group, g) => (
             <div key={group.key} className={cn(g > 0 && "pt-3")}>
               <div className="flex items-center gap-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
