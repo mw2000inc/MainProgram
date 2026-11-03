@@ -640,6 +640,16 @@ function ReleaseSlipContent() {
   // anything edited again while saving stays and saves on the next round.
   const [autoStatus, setAutoStatus] = React.useState<{ state: "idle" | "saving" | "saved"; at?: string }>({ state: "idle" })
   const autoRunning = React.useRef(false)
+  // A save that couldn't reach the server (connection dropped) is tried again
+  // by itself: a few seconds later, and as soon as the browser is back
+  // online — the lines stay on the slip meanwhile, so nothing is typed twice.
+  const [retryTick, setRetryTick] = React.useState(0)
+  const offline = React.useRef(false)
+  React.useEffect(() => {
+    const back = () => setRetryTick((n) => n + 1)
+    window.addEventListener("online", back)
+    return () => window.removeEventListener("online", back)
+  }, [])
   // Always this render's buildRows — a Save that waited for a running
   // auto-save builds its rows afresh, so a row the auto-save just saved (now
   // a job of its own) isn't sent a second time and created twice.
@@ -689,16 +699,28 @@ function ReleaseSlipContent() {
           return { ...s, edits: { ...s.edits, [slipKey]: slipEdits }, added: { ...s.added, [slipKey]: added } }
         })
         setAutoStatus({ state: "saved", at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) })
+        if (offline.current) {
+          offline.current = false
+          toast.dismiss(OFFLINE_TOAST)
+          toast.success("Connection is back — the slip is saved.")
+        }
       } catch (e) {
         setAutoStatus({ state: "idle" })
-        toast.error(e instanceof Error ? e.message : "Save failed")
+        if (isNetworkError(e)) {
+          // Said once per outage (the retries stay quiet), then tried again.
+          if (!offline.current) toast.error(NO_CONNECTION, { id: OFFLINE_TOAST, duration: Infinity })
+          offline.current = true
+          window.setTimeout(() => setRetryTick((n) => n + 1), 5000)
+        } else {
+          toast.error(e instanceof Error ? e.message : "Save failed")
+        }
       } finally {
         autoRunning.current = false
       }
     }, 1500)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editState, canEdit, allMode, technicianId, saving, data, pendingSave])
+  }, [editState, canEdit, allMode, technicianId, saving, data, pendingSave, retryTick])
   async function confirmSave() {
     if (!pendingSave) return
     setSaving(true)
@@ -722,7 +744,7 @@ function ReleaseSlipContent() {
       setPendingSave(null)
       resetEdits()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save failed")
+      toast.error(isNetworkError(e) ? NO_CONNECTION_BUTTON : e instanceof Error ? e.message : "Save failed")
     } finally {
       setSaving(false)
     }
@@ -959,6 +981,16 @@ function ReleaseSlipContent() {
     </div>
   )
 }
+
+// A request that never reached the server (no internet, the connection
+// dropped): fetch throws a TypeError — "Failed to fetch" (Chrome), "Load
+// failed" (Safari), "NetworkError…" (Firefox).
+function isNetworkError(e: unknown): boolean {
+  return e instanceof TypeError || (e instanceof Error && /failed to fetch|load failed|networkerror|network request failed/i.test(e.message))
+}
+const OFFLINE_TOAST = "release-slip-offline"
+const NO_CONNECTION = "No internet connection — the slip isn't saved yet. It saves by itself when the connection is back; keep this page open."
+const NO_CONNECTION_BUTTON = "No internet connection — not saved. Check the connection, then press Save to Daily Report again."
 
 export default function ReleaseSlipPage() {
   return (
