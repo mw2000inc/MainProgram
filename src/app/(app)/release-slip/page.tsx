@@ -34,7 +34,7 @@ import { collectionNoteFor } from "@/lib/release-slip-collect"
 import { useCollections } from "@/lib/hooks/use-collections"
 import { useSaleListEntries } from "@/lib/hooks/use-sale-list"
 import { useRepairPlans } from "@/lib/hooks/use-repair-plans"
-import { installUnitLines, repairPartLines } from "@/lib/release-slip-repair-parts"
+import { installUnitLines, repairPartLines, repairUnitLines } from "@/lib/release-slip-repair-parts"
 import { useInstallPlans } from "@/lib/hooks/use-install-plans"
 import { useFilterChangePlans } from "@/lib/hooks/use-filter-change-plans"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -42,7 +42,7 @@ import { useUsers } from "@/lib/hooks/use-misc"
 import { useTranslation } from "@/lib/i18n/i18n-context"
 import { businessToday } from "@/lib/dispatch-lead-time"
 import { assignmentAccounts, isAssignedTechnician } from "@/lib/technicians"
-import type { ReleaseSlipJob } from "@/lib/api/release-slip"
+import type { ReleaseSlipJob, ReleaseSlipMovement } from "@/lib/api/release-slip"
 
 // The admin's technician picker value for every technician's slip at once.
 const ALL_TECHNICIANS = "all"
@@ -245,10 +245,13 @@ function ReleaseSlipContent() {
       // * while awaiting approval) — instead of blank lines. A Repair with no
       // stock movements: its Part No as lines; an Installation with none: its
       // unit (installUnitLines).
+      // A Repair's unit (UNIT OUT / UNIT IN) is shown first, as on the Daily
+      // Report (repairUnitLines; display only).
       const parts = repairPartLines(j, repairPlans) ?? installUnitLines(j, installPlans, saleListEntries)
+      const lines = parts ?? j.movements
       return {
         ...j,
-        movements: inShownOrder(parts ?? j.movements, lineOrder[j.jobId]),
+        movements: inShownOrder([...repairUnitLines({ ...j, movements: lines }, repairPlans), ...lines], lineOrder[j.jobId]),
         jobNote: collectionNoteFor(j, { date, collections, saleListEntries, slipJobs: list }),
       }
     })
@@ -443,8 +446,10 @@ function ReleaseSlipContent() {
         noType.push(job.orderNo || "—")
         continue
       }
+      // A repair's unit line is shown only (never saved as a part).
+      const isUnit = (m: ReleaseSlipMovement) => !!m.unitLine && (m.sku || m.label).trim() === m.unitLine
       const items = job.movements.flatMap((m) => {
-        if (m.errand) return []
+        if (m.errand || isUnit(m)) return []
         const out = { sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.inSku ? 0 : m.qtyIn || 0, purpose: m.purpose, slipType: m.slipType }
         const back = m.inSku && m.qtyIn ? [{ sku: m.inSku.trim(), qtyOut: 0, qtyIn: m.qtyIn, purpose: m.purpose, slipType: m.slipType }] : []
         return [...(out.sku && (out.qtyOut || out.qtyIn) ? [out] : []), ...back]
@@ -453,7 +458,7 @@ function ReleaseSlipContent() {
       // this save — items added since (another tab, the technician's phone)
       // aren't removed just because this slip doesn't show them yet.
       const loaded = jobs.find((j) => j.jobId === job.jobId)
-      const shown = job.added || !loaded ? undefined : loaded.movements.map((m) => ({ sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.qtyIn || 0 }))
+      const shown = job.added || !loaded ? undefined : loaded.movements.filter((m) => !m.unitLine).map((m) => ({ sku: (m.sku || m.label).trim(), qtyOut: m.qtyOut || 0, qtyIn: m.qtyIn || 0 }))
       rows.push({ jobId: job.added ? undefined : job.jobId, orderNo: job.orderNo, accountName: job.accountName, jobType: job.jobType as SlipSaveRowInput["jobType"], items, shown })
       sourceIds.push(job.jobId)
     }

@@ -85,19 +85,22 @@ export function combineSameAccount(jobs: ReleaseSlipJob[]): SlipJob[] {
     // Summed per code: OUT and IN separately, a code with both on one line.
     // Keyed by code AND the line's type box, so items ticked R stay apart
     // from the job's own (F) ones; grouped by type, the job's own type first.
-    const keyOf2 = (code: string, type?: string) => `${type ?? ""}|${code}`
+    // A repair's unit (UNIT OUT / UNIT IN) stays on a line of its own, apart
+    // from a part with the same code.
+    const UNIT = "unit"
+    const keyOf2 = (code: string, type?: string, unit?: boolean) => `${type ?? ""}|${code}${unit ? UNIT : ""}`
     const outs = new Map<string, { qty: number; pending: boolean }>()
     const ins = new Map<string, { qty: number; pending: boolean }>()
     for (const g of group)
       for (const m of slipItems(g)) {
         const pending = m.status === "pending"
         if (m.qtyOut) {
-          const k = keyOf2(itemName(m), m.slipType)
+          const k = keyOf2(itemName(m), m.slipType, !!m.unitLine)
           const e = outs.get(k) ?? { qty: 0, pending: false }
           outs.set(k, { qty: e.qty + m.qtyOut, pending: e.pending || pending })
         }
         if (m.qtyIn) {
-          const k = keyOf2(inItemName(m), m.slipType)
+          const k = keyOf2(inItemName(m), m.slipType, !!m.unitLine)
           const e = ins.get(k) ?? { qty: 0, pending: false }
           ins.set(k, { qty: e.qty + m.qtyIn, pending: e.pending || pending })
         }
@@ -112,8 +115,10 @@ export function combineSameAccount(jobs: ReleaseSlipJob[]): SlipJob[] {
       const o = outs.get(k)
       const i = ins.get(k)
       const type = k.slice(0, k.indexOf("|"))
-      const code = k.slice(k.indexOf("|") + 1)
-      return { sku: code, label: code, qtyOut: o?.qty ?? 0, qtyIn: i?.qty ?? 0, status: o?.pending || i?.pending ? "pending" : "recorded", slipType: type || undefined }
+      const unit = k.endsWith(UNIT)
+      const code = k.slice(k.indexOf("|") + 1, unit ? -UNIT.length : undefined)
+      const line: ReleaseSlipMovement = { sku: code, label: code, qtyOut: o?.qty ?? 0, qtyIn: i?.qty ?? 0, status: o?.pending || i?.pending ? "pending" : "recorded", slipType: type || undefined }
+      return unit ? { ...line, note: o ? "UNIT OUT" : "UNIT IN", unitLine: code } : line
     })
     const first = group[0]
     // The first order's lines typed here but not finished (a code without a

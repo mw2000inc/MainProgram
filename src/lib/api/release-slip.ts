@@ -24,6 +24,9 @@ export interface ReleaseSlipMovement {
   // The job type box ticked for this item on the slip ('F' | 'R' | 'S' | 'O');
   // unset = the job's own type (stock_movements.slip_type, 20261120000000).
   slipType?: string
+  // A repair's unit shown on the slip (repairUnitLines): its code. Display
+  // only — never saved as a part (the unit isn't stock used on the repair).
+  unitLine?: string
 }
 
 export interface ReleaseSlipJob {

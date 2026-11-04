@@ -41,3 +41,21 @@ export function installUnitLines(
   if (!sku) return undefined
   return [{ sku, label: unit, qtyOut: 1, qtyIn: 0, status: "recorded" }]
 }
+
+// A Repair job's unit on the Release Slip, as on the Daily Report (UNIT OUT /
+// UNIT IN): the repair's Model code, 1, under OUT or IN as its Unit IN/OUT
+// says, with "UNIT OUT" / "UNIT IN" in Notes. Shown for the record only —
+// Unit IN/OUT is where the customer's machine is, not stock — so it's never
+// saved as a part (unitLine). Left out when the job already lists that code
+// on that side (a part with the same code, say).
+export function repairUnitLines(job: Pick<ReleaseSlipJob, "jobId" | "jobType" | "movements">, repairPlans: RepairPlan[]): ReleaseSlipMovement[] {
+  if (job.jobType !== "repair") return []
+  const record = repairPlans.find((r) => r.scheduleJobId === job.jobId)
+  const model = (record?.model ?? "").trim()
+  const sku = model.split(" / ")[0].trim()
+  const side = (record?.unitInOut ?? "").trim().toLowerCase()
+  if (!sku || (side !== "in" && side !== "out")) return []
+  const listed = job.movements.some((m) => (m.sku || m.label).trim() === sku && (side === "out" ? m.qtyOut > 0 : m.qtyIn > 0))
+  if (listed) return []
+  return [{ sku, label: model, qtyOut: side === "out" ? 1 : 0, qtyIn: side === "in" ? 1 : 0, status: "recorded", note: side === "out" ? "UNIT OUT" : "UNIT IN", unitLine: sku }]
+}
